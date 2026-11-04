@@ -454,6 +454,86 @@ describe("Audit", () => {
 
       expect([opened, control!.getAttribute("aria-expanded")]).toEqual(["true", "false"]);
     });
+
+    it("opens on a click anywhere on its row, and closes on a second", async () => {
+      await renderAudit(everyRead(answerPage([EVENT_1], { totalResults: 1 })));
+      const user = userEvent.setup();
+
+      await findTable();
+      const [row] = eventRows();
+      await user.click(cellOf(row!, "Operation"));
+      const opened = detailControls()[0]!.getAttribute("aria-expanded");
+      await user.click(cellOf(row!, "Outcome"));
+
+      expect([opened, detailControls()[0]!.getAttribute("aria-expanded")]).toEqual([
+        "true",
+        "false",
+      ]);
+    });
+
+    it("closes on a click anywhere on the open detail", async () => {
+      await renderAudit(everyRead(answerPage([EVENT_1], { totalResults: 1 })));
+      const user = userEvent.setup();
+
+      await findTable();
+      await user.click(detailControls()[0]!);
+      await user.click(within(screen.getByRole("region", { name: /^Details of / })).getByText("—"));
+
+      expect([
+        detailControls()[0]!.getAttribute("aria-expanded"),
+        screen.queryByRole("region", { name: /^Details of / }),
+      ]).toEqual(["false", null]);
+    });
+
+    it("stays as it is on a click that ends selecting text, on its row or its detail", async () => {
+      await renderAudit(everyRead(answerPage([EVENT_2], { totalResults: 1 })));
+      const user = userEvent.setup();
+
+      await findTable();
+      const [row] = eventRows();
+      /** A click that lands as a drag-selection of `target`'s text ends. */
+      const selectAndClick = (target: Element) => {
+        window.getSelection()!.selectAllChildren(target);
+        fireEvent.click(target);
+        window.getSelection()!.removeAllRanges();
+      };
+      selectAndClick(cellOf(row!, "Actor"));
+      const afterRowSelection = detailControls()[0]!.getAttribute("aria-expanded");
+      await user.click(detailControls()[0]!);
+      selectAndClick(
+        within(screen.getByRole("region", { name: /^Details of / })).getByText(
+          "GET /Users (req-2)",
+        ),
+      );
+
+      expect([afterRowSelection, detailControls()[0]!.getAttribute("aria-expanded")]).toEqual([
+        "false",
+        "true",
+      ]);
+    });
+
+    it("shows its row as clickable, with a pointer over it", async () => {
+      await renderAudit(everyRead(answerPage([EVENT_1], { totalResults: 1 })));
+
+      await findTable();
+      const [row] = eventRows();
+
+      expect(row).toHaveClass("cursor-pointer");
+    });
+
+    it("opens from its control even while text elsewhere on the page stays selected", async () => {
+      await renderAudit(everyRead(answerPage([EVENT_1, EVENT_2], { totalResults: 2 })));
+      const user = userEvent.setup();
+
+      await findTable();
+      window.getSelection()!.selectAllChildren(cellOf(eventRows()[1]!, "Actor"));
+      const [control] = detailControls();
+      control!.focus();
+      await user.keyboard("{Enter}");
+      window.getSelection()!.removeAllRanges();
+
+      expect(control).toHaveAttribute("aria-expanded", "true");
+    });
   });
 
   it("renders a resource id beside its type, and the type alone when there is none", async () => {
@@ -1115,19 +1195,50 @@ describe("Audit", () => {
       );
     });
 
-    it("clears every selection in one step, and reads every operation", async () => {
-      const { requests } = await renderAudit(everyRead(answerPage([EVENT_1], { totalResults: 1 })));
+    const clearings = () => screen.queryAllByRole("option", { name: "Clear selection" });
+
+    it("offers clearing first and last in the list, each set apart, once something is selected", async () => {
+      await renderAudit(everyRead(answerPage([EVENT_1], { totalResults: 1 })));
       const user = userEvent.setup();
 
       await findTable();
-      await pick(user, "Logged out", "Lockout set");
-      await vi.waitFor(() => expect(requests()).toHaveLength(3));
-      await user.click(screen.getByRole("option", { name: "Clear selection" }));
+      await pick(user, "Logged out");
+      const shown = shownOptions();
 
-      await vi.waitFor(() => expect(requests()).toHaveLength(4));
-      expect(lastRead(requests)).toBe(unfiltered);
-      expect(pickerTrigger()).toHaveAccessibleName("Operation: Any");
+      expect({
+        first: shown[0],
+        last: shown[shown.length - 1],
+        clearings: clearings().length,
+        separators: within(screen.getByRole("listbox")).getAllByRole("separator").length,
+      }).toEqual({
+        first: "Clear selection",
+        last: "Clear selection",
+        clearings: 2,
+        separators: 2,
+      });
     });
+
+    it.each([
+      ["first", 0],
+      ["last", 1],
+    ])(
+      "clears every selection in one step from the %s clearing, and reads every operation",
+      async (_where, index) => {
+        const { requests } = await renderAudit(
+          everyRead(answerPage([EVENT_1], { totalResults: 1 })),
+        );
+        const user = userEvent.setup();
+
+        await findTable();
+        await pick(user, "Logged out", "Lockout set");
+        await vi.waitFor(() => expect(requests()).toHaveLength(3));
+        await user.click(clearings()[index]!);
+
+        await vi.waitFor(() => expect(requests()).toHaveLength(4));
+        expect(lastRead(requests)).toBe(unfiltered);
+        expect(pickerTrigger()).toHaveAccessibleName("Operation: Any");
+      },
+    );
 
     it("offers no clearing with nothing selected", async () => {
       await renderAudit(everyRead(answerPage([EVENT_1], { totalResults: 1 })));
@@ -1136,10 +1247,10 @@ describe("Audit", () => {
       await findTable();
       await openPicker(user);
 
-      expect(screen.queryByRole("option", { name: "Clear selection" })).toBeNull();
+      expect(clearings()).toEqual([]);
     });
 
-    it("offers clearing still while a search hides every operation", async () => {
+    it("offers both clearings still while a search hides every operation", async () => {
       await renderAudit(everyRead(answerPage([EVENT_1], { totalResults: 1 })));
       const user = userEvent.setup();
 
@@ -1147,7 +1258,7 @@ describe("Audit", () => {
       await pick(user, "Logged out");
       await user.type(screen.getByRole("combobox"), "zzz");
 
-      expect(shownOptions()).toEqual(["Clear selection"]);
+      expect(shownOptions()).toEqual(["Clear selection", "Clear selection"]);
     });
 
     it("refuses a change while a typed field is invalid, sending nothing", async () => {
