@@ -23,6 +23,10 @@ MVN ?= $(CURDIR)/backend/mvnw
 COMPOSE ?= docker compose -f backend/compose.yaml
 IMAGE ?= smart-on-fhir
 TAG ?= local
+# `make infra-down VOL=1` (or fhircast-down) also removes the named volumes,
+# wiping the local databases. Make reads a bare `-v` as its own flag, hence the
+# variable.
+COMPOSE_DOWN_FLAGS := $(if $(filter 1,$(VOL)),-v)
 
 export NPM
 export MVN
@@ -42,8 +46,8 @@ infra-up: ## Start SQL Server and Redis, wait until both are healthy, and create
 	$(COMPOSE) up -d --wait
 	$(COMPOSE) run --rm sqlserver-init
 
-infra-down: ## Stop SQL Server and Redis (volumes are kept)
-	$(COMPOSE) down
+infra-down: ## Stop SQL Server and Redis (volumes are kept; VOL=1 removes them)
+	$(COMPOSE) down $(COMPOSE_DOWN_FLAGS)
 
 infra-logs: ## Tail the dependency logs
 	$(COMPOSE) logs -f
@@ -61,8 +65,8 @@ fhircast-up: ## Start the local Epic stand-in (Medplum and the DCR shim), seed M
 fhircast-publish: ## Publish a FHIRcast event to the local Epic stand-in's hub: EVENT=Patient-open|Patient-close PATIENT=<id> [TOPIC=<topic>]
 	@TOPIC="$(TOPIC)" scripts/fhircast-publish.sh "$(EVENT)" "$(PATIENT)"
 
-fhircast-down: ## Stop the local Epic stand-in and the dependencies (volumes are kept)
-	$(COMPOSE) --profile fhircast down
+fhircast-down: ## Stop the local Epic stand-in and the dependencies (volumes are kept; VOL=1 removes them)
+	$(COMPOSE) --profile fhircast down $(COMPOSE_DOWN_FLAGS)
 
 dev: ## Run backend and frontend together (Ctrl-C stops both)
 	@scripts/dev.sh
