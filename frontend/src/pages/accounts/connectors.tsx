@@ -4,6 +4,17 @@ import { useAuth } from "@/auth/auth-context-value";
 import { holds, type Requirement } from "@/auth/permissions";
 import { useGatedRead } from "@/auth/use-gated-read";
 import { type RefusalMessages, useGatedWrite } from "@/auth/use-gated-write";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -141,6 +152,55 @@ function TokenDisclosure({
   );
 }
 
+/**
+ * The delete control, behind a confirmation: deleting a connector cannot be
+ * undone from here — it revokes every token the connector holds, so the
+ * directory behind it stops provisioning at once — and the button sits beside
+ * the issue form's, where a slip is easy. Nothing is sent until the dialog's
+ * own delete is chosen; cancelling, Escape or the overlay sends nothing.
+ */
+function DeleteConnectorConfirmation({
+  connector,
+  onDelete,
+  pending,
+}: {
+  connector: Connector;
+  onDelete: () => void;
+  pending: boolean;
+}) {
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        {/* Reads "Delete"; the label keeps the connector's name for a screen
+            reader, where every connector's button would otherwise sound alike. */}
+        <Button
+          aria-label={`Delete ${connector.displayName}`}
+          disabled={pending}
+          size="sm"
+          variant="destructive"
+        >
+          Delete
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete {connector.displayName}?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Every token it holds is revoked and it stops provisioning at once. Users and Groups it
+            provisioned are kept. This cannot be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction onClick={onDelete} variant="destructive">
+            Delete
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
 function ConnectorSection({
   connector,
   may,
@@ -167,9 +227,11 @@ function ConnectorSection({
           <p className="text-sm text-muted-foreground">Created {formatDate(connector.createdAt)}</p>
         </div>
         {may(DELETE_CONNECTOR) ? (
-          <Button disabled={pending} onClick={onDelete} size="sm" variant="destructive">
-            Delete {connector.displayName}
-          </Button>
+          <DeleteConnectorConfirmation
+            connector={connector}
+            onDelete={onDelete}
+            pending={pending}
+          />
         ) : null}
       </div>
 

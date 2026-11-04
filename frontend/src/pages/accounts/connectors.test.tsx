@@ -73,6 +73,13 @@ const renderConnectors = (
 
 const section = (name: string) => within(screen.getByRole("region", { name: `Connector ${name}` }));
 
+/** Asks to delete Okta and confirms it in the dialog — the one path that sends the request. */
+const deleteOkta = async (user: ReturnType<typeof userEvent.setup>) => {
+  await user.click(await screen.findByRole("button", { name: "Delete Okta" }));
+  const confirmation = await screen.findByRole("alertdialog", { name: "Delete Okta?" });
+  await user.click(within(confirmation).getByRole("button", { name: "Delete" }));
+};
+
 describe("Connectors by Superuser", () => {
   const oneActiveToken = { [LISTING]: json([connector({ tokens: [token()] })]) };
 
@@ -104,7 +111,9 @@ describe("Connectors by Superuser", () => {
     expect(await screen.findByRole("heading", { name: "Okta" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Create connector" })).toBeEnabled();
     const okta = section("Okta");
-    expect(okta.getByRole("button", { name: "Delete Okta" })).toBeEnabled();
+    const remove = okta.getByRole("button", { name: "Delete Okta" });
+    expect(remove).toBeEnabled();
+    expect(remove).toHaveTextContent(/^Delete$/);
     expect(okta.getByRole("button", { name: /^Rotate token/ })).toBeEnabled();
     expect(okta.getByRole("button", { name: /^Revoke token/ })).toBeEnabled();
     expect(okta.getByRole("button", { name: "Issue token for Okta" })).toBeDisabled();
@@ -243,10 +252,42 @@ describe("Connectors", () => {
     });
     const user = userEvent.setup();
 
-    await user.click(await screen.findByRole("button", { name: "Delete Okta" }));
+    await deleteOkta(user);
 
     expect(requests()).toContainEqual({ method: "DELETE", path: connectorAt });
     expect(await screen.findByText("No connectors exist.")).toBeInTheDocument();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+  });
+
+  it("asks before deleting a connector, saying what deleting it does", async () => {
+    const { requests } = await renderConnectors({ [LISTING]: json([connector()]) });
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole("button", { name: "Delete Okta" }));
+
+    const confirmation = await screen.findByRole("alertdialog", { name: "Delete Okta?" });
+    expect(confirmation).toHaveTextContent("Every token it holds is revoked");
+    expect(confirmation).toHaveTextContent("This cannot be undone.");
+    expect(requests()).toEqual([{ method: "GET", path: "/api/admin/connectors" }]);
+  });
+
+  it("sends nothing when the deletion is cancelled or dismissed", async () => {
+    const { requests } = await renderConnectors({ [LISTING]: json([connector()]) });
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole("button", { name: "Delete Okta" }));
+    await user.click(
+      within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Cancel" }),
+    );
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Delete Okta" }));
+    await screen.findByRole("alertdialog");
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+
+    expect(requests()).toEqual([{ method: "GET", path: "/api/admin/connectors" }]);
+    expect(screen.getByRole("heading", { name: "Okta" })).toBeInTheDocument();
   });
 
   /**
@@ -429,7 +470,7 @@ describe("Connectors", () => {
     });
     const user = userEvent.setup();
 
-    await user.click(await screen.findByRole("button", { name: "Delete Okta" }));
+    await deleteOkta(user);
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Deleting Okta failed: it no longer exists. Reload the page.",
@@ -489,7 +530,7 @@ describe("Connectors", () => {
     });
     const user = userEvent.setup();
 
-    await user.click(await screen.findByRole("button", { name: "Delete Okta" }));
+    await deleteOkta(user);
 
     // The re-read is the latest thing to go wrong, so its copy replaces the delete's.
     expect(await screen.findByRole("alert")).toHaveTextContent(
@@ -506,10 +547,10 @@ describe("Connectors", () => {
     });
     const user = userEvent.setup();
 
-    await user.click(await screen.findByRole("button", { name: "Delete Okta" }));
+    await deleteOkta(user);
     // Delete fails (500) and the re-read fails too, so the alert shows the listing copy.
     await screen.findByText(/^Unable to load the connectors/);
-    await user.click(screen.getByRole("button", { name: "Delete Okta" }));
+    await deleteOkta(user);
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       /^Deleting Okta failed\. Please try again\.$/,
