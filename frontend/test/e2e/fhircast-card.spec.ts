@@ -234,6 +234,8 @@ test("an event published once the first Hub Token and lease have expired still r
 });
 
 test("after a renewal the hub holds only the new subscription", async ({ browser }) => {
+  // The launch, up to 20 s to connect and the renewal 15 s after it: past the default 30 s.
+  test.setTimeout(90_000);
   expectStandInConfigured();
   const signIn = seededClinician("fhircast-renewal-cleanup@example.com");
   const id = await provisionServerNamedUser(directory.scim, signIn.practitionerId);

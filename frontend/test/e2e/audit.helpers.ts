@@ -78,7 +78,8 @@ export async function selectAuditOperations(page: Page, labels: readonly string[
   await operationPicker(page).click();
   const search = page.getByRole("combobox", { name: "Operations" });
   await expect(search).toBeFocused();
-  const clear = page.getByRole("option", { name: "Clear selection" });
+  // The picker offers Clear selection at both ends of its list; either clears the same selection.
+  const clear = page.getByRole("option", { name: "Clear selection" }).first();
   if ((await clear.count()) > 0) await clear.click();
   for (const label of labels) {
     await search.fill(label);

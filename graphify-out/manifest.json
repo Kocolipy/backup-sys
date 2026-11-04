@@ -1902,9 +1902,9 @@
     "semantic_hash": ""
   },
   "frontend/test/e2e/accounts-admin.spec.ts": {
-    "mtime": 1793608193.595904,
-    "seen": 1793758065.5507817,
-    "ast_hash": "7b7de1c5c14d68520f0a170a0477d9c2",
+    "mtime": 1793758875.0612686,
+    "seen": 1793759559.982822,
+    "ast_hash": "d045f994df1d11f5d2757a90e04816d8",
     "semantic_hash": ""
   },
   "frontend/test/e2e/auth.helpers.ts": {
@@ -6198,9 +6198,9 @@
     "semantic_hash": ""
   },
   "frontend/test/e2e/fhircast-card.spec.ts": {
-    "mtime": 1793255573.6474402,
-    "seen": 1793758065.55079,
-    "ast_hash": "3672388924d26b7caaa7c40fad93c347",
+    "mtime": 1793759555.5012743,
+    "seen": 1793759559.983125,
+    "ast_hash": "19eb34ac551aeea0567ab24d2db7c44e",
     "semantic_hash": ""
   },
   "docs/adr/0016-smart-access-token-released-to-the-spa-for-fhircast.md": {
@@ -6972,9 +6972,9 @@
     "semantic_hash": ""
   },
   "frontend/test/e2e/audit.helpers.ts": {
-    "mtime": 1793608193.595904,
-    "seen": 1793758065.550783,
-    "ast_hash": "38e085598b599abf4e7224ccd7f69e60",
+    "mtime": 1793759554.6482244,
+    "seen": 1793759559.9828494,
+    "ast_hash": "ef9d407493c07dc9d216f2b1d542a61e",
     "semantic_hash": ""
   },
   "frontend/test/e2e/deleted-user-refusal.spec.ts": {
