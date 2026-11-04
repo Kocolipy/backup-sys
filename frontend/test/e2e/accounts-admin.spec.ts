@@ -79,6 +79,18 @@ async function signInState(userName: string) {
 const usersTable = (page: Page) => page.getByRole("table", { name: "Users" });
 const groupsTable = (page: Page) => page.getByRole("table", { name: "Groups" });
 
+/**
+ * Deletes a connector from the page: its Delete asks first, and only the
+ * dialog's Delete sends the request. The dialog renders outside the section.
+ */
+async function deleteFromPage(page: Page, section: Locator, name: string) {
+  await section.getByRole("button", { name: `Delete ${name}` }).click();
+  const confirmation = page.getByRole("alertdialog", { name: `Delete ${name}?` });
+  await confirmation.getByRole("button", { name: "Delete", exact: true }).click();
+  await expect(confirmation).toHaveCount(0);
+  await expect(section).toHaveCount(0);
+}
+
 /** A table's rows, without its headings — whose sortable ones are buttons that act on no row. */
 const bodyOf = (table: Locator) => table.getByRole("rowgroup").nth(1);
 
@@ -193,8 +205,7 @@ test.describe.serial("ADMIN accounts page", () => {
       expect(write.status()).toBe(403);
       expect(write.headers()["www-authenticate"]).toContain('error="insufficient_scope"');
 
-      await section.getByRole("button", { name: `Delete ${READ_ONLY_CONNECTOR}` }).click();
-      await expect(section).toHaveCount(0);
+      await deleteFromPage(page, section, READ_ONLY_CONNECTOR);
     } finally {
       await client?.dispose();
       await deleteOwnConnectors(page);
@@ -307,8 +318,7 @@ test.describe.serial("ADMIN accounts page", () => {
       }
 
       // Delete the connector from the page.
-      await section.getByRole("button", { name: `Delete ${CONNECTOR_NAME}` }).click();
-      await expect(section).toHaveCount(0);
+      await deleteFromPage(page, section, CONNECTOR_NAME);
     } finally {
       await cleanUp(page, scim, provisioned);
     }
