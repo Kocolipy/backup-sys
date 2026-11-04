@@ -49,6 +49,18 @@ const TOKEN_PERMISSION_HINTS: Record<TokenPermission, string> = {
 };
 
 /**
+ * The order the issue form offers the token Permissions in: Users before
+ * Groups, read before write. Display only — the request still lists them in
+ * `TOKEN_PERMISSIONS`' order, the backend's.
+ */
+const OFFERED_TOKEN_PERMISSIONS = [
+  "user:read",
+  "user:write",
+  "group:read",
+  "group:write",
+] as const satisfies readonly TokenPermission[];
+
+/**
  * Whether the session may send a declared request, and so whether the control
  * that sends it is offered at all. Each control asks about the declaration it
  * sends, never a neighbour's, so a Permission that moves on the backend moves
@@ -280,37 +292,40 @@ function IssueTokenForm({
   };
 
   return (
-    <form className="flex flex-wrap items-end gap-3" onSubmit={issue}>
+    <form className="flex flex-wrap items-start justify-between gap-3" onSubmit={issue}>
       <fieldset className="flex flex-col gap-1">
         <legend className="text-sm font-medium">Permissions for {connector.displayName}</legend>
-        {TOKEN_PERMISSIONS.map((permission) => (
+        {OFFERED_TOKEN_PERMISSIONS.map((permission) => (
           <Label className="font-normal" key={permission}>
             <Checkbox
               checked={chosen.includes(permission)}
               onCheckedChange={(checked) => toggle(permission, checked === true)}
             />
-            <span className="font-mono">{permission}</span>
+            {/* As wide as the longest name, so every hint starts in one column. */}
+            <span className="w-[11ch] shrink-0 font-mono">{permission}</span>
             <span className="text-muted-foreground">{TOKEN_PERMISSION_HINTS[permission]}</span>
           </Label>
         ))}
       </fieldset>
-      <div className="flex flex-col gap-1">
-        <Label htmlFor={lifetimeId}>
-          Lifetime in days for {connector.displayName} (default 365)
-        </Label>
-        <Input
-          id={lifetimeId}
-          inputMode="numeric"
-          max={365}
-          min={1}
-          onChange={(event) => setLifetime(event.target.value)}
-          type="number"
-          value={lifetime}
-        />
+      <div className="ml-auto flex flex-col items-end gap-3">
+        <div className="flex flex-col gap-1">
+          <Label htmlFor={lifetimeId}>
+            Lifetime in days for {connector.displayName} (default 365)
+          </Label>
+          <Input
+            id={lifetimeId}
+            inputMode="numeric"
+            max={365}
+            min={1}
+            onChange={(event) => setLifetime(event.target.value)}
+            type="number"
+            value={lifetime}
+          />
+        </div>
+        <Button disabled={pending || chosen.length === 0} size="sm" type="submit">
+          Issue token for {connector.displayName}
+        </Button>
       </div>
-      <Button disabled={pending || chosen.length === 0} size="sm" type="submit">
-        Issue token for {connector.displayName}
-      </Button>
     </form>
   );
 }

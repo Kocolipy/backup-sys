@@ -330,15 +330,18 @@ describe("Connectors", () => {
   });
 
   /** The Superuser may put any token-grantable Permission on a token, whatever its own session lists. */
-  it("offers the Superuser every token Permission", async () => {
+  it("offers the Superuser every token Permission, Users before Groups", async () => {
     await renderConnectors({ [LISTING]: json([connector()]) }, ["connector:read"]);
 
     await screen.findByRole("heading", { name: "Okta" });
     const permissions = within(screen.getByRole("group", { name: "Permissions for Okta" }));
-    for (const permission of ["group:read", "group:write", "user:read", "user:write"]) {
+    const offered = ["user:read", "user:write", "group:read", "group:write"];
+    for (const permission of offered) {
       expect(permissions.getByRole("checkbox", { name: new RegExp(permission) })).toBeEnabled();
     }
-    expect(permissions.getAllByRole("checkbox")).toHaveLength(4);
+    expect(
+      permissions.getAllByRole("checkbox").map((box) => box.closest("label")?.textContent),
+    ).toEqual(offered.map((permission) => expect.stringContaining(permission)));
     expect(permissions.getByText("read Users")).toBeInTheDocument();
     expect(permissions.getByText("create, change and delete Users")).toBeInTheDocument();
     expect(permissions.getByText("read Groups")).toBeInTheDocument();
