@@ -69,11 +69,12 @@ async function signedInBrowser(browser: Browser, userName: string) {
 }
 
 /**
- * Park the page on `/change-password`, reached by an in-app link so the SPA
- * keeps its authenticated state, and nothing there writes anything.
+ * Park the page on Settings, which holds the password change, reached by an
+ * in-app link so the SPA keeps its authenticated state, and nothing there
+ * writes anything.
  */
 async function park(page: Page) {
-  await page.getByRole("link", { name: "Change password" }).click();
+  await page.getByRole("link", { name: "Settings", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Change your password" })).toBeVisible();
 }
 

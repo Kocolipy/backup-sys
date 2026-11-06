@@ -97,8 +97,14 @@
    - border/input            <- outline-variant (#c3c6d5) — DESIGN.md reserves
      outline/outline-variant for hairline borders
    - ring                    <- primary-container (#0047ab) — same value as
-     --sidebar-accent, chosen for visible contrast against light surfaces
-   - sidebar*                <- unchanged from the original migration
+     --sidebar-ring, chosen for visible contrast against light surfaces
+   - sidebar/sidebar-foreground <- surface-container-lowest (#fff) / on-surface,
+     same values as card/card-foreground — the sidebar is a light surface, not
+     the dark rail the original migration left it as
+   - sidebar-accent/sidebar-accent-foreground <- surface-container / primary —
+     same value as accent, but with primary (not on-surface) for the active
+     row's text so it reads as the brand-coloured nav indicator
+   - sidebar-border/sidebar-ring <- same values as border/ring
    ------------------------------------------------------------------------- */
 :root {
   /* 0.25rem base -> radius-md: 2px (DESIGN.md's tight DEFAULT, tightest
@@ -131,12 +137,12 @@
   --border: oklch(0.829 0.021 276.896);
   --input: oklch(0.829 0.021 276.896);
   --ring: oklch(0.428 0.172 259.702);
-  --sidebar: oklch(0.341 0.137 259.659);
-  --sidebar-foreground: oklch(1 0 0);
-  --sidebar-accent: oklch(0.428 0.172 259.702);
-  --sidebar-accent-foreground: oklch(0.805 0.098 268.749);
-  --sidebar-border: oklch(0.829 0.085 269.737);
-  --sidebar-ring: oklch(0.916 0.04 273.348);
+  --sidebar: oklch(1 0 0);
+  --sidebar-foreground: oklch(0.225 0.035 257.675);
+  --sidebar-accent: oklch(0.949 0.024 267.93);
+  --sidebar-accent-foreground: oklch(0.341 0.137 259.659);
+  --sidebar-border: oklch(0.829 0.021 276.896);
+  --sidebar-ring: oklch(0.428 0.172 259.702);
 }
 
 .dark {
@@ -165,12 +171,12 @@
   --border: oklch(0.829 0.021 276.896);
   --input: oklch(0.829 0.021 276.896);
   --ring: oklch(0.428 0.172 259.702);
-  --sidebar: oklch(0.341 0.137 259.659);
-  --sidebar-foreground: oklch(1 0 0);
-  --sidebar-accent: oklch(0.428 0.172 259.702);
-  --sidebar-accent-foreground: oklch(0.805 0.098 268.749);
-  --sidebar-border: oklch(0.829 0.085 269.737);
-  --sidebar-ring: oklch(0.916 0.04 273.348);
+  --sidebar: oklch(1 0 0);
+  --sidebar-foreground: oklch(0.225 0.035 257.675);
+  --sidebar-accent: oklch(0.949 0.024 267.93);
+  --sidebar-accent-foreground: oklch(0.341 0.137 259.659);
+  --sidebar-border: oklch(0.829 0.021 276.896);
+  --sidebar-ring: oklch(0.428 0.172 259.702);
 }
 
 @theme inline {

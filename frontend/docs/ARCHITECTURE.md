@@ -490,14 +490,21 @@ falling back to `/`.
 optional `homeLink`, and the shell's metadata (title, back link, width,
 centering). `App.tsx` maps the table to routes, wrapping an entry with
 `permissions` in its own `ProtectedRoute`; the shell finds the current entry
-with `matchPath`; Home is handed the other entries and links each with a
+with `matchPath`, and its navigation sidebar links each entry with a
 `homeLink` that `mayOpen` admits. **Adding a signed-in page is one entry
 there**, nothing in `App.tsx` or the shell. (`BrowserRouter` has no route
 `handle` / `useMatches`, so the table is the single source.)
 
-`SignedInShell` owns the header, the page's one error line (the page-status
-scope), the back link (withheld from a confined session) and Sign out; a page
-renders only its body. A failed or CSRF-expired logout ends nothing — the
+`SignedInShell` owns the navigation sidebar (`shell/navigation-sidebar.tsx`,
+which folds to its icons from its top-right control, is a sheet on a phone,
+and holds Settings and Sign out at its foot), the top bar (`shell/top-bar.tsx`:
+the patient in the tab's EHR context by name and NRIC, read with `patient:read`
+beside Home's own read of them, then Notifications, Settings, Help and who is
+signed in), the page title (kept for screen readers only on every page the
+sidebar reaches, `titleHidden`), the page's one error line (the page-status
+scope) and the back link (the password change's alone, withheld from a confined
+session); a page renders only its body. Settings (`/settings`) holds the password change; the change-required
+flag still confines a session to `/change-password`, the same form alone. A failed or CSRF-expired logout ends nothing — the
 session and its token stand (ADR 0009) — and the line goes to the page status.
 The idle warning's Sign out runs the same session action; the Idle sign-out at
 the limit is a separate path, and ends the session even when its logout fails.

@@ -63,7 +63,7 @@ const EXPECTED: Record<
 async function expectHome(page: Page, linksToAccounts: boolean, linksToAudit: boolean) {
   const patientRequests = recordPatientRequests(page);
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Home" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Profile" })).toBeVisible();
   // Every fixture's User holds the baseline patient:read, but a password
   // login puts no patient in context: the Patient card says so and reads nothing.
   await expectNoPatientInContext(page);
@@ -80,7 +80,7 @@ async function expectAccounts(page: Page, view: AccountsView, createConnector: b
   await page.goto("/accounts");
   if (view === null) {
     // Routed away exactly as any page the User lacks the Permission for.
-    await expect(page.getByRole("heading", { name: "Home" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Profile" })).toBeVisible();
     await expect(page).toHaveURL("/");
     return;
   }
@@ -108,7 +108,7 @@ async function expectAudit(page: Page, canView: boolean) {
   await page.goto("/audit");
   if (!canView) {
     // Routed away exactly as any page the User lacks the Permission for.
-    await expect(page.getByRole("heading", { name: "Home" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Profile" })).toBeVisible();
     await expect(page).toHaveURL("/");
     return;
   }

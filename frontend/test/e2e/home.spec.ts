@@ -1,54 +1,59 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 import { cardTitled } from "./card.helpers";
 import { expectNoPatientInContext, recordPatientRequests } from "./patient.helpers";
 
+/** The navigation sidebar, which the layout renders beside every signed-in page. */
+const sidebar = (page: Page) => page.locator('[data-slot="sidebar"]');
+
 test.describe("Home", () => {
-  test("opens Home with the saved session, the Patient card above the Pages card", async ({
-    page,
-  }) => {
+  test("opens Home with the saved session and the Patient card", async ({ page }) => {
     await page.goto("/");
 
     await expect(page).toHaveURL("/");
     await expect(page.getByText("Signed in as admin")).toBeVisible();
-    await expect(page.getByRole("heading", { level: 3 })).toHaveText(["Patient", "Pages"]);
+    await expect(page.getByRole("heading", { level: 3 })).toHaveText(["Patient"]);
   });
 
-  // The Superuser opens every page, so the Pages card links each of them.
-  test("links the Superuser to every page from the Pages card", async ({ page }) => {
+  // The Superuser opens every page, so the navigation sidebar links each of
+  // them, and Settings at its foot.
+  test("links the Superuser to every page from the navigation sidebar", async ({ page }) => {
     await page.goto("/");
 
-    const card = cardTitled(page, "Pages");
-    await expect(card.getByRole("link")).toHaveText([
+    await expect(sidebar(page).getByRole("link")).toHaveText([
+      "Profile",
       "Manage accounts",
       "View audit log",
-      "Change password",
+      "Settings",
     ]);
   });
 
-  // Each page Home links names its way back, and following it lands on Home again.
-  for (const [link, title, back] of [
-    ["Manage accounts", "Accounts", "Back to home"],
-    ["View audit log", "Audit", "Back to home"],
-    ["Change password", "Change password", "Back"],
+  // Each page the sidebar links opens under its own title, offers no back link,
+  // and the sidebar's Profile link lands on Home again.
+  for (const [link, title] of [
+    ["Manage accounts", "Accounts"],
+    ["View audit log", "Audit"],
+    ["Settings", "Settings"],
   ] as const) {
-    test(`returns from ${title} to Home through its "${back}" link`, async ({ page }) => {
+    test(`returns from ${title} to Home through the sidebar`, async ({ page }) => {
       await page.goto("/");
-      await cardTitled(page, "Pages").getByRole("link", { name: link }).click();
+      await sidebar(page).getByRole("link", { name: link, exact: true }).click();
       await expect(page.getByRole("heading", { level: 1 })).toHaveText(title);
+      await expect(page.getByRole("link", { name: /^Back/ })).toHaveCount(0);
 
-      await page.getByRole("link", { name: back, exact: true }).click();
+      await sidebar(page).getByRole("link", { name: "Profile", exact: true }).click();
 
       await expect(page).toHaveURL("/");
-      await expect(page.getByRole("heading", { level: 1 })).toHaveText("Home");
+      await expect(page.getByRole("heading", { level: 1 })).toHaveText("Profile");
     });
   }
 
-  test("offers no control but Sign out", async ({ page }) => {
+  // Sign out, the sidebar's and the top bar's controls are the layout's, outside the page.
+  test("offers no control of its own", async ({ page }) => {
     await page.goto("/");
     await expectNoPatientInContext(page);
 
-    await expect(page.getByRole("button")).toHaveText(["Sign out"]);
+    await expect(page.getByRole("main").getByRole("button")).toHaveCount(0);
   });
 
   // A password login puts no patient in context, though the Superuser holds
@@ -66,7 +71,7 @@ test.describe("Home", () => {
   test("sends a signed-in visit to login on to Home", async ({ page }) => {
     await page.goto("/login");
 
-    await expect(page.getByRole("heading", { name: "Home" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Profile" })).toBeVisible();
     await expect(page).toHaveURL("/");
   });
 });

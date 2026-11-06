@@ -58,8 +58,17 @@ require_node() {
        Activate it from the repo root: 'nvm use', 'asdf install', or 'mise install'."
   fi
   require_cmd "$NPM"
-  local npm_pin npm_actual
-  npm_pin="$(node -p 'require("'"$FRONTEND_DIR"'/package.json").engines.npm.replace(/[^0-9.]/g, "")')"
+  local npm_pin npm_actual frontend_dir_for_node
+  # Under Git Bash, $FRONTEND_DIR is POSIX-style (/c/...), but `node` there is
+  # a native win32 binary whose require() can't resolve that form. cygpath -m
+  # gives the drive-letter form with forward slashes, safe to embed in the JS
+  # string literal below without backslash-escaping; unaffected platforms
+  # (no cygpath) use $FRONTEND_DIR as-is.
+  frontend_dir_for_node="$FRONTEND_DIR"
+  if command -v cygpath >/dev/null 2>&1; then
+    frontend_dir_for_node="$(cygpath -m "$FRONTEND_DIR")"
+  fi
+  npm_pin="$(node -p 'require("'"$frontend_dir_for_node"'/package.json").engines.npm.replace(/[^0-9.]/g, "")')"
   npm_actual="$("$NPM" --version)"
   version_ge "$npm_actual" "$npm_pin" ||
     die "npm $npm_actual is older than the pinned $npm_pin (frontend/package.json engines.npm).

@@ -1,13 +1,12 @@
-import { act, screen } from "@testing-library/react";
+import { act, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { bare, holding, json, STILL_CHECKING } from "@/auth/session-adapter.testHelpers";
 import type { Permission } from "@/auth/api";
 import { adoptLaunchLanding, clearEhrContext } from "@/auth/ehr-context";
 
-import { Home } from "./home";
 import { TAN_WEI_MING, TAN_WEI_MING_READ } from "./patient.testHelpers";
-import { renderInLayout, renderSignedIn } from "@/shell/signed-in-shell.testHelpers";
+import { renderSignedIn } from "@/shell/signed-in-shell.testHelpers";
 
 /** The tab loaded at an Epic landing with `patient` in context. */
 const landedFromEpicWith = (patient: string) => {
@@ -28,79 +27,13 @@ const NO_FHIRCAST_RELEASE = { "GET /api/auth/epic/fhircast": bare(404) };
 const patientReads = (sent: readonly { method: string; path: string }[]) =>
   sent.filter(({ path }) => path.startsWith("/api/patient/"));
 
+/** The page beneath the top bar, which names the patient in context too. */
+const page = () => within(screen.getByRole("main"));
+
 /** Every baseline Permission a User holds. */
 const BASELINE: Permission[] = ["patient:read"];
 
 describe("Home", () => {
-  it("links a page it is handed only for a session that may open it, with no edit of its own", async () => {
-    const extra = {
-      homeLink: "View reports",
-      path: "/reports",
-      permissions: ["ops:read"] as const,
-    };
-    const routes = [{ element: <Home pages={[extra]} />, path: "/" }];
-
-    const { unmount } = await renderInLayout(routes, "/", holding(["ops:read"]), {});
-    expect(screen.getByRole("link", { name: "View reports" })).toHaveAttribute("href", "/reports");
-    unmount();
-
-    await renderInLayout(routes, "/", holding(["audit:read"]), {});
-    expect(screen.queryByRole("link", { name: "View reports" })).not.toBeInTheDocument();
-  });
-
-  it("links no page it is handed without a link label", async () => {
-    const unlabelled = { path: "/reports" };
-    await renderInLayout([{ element: <Home pages={[unlabelled]} />, path: "/" }], "/", holding([]));
-
-    expect(screen.queryAllByRole("link")).toEqual([]);
-  });
-
-  // Each page Home links to, with the Permissions its route guard opens it for
-  // (none: every signed-in session), as the registry declares them today.
-  it.each([
-    ["Manage accounts", "/accounts", ["user:read", "group:read", "connector:read"]],
-    ["View audit log", "/audit", ["audit:read"]],
-    ["Change password", "/change-password", []],
-  ] as const)(
-    "links %s exactly for a session its route guard would open it to",
-    async (label, path, qualifying) => {
-      /** Where the link labelled `label` leads for a session holding `held`, or null if absent. */
-      const linkFor = async (held: readonly Permission[]) => {
-        const { unmount } = await renderHolding([...held]);
-        const href = screen.queryByRole("link", { name: label })?.getAttribute("href") ?? null;
-        unmount();
-        return href;
-      };
-      const forEverySession = qualifying.length === 0 ? path : null;
-
-      // A Monitoring account's Permission opens none of the guarded pages.
-      expect(await linkFor([])).toBe(forEverySession);
-      expect(await linkFor(["ops:read"])).toBe(forEverySession);
-      for (const permission of qualifying) expect(await linkFor([permission])).toBe(path);
-      expect(await linkFor([...qualifying])).toBe(path);
-    },
-  );
-
-  it("lists the pages it links to in registry order, and not itself", async () => {
-    await renderHolding(["user:read", "group:read", "connector:read", "audit:read"]);
-
-    expect(screen.getAllByRole("link").map((link) => link.textContent)).toEqual([
-      "Manage accounts",
-      "View audit log",
-      "Change password",
-    ]);
-  });
-
-  it("styles a page link as an underlined text link", async () => {
-    await renderHolding([]);
-
-    expect(screen.getByRole("link", { name: "Change password" })).toHaveClass(
-      "text-sm",
-      "font-medium",
-      "underline",
-    );
-  });
-
   it("shows no patient in context, and asks for nothing, for a session holding the baseline Permissions", async () => {
     const { requests } = await renderHolding(BASELINE);
 
@@ -116,7 +49,7 @@ describe("Home", () => {
       ...NO_FHIRCAST_RELEASE,
     });
 
-    expect(await screen.findByText("Tan Wei Ming")).toBeInTheDocument();
+    expect(await page().findByRole("heading", { name: "Tan Wei Ming" })).toBeInTheDocument();
   });
 
   it("asks for no patient after an EHR launch that put none in context", async () => {
@@ -147,7 +80,7 @@ describe("Home", () => {
       [TAN_WEI_MING_READ]: json(TAN_WEI_MING),
       ...NO_FHIRCAST_RELEASE,
     });
-    await screen.findByText("Tan Wei Ming");
+    await page().findByText("Tan Wei Ming");
 
     act(() => clearEhrContext());
 
@@ -157,21 +90,19 @@ describe("Home", () => {
     ]).toEqual([null, null]);
   });
 
-  it("offers no control but Sign out", async () => {
+  it("offers no control of its own", async () => {
     await renderHolding(BASELINE);
 
-    expect(screen.queryAllByRole("button").map((button) => button.textContent)).toEqual([
-      "Sign out",
-    ]);
+    // Sign out and the sidebar's controls are the layout's, outside the page.
+    expect(page().queryAllByRole("button")).toEqual([]);
   });
 
-  it("shows the Patient card above the links card, titled Pages", async () => {
+  it("shows the page title above the Patient card", async () => {
     await renderHolding(BASELINE);
 
     expect(screen.getAllByRole("heading").map((heading) => heading.textContent)).toEqual([
-      "Home",
+      "Profile",
       "Patient",
-      "Pages",
     ]);
   });
 

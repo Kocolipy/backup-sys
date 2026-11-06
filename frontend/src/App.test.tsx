@@ -61,21 +61,21 @@ describe("App", () => {
   it("sends a User's visit to a path with no route of its own on to Home", async () => {
     renderApp(SIGNED_IN, "/no-such-page");
 
-    expect(await screen.findByRole("heading", { name: "Home" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Profile" })).toBeInTheDocument();
     expect(window.location.pathname).toBe("/");
   });
 
   it("sends a User's visit to login on to Home", async () => {
     renderApp(SIGNED_IN, "/login");
 
-    expect(await screen.findByRole("heading", { name: "Home" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Profile" })).toBeInTheDocument();
     expect(window.location.pathname).toBe("/");
   });
 
   it("renders Home when the session is authenticated", async () => {
     renderApp(SIGNED_IN);
 
-    expect(await screen.findByRole("heading", { name: "Home" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Profile" })).toBeInTheDocument();
     expect(screen.getByText("Signed in as ada")).toBeInTheDocument();
   });
 
@@ -127,7 +127,7 @@ describe("App", () => {
     await user.type(screen.getByLabelText("Password"), password);
     await user.click(screen.getByRole("button", { name: "Sign in" }));
 
-    expect(await screen.findByRole("heading", { name: "Home" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Profile" })).toBeInTheDocument();
     expect(window.location.pathname).toBe("/");
     // One token fetch, and the login carrying it: never refused for want of it.
     expect(requests({ tokenFetches: true })).toEqual([
@@ -140,14 +140,14 @@ describe("App", () => {
   it("redirects a User holding no Accounts Permission away from account administration", async () => {
     renderApp(SIGNED_IN, "/accounts");
 
-    expect(await screen.findByRole("heading", { name: "Home" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Profile" })).toBeInTheDocument();
     expect(window.location.pathname).toBe("/");
   });
 
   it("redirects a User holding no audit:read away from the audit trail", async () => {
     renderApp(SIGNED_IN, "/audit");
 
-    expect(await screen.findByRole("heading", { name: "Home" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Profile" })).toBeInTheDocument();
     expect(window.location.pathname).toBe("/");
   });
 
@@ -294,7 +294,7 @@ describe("App with the change-required flag", () => {
     await user.click(screen.getByRole("button", { name: "Sign in" }));
 
     // Not replayed back to /change-password: the change recorded no return destination.
-    expect(await screen.findByRole("heading", { name: "Home" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Profile" })).toBeInTheDocument();
     expect(window.location.pathname).toBe("/");
   });
 

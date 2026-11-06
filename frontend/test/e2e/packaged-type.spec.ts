@@ -59,7 +59,7 @@ test("the page title renders on headline-lg and a card title on headline-sm", as
   await expectNoPatientInContext(page);
 
   expect({
-    pageTitle: await typeOf(page.getByRole("heading", { level: 1, name: "Home" })),
+    pageTitle: await typeOf(page.getByRole("heading", { level: 1, name: "Profile" })),
     cardTitle: await typeOf(page.getByRole("heading", { level: 3, name: "Patient" })),
   }).toEqual({
     // DESIGN.md: Public Sans 28/36, 700, -0.02em (of 28px).

@@ -71,16 +71,16 @@ async function connectedHome(options: HubOptions = {}, answers: Answers = {}) {
   return Object.assign(hub, { pageRequests: requests, session });
 }
 
-/** Leaves Home for another signed-in page, the password change, by Home's own link. */
+/** Leaves Home for another signed-in page, Settings, by the sidebar's link. */
 async function leaveHome() {
-  fireEvent.click(screen.getByRole("link", { name: "Change password" }));
-  await screen.findByRole("heading", { level: 1, name: "Change password" });
+  fireEvent.click(screen.getByRole("link", { name: "Settings" }));
+  await screen.findByRole("heading", { level: 1, name: "Settings" });
 }
 
-/** Comes back to Home by the page's back link. */
+/** Comes back to Home by the sidebar's link. */
 async function returnHome() {
-  fireEvent.click(screen.getByRole("link", { name: "Back" }));
-  await screen.findByRole("heading", { level: 1, name: "Home" });
+  fireEvent.click(screen.getByRole("link", { name: "Profile" }));
+  await screen.findByRole("heading", { level: 1, name: "Profile" });
 }
 
 /** Signs out by the layout's Sign out, and waits for the session to have ended. */

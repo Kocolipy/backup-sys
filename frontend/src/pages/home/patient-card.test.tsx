@@ -1,4 +1,4 @@
-import { act, fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import type { OperationOutcome } from "fhir/r5";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -100,20 +100,21 @@ describe("PatientCard with a patient in context", () => {
     expect(requests()).toEqual([{ method: "GET", path: "/api/patient/eq081-VQEgP8drUUqCWzHfw3" }]);
   });
 
-  it("is headed Patient", async () => {
+  it("is a region named Patient, headed by the patient's name", async () => {
     await renderCard(json(TAN_WEI_MING));
 
-    expect(screen.getByRole("heading", { name: "Patient" })).toBeInTheDocument();
+    const banner = await screen.findByRole("region", { name: "Patient" });
+    expect(within(banner).getByRole("heading", { name: "Tan Wei Ming" })).toBeInTheDocument();
   });
 
-  it("shows the loaded patient's name, NRIC in full, gender, date of birth and age", async () => {
+  it("shows the loaded patient's NRIC in full, gender, age and date of birth", async () => {
     await renderCard(json(TAN_WEI_MING));
     await screen.findByText("Tan Wei Ming");
 
     expect(fields()).toEqual({
-      "Date of birth": "12 Mar 1985 (41 y)",
+      Age: "41",
+      "Date of birth": "12 Mar 1985",
       Gender: "Male",
-      Name: "Tan Wei Ming",
       NRIC: "S1234567A",
     });
   });
@@ -169,7 +170,7 @@ describe("PatientCard with a patient in context", () => {
     await renderCard(json(TAN_WEI_MING), at("2026-03-11T23:59:00+08:00"));
     await screen.findByText("Tan Wei Ming");
 
-    expect(fields()["Date of birth"]).toBe("12 Mar 1985 (40 y)");
+    expect(fields().Age).toBe("40");
   });
 
   it.each([
@@ -221,6 +222,9 @@ describe("PatientCard following the FHIRcast hub", () => {
   /** The FHIRcast card's one status line. */
   const fhircastStatus = () => screen.getByRole("status", { name: "FHIRcast" });
 
+  /** The page beneath the top bar, which names the patient in context too. */
+  const page = () => within(screen.getByRole("main"));
+
   /** Every patient read the page sent, in order. */
   const patientReads = (requests: () => readonly { method: string; path: string }[]) =>
     requests()
@@ -262,7 +266,7 @@ describe("PatientCard following the FHIRcast hub", () => {
 
     publish(hub, "Patient-open", TAN_WEI_MING.id);
 
-    expect(await screen.findByText("Tan Wei Ming")).toBeInTheDocument();
+    expect(await page().findByText("Tan Wei Ming")).toBeInTheDocument();
   });
 
   it("shows the loading note at once on a Patient-open for another patient, never the previous one", async () => {
@@ -271,13 +275,13 @@ describe("PatientCard following the FHIRcast hub", () => {
       [SITI_READ]: siti.answer,
       [TAN_WEI_MING_READ]: json(TAN_WEI_MING),
     });
-    await screen.findByText("Tan Wei Ming");
+    await page().findByText("Tan Wei Ming");
 
     publish(hub, "Patient-open", SITI.id);
 
     expect([
-      screen.queryByText("Loading the patient…") !== null,
-      screen.queryByText("Tan Wei Ming"),
+      page().queryByText("Loading the patient…") !== null,
+      page().queryByText("Tan Wei Ming"),
     ]).toEqual([true, null]);
   });
 
@@ -286,11 +290,11 @@ describe("PatientCard following the FHIRcast hub", () => {
       [SITI_READ]: json(SITI),
       [TAN_WEI_MING_READ]: json(TAN_WEI_MING),
     });
-    await screen.findByText("Tan Wei Ming");
+    await page().findByText("Tan Wei Ming");
 
     publish(hub, "Patient-open", SITI.id);
 
-    expect(await screen.findByText("Siti Nurhaliza binte Ahmad")).toBeInTheDocument();
+    expect(await page().findByText("Siti Nurhaliza binte Ahmad")).toBeInTheDocument();
   });
 
   it("says no patient is in context when the opened patient reads 404, reporting nothing", async () => {
@@ -298,11 +302,11 @@ describe("PatientCard following the FHIRcast hub", () => {
       [SITI_READ]: bare(404),
       [TAN_WEI_MING_READ]: json(TAN_WEI_MING),
     });
-    await screen.findByText("Tan Wei Ming");
+    await page().findByText("Tan Wei Ming");
 
     publish(hub, "Patient-open", SITI.id);
 
-    expect(await screen.findByText("No patient in context")).toBeInTheDocument();
+    expect(await page().findByText("No patient in context")).toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
@@ -311,7 +315,7 @@ describe("PatientCard following the FHIRcast hub", () => {
       [SITI_READ]: bare(503),
       [TAN_WEI_MING_READ]: json(TAN_WEI_MING),
     });
-    await screen.findByText("Tan Wei Ming");
+    await page().findByText("Tan Wei Ming");
 
     publish(hub, "Patient-open", SITI.id);
 
@@ -325,13 +329,13 @@ describe("PatientCard following the FHIRcast hub", () => {
       [TAN_WEI_MING_READ]: tan.answer,
     });
     publish(hub, "Patient-open", SITI.id);
-    await screen.findByText("Siti Nurhaliza binte Ahmad");
+    await page().findByText("Siti Nurhaliza binte Ahmad");
 
     await tan.settle(json(TAN_WEI_MING));
 
     expect([
-      screen.queryByText("Siti Nurhaliza binte Ahmad") !== null,
-      screen.queryByText("Tan Wei Ming"),
+      page().queryByText("Siti Nurhaliza binte Ahmad") !== null,
+      page().queryByText("Tan Wei Ming"),
     ]).toEqual([true, null]);
   });
 
@@ -339,12 +343,13 @@ describe("PatientCard following the FHIRcast hub", () => {
     const { hub, requests } = await connectedHome(`/#patient=${TAN_WEI_MING.id}&encounter=enc-1`, {
       [TAN_WEI_MING_READ]: json(TAN_WEI_MING),
     });
-    await screen.findByText("Tan Wei Ming");
+    await page().findByText("Tan Wei Ming");
 
     publish(hub, "Patient-open", TAN_WEI_MING.id);
 
-    expect([patientReads(requests), screen.queryByText("Tan Wei Ming") !== null]).toEqual([
-      [TAN_WEI_MING_READ],
+    expect([patientReads(requests), page().queryByText("Tan Wei Ming") !== null]).toEqual([
+      // One read by the card, one by the top bar, and none again.
+      [TAN_WEI_MING_READ, TAN_WEI_MING_READ],
       true,
     ]);
   });
@@ -353,13 +358,13 @@ describe("PatientCard following the FHIRcast hub", () => {
     const { hub } = await connectedHome(`/#patient=${TAN_WEI_MING.id}`, {
       [TAN_WEI_MING_READ]: json(TAN_WEI_MING),
     });
-    await screen.findByText("Tan Wei Ming");
+    await page().findByText("Tan Wei Ming");
 
     publish(hub, "Patient-close", TAN_WEI_MING.id);
 
     expect([
-      screen.queryByText("No patient in context") !== null,
-      screen.queryByText("Tan Wei Ming"),
+      page().queryByText("No patient in context") !== null,
+      page().queryByText("Tan Wei Ming"),
       fhircastStatus().textContent,
     ]).toEqual([true, null, "Connected"]);
   });
@@ -368,36 +373,36 @@ describe("PatientCard following the FHIRcast hub", () => {
     const { hub } = await connectedHome(`/#patient=${TAN_WEI_MING.id}`, {
       [TAN_WEI_MING_READ]: json(TAN_WEI_MING),
     });
-    await screen.findByText("Tan Wei Ming");
+    await page().findByText("Tan Wei Ming");
     publish(hub, "Patient-close", TAN_WEI_MING.id);
-    await screen.findByText("No patient in context");
+    await page().findByText("No patient in context");
 
     publish(hub, "Patient-open", TAN_WEI_MING.id);
 
-    expect(await screen.findByText("Tan Wei Ming")).toBeInTheDocument();
+    expect(await page().findByText("Tan Wei Ming")).toBeInTheDocument();
   });
 
   it("shows, back on Home, the patient a Patient-open named while the clinician was on another page", async () => {
     const { hub } = await connectedHome("/#launch", { [SITI_READ]: json(SITI) });
-    fireEvent.click(screen.getByRole("link", { name: "Change password" }));
-    await screen.findByRole("heading", { level: 1, name: "Change password" });
+    fireEvent.click(screen.getByRole("link", { name: "Settings" }));
+    await screen.findByRole("heading", { level: 1, name: "Settings" });
 
     publish(hub, "Patient-open", SITI.id);
-    fireEvent.click(screen.getByRole("link", { name: "Back" }));
+    fireEvent.click(screen.getByRole("link", { name: "Profile" }));
 
-    expect(await screen.findByText("Siti Nurhaliza binte Ahmad")).toBeInTheDocument();
+    expect(await page().findByText("Siti Nurhaliza binte Ahmad")).toBeInTheDocument();
   });
 
   it("keeps the opened patient while the connection reconnects", async () => {
     const { hub } = await connectedHome("/#launch", { [SITI_READ]: json(SITI) });
     publish(hub, "Patient-open", SITI.id);
-    await screen.findByText("Siti Nurhaliza binte Ahmad");
+    await page().findByText("Siti Nurhaliza binte Ahmad");
 
     act(() => hub.dropSockets());
 
     expect([
       fhircastStatus().textContent,
-      screen.queryByText("Siti Nurhaliza binte Ahmad") !== null,
+      page().queryByText("Siti Nurhaliza binte Ahmad") !== null,
     ]).toEqual(["Reconnecting", true]);
   });
 
@@ -420,13 +425,13 @@ describe("PatientCard following the FHIRcast hub", () => {
         { socket: ["confirms", "closes"] },
       );
       publish(hub, "Patient-open", SITI.id);
-      await screen.findByText("Siti Nurhaliza binte Ahmad");
+      await page().findByText("Siti Nurhaliza binte Ahmad");
       act(() => hub.dropSockets());
 
       await act(() => vi.advanceTimersByTimeAsync(RETRIES_RUN_OUT_MS));
       await waitFor(() => expect(fhircastStatus()).toHaveTextContent(/^Disconnected$/));
 
-      expect(screen.queryByText("Siti Nurhaliza binte Ahmad")).toBeInTheDocument();
+      expect(page().queryByText("Siti Nurhaliza binte Ahmad")).toBeInTheDocument();
     });
   });
 
@@ -455,6 +460,6 @@ describe("PatientCard following the FHIRcast hub", () => {
     });
 
     await waitFor(() => expect(fhircastStatus()).toHaveTextContent(shown));
-    expect(screen.queryByText("Tan Wei Ming")).toBeInTheDocument();
+    expect(page().queryByText("Tan Wei Ming")).toBeInTheDocument();
   });
 });

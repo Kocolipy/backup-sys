@@ -1,8 +1,9 @@
-import { screen } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Route, Routes } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 
+import type { Permission } from "@/auth/api";
 import { EVERY_PERMISSION } from "@/auth/auth-context.testHelpers";
 import {
   bare,
@@ -31,6 +32,7 @@ function renderShell(path = "/", answers: Answers = {}, session: StartingSession
         <Route element={<p>page body</p>} path="/accounts" />
         <Route element={<p>page body</p>} path="/audit" />
         <Route element={<p>page body</p>} path="/change-password" />
+        <Route element={<p>page body</p>} path="/settings" />
         <Route element={<p>page body</p>} path="*" />
       </Route>
     </Routes>,
@@ -41,7 +43,7 @@ function renderShell(path = "/", answers: Answers = {}, session: StartingSession
 
 const STILL_SIGNED_IN = /^Unable to sign out\. Please try again\. You are still signed in\.$/;
 
-const TOP_ALIGNED_WIDE = "mx-auto flex min-h-svh flex-col gap-6 p-8 max-w-6xl";
+const TOP_ALIGNED_WIDE = "mx-auto flex flex-1 flex-col gap-6 p-8 max-w-6xl";
 
 const signOut = () => screen.getByRole("button", { name: "Sign out" });
 
@@ -53,13 +55,9 @@ describe("SignedInShell", () => {
     expect(screen.getByText("page body")).toBeInTheDocument();
   });
 
-  it("links back to Home from the Audit page", async () => {
-    await renderShell("/audit");
-    expect(screen.getByRole("link", { name: "Back to home" })).toHaveAttribute("href", "/");
-  });
-
-  it("offers no back link on Home", async () => {
-    await renderShell("/");
+  // The sidebar is a link away from every other page, so none of these needs one.
+  it.each(["/", "/accounts", "/audit", "/settings"])("offers no back link on %s", async (path) => {
+    await renderShell(path);
     expect(screen.queryByRole("link", { name: /^Back/ })).not.toBeInTheDocument();
   });
 
@@ -100,17 +98,33 @@ describe("SignedInShell", () => {
 
   it("titles each signed-in page", async () => {
     await renderShell("/");
-    expect(screen.getByRole("heading", { level: 1, name: "Home" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "Profile" })).toBeInTheDocument();
+  });
+
+  it("keeps Profile's title for screen readers only, the patient banner heading the page", async () => {
+    await renderShell("/");
+    expect(screen.getByRole("heading", { level: 1, name: "Profile" })).toHaveClass("sr-only");
+  });
+
+  it.each([
+    ["Accounts", "/accounts"],
+    ["Audit", "/audit"],
+    ["Settings", "/settings"],
+  ])("keeps the %s page's title for screen readers only", async (title, path) => {
+    await renderShell(path);
+    expect(screen.getByRole("heading", { level: 1, name: title })).toHaveClass("sr-only");
+  });
+
+  it("shows the password change's title, where a confined session has no sidebar to go by", async () => {
+    await renderShell("/change-password");
+    expect(screen.getByRole("heading", { level: 1, name: "Change password" })).not.toHaveClass(
+      "sr-only",
+    );
   });
 
   it("titles the password change", async () => {
     await renderShell("/change-password");
     expect(screen.getByRole("heading", { level: 1, name: "Change password" })).toBeInTheDocument();
-  });
-
-  it("links back to Home from the Accounts page", async () => {
-    await renderShell("/accounts");
-    expect(screen.getByRole("link", { name: "Back to home" })).toHaveAttribute("href", "/");
   });
 
   it("renders safely while the session's user details are unavailable", async () => {
@@ -119,11 +133,20 @@ describe("SignedInShell", () => {
   });
 
   it.each([
+    ["Profile", "/"],
     ["Accounts", "/accounts"],
     ["Audit", "/audit"],
   ])("lays the %s page out wide and top-aligned", async (_, path) => {
     await renderShell(path);
-    expect(screen.getByRole("main").className.trim()).toBe(TOP_ALIGNED_WIDE);
+    expect(screen.getByRole("main")).toHaveClass(...TOP_ALIGNED_WIDE.split(" "));
+    expect(screen.getByRole("main")).not.toHaveClass("items-center");
+    expect(screen.getByRole("main")).not.toHaveClass("justify-center");
+  });
+
+  it("lays Settings out in a narrow column, top-aligned", async () => {
+    await renderShell("/settings");
+    expect(screen.getByRole("main")).toHaveClass("max-w-md");
+    expect(screen.getByRole("main")).not.toHaveClass("justify-center");
   });
 
   it("centers the password change in a narrow column", async () => {
@@ -131,19 +154,138 @@ describe("SignedInShell", () => {
     expect(screen.getByRole("main")).toHaveClass("max-w-md", "items-center", "justify-center");
   });
 
-  it("centers Home in a medium column", async () => {
-    await renderShell("/");
-    expect(screen.getByRole("main")).toHaveClass("max-w-2xl", "items-center", "justify-center");
-  });
-
   it("renders the Home layout for a path it has no page for", async () => {
     await renderShell("/nowhere");
-    expect(screen.getByRole("heading", { level: 1, name: "Home" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "Profile" })).toBeInTheDocument();
   });
 
   it("renders a page's own layout for its trailing-slash path", async () => {
     await renderShell("/accounts/");
     expect(screen.getByRole("heading", { level: 1, name: "Accounts" })).toBeInTheDocument();
+  });
+});
+
+describe("SignedInShell's navigation sidebar", () => {
+  // Each page the sidebar links, with the Permissions its route guard opens it
+  // for (none: every signed-in session), as the registry declares them today.
+  it.each([
+    ["Profile", "/", []],
+    ["Manage accounts", "/accounts", ["user:read", "group:read", "connector:read"]],
+    ["View audit log", "/audit", ["audit:read"]],
+    ["Settings", "/settings", []],
+  ] as const)(
+    "links %s exactly for a session its route guard would open it to",
+    async (label, path, qualifying) => {
+      /** Where the sidebar's link labelled `label` leads for a session holding `held`, or null if absent. */
+      const linkFor = async (held: readonly Permission[]) => {
+        const { unmount } = await renderSignedIn("/", holding([...held]));
+        const href = screen.queryByRole("link", { name: label })?.getAttribute("href") ?? null;
+        unmount();
+        return href;
+      };
+      const forEverySession = qualifying.length === 0 ? path : null;
+
+      // A Monitoring account's Permission opens none of the guarded pages.
+      expect(await linkFor([])).toBe(forEverySession);
+      expect(await linkFor(["ops:read"])).toBe(forEverySession);
+      for (const permission of qualifying) expect(await linkFor([permission])).toBe(path);
+      expect(await linkFor([...qualifying])).toBe(path);
+    },
+  );
+
+  it.each([
+    ["/", "Profile"],
+    ["/audit", "View audit log"],
+    ["/settings", "Settings"],
+  ])("on %s highlights %s's link, and no other", async (path, current) => {
+    await renderShell(path, {}, holding(EVERY_PERMISSION));
+
+    const links = ["Profile", "Manage accounts", "View audit log", "Settings"];
+    expect(
+      links.map((name) => screen.getByRole("link", { name }).getAttribute("data-active")),
+    ).toEqual(links.map((name) => String(name === current)));
+  });
+
+  it("links no page of its own for the password change, which Settings holds", async () => {
+    await renderSignedIn("/settings", holding(EVERY_PERMISSION));
+
+    expect([
+      screen.queryByRole("link", { name: "Change password" }),
+      screen.getByRole("button", { name: "Change password" }) !== null,
+    ]).toEqual([null, true]);
+  });
+});
+
+describe("SignedInShell's sidebar collapse", () => {
+  /** The element carrying the sidebar's expanded or collapsed state. */
+  const sidebarState = () =>
+    document.querySelector('[data-slot="sidebar"]')?.getAttribute("data-state");
+
+  it("starts open, with a control to collapse it", async () => {
+    await renderShell("/");
+
+    expect([
+      screen.getByRole("button", { name: "Collapse sidebar" }).getAttribute("aria-expanded"),
+      sidebarState(),
+    ]).toEqual(["true", "expanded"]);
+  });
+
+  it("folds to its icons and opens out again from the same control", async () => {
+    await renderShell("/");
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole("button", { name: "Collapse sidebar" }));
+    const expand = screen.getByRole("button", { name: "Expand sidebar" });
+    expect([expand.getAttribute("aria-expanded"), sidebarState()]).toEqual(["false", "collapsed"]);
+
+    await user.click(expand);
+    expect([
+      screen.getByRole("button", { name: "Collapse sidebar" }).getAttribute("aria-expanded"),
+      sidebarState(),
+    ]).toEqual(["true", "expanded"]);
+  });
+
+  it("opens as a sheet from the top bar on a phone, and closes on following a link", async () => {
+    const width = window.innerWidth;
+    window.innerWidth = 400;
+    try {
+      await renderSignedIn("/", holding(EVERY_PERMISSION));
+      const user = userEvent.setup();
+
+      await user.click(screen.getByRole("button", { name: "Open navigation" }));
+      const sheet = await screen.findByRole("dialog");
+      await user.click(within(sheet).getByRole("link", { name: "Settings" }));
+
+      expect([
+        screen.queryByRole("dialog"),
+        await screen.findByRole("heading", { level: 1, name: "Settings" }),
+      ]).toEqual([null, expect.anything()]);
+
+      // A page's own link closes it too, as Settings' at the foot does.
+      await user.click(screen.getByRole("button", { name: "Open navigation" }));
+      await user.click(
+        within(await screen.findByRole("dialog")).getByRole("link", { name: "Profile" }),
+      );
+
+      expect([
+        screen.queryByRole("dialog"),
+        await screen.findByRole("heading", { level: 1, name: "Profile" }),
+      ]).toEqual([null, expect.anything()]);
+    } finally {
+      window.innerWidth = width;
+    }
+  });
+
+  it("keeps every link's and Sign out's name while folded", async () => {
+    await renderSignedIn("/", holding(EVERY_PERMISSION));
+
+    await userEvent.setup().click(screen.getByRole("button", { name: "Collapse sidebar" }));
+
+    expect([
+      screen.getByRole("link", { name: "Profile" }) !== null,
+      screen.getByRole("link", { name: "Settings" }) !== null,
+      screen.getByRole("button", { name: "Sign out" }) !== null,
+    ]).toEqual([true, true, true]);
   });
 });
 
@@ -205,7 +347,7 @@ describe("SignedInShell's error line", () => {
     await user.click(signOut());
     await screen.findByRole("alert");
 
-    await user.click(screen.getByRole("link", { name: "Change password" }));
+    await user.click(screen.getByRole("link", { name: "Settings" }));
 
     expect(lines()).toEqual([]);
   });
@@ -214,7 +356,7 @@ describe("SignedInShell's error line", () => {
     await renderSignedIn("/accounts", holding(["user:read"]), { [USERS]: bare(503) });
     await screen.findByRole("alert");
 
-    await userEvent.setup().click(screen.getByRole("link", { name: "Back to home" }));
+    await userEvent.setup().click(screen.getByRole("link", { name: "Profile" }));
 
     expect(lines()).toEqual([]);
   });
@@ -247,7 +389,7 @@ describe("SignedInShell's error line", () => {
     });
     const user = userEvent.setup();
     await user.click(await screen.findByRole("button", { name: "Unlock grace" }));
-    await user.click(screen.getByRole("link", { name: "Back to home" }));
+    await user.click(screen.getByRole("link", { name: "Profile" }));
 
     await unlock.settle(bare(500));
 

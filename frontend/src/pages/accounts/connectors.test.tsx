@@ -141,12 +141,12 @@ describe("Connectors by Superuser", () => {
 
     await tokenRow("a1b2c3d4");
     expect(screen.getByRole("heading", { name: "Okta" })).toBeInTheDocument();
-    // The layout's Sign out and the tokens' pager are the only controls on the page.
-    expect(screen.getAllByRole("button").map((button) => button.textContent)).toEqual([
-      "Sign out",
-      "Previous",
-      "Next",
-    ]);
+    // The tokens' pager is the page's only control; the layout's own sit outside it.
+    expect(
+      within(screen.getByRole("main"))
+        .getAllByRole("button")
+        .map((button) => button.textContent),
+    ).toEqual(["Previous", "Next"]);
   });
 
   it("offers every connector and token action to the Superuser", async () => {

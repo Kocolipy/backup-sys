@@ -602,7 +602,7 @@ describe("logout on an expired session", () => {
     await user.type(screen.getByLabelText("Password"), "correct-password");
     await user.click(screen.getByRole("button", { name: "Sign in" }));
 
-    expect(await screen.findByRole("heading", { name: "Home" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Profile" })).toBeInTheDocument();
     const urls = fetchMock.mock.calls.map(([url]) => url);
     // The token fetched just before the login, not the one the dead session held.
     expect(urls[urls.indexOf("/api/auth/login") - 1]).toBe(CSRF_PATH);

@@ -5,13 +5,17 @@ import { PageStatusScope, useStatusReporter } from "@/auth/page-status";
 import { useSessionAction } from "@/auth/use-session-action";
 import { useSessionFhircast } from "@/auth/use-session-fhircast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
+import { NavigationSidebar } from "@/shell/navigation-sidebar";
 import { HOME_PAGE, SIGNED_IN_PAGES } from "@/shell/signed-in-pages";
+import { TopBar } from "@/shell/top-bar";
 
 /**
- * The layout route of every signed-in page: the header (who is signed in, the
- * page title), the page's one error line, the back link and Sign out.
+ * The layout route of every signed-in page: the navigation sidebar
+ * (`navigation-sidebar.tsx`, which folds to its icons and holds Sign out), the
+ * top bar (the patient in context, who is signed in), the page title, the
+ * page's one error line and the back link.
  *
  * The layout owns the page status (`page-status.ts`) and renders its line, the
  * only error line a signed-in page has. The page, its panels and Sign out each
@@ -50,35 +54,39 @@ function SignedInLayout({ error, pathname }: { error: string | null; pathname: s
   const confined = user?.passwordChangeRequired === true;
 
   return (
-    <main
-      className={cn(
-        "mx-auto flex min-h-svh flex-col gap-6 p-8",
-        page.width,
-        page.centered && "items-center justify-center",
-      )}
-    >
-      <div className="flex w-full items-center justify-between gap-4">
-        <div>
-          <p className="text-sm text-muted-foreground">Signed in as {user?.username}</p>
-          <h1 className="font-headline text-headline-lg">{page.title}</h1>
-        </div>
-        <Button disabled={signOut.pending} variant="outline" onClick={() => void signOut.run()}>
-          {signOut.pending ? "Signing out…" : "Sign out"}
-        </Button>
+    <SidebarProvider>
+      <NavigationSidebar
+        onSignOut={() => void signOut.run()}
+        pathname={pathname}
+        signingOut={signOut.pending}
+      />
+      <div className="flex min-h-svh min-w-0 flex-1 flex-col">
+        <TopBar username={user?.username} />
+        <SidebarInset
+          className={cn(
+            "mx-auto flex flex-1 flex-col gap-6 p-8",
+            page.width,
+            page.centered && "items-center justify-center",
+          )}
+        >
+          <h1 className={cn("font-headline text-headline-lg", page.titleHidden && "sr-only")}>
+            {page.title}
+          </h1>
+          {error ? (
+            <Alert className="w-full" variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          ) : null}
+
+          <Outlet />
+
+          {page.back && !confined ? (
+            <Link className="text-sm font-medium underline underline-offset-4" to={page.back.to}>
+              {page.back.label}
+            </Link>
+          ) : null}
+        </SidebarInset>
       </div>
-      {error ? (
-        <Alert className="w-full" variant="destructive">
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      ) : null}
-
-      <Outlet />
-
-      {page.back && !confined ? (
-        <Link className="text-sm font-medium underline underline-offset-4" to={page.back.to}>
-          {page.back.label}
-        </Link>
-      ) : null}
-    </main>
+    </SidebarProvider>
   );
 }

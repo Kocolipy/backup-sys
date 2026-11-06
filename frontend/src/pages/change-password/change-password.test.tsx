@@ -122,8 +122,10 @@ describe("ChangePassword", () => {
   it("states the password requirements before submission and links them to the new-password field", async () => {
     await renderPage();
 
-    const requirements = screen.getByRole("list");
-    expect(requirements).toHaveAttribute("id", "newPasswordRequirements");
+    // getByRole("list") would also match the navigation sidebar's menu, so this
+    // one is found by the id the field's aria-describedby points to instead.
+    const requirements = document.getElementById("newPasswordRequirements")!;
+    expect(requirements.tagName).toBe("UL");
     expect(Array.from(requirements.querySelectorAll("li"), (item) => item.textContent)).toEqual([
       "12 to 256 characters long",
       "Must not contain your user name",

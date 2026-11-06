@@ -144,11 +144,11 @@ test("a Patient-open published while the clinician is on another page shows on H
     "fhircast-open-elsewhere@example.com",
     undefined,
     async (page, hubTopic) => {
-      await page.getByRole("link", { name: "Change password" }).click();
-      await expect(page.getByRole("heading", { level: 1, name: "Change password" })).toBeVisible();
+      await page.getByRole("link", { name: "Settings", exact: true }).click();
+      await expect(page.getByRole("heading", { level: 1, name: "Settings" })).toBeVisible();
 
       await publishPatientEvent(hubTopic, "Patient-open", (await sitiNurhaliza()).epicId);
-      await page.getByRole("link", { name: "Back" }).click();
+      await page.getByRole("link", { name: "Profile", exact: true }).click();
 
       await expectPatientInContext(page, "Siti Nurhaliza binte Ahmad");
     },

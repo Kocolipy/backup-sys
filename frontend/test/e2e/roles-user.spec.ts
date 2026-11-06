@@ -1,7 +1,6 @@
 import { expect, test } from "@playwright/test";
 
 import { csrfHeaderFor, submitLoginViaApi } from "./auth.helpers";
-import { cardTitled } from "./card.helpers";
 import { expectNoPatientInContext, recordPatientRequests } from "./patient.helpers";
 import {
   anonymousApi,
@@ -29,20 +28,23 @@ test.describe("baseline User pages", () => {
     const patientRequests = recordPatientRequests(page);
     await page.goto("/");
 
-    await expect(page.getByRole("heading", { name: "Home" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Profile" })).toBeVisible();
     await expect(page).toHaveURL("/");
     await expectNoPatientInContext(page);
     expect(patientRequests()).toEqual([]);
-    // The Pages card links the one page a baseline User may open.
-    const pages = cardTitled(page, "Pages");
-    await expect(pages.getByRole("link")).toHaveText(["Change password"]);
-    await expect(page.getByRole("button")).toHaveText(["Sign out"]);
+    // The navigation sidebar links only what a baseline User may open: Profile,
+    // and Settings at its foot. Home itself offers no control.
+    await expect(page.locator('[data-slot="sidebar"]').getByRole("link")).toHaveText([
+      "Profile",
+      "Settings",
+    ]);
+    await expect(page.getByRole("main").getByRole("button")).toHaveCount(0);
   });
 
   test("is routed away from the accounts page by a deep link", async ({ page }) => {
     await page.goto("/accounts");
 
-    await expect(page.getByRole("heading", { name: "Home" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Profile" })).toBeVisible();
     await expect(page).toHaveURL("/");
   });
 });
