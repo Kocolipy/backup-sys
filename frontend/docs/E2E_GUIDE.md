@@ -11,7 +11,9 @@ tags: [testing, e2e, playwright]
 
 Playwright specs in `test/e2e/`, run against `npm run dev` on `:5173`
 (`webServer` starts it, `reuseExistingServer` outside CI reuses one you already
-have up). First run on a machine needs `npx playwright install chromium`.
+have up). The server Playwright starts sets `E2E_DEV_SERVER=1`, so it watches no
+file and opens no HMR socket (`vite.config.ts`): edits made during a run are not
+served, and no page reloads under a spec. First run on a machine needs `npx playwright install chromium`.
 
 The `setup` project signs in the fixture `user` and the Bootstrap Admin once and saves separate
 Playwright `storageState` files under the ignored `test/e2e/.auth/` directory.
@@ -24,11 +26,17 @@ The backend keeps **one session per User**: an accepted login ends every other
 session that User holds. A spec that signs in as a seeded identity therefore
 revokes the session the matching project replays from `.auth/`, or the one
 another project's sign-in holds. So the projects run as one chain, `setup` →
-`user` → `admin` → `guest` → `dormancy`, each declaring the
+`user` → `admin` → `routes` → `guest` → `dormancy`, each declaring the
 previous one in `dependencies`:
 
-- `guest` follows `admin` (and the `epic` and `packaged` projects below, when
-  declared) because `login.spec.ts` signs in as the seeded Admin,
+- `routes` holds `console-errors.spec.ts`, which asserts that every signed-in
+  route, Accounts among them, loads with no alert. It follows every project
+  whose specs create and delete connectors (`admin`, and `fhircast` and `epic`
+  when declared): Accounts reads each listed connector's tokens, and a
+  connector another worker deleted between the listing and that read showed
+  an alert there.
+- `guest` follows `routes` (and the `fhircast`, `epic` and `packaged` projects
+  below, when declared) because `login.spec.ts` signs in as the seeded Admin,
   and beside the `admin` project it turned that project's specs into 401s.
 - `dormancy` runs last and alone: it signs in as the Helpdesk fixture User
   and consumes the `dormant` fixture's locked state, which only a backend
@@ -45,7 +53,8 @@ update both together.
 Three projects sit outside that chain, declared only by the environment `make
 integration-test` sets up, so a bare `npm run test:e2e` against a backend
 started some other way runs without them. Each depends on `setup` and replays
-the Admin session, so it runs beside `admin`, and `guest` lists each declared
+the Admin session, so `fhircast` and `epic` run beside `admin`, `packaged`
+after them for the same reason `routes` does, and `guest` lists each declared
 one in its `dependencies` as well: `login.spec.ts` signing in as the seeded Admin
 would end the session they replay. The routing arch test reads their
 `testMatch` either way:
@@ -90,13 +99,14 @@ would end the session they replay. The routing arch test reads their
   Kumaravel and Marcus Anthony de Souza are seeded too),
   publishing `Patient-open` / `Patient-close` to a hub topic, dropping a
   channel endpoint's sockets through the shim's test-only
-  `POST /shim/test/drop`, and reading which leases its `GET /shim/test/state`
-  counts as run out, which a case outliving one waits on rather than sleeping.
+  `POST /shim/test/drop`, and ending a channel endpoint's lease at once
+  through `POST /shim/test/end-lease`, so no case waits a lease out.
 - **`packaged`** holds `packaged-csp.spec.ts` and `packaged-type.spec.ts` and
   is declared when
   `E2E_PACKAGED_BASE_URL` names the packaged JAR. Its `baseURL` is the JAR's
   origin, so its specs load the built bundle under the backend's CSP rather
-  than Vite's dev server; it signs no one in.
+  than Vite's dev server; it signs no one in. Its route walk loads Accounts,
+  so it runs after the projects that write connectors, as `routes` does.
 
 ## Routing a new spec
 
@@ -130,8 +140,8 @@ signed-out login page, `console-errors.spec.ts` every signed-in route, and
 
 ## Calling the API from a spec
 
-A **safe** request needs nothing but the jar: `roles-admin.spec.ts` and
-`dev-roles.spec.ts` call the Permission-guarded reads through `page.request` directly,
+A **safe** request needs nothing but the jar: `dev-roles.spec.ts` calls the
+Permission-guarded reads through `page.request` directly,
 which is how what each seeded identity holds is asserted over the real stack. A
 case that asserts only a status and a body, with no browser behaviour around it,
 belongs to the backend's suites rather than here: the Permission policy itself
@@ -304,11 +314,12 @@ timing hacks:
   heading, or the `status` / `alert` text, as `change-password.spec.ts` does
   with `toHaveText("The current password is incorrect.")` — before acting on
   what follows it.
-- **A full page reload wipes in-memory state, and `npm run dev` causes them.**
-  Vite full-reloads every connected page when a watched `.html` under the root
-  changes — see `server.watch.ignored` in `vite.config.ts`. Symptom: the failure
-  screenshot shows the app back on its first screen, fully loaded, nothing in
-  flight.
+- **A full page reload wipes in-memory state, and a watching dev server causes
+  them.** Vite reloads every connected page when its server restarts, its
+  dependency optimizer runs again, or a watched `.html` changes. The server
+  Playwright starts watches nothing; one you started yourself and Playwright
+  reuses still does. Symptom: state the spec put on `window` is gone, or the
+  failure screenshot shows the app back on its first screen, nothing in flight.
 - **Prefer role and label selectors over CSS.** `getByRole("button", { name: "Sign out" })`,
   `getByLabel("Current password")`. `getByTestId` is fine for a value with no
   accessible name of its own.
