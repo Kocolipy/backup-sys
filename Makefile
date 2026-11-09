@@ -21,7 +21,7 @@ NPM ?= npm
 # run from backend/ here and exported to scripts/ that cd elsewhere.
 MVN ?= $(CURDIR)/backend/mvnw
 COMPOSE ?= docker compose -f backend/compose.yaml
-IMAGE ?= smart-on-fhir
+IMAGE ?= backup-sys
 TAG ?= local
 # `make infra-down VOL=1` (or fhircast-down) also removes the named volumes,
 # wiping the local databases. Make reads a bare `-v` as its own flag, hence the

@@ -8,7 +8,7 @@
 # ContainerTestConfiguration then gives each context its own database on that
 # server rather than starting another. The server is removed when the calling
 # shell exits, however it exits short of SIGKILL; a leftover carries the label
-# below (docker ps --filter label=smart-on-fhir.test-sql-server).
+# below (docker ps --filter label=backup-sys.test-sql-server).
 #
 # No secret is ever echoed or put on a command line: every password reaches
 # docker as a bare `-e NAME` read from this shell's environment, and the logins'
@@ -53,7 +53,7 @@ start_test_sql_server() {
   # can see, which is most of a developer machine's.
   container=$(MSSQL_SA_PASSWORD="$TEST_SQL_SERVER_SA_PASSWORD" docker run -d --rm \
     --platform linux/amd64 \
-    --label smart-on-fhir.test-sql-server \
+    --label backup-sys.test-sql-server \
     -e ACCEPT_EULA=Y -e MSSQL_PID=Developer -e MSSQL_MEMORY_LIMIT_MB=2048 \
     -e MSSQL_SA_PASSWORD \
     -p 127.0.0.1::1433 \

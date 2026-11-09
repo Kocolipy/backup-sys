@@ -1,4 +1,4 @@
-# smart-on-fhir
+# backup-sys
 
 The language of a session-authenticated web application whose identities are
 provisioned by external directories over SCIM 2.0. This file says what each term
