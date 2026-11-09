@@ -105,9 +105,8 @@ public class ContainerTestConfiguration {
      * {@value #COLLATION}. A server collated {@code BIN2_UTF8} ({@code MSSQL_COLLATION}) fails to
      * load the internal extended procedures behind {@code sp_getapplock} and a T-SQL
      * {@code sp_executesql} ("Could not load the DLL (server internal)", error 17750) on this
-     * image. Nothing of the service's own calls either any more — the seed lock is a row lock
-     * (ADR 0013, "Collation and the seed lock") — but Flyway takes {@code sp_getapplock} to guard
-     * every
+     * image. The service's own T-SQL calls neither — the seed lock is a row lock (ADR 0013,
+     * "Collation and the seed lock") — but Flyway takes {@code sp_getapplock} to guard every
      * migration, so on such a server no context could migrate its database.
      */
     private static final MSSQLServerContainer SQL_SERVER =

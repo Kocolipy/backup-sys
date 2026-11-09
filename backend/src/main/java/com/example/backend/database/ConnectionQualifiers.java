@@ -9,7 +9,7 @@ package com.example.backend.database;
  * adapter layers that may not depend on each other. So the name they meet on lives in neither,
  * but here, beside the module that owns how the service reaches its database
  * ({@code database.config.DatabaseConnections}), and both sides spell it through this class. A
- * name that matched no bean fails the context's start; it can no longer be spelled two ways.
+ * name that matched no bean fails the context's start, so it is spelled one way.
  *
  * <p>Names only: this class knows no bean, no type and no business module.
  */

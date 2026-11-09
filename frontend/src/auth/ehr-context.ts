@@ -6,7 +6,7 @@
  * Its lifecycle (`docs/BACKEND_CONTRACT.md`):
  *
  * - {@link setEhrContext} **replaces** it, holding each value to FHIR's id
- *   grammar and keeping what passes; nothing in the SPA sets it yet, so a tab
+ *   grammar and keeping what passes; nothing in the SPA sets it, so a tab
  *   holds none;
  * - a reload **keeps** it, since `sessionStorage` outlives the page;
  * - every end of the session — sign-out, expiry, an Idle sign-out, a password
@@ -16,7 +16,7 @@
  * It is a subscribable store, shaped for `useSyncExternalStore`
  * ({@link useEhrContext}): the signed-in layout's read of the patient in
  * context re-renders when it changes, not only on load. The encounter is held
- * but nothing reads it yet.
+ * but nothing reads it.
  */
 
 import { useSyncExternalStore } from "react";

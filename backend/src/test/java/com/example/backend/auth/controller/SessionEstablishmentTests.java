@@ -32,8 +32,8 @@ import org.springframework.security.web.csrf.CsrfTokenRepository;
 import org.springframework.session.FindByIndexNameSessionRepository;
 
 /**
- * The session step both Login paths end in, driven with the beans the application wires it from,
- * so what it does to a session is what a signed-in caller's session gets.
+ * The session step every accepted Login ends in, driven with the beans the application wires it
+ * from, so what it does to a session is what a signed-in caller's session gets.
  */
 class SessionEstablishmentTests {
 
