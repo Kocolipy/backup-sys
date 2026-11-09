@@ -213,9 +213,17 @@ actually see the thing it governs:
 
 For example:
 
-- `designTokens.test.ts` — no colour literal outside `src/index.css`.
+- `designTokens.test.ts` — no colour literal, and no shade of Tailwind's own
+  default palette (`bg-red-500`, `text-white`, `bg-black`), outside
+  `src/index.css`.
 - `e2eSpecRouting.test.ts` — every Playwright spec is matched by exactly one
   project's `testMatch`.
+- `skippedTests.test.ts` — no skip or focus marker in any suite
+  (`/backend/AGENTS.md`, "Test suite policy"): a skip leaves a test nothing
+  runs, a focus drops every other test in its file, and the run still exits
+  zero. `vitest.config.ts` sets `allowOnly: false` and
+  `playwright.config.ts` `forbidOnly: true` for a marker that never reaches
+  the tree, since both runners otherwise refuse one only when `CI` is set.
 
 ### Why the arch suite reads sources through `node:fs`
 
