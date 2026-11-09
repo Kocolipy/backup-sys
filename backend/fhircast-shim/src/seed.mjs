@@ -73,7 +73,7 @@ const settings = {
     }),
   // Not configuration: what marks the seed's launch among the others.
   launchTag: {
-    system: "urn:smart-on-fhir:fhircast-up",
+    system: "urn:backup-sys:fhircast-up",
     code: "default-patient-launch",
   },
   client: {
@@ -225,7 +225,7 @@ async function ensureClient(project) {
   const wanted = {
     name: settings.client.name,
     description:
-      "smart-on-fhir, as Epic Login registers it (backend/docs/configuration/epic-login.md)",
+      "backup-sys, as Epic Login registers it (backend/docs/configuration/epic-login.md)",
     jwksUri: settings.client.jwksUri,
     redirectUris: settings.client.redirectUris,
     launchUri: settings.client.launchUri,

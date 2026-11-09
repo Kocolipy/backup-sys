@@ -1,4 +1,4 @@
-# smart-on-fhir
+# backup-sys
 
 Monorepo holding the frontend SPA and the backend service.
 
