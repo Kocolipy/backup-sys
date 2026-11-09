@@ -17,7 +17,7 @@ import java.util.UUID;
  *       sign-in, and {@link #signIn} removes them all before it records the new one, so a Login
  *       over a session another Login signed in — a password Login in a browser an EHR launch
  *       signed in, say — carries none of the earlier sign-in's state over: not its owner, not its
- *       Epic tokens, not its FHIRcast hub. The module writes only the members of one closed set,
+ *       Epic tokens. The module writes only the members of one closed set,
  *       so an attribute added later is one more member, and reset with the rest. What the module
  *       does not write — the security context, the CSRF token, the framework's own — is left
  *       to its owner.
@@ -33,8 +33,7 @@ import java.util.UUID;
  *       missing or of another type, which only shortens its life.
  *   <li><b>The Epic tokens</b> are kept on the signed-in session for exactly its life (ADR 0012,
  *       D29), and are never handed out once the session has outlived its absolute lifetime,
- *       whatever the store still holds. So is the <b>FHIRcast hub</b> the token response named,
- *       beside them (ADR 0016).
+ *       whatever the store still holds.
  *   <li><b>The idle bound</b> of a session holding them is cut to what remains of that lifetime
  *       once that is the shorter ({@link AbsoluteSessionLifetimePolicy#idleBoundAt}), so the store
  *       never keeps the session, and the tokens with it, past the lifetime's end. Applied when the
@@ -63,12 +62,6 @@ public final class SignedInSession {
     public static final String EPIC_TOKENS_ATTRIBUTE = "app.epic.tokens";
 
     /**
-     * The attribute an Epic Login keeps its FHIRcast hub under, beside the tokens (ADR 0016), read
-     * by {@link EpicTokens}.
-     */
-    public static final String FHIRCAST_HUB_ATTRIBUTE = "app.epic.fhircast-hub";
-
-    /**
      * The attribute the instant the session was signed in at is kept under, which its absolute
      * lifetime counts from.
      */
@@ -82,8 +75,7 @@ public final class SignedInSession {
     private enum SignInAttribute {
         OWNER(OWNER_ATTRIBUTE),
         SIGNED_IN_AT(SIGNED_IN_AT_ATTRIBUTE),
-        EPIC_TOKENS(EPIC_TOKENS_ATTRIBUTE),
-        FHIRCAST_HUB(FHIRCAST_HUB_ATTRIBUTE);
+        EPIC_TOKENS(EPIC_TOKENS_ATTRIBUTE);
 
         private final String name;
 
@@ -199,30 +191,6 @@ public final class SignedInSession {
         }
         return read(SignInAttribute.EPIC_TOKENS) instanceof EpicTokenSet tokens
                 ? Optional.of(tokens)
-                : Optional.empty();
-    }
-
-    /**
-     * Keeps the FHIRcast hub Epic's token response named on the session, beside the tokens (ADR
-     * 0016). Kept together with them, so the store keeps it exactly as long.
-     */
-    public void keepFhircastHub(FhircastHub hub) {
-        write(SignInAttribute.FHIRCAST_HUB, hub);
-    }
-
-    /**
-     * The FHIRcast hub the session holds, as of {@code now}.
-     *
-     * @return the hub; empty for a session holding none — a password Login's, or an Epic one whose
-     *     token response named no hub this service keeps — and for one that has outlived
-     *     {@code lifetime}
-     */
-    public Optional<FhircastHub> fhircastHub(AbsoluteSessionLifetimePolicy lifetime, Instant now) {
-        if (hasOutlived(lifetime, now)) {
-            return Optional.empty();
-        }
-        return read(SignInAttribute.FHIRCAST_HUB) instanceof FhircastHub hub
-                ? Optional.of(hub)
                 : Optional.empty();
     }
 

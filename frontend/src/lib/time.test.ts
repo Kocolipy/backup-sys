@@ -5,8 +5,6 @@ import {
   formatCalendarDate,
   formatDate,
   isCalendarDate,
-  instantMillis,
-  isInstant,
   formatInstant,
   parseTypedTime,
   today,
@@ -49,31 +47,6 @@ describe("formatInstant", () => {
 
   it("writes single-digit months, days, hours and minutes with their leading zero", () => {
     expect(formatInstant("2026-01-04T17:05:00Z")).toBe("2026-01-05 01:05");
-  });
-});
-
-describe("isInstant", () => {
-  it.each(["2026-10-24T02:00:05Z", "2026-10-24T10:00:05.123+08:00"])(
-    "takes %s for an instant",
-    (text) => {
-      expect(isInstant(text)).toBe(true);
-    },
-  );
-
-  it.each(["", "yesterday", "<b>2026</b>", "2026-13-45T00:00:00Z"])(
-    "refuses %j, which names no instant",
-    (text) => {
-      expect(isInstant(text)).toBe(false);
-    },
-  );
-});
-
-describe("instantMillis", () => {
-  it.each([
-    ["2100-01-01T00:00:00Z", 4_102_444_800_000],
-    ["2100-01-01T08:00:00+08:00", 4_102_444_800_000],
-  ])("reads %s as milliseconds since the epoch, whatever its offset", (instant, millis) => {
-    expect(instantMillis(instant)).toBe(millis);
   });
 });
 

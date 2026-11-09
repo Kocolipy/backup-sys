@@ -41,11 +41,11 @@ function PatientInContext() {
 
 /**
  * The bar across the top of every signed-in page: the patient in the tab's EHR
- * context (`usePatientInContext`) on the left, followed as the FHIRcast hub moves it,
- * and on the right Notifications, a link to Settings, Help and who is signed
- * in. On a phone it also leads with the menu button that opens the navigation
- * sidebar. Nothing yet sends notifications, so Notifications says there are
- * none rather than showing an unread mark.
+ * context (`usePatientInContext`) on the left, and on the right Notifications,
+ * a link to Settings, Help and who is signed in. On a phone it also leads with
+ * the menu button that opens the navigation sidebar. Nothing yet sends
+ * notifications, so Notifications says there are none rather than showing an
+ * unread mark.
  */
 export function TopBar({ username }: { username: string | undefined }) {
   return (

@@ -3,10 +3,8 @@ package com.example.backend.auth.domain;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.ZoneOffset;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -41,10 +39,6 @@ class EpicTokenSetTests {
         return issued(Optional.empty());
     }
 
-    private static Clock at(Instant instant) {
-        return Clock.fixed(instant, ZoneOffset.UTC);
-    }
-
     @Test
     void theGrantedScopeIsACopyTheIssuerCannotChangeAfterwards() {
         Set<String> granted = new HashSet<>(List.of("openid"));
@@ -59,24 +53,6 @@ class EpicTokenSetTests {
     @Test
     void theRefreshTokenIsEmptyWhenEpicIssuedNone() {
         assertThat(withoutRefreshToken().refreshToken()).isEmpty();
-    }
-
-    @Test
-    void theAccessTokenIsNotExpiredBeforeItsExpiry() {
-        assertThat(withRefreshToken()
-                .isExpired(at(Instant.parse("2026-10-09T09:59:59Z")))).isFalse();
-    }
-
-    @Test
-    void theAccessTokenIsExpiredAtItsExpiry() {
-        assertThat(withRefreshToken()
-                .isExpired(at(Instant.parse("2026-10-09T10:00:00Z")))).isTrue();
-    }
-
-    @Test
-    void theAccessTokenIsExpiredAfterItsExpiry() {
-        assertThat(withRefreshToken()
-                .isExpired(at(Instant.parse("2026-10-09T12:00:00Z")))).isTrue();
     }
 
     @Test

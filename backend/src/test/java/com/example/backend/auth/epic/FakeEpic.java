@@ -66,9 +66,7 @@ import tools.jackson.databind.json.JsonMapper;
  * show where each is kept and where none of them is: the tokens for the signed-in session alone,
  * the launch context nowhere, only passed to the browser in the landing's fragment (ADR 0012, D8,
  * D29). A test can replace the launch context, or leave either member out
- * ({@link #launchContext}). It names a FHIRcast hub on loopback and a topic too, as Epic's does
- * when a {@code fhircast/} scope is granted, which a test can replace or leave out ({@link #hub}),
- * and it grants the scope the authorize request asked for.
+ * ({@link #launchContext}). It grants the scope the authorize request asked for.
  *
  * <p>It can also be Epic on a bad day: any of discovery, the JWKS and {@code /token} can be made
  * to stall past our read timeout, before its headers or partway through its body, drop the
@@ -210,18 +208,6 @@ public final class FakeEpic implements AutoCloseable {
     /** The launch context members the token response carries, in order. */
     private volatile Map<String, Object> launchContext = launchContextOf(patient, encounter);
 
-    /**
-     * The FHIRcast hub the token response names unless {@link #hub} replaced it: Epic's local hub,
-     * on the clinician's loopback interface (ADR 0016).
-     */
-    public final String hubUrl = "http://127.0.0.1:8103/fhircast/STU3";
-
-    /** The clinician's FHIRcast topic the token response names unless {@link #hub} replaced it. */
-    public final String hubTopic = "topic-" + UUID.randomUUID();
-
-    /** The FHIRcast members the token response carries, in order. */
-    private volatile Map<String, Object> hub = hubOf(hubUrl, hubTopic);
-
     /** Every {@code id_token} this instance minted, in order. */
     public final List<String> idTokens = Collections.synchronizedList(new ArrayList<>());
 
@@ -303,26 +289,6 @@ public final class FakeEpic implements AutoCloseable {
      */
     public String defaultHome() {
         return "/#patient=" + patient + "&encounter=" + encounter;
-    }
-
-    /**
-     * From now on the token response carries {@code url} as {@code hub.url} and {@code topic} as
-     * {@code hub.topic} — any JSON value, as Epic could send — or lacks the member for
-     * {@code null}.
-     */
-    public void hub(Object url, Object topic) {
-        this.hub = hubOf(url, topic);
-    }
-
-    private static Map<String, Object> hubOf(Object url, Object topic) {
-        Map<String, Object> members = new LinkedHashMap<>();
-        if (url != null) {
-            members.put("hub.url", url);
-        }
-        if (topic != null) {
-            members.put("hub.topic", topic);
-        }
-        return Collections.unmodifiableMap(members);
     }
 
     private static Map<String, Object> launchContextOf(Object patient, Object encounter) {
@@ -656,7 +622,6 @@ public final class FakeEpic implements AutoCloseable {
             response.put("refresh_token", refreshToken);
         }
         response.putAll(launchContext);
-        response.putAll(hub);
         respond(exchange, 200, JSON.writeValueAsString(response));
     }
 

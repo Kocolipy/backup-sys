@@ -27,7 +27,7 @@ reverse once a client depends on the wire:
 2. **Where the data comes from.** Real patients come from an in-house system.
    The adapter contract is FHIR R4 `GET {base}/Patient/{id}`, with no request
    credential and with source failures mapped to `502`. The patient's EHR FHIR
-   id is the id an EHR launch and a FHIRcast `Patient-open` already name. Home's
+   id is the id an EHR launch already names. Home's
    wire contract remains base R5 with `identifier`, `name`, `gender` and
    `birthDate`, the `patient:read` gate and the `OperationOutcome` table,
    independent of changes behind the adapter.
@@ -114,8 +114,7 @@ NRIC carries a wrong check letter) are checked over the stubs themselves.
 WireMock is a **test-scope** dependency only: the Enforcer's
 `wiremock-test-scope-only` fails the build if it resolves in a scope that
 reaches the packaged JAR, as `hapi-test-scope-only` does for HAPI. The Medplum
-seed names the same ids, so an EHR launch and a FHIRcast event name a
-patient the mock holds.
+seed names the same ids, so an EHR launch names a patient the mock holds.
 
 ### The module's edges
 

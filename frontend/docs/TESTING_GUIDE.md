@@ -31,23 +31,7 @@ under "Testing".
 
 Vitest with happy-dom and Testing Library; `test/setup.ts` pulls in
 `@testing-library/jest-dom` and clears `sessionStorage` after every test, since
-one window serves a whole file and the tab's EHR context lives there. It
-ends the FHIRcast module's connections first (`endFhircast`), for the same
-reason: the session's connection is a module-level singleton, which a later
-test's start would otherwise take as already started, and a later test's end
-of the session would tear the connections down at that test's fake hub.
-That one `endFhircast` is the only reset the FHIRcast module's state takes: all
-of it lives in `src/lib/fhircast/session.ts`. The module's suites sit beside
-its internal modules in `src/lib/fhircast/` (`protocol.test.ts`,
-`notifications.test.ts`, `storage.test.ts`, `connection.test.ts`,
-`session.test.ts`, `session.teardown.test.ts`, `release.test.ts`, and the
-reload suites `*.reload.test.ts` / `connection.resume.test.ts`). Every
-connection they make is the session's, driven through the entry points the
-SPA calls (`startFhircast`, `retryFhircast`, `endFhircast`) and read back
-through `fhircastSnapshot` and `followFhircastEvents` (helpers in
-`fhircast.testHelpers.ts`), on the global fakes of `fetch`, `WebSocket` and
-the clock; only the hub protocol's requests and the notification decoders are
-also tested directly, with no connection made and nothing to reset.
+one window serves a whole file and the tab's EHR context lives there.
 
 Tests are **colocated** with the code they cover — `home.test.tsx` beside
 `home.tsx` — and type-checked through `tsconfig.test.json`, which is the only

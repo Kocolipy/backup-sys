@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The whole Playwright suite, end to end, in one run: every project in
-# frontend/playwright.config.ts, Epic Login's (`epic`), the local Epic
-# stand-in's own (`fhircast`) and the packaged SPA's (`packaged`) among them.
+# frontend/playwright.config.ts, Epic Login's (`epic`) and the packaged SPA's
+# (`packaged`) among them.
 # frontend/AGENTS.md carries its trigger and when it passes.
 #
 # Runs the FHIRcast shim's unit tests first (backend/fhircast-shim), and the
@@ -14,7 +14,7 @@
 # on SERVER_PORT (backend/.env's over the shell's; 8080 when neither sets it),
 # with Epic Login pointed at Medplum. Playwright
 # starts the Vite dev server itself, which proxies /api to that JAR: every
-# project but `packaged` runs through it, `epic` and `fhircast` among them, and
+# project but `packaged` runs through it, `epic` among them, and
 # `packaged` loads the JAR's own origin, where the built bundle runs under the
 # backend's CSP, as the specs' direct SCIM and actuator calls reach it too.
 # Everything this script started is torn down again unless
@@ -28,7 +28,7 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 require_cmd openssl
 require_node
 
-# First and cheapest: the stand-in `epic` and `fhircast` run against. No
+# First and cheapest: the stand-in `epic` runs against. No
 # dependencies to install; it is Node's own test runner on the pinned Node.
 log "testing the FHIRcast shim"
 node --test "$BACKEND_DIR"/fhircast-shim/test/*.test.mjs
@@ -41,13 +41,6 @@ node --test "$ROOT_DIR"/scripts/test/*.test.mjs
 # -print -quit rather than `find ... | head -1`: see package.sh.
 jar="$(find "$BACKEND_DIR/target" -maxdepth 1 -name 'backend-*.jar' ! -name '*-plain.jar' -print -quit)"
 [[ -n $jar ]] || die "no backend-*.jar in backend/target after packaging"
-
-# Subscription leases of 75 s, so that the SPA renews its Hub Subscription 15 s
-# in, 60 s before the lease ends, rather than as soon as it may: a spec waits
-# for one renewal, and has the shim end a lease (/shim/test/end-lease) rather
-# than wait one out. Set before the stand-in starts: compose
-# hands it to the shim then.
-export FHIRCAST_LEASE_SECONDS=75
 
 stack_up "SQL Server, Redis, the patient source's mock and the local Epic stand-in" fhircast
 
@@ -82,13 +75,13 @@ unset APP_EPIC_CLIENT_NEXT_KEY APP_EPIC_CLIENT_NEXT_KEY_ID
 # The managed block `make fhircast-up` keeps in backend/.env names the seeded
 # clinician for the dev fixtures, which would provision it as a User at startup.
 # The E2E backend must not: `epic-unprovisioned` signs in as a clinician no User
-# exists for, and the `fhircast` project provisions its own over SCIM. Unset
+# exists for, and the `epic` project provisions its own over SCIM. Unset
 # after load_backend_env, whatever .env says.
 unset APP_DEV_FIXTURES_EPIC_CLINICIAN
 
-# What the `epic` and `fhircast` specs need (frontend/README.md lists each); a
-# set E2E_FHIRCAST_FHIR_BASE, the launch `iss`, is what declares both
-# projects. The sign-ins are the development fixtures compose.yaml seeds.
+# What the `epic` spec needs (frontend/README.md lists each); a set
+# E2E_FHIRCAST_FHIR_BASE, the launch `iss`, is what declares the project. The
+# sign-ins are the development fixtures compose.yaml seeds.
 export E2E_FHIRCAST_MEDPLUM_URL="$MEDPLUM_URL"
 export E2E_FHIRCAST_FHIR_BASE="$APP_EPIC_FHIR_BASE"
 E2E_EPIC_CLINICIANS="$(compose_env STACK_COMPOSE medplum-init SEED_EPIC_LOGIN_CLINICIANS)"

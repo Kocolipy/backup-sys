@@ -91,13 +91,13 @@ out; the first sees an expired session.
 **A Login starts from a clean session** — an accepted Login, by either login
 method, signs in the session the browser already holds (under a rotated id), and
 signing in removes everything an earlier sign-in left on it: its owner, its Epic
-tokens and its FHIRcast Hub, and any state a later sign-in keeps. So a password
-Login from a stale `/login` tab, in a browser an EHR launch signed in, holds none
-of that clinician's Epic tokens, and the FHIRcast release answers it `404` as for
-any password Login's session. The absolute session lifetime restarts with it.
-What the session's frameworks keep — the security context the Login saves, the
-CSRF token it drops — is theirs. An EHR launch also ends whatever session the
-browser held before it begins ([Epic Login](./epic-login.md)).
+tokens, and any state a later sign-in keeps. So a password Login from a stale
+`/login` tab, in a browser an EHR launch signed in, holds none of that
+clinician's Epic tokens, as no password Login's session does. The absolute
+session lifetime restarts with it. What the session's frameworks keep — the
+security context the Login saves, the CSRF token it drops — is theirs. An EHR
+launch also ends whatever session the browser held before it begins
+([Epic Login](./epic-login.md)).
 
 ## Session revocation
 

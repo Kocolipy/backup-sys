@@ -2,18 +2,16 @@ import { describe, expect, it } from "vitest";
 
 import { readSources } from "./sources";
 
-// Architecture rule `no_web_storage_outside_its_two_keepers` (docs/BACKEND_CONTRACT.md,
-// the EHR context and "What the FHIRcast module keeps"). The SPA keeps exactly
-// two things in the browser, both per tab in `sessionStorage`: the EHR context
-// and the FHIRcast connection. Each keeper decodes what it reads back and is
-// cleared on every session end; the CSRF token is never kept at all
+// Architecture rule `no_web_storage_outside_its_keeper` (docs/BACKEND_CONTRACT.md,
+// the EHR context). The SPA keeps exactly one thing in the browser, per tab in
+// `sessionStorage`: the EHR context. Its keeper decodes what it reads back and
+// clears it on every session end; the CSRF token is never kept at all
 // (src/lib/http.ts). `localStorage` and `sessionStorage` are globals, so a page
 // that writes to them imports nothing, and dependency-cruiser never sees it.
 const EHR_CONTEXT = "src/auth/ehr-context.ts";
-const FHIRCAST_STORAGE = "src/lib/fhircast/storage.ts";
 
 /** Every module allowed to touch browser storage, and nothing else. */
-const STORAGE_MODULES = [EHR_CONTEXT, FHIRCAST_STORAGE];
+const STORAGE_MODULES = [EHR_CONTEXT];
 
 const WEB_STORAGE = /\b(localStorage|sessionStorage|indexedDB)\b/;
 
@@ -55,7 +53,7 @@ describe("browser storage", () => {
     expect(WEB_STORAGE.test(blankComments(module?.code ?? ""))).toBe(true);
   });
 
-  it("reports storage reached outside the two keepers, and not in a comment", () => {
+  it("reports storage reached outside its keeper, and not in a comment", () => {
     const planted = [
       { path: "src/pages/planted.tsx", code: 'window.localStorage.setItem("token", value);' },
       {
@@ -69,13 +67,13 @@ describe("browser storage", () => {
     ]);
   });
 
-  it("has no no_web_storage_outside_its_two_keepers violation", () => {
+  it("has no no_web_storage_outside_its_keeper violation", () => {
     const violations = violationsIn(files);
 
     const why =
-      `The tab keeps the EHR context (${EHR_CONTEXT}) and the FHIRcast connection ` +
-      `(${FHIRCAST_STORAGE}), and nothing else: each decodes what it reads back and is ` +
-      "cleared when the session ends. Anything new the tab keeps gets a keeper of its own, " +
+      `The tab keeps the EHR context (${EHR_CONTEXT}), and nothing else: its keeper decodes ` +
+      "what it reads back and clears it when the session ends. Anything new the tab keeps " +
+      "gets a keeper of its own, " +
       "added here and to docs/BACKEND_CONTRACT.md together.\n";
 
     expect(violations, why + violations.join("\n")).toEqual([]);

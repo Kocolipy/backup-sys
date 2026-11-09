@@ -1156,7 +1156,6 @@ describe("Audit", () => {
         "Permission granted",
         "Permission revoked",
         "Group Permissions changed",
-        "FHIRcast token released",
       ]);
     });
 

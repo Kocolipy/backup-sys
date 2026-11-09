@@ -3,15 +3,11 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
 
 import type { Permission } from "@/auth/api";
-import { adoptLaunchLanding, clearEhrContext } from "@/auth/ehr-context";
+import { clearEhrContext } from "@/auth/ehr-context";
 import { bare, holding, json, type Answers } from "@/auth/session-adapter.testHelpers";
 import {
   landedFromEpicWith,
-  NO_FHIRCAST_RELEASE,
-  patientOpened,
   patientReads,
-  SITI,
-  SITI_READ,
   TAN_WEI_MING,
   TAN_WEI_MING_READ,
 } from "@/pages/home/patient.testHelpers";
@@ -21,16 +17,9 @@ import { renderInLayout, renderSignedIn } from "./signed-in-shell.testHelpers";
 /** The tab loaded at an Epic landing with Tan Wei Ming in context. */
 const landedWithTanWeiMing = () => landedFromEpicWith(TAN_WEI_MING.id);
 
-/**
- * The layout over a page that reads nothing, for a session holding
- * `permissions`; the FHIRcast release an Epic session's layout asks for is
- * answered "nothing released".
- */
+/** The layout over a page that reads nothing, for a session holding `permissions`. */
 const renderBar = (permissions: Permission[], answers: Answers = {}) =>
-  renderInLayout([{ element: <p>page body</p>, path: "/" }], "/", holding(permissions), {
-    ...NO_FHIRCAST_RELEASE,
-    ...answers,
-  });
+  renderInLayout([{ element: <p>page body</p>, path: "/" }], "/", holding(permissions), answers);
 
 const topBar = () => within(screen.getByRole("banner"));
 
@@ -80,34 +69,14 @@ describe("TopBar", () => {
     );
   });
 
-  it("reads the patient in context once per change on a page that shows no patient", async () => {
+  it("reads the patient in context once on a page that shows no patient", async () => {
     landedWithTanWeiMing();
     const { requests } = await renderSignedIn("/settings", holding(["patient:read"]), {
-      ...NO_FHIRCAST_RELEASE,
-      [SITI_READ]: json(SITI),
       [TAN_WEI_MING_READ]: json(TAN_WEI_MING),
     });
     await topBar().findByText("Tan Wei Ming");
 
-    patientOpened(SITI.id);
-    await topBar().findByText("Siti Nurhaliza binte Ahmad");
-
-    expect(patientReads(requests())).toEqual([TAN_WEI_MING_READ, SITI_READ]);
-  });
-
-  it("keeps the page as it was when a patient comes into context", async () => {
-    window.history.replaceState(null, "", "/#launch");
-    adoptLaunchLanding();
-    await renderSignedIn("/settings", holding(["patient:read"]), {
-      ...NO_FHIRCAST_RELEASE,
-      [SITI_READ]: json(SITI),
-    });
-    await userEvent.setup().type(screen.getByLabelText("Current password"), "typed so far");
-
-    patientOpened(SITI.id);
-    await topBar().findByText("Siti Nurhaliza binte Ahmad");
-
-    expect(screen.getByLabelText("Current password")).toHaveValue("typed so far");
+    expect(patientReads(requests())).toEqual([TAN_WEI_MING_READ]);
   });
 
   it("names no patient, and asks nothing, with no patient in context", async () => {

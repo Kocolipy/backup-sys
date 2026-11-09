@@ -13,16 +13,6 @@ import {
   requestKey,
   type FakeBackend,
 } from "@/lib/fake-backend.testHelpers";
-import {
-  fakeHub,
-  fhircastConnected,
-  HUB_URL,
-  type HubAnswer,
-  type HubOptions,
-  requestsSince,
-} from "@/lib/fake-hub.testHelpers";
-import { FHIRCAST_STORAGE_KEYS, type FhircastRelease } from "@/lib/fhircast";
-
 import type { LoginOutcome, LogoutOutcome, PasswordChangeOutcome } from "./api";
 import { AuthProvider } from "./auth-context";
 import { AUTH_REQUESTS, testUser } from "./auth-context.testHelpers";
@@ -590,109 +580,5 @@ describe("AuthProvider and the EHR context", () => {
     await settle(session, (auth) => auth.login(...CREDENTIALS));
 
     expect(ehrContext()).toEqual({ patient: PATIENT });
-  });
-});
-
-describe("AuthProvider and what the FHIRcast module kept", () => {
-  /** What connecting to the hub left in the tab (ADR 0016). */
-  const keptByFhircast = () => {
-    for (const key of Object.values(FHIRCAST_STORAGE_KEYS)) {
-      window.sessionStorage.setItem(key, `${key}-value`);
-    }
-  };
-
-  const stillKept = () =>
-    Object.values(FHIRCAST_STORAGE_KEYS).filter((key) => window.sessionStorage.getItem(key));
-
-  it("forgets it on sign-out", async () => {
-    keptByFhircast();
-    const session = await mounted({ ...SIGNED_IN, [LOGOUT]: bare(204) });
-
-    await settle(session, (auth) => auth.logout());
-
-    expect(stillKept()).toEqual([]);
-  });
-
-  it("forgets it when the session expires", async () => {
-    keptByFhircast();
-    const { result } = await mounted(SIGNED_IN);
-
-    act(() => result.current.expireSession(result.current.sessionGeneration()));
-
-    expect(stillKept()).toEqual([]);
-  });
-
-  it("forgets it on a password Login", async () => {
-    keptByFhircast();
-    const session = await mounted({ ...SIGNED_IN, [LOGIN]: json(USER) });
-
-    await settle(session, (auth) => auth.login(...CREDENTIALS));
-
-    expect(stillKept()).toEqual([]);
-  });
-
-  it("keeps it while the session stands", async () => {
-    keptByFhircast();
-
-    await mounted(SIGNED_IN);
-
-    expect(stillKept()).toEqual(Object.values(FHIRCAST_STORAGE_KEYS));
-  });
-});
-
-describe("AuthProvider and the FHIRcast connection", () => {
-  const RELEASE: FhircastRelease = {
-    accessToken: `smart-${crypto.randomUUID()}`,
-    expiresAt: "2100-01-01T00:00:00Z",
-    hubTopic: "topic-1",
-    hubUrl: HUB_URL,
-    scope: ["fhircast/Patient-open.read"],
-  };
-
-  /** Signed in over `answers`, connected to a hub answering `options`, and what the hub was sent from then on. */
-  async function connectedSession(answers: Answers, options: HubOptions = {}) {
-    const session = await mounted({ ...SIGNED_IN, ...answers });
-    const hub = fakeHub(options);
-    await fhircastConnected(RELEASE);
-    const sent = requestsSince(hub);
-    const since = () => sent().map(({ method, url }) => `${method} ${url}`);
-    return { hub, session, since };
-  }
-
-  /** The teardown at the hub: the one unsubscription. */
-  const TORN_DOWN = [`POST ${HUB_URL}`];
-
-  it("tears it down at the hub on sign-out", async () => {
-    const { session, since } = await connectedSession({ [LOGOUT]: bare(204) });
-
-    await settle(session, (auth) => auth.logout());
-
-    await waitFor(() => expect(since()).toEqual(TORN_DOWN));
-  });
-
-  it("tears it down at the hub when the session expires", async () => {
-    const { session, since } = await connectedSession({});
-
-    act(() => session.result.current.expireSession(session.result.current.sessionGeneration()));
-
-    await waitFor(() => expect(since()).toEqual(TORN_DOWN));
-  });
-
-  it("leaves it standing when a logout may have left the session standing", async () => {
-    const { hub, session, since } = await connectedSession({ [LOGOUT]: bare(500) });
-
-    await settle(session, (auth) => auth.logout());
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    expect([since(), hub.openSockets()]).toEqual([[], 1]);
-  });
-
-  it("signs out without waiting on a hub that never answers", async () => {
-    const never = new Promise<HubAnswer>(() => undefined);
-    const { session } = await connectedSession({ [LOGOUT]: bare(204) }, { unsubscription: never });
-
-    const { outcome, status } = await settle(session, (auth) => auth.logout());
-
-    expect([outcome?.kind, status]).toEqual(["signed-out", "guest"]);
   });
 });

@@ -68,43 +68,25 @@ through `ClientAssertionSigner`. The runbook for promoting a key is
 curl -i localhost:${SERVER_PORT:-8080}/api/auth/epic/jwks.json
 ```
 
-### Scopes, the FHIRcast hub and the CSP
+### Scopes and the CSP
 
-Epic Login asks for exactly
-`launch openid fhirUser fhircast/Patient-open.read fhircast/Patient-close.read`
-(FHIRcast STU3 scope syntax; ADR 0016). Nothing configures it: the registration
-at Epic must allow all five, or Epic narrows the grant and the session keeps no
-FHIRcast hub. No `offline_access` or `online_access` is asked for, so Epic issues
-no refresh token.
+Epic Login asks for exactly `launch openid fhirUser`. Nothing configures it: the
+registration at Epic must allow all three. No `offline_access` or
+`online_access` is asked for, so Epic issues no refresh token.
 
-The token response's `hub.url` is kept only on host `127.0.0.1` (any port,
-`http` or `https`) and `hub.topic` only within `[A-Za-z0-9\-._~]{1,128}`; a
-deployment whose Epic names its hub anywhere else gets "FHIRcast unavailable" on
-Home, with no log line naming either value. `GET /api/auth/epic/fhircast` then
-releases the session's access token to its SPA, and is answered `404` with the
-rest of the namespace while the switch is off.
-
-The CSP (`SecurityConfig`) carries the hub's loopback entries in `connect-src`
-whatever the switch says: `'self' http://127.0.0.1:* https://127.0.0.1:*
-ws://127.0.0.1:* wss://127.0.0.1:*`, and no Epic origin — the browser never
-calls Epic. A managed Chrome needs the application's origin allowed for Local
-Network Access, through the `LocalNetworkAccessAllowedForUrls` policy, or each
-clinician answers the browser's prompt once
-(`/frontend/docs/BACKEND_CONTRACT.md`).
+The CSP (`SecurityConfig`) admits the application's own origin alone, whatever
+the switch says, and no Epic origin — the browser never calls Epic.
 
 ## Local Epic stand-in
 
-A real SMART EHR launch, locally and without Epic, and a stand-in for Epic's
-FHIRcast hub (Subspace), which runs on the clinician's own machine, so its
-`hub.url` is a loopback address; the stand-in is built to look the same. It is
-the one local stand-in for Epic, behind the `fhircast` compose profile, so
+A real SMART EHR launch, locally and without Epic. It is the one local stand-in
+for Epic, behind the `fhircast` compose profile, so
 `make infra-up` and a plain `docker compose up` never start it. From the
 repository root:
 
 ```bash
 make fhircast-up     # SQL Server, Redis, the patient source's mock and the stand-in; seeds Medplum, sets up backend/.env, prints the launch URL
 make dev             # the app, which reads that .env
-make fhircast-publish EVENT=Patient-open PATIENT=<id>   # an event on the clinician's topic, as the EHR sends one
 make fhircast-down   # stops them all, keeping the volumes (Medplum's database among them); VOL=1 removes them
 ```
 
@@ -112,70 +94,18 @@ Then open the URL `make fhircast-up` printed and sign in on Medplum's page as
 the clinician it names; "Launching from the stand-in" below has what happens
 next and what is set up for you.
 
-`make fhircast-publish` plays the EHR's part once the FHIRcast card reads
-`Connected`: it publishes `EVENT` (`Patient-open` or `Patient-close`) for the
-Patient whose FHIR id is `PATIENT` (`scripts/fhircast-publish.sh`). It takes the
-topic from Medplum's token response for the seeded clinician, signed in with the
-`fhircast/` scopes, so it is the topic the launch subscribed on, and posts as
-Medplum's super admin, as the shim subscribes. `TOPIC=<topic>` publishes on
-another, such as the `hubTopic` `GET /api/auth/epic/fhircast` releases to a
-session signed in as another clinician.
-
 Two parts, both on `127.0.0.1` alone:
 
 - **Medplum** (`medplum/medplum-server`, self-hosted, with its own Postgres and
-  Redis, apart from the app's) is both the SMART EHR launcher and the FHIRcast
-  STU3 websocket hub. When a `fhircast/` scope is granted, its token response
-  carries `hub.url` (`http://127.0.0.1:8103/fhircast/STU3`) and `hub.topic`.
-- **The FHIRcast shim** (`backend/fhircast-shim`, a small Node service) puts
-  Medplum's hub behind the checks Epic's hub makes and Medplum's does not: the
-  SMART access token, and the subscription's lease. Medplum names `hub.url`
-  from its own base URL, so the shim fronts Medplum: Medplum's base URL is the
-  shim's port, and the shim passes everything that is not its own through to
-  Medplum, websockets included.
+  Redis, apart from the app's) is the SMART EHR launcher.
+- **The FHIRcast shim** (`backend/fhircast-shim`, a small Node service) fronts
+  Medplum: Medplum's base URL is the shim's port, and the shim passes everything
+  that is not its own through to Medplum, its token endpoint included.
 
 | Port             | What answers                                                                                                                |
 | ---------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `127.0.0.1:8103` | Medplum's base URL, through the shim: its OIDC issuer, FHIR base (`/fhir/R4`), hub, and the shim's test-only `/shim/test/*` |
+| `127.0.0.1:8103` | Medplum's base URL, through the shim: its OIDC issuer and FHIR base (`/fhir/R4`)                                            |
 | `127.0.0.1:3103` | Medplum's web app: the sign-in page Medplum's authorize sends the browser to                                                |
-
-The shim's own endpoints, under that base URL, are test-only, answered while
-`SHIM_TEST_STATE` is `enabled`, as compose sets it:
-
-| Endpoint                                  | Does                                                                                                                                                                            |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /shim/test/state`                    | the channel endpoints whose lease has ended, for E2E assertions                                                                                                                 |
-| `POST /shim/test/drop?endpoint={id}`      | closes every socket open at the channel endpoint `/ws/fhircast/{id}`, as a network fault would, for E2E's dropped-socket case                                                   |
-| `POST /shim/test/end-lease?endpoint={id}` | ends the lease of the channel endpoint `/ws/fhircast/{id}` at once, as when it runs out: its sockets closed, the endpoint denied from then on, so E2E need not wait out a lease |
-| `POST /shim/test/expire`                  | the SMART access token in the form's `token` counts as expired at once, as when its `exp` passes, so E2E need not wait out a token's lifetime                                   |
-
-The hub accepts a SMART access token as `Bearer` on its own paths
-(`/fhircast/`) through the shim, as the Epic team has confirmed Epic's hub
-accepts the one from the EHR launch: any token, live while Medplum's
-introspection calls it active and its `exp` is still ahead. The shim exchanges
-it for Medplum's super admin token while it is live, and refuses it without
-reaching Medplum's hub once it is not. Medplum's own access tokens are such
-tokens, so the super admin's, which the E2E helpers subscribe and publish
-with, is accepted the same way. The shim checks the token of every standing
-subscription. Once the token is no longer live (its `exp` has passed, or
-Medplum's introspection no longer calls it active, as when signing out at
-Medplum's `/oauth2/logout` revokes its Login), every subscription made with it
-is denied on its open socket. The shim sends its own FHIRcast denial —
-`hub.mode` `denied`, the subscription's `hub.topic` and `hub.events`, and a
-`hub.reason` naming expiry or revocation — then a close frame, and Medplum
-denies its channel endpoint from then on; a subscription unsubscribed before
-then is not. The shim's test-only `POST /shim/test/expire` has a token count
-as expired at once.
-
-The shim also holds each subscription to a lease, which Medplum names in its
-confirmation but never enforces on an open socket: the lease starts with the
-subscription's first socket, the confirmation's `hub.lease_seconds` states what
-is left of it, its sockets are closed when it runs out, and Medplum denies its
-channel endpoint from then on. A lease lasts an hour, as Medplum grants;
-`FHIRCAST_LEASE_SECONDS` sets another, and `make integration-test` sets 75.
-Medplum keeps a FHIRcast topic per Medplum project, and the shim subscribes as
-the super admin whichever token it was given, so whoever publishes to a topic
-the app subscribes to publishes as the super admin too.
 
 `make fhircast-up` runs the one-shot `medplum-init` after every service is
 healthy, as `make infra-up` runs `sqlserver-init`. It seeds Medplum
@@ -185,8 +115,8 @@ sign-in at the Practitioner id `SEED_CLINICIAN_ID` gives it, and one more for
 each Epic Login E2E case that signs in at Medplum, each at the Practitioner id
 `SEED_EPIC_LOGIN_CLINICIANS` gives it and the spec names; every one of the
 patient source's development fixtures (`backend/patient-source-mock`), each
-as a Patient carrying the Epic id its fixture is held under, so a launch or a
-FHIRcast event can name any of them and the Patient card reads it;
+as a Patient carrying the Epic id its fixture is held under, so a launch can
+name any of them and the Patient card reads it;
 a `SmartAppLaunch` for Tan Wei Ming (see "Launching from the stand-in");
 and this app's ClientApplication — `private_key_jwt` against our JWKS
 (`http://host.docker.internal:${SERVER_PORT}/api/auth/epic/jwks.json`, as
@@ -215,10 +145,7 @@ fixture:
 | Kumaravel                  | `e0w0LEDCYtfckT6N.CkJKCw3` |
 | Marcus Anthony de Souza    | `egqBHVfQlt4Bw3XGXoxVxHg3` |
 
-The default launch `make fhircast-up` prints names Tan Wei Ming. A FHIRcast
-event names a patient by the same Epic id:
-`make fhircast-publish EVENT=Patient-open PATIENT=erXuFYUfucBZaryVksYEcMg3`
-moves the Patient card to Siti Nurhaliza binte Ahmad.
+The default launch `make fhircast-up` prints names Tan Wei Ming.
 
 A Medplum volume seeded before the clinicians' ids were fixed holds each
 sign-in under a Practitioner Medplum assigned, and the seed then fails on
@@ -295,8 +222,7 @@ Three steps, with nothing pasted, provisioned or created by hand:
    `compose.yaml` seeds (`fhircast-stand-in-clinician`), and approve the scopes.
 
 The launch lands on Home (`/`), signed in as the clinician with Tan Wei Ming in
-the Patient card, and Home's FHIRcast card connects to Medplum's hub through the
-shim and reads `Connected`. What the seed and the dev fixtures did for it:
+the Patient card. What the seed and the dev fixtures did for it:
 
 - **The `SmartAppLaunch`** is the seed's (step 6 of `seed.mjs`). Its `patient`
   references the seeded Patient, and its `patient.identifier.value`
@@ -331,17 +257,13 @@ clinician (`docs/domain/epic-login.md`, "Linking by `userName`"); `compose.yaml`
 is the one place the id is chosen, which is why the backend takes it from `.env`
 rather than carrying a copy. The other seeded clinicians, made for the E2E
 specs, sign in with the same password but have no User: one is provisioned by
-the spec that signs it in, or by hand over SCIM. Medplum always names its hub on
-`127.0.0.1` with a well-formed topic, so it cannot show a dropped hub; the drop
-rules are covered by the backend's tests against FakeEpic.
+the spec that signs it in, or by hand over SCIM.
 
 `make integration-test` runs the same launch as Playwright specs, part of the
 E2E gate (`frontend/AGENTS.md`): the `epic` project drives Epic Login through
-it, as the seeded clinician of each case, and the `fhircast` project
-the seeded clinician's launch, the hub, and the FHIRcast card
-(`fhircast-card.spec.ts`, as a clinician seeded for it alone). It generates its
+it, as the seeded clinician of each case. It generates its
 own key, sets every `APP_EPIC_*` value itself, and runs the shim's own unit
 tests first. It also unsets `APP_DEV_FIXTURES_EPIC_CLINICIAN` after loading
 `.env`, whatever the block says: the specs' backend seeds no Epic clinician, so
-`epic-unprovisioned` stays unprovisioned and the `fhircast` project provisions
+`epic-unprovisioned` stays unprovisioned and the `epic` project provisions
 its own.

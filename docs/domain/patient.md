@@ -246,9 +246,7 @@ a test states the day it runs on and the age never depends on the viewer's zone.
 
 Home's **Patient card** shows the patient in context, and only that patient: the
 patient of the tab's **EHR context**, which the Launch context an EHR launch
-passes to the SPA seeds and the FHIRcast hub's `Patient-open` and
-`Patient-close` move, so the card follows the chart open in Epic
-([Epic Login](./epic-login.md)). With none in context it
+passes to the SPA seeds ([Epic Login](./epic-login.md)). With none in context it
 shows "No patient in context" and reads nothing, and a `404` for the id in
 context shows the same. The top bar names the same patient by name and NRIC.
 Both render from **one reader** of the patient in context, which the signed-in
@@ -292,8 +290,7 @@ reaches a deployed environment. The backend holds no fixture of its own.
   the tests read the selection, not merely the copy.
 - **The same ids as the Medplum seed.** The local Epic stand-in's seed
   (`backend/fhircast-shim/src/seed-patients.mjs`) makes a Medplum Patient under
-  each fixture's id, so an EHR launch and a FHIRcast event name a patient the
-  mock holds.
+  each fixture's id, so an EHR launch names a patient the mock holds.
 - **Dummy NRICs.** Every fixture's NRIC has the NRIC shape — a prefix letter,
   seven digits and a check letter — but carries a **deliberately wrong check
   letter**, so it cannot be a real person's: Tan Wei Ming's `S1234567A`

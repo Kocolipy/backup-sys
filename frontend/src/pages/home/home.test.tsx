@@ -7,12 +7,8 @@ import { adoptLaunchLanding, clearEhrContext } from "@/auth/ehr-context";
 
 import {
   landedFromEpicWith,
-  NO_FHIRCAST_RELEASE,
   page,
-  patientOpened,
   patientReads,
-  SITI,
-  SITI_READ,
   TAN_WEI_MING,
   TAN_WEI_MING_READ,
 } from "./patient.testHelpers";
@@ -37,66 +33,44 @@ describe("Home", () => {
 
     await renderSignedIn("/", holding(BASELINE), {
       [TAN_WEI_MING_READ]: json(TAN_WEI_MING),
-      ...NO_FHIRCAST_RELEASE,
     });
 
     expect(await page().findByRole("heading", { name: "Tan Wei Ming" })).toBeInTheDocument();
   });
 
-  it("reads the patient in context once per change, for the Patient card and the top bar both", async () => {
+  it("reads the patient in context once, for the Patient card and the top bar both", async () => {
     landedFromEpicWith(TAN_WEI_MING.id);
     const { requests } = await renderSignedIn("/", holding(BASELINE), {
-      [SITI_READ]: json(SITI),
       [TAN_WEI_MING_READ]: json(TAN_WEI_MING),
-      ...NO_FHIRCAST_RELEASE,
     });
     await page().findByText("Tan Wei Ming");
-
-    patientOpened(SITI.id);
-    await page().findByText("Siti Nurhaliza binte Ahmad");
 
     expect([
       screen.getByRole("region", { name: "Patient in context" }).textContent,
       patientReads(requests()),
-    ]).toEqual(["Siti Nurhaliza binte AhmadS9212345A", [TAN_WEI_MING_READ, SITI_READ]]);
+    ]).toEqual(["Tan Wei MingS1234567A", [TAN_WEI_MING_READ]]);
   });
 
   it("asks for no patient after an EHR launch that put none in context", async () => {
     window.history.replaceState(null, "", "/#encounter=enc-1");
     adoptLaunchLanding();
 
-    const { requests } = await renderSignedIn("/", holding(BASELINE), NO_FHIRCAST_RELEASE);
+    const { requests } = await renderSignedIn("/", holding(BASELINE), {});
 
     expect(screen.getByText("No patient in context")).toBeInTheDocument();
     expect(patientReads(requests())).toEqual([]);
   });
 
-  it("shows the FHIRcast card after an EHR launch that put no patient in context", async () => {
-    window.history.replaceState(null, "", "/#launch");
-    adoptLaunchLanding();
-
-    await renderSignedIn("/", holding(BASELINE), NO_FHIRCAST_RELEASE);
-
-    expect([
-      screen.getByText("No patient in context") !== null,
-      screen.getByRole("heading", { name: "FHIRcast" }) !== null,
-    ]).toEqual([true, true]);
-  });
-
-  it("drops the patient and the FHIRcast card as soon as the tab's EHR context is cleared", async () => {
+  it("drops the patient as soon as the tab's EHR context is cleared", async () => {
     landedFromEpicWith(TAN_WEI_MING.id);
     await renderSignedIn("/", holding(BASELINE), {
       [TAN_WEI_MING_READ]: json(TAN_WEI_MING),
-      ...NO_FHIRCAST_RELEASE,
     });
     await page().findByText("Tan Wei Ming");
 
     act(() => clearEhrContext());
 
-    expect([
-      screen.queryByText("Tan Wei Ming"),
-      screen.queryByRole("heading", { name: "FHIRcast" }),
-    ]).toEqual([null, null]);
+    expect(screen.queryByText("Tan Wei Ming")).toBeNull();
   });
 
   it("offers no control of its own", async () => {

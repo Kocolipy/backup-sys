@@ -1,7 +1,7 @@
 ---
 type: Decision Record
 title: "ADR 0011: Accepted policy deviations and scope limits"
-description: The IM8 controls and App-Standards requirements this application knowingly does not meet, the FHIRcast-in-the-browser deviations, the entries still open, and what is out of scope.
+description: The IM8 controls and App-Standards requirements this application knowingly does not meet, the entries still open, and what is out of scope.
 tags: [compliance, im8, app-standards, deviations]
 ---
 
@@ -47,91 +47,6 @@ development fixtures on, which startup refuses outside the `local` profile, so
 only a developer's machine can enable them. The Bootstrap Admin's first password
 has no fallback: a start without one fails. An Epic Login, which presents no password of ours, is
 not confined by the flag (ADR 0007, "The change-required flag").
-
-### FHIRcast in the browser (ADR 0016)
-
-The SPA connects to Epic's local FHIRcast hub itself, because the hub listens on
-the clinician's loopback interface, which the server cannot reach. That puts the
-SMART access token in the browser, and the Hub Subscription it is presented on.
-Each deviation below follows from that. ADR 0016 has the design, and
-`/docs/domain/epic-login.md` the connection's behaviour and the teardown's
-steps.
-
-- **The SMART access token in the tab's memory for the connection's life, and
-  the Hub Subscription in `sessionStorage`, visible to JS (IM8 as-8, ck-4; SSO
-  token-storage rule).** The token is never stored; the tab keeps only its hub,
-  its one live Hub Subscription and the token's expiry (ADR 0016).
-  - _Rationale:_ the browser makes every hub call, and the hub accepts the
-    SMART access token on each, so renewing and tearing down without the
-    backend need the token for the connection's life. What the tab keeps lets a
-    reload resume the subscription instead of leaving one standing at the hub.
-    `sessionStorage` is per tab, never sent to a server, decoded on every read,
-    and cleared by every end of the session.
-  - _Residual risk:_ any script running in the SPA's origin can read the token
-    for as long as the connection lasts, and what the tab keeps. The CSP
-    (`script-src 'self'`, no inline script, no third-party origin) is what keeps
-    that origin the application's own. A tab Chrome duplicates copies what is
-    kept.
-- **The loopback CSP: any port, any scheme (IM8 as-9).** `connect-src` admits
-  `http`, `https`, `ws` and `wss` on `127.0.0.1:*`.
-  - _Rationale:_ Epic chooses the local hub's port and scheme. The host is
-    pinned: no Epic origin and no other host is admitted, and the backend keeps
-    a `hub.url` only on `127.0.0.1`.
-  - _Residual risk:_ an injected script could reach any loopback service on the
-    clinician's workstation. Script injection is already what the rest of the
-    CSP refuses.
-- **Plain `http` and `ws` to the loopback hub, which carries the SMART access
-  token (IM8 dp-3).**
-  - _Rationale:_ loopback traffic never leaves the workstation, and Epic's
-    local hub chooses its own scheme.
-  - _Residual risk:_ another process on the same workstation, with the
-    privilege to watch loopback traffic, could read the token. That process
-    already holds the clinician's desktop.
-- **Epic-set access-token lifetimes over 30 minutes (SSO standard).** The
-  released SMART access token lives as long as Epic's `expires_in` says.
-  - _Rationale:_ Epic issues it; this application neither mints nor shortens
-    it, and refuses to release one past its expiry.
-  - _Residual risk:_ a token copied out of the tab stays valid at Epic, and at
-    the hub, until it expires. Nothing revokes it at Epic (ADR 0012, D13).
-- **The FHIRcast connection can outlive the application session (IM8 as-11;
-  SSO: refresh tokens do not extend the local session lifetime).** The hub
-  accepts renewals with the SMART access token until it expires, and neither
-  the absolute session lifetime nor the idle timeout is enforced on them.
-  - _Rationale:_ a renewal needs nothing of the backend, so nothing on the
-    server can stop it. In the tab the connection ends with the session, and
-    renewals are not activity, so they never keep the session alive.
-  - _Residual risk:_ a SMART access token copied out of the tab keeps
-    subscribing, and so reading the clinician's FHIRcast events, after the
-    session has ended, until it expires. Only from the clinician's own
-    workstation, where the hub listens on loopback.
-- **Revocation at the hub is best-effort (IM8 ck-2; SSO: all tokens associated
-  with a logged-out session are revoked).** Every end of the session
-  unsubscribes what the tab's connections hold at the hub and clears
-  `sessionStorage`, each step bounded and none stopping the rest. The SMART
-  access token is not revoked: Epic offers no revocation for it (ADR 0012,
-  D13). Logout's `Clear-Site-Data` is the backstop for what the tab kept.
-  - _Rationale:_ only the browser can reach the hub, so the browser cancels
-    the subscription, after the backend has ended the session, so a hub that
-    refuses, fails or hangs cannot keep a clinician signed in.
-  - _Residual risk:_ a subscription the hub does not cancel in time, or never
-    hears about (the tab closed before the session ended), stands until its
-    lease runs out. Only from the clinician's own workstation.
-- **Hub Subscriptions absent from the application's audit trail (Logging audit
-  contract, IM8 lm-4).** The trail records each release of the SMART access token
-  (`FHIRCAST_TOKEN_RELEASE`), not the subscriptions made with it.
-  - _Rationale:_ the browser makes those calls to the hub, and the backend never
-    sees them. The hub accepts them, and records them.
-  - _Residual risk:_ an investigator reconstructs a clinician's hub activity
-    from the hub's records, joined to this trail by time and User.
-- **Browser-side integration calls not logged or monitored (Logging
-  outbound-call rule, IM8 lm-16).** The hub calls carry no correlation id,
-  latency metric or error log of the application's.
-  - _Rationale:_ they are made from the clinician's browser to their own
-    workstation. The card shows only generic states and logs no hub or Epic
-    `error_description` or response body, so nothing sensitive reaches the
-    browser console.
-  - _Residual risk:_ a hub fault on one workstation is seen only as that
-    clinician's "FHIRcast unavailable", not centrally.
 
 ### Standalone User Access Control standard
 

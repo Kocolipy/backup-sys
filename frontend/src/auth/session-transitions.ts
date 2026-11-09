@@ -11,14 +11,7 @@
  *
  * Ending a session also forgets the tab's EHR context (`ehr-context.ts`): the
  * patient an EHR launch put in context belongs to the session it signed in,
- * and is not shown to whoever signs in next. So does what the FHIRcast module
- * kept for that session — its hub and its one Hub Subscription
- * (`@/lib/fhircast`, ADR 0016) — at once, by `endFhircast`; and the module
- * then stops the session's FHIRcast connection, so the next session's starts
- * anew, and tears down at the hub, in the background and best-effort, every
- * connection the tab made, each unsubscribed with the SMART access token it
- * holds (ADR 0011). This is the one thing that stops the connection: leaving
- * a page never does.
+ * and is not shown to whoever signs in next.
  *
  * Two transitions change the auth state without changing the session, and so
  * keep the token: a start-up check that did not answer (`checkFailed`), which
@@ -36,7 +29,6 @@
 
 import { useCallback, useRef, useState } from "react";
 
-import { endFhircast } from "@/lib/fhircast";
 import { discardCsrfToken } from "@/lib/http";
 
 import type { AuthUser, SessionCheckFailure } from "./api";
@@ -102,10 +94,6 @@ export function useSessionTransitions(): SessionTransitions {
     current.current += 1;
     discardCsrfToken();
     clearEhrContext();
-    // Forgets what the FHIRcast module kept at once, then tears its
-    // connections down at the hub. Not awaited: the session has ended
-    // already, and the hub, however it answers, has no say in that.
-    void endFhircast();
     setSession({ checkFailure: null, signInReason: reason, status: "guest", user: null });
   }, []);
 

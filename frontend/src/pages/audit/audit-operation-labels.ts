@@ -40,5 +40,4 @@ export const AUDIT_OPERATION_LABELS: Record<AuditOperation, string> = {
   PERMISSION_GRANT: "Permission granted",
   PERMISSION_REVOKE: "Permission revoked",
   GROUP_PERMISSIONS_CHANGE: "Group Permissions changed",
-  FHIRCAST_TOKEN_RELEASE: "FHIRcast token released",
 };

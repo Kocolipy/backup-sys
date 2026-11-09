@@ -29,15 +29,6 @@ module.exports = {
     },
 
     {
-      name: "fhircast-only-through-the-facade",
-      comment:
-        "src/lib/fhircast/ is one module to the rest of the SPA: its facade, index.ts, is the only file in it that anything outside the folder may import (docs/ARCHITECTURE.md). The internal modules behind it — the hub protocol, the notifications, what the tab keeps, the renewing connection, the session — can each be changed on its own only while nothing outside reaches past the facade to one of them.",
-      severity: "error",
-      from: { pathNot: "^src/lib/fhircast/" },
-      to: { path: "^src/lib/fhircast/", pathNot: "^src/lib/fhircast/index\\.ts$" },
-    },
-
-    {
       name: "mb-no-top-level-catchall-dirs",
       comment:
         "There is no src/types, src/hooks or src/utils. Types live in the folder that owns them; shared helpers and hooks live in src/lib (which is what components.json points the shadcn CLI at).",
@@ -249,7 +240,7 @@ module.exports = {
     {
       name: "cq-no-test-code-in-prod",
       comment:
-        "Production source must not import a test or a *.testHelpers.ts(x) module. tsconfig.json's exclude does not stop it — an excluded file a production file imports is compiled anyway — and cq-no-devdep-in-prod exempts the helpers, so a fake backend or hub reached this way would ship in the bundle unflagged.",
+        "Production source must not import a test or a *.testHelpers.ts(x) module. tsconfig.json's exclude does not stop it — an excluded file a production file imports is compiled anyway — and cq-no-devdep-in-prod exempts the helpers, so a fake backend reached this way would ship in the bundle unflagged.",
       severity: "error",
       from: {
         path: "^src/",
