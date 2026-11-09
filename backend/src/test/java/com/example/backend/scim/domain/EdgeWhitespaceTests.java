@@ -52,7 +52,7 @@ class EdgeWhitespaceTests {
             "\"\t\nOkta\r\" | Okta",
             // A no-break space, which String.strip() would leave, and an ideographic space.
             "\"\u00A0Okta\u3000\" | Okta",
-            "\"  Epic   Hyperspace \" | Epic   Hyperspace",
+            "\"  Acme   Directory \" | Acme   Directory",
             // A zero-width space is no whitespace, so it stays; nor is a character outside the
             // Basic Multilingual Plane, at either edge.
             "\"\u200BOkta\" | \u200BOkta",

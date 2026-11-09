@@ -8,7 +8,6 @@ import com.example.backend.ContainerTestConfiguration;
 import com.example.backend.CreatedScimRows;
 import com.example.backend.TokenPermissions;
 import com.example.backend.UuidColumnRows;
-import com.example.backend.auth.epic.EpicLoginOnContext;
 import com.example.backend.authorization.domain.Permission;
 import com.example.backend.observability.EcsLogCapture;
 import com.example.backend.scim.application.ConnectorAdministrationService;
@@ -50,7 +49,7 @@ import tools.jackson.databind.JsonNode;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Import(ContainerTestConfiguration.class)
 @AutoConfigureMetrics
-class ScimEncodedPathAuthorizationIntegrationTests extends EpicLoginOnContext {
+class ScimEncodedPathAuthorizationIntegrationTests {
 
     private static final String INSUFFICIENT_SCOPE = "Bearer error=\"insufficient_scope\"";
 

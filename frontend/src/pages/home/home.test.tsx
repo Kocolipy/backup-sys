@@ -3,10 +3,10 @@ import { describe, expect, it } from "vitest";
 
 import { holding, json, STILL_CHECKING } from "@/auth/session-adapter.testHelpers";
 import type { Permission } from "@/auth/api";
-import { adoptLaunchLanding, clearEhrContext } from "@/auth/ehr-context";
+import { clearEhrContext, setEhrContext } from "@/auth/ehr-context";
 
 import {
-  landedFromEpicWith,
+  withPatientInContext,
   page,
   patientReads,
   TAN_WEI_MING,
@@ -28,8 +28,8 @@ describe("Home", () => {
     expect(requests()).toEqual([]);
   });
 
-  it("shows the patient an EHR launch put in context on the Patient card", async () => {
-    landedFromEpicWith(TAN_WEI_MING.id);
+  it("shows the patient in the tab's EHR context on the Patient card", async () => {
+    withPatientInContext(TAN_WEI_MING.id);
 
     await renderSignedIn("/", holding(BASELINE), {
       [TAN_WEI_MING_READ]: json(TAN_WEI_MING),
@@ -39,7 +39,7 @@ describe("Home", () => {
   });
 
   it("reads the patient in context once, for the Patient card and the top bar both", async () => {
-    landedFromEpicWith(TAN_WEI_MING.id);
+    withPatientInContext(TAN_WEI_MING.id);
     const { requests } = await renderSignedIn("/", holding(BASELINE), {
       [TAN_WEI_MING_READ]: json(TAN_WEI_MING),
     });
@@ -51,9 +51,8 @@ describe("Home", () => {
     ]).toEqual(["Tan Wei MingS1234567A", [TAN_WEI_MING_READ]]);
   });
 
-  it("asks for no patient after an EHR launch that put none in context", async () => {
-    window.history.replaceState(null, "", "/#encounter=enc-1");
-    adoptLaunchLanding();
+  it("asks for no patient when the tab's EHR context names none", async () => {
+    setEhrContext({ encounter: "enc-1" });
 
     const { requests } = await renderSignedIn("/", holding(BASELINE), {});
 
@@ -62,7 +61,7 @@ describe("Home", () => {
   });
 
   it("drops the patient as soon as the tab's EHR context is cleared", async () => {
-    landedFromEpicWith(TAN_WEI_MING.id);
+    withPatientInContext(TAN_WEI_MING.id);
     await renderSignedIn("/", holding(BASELINE), {
       [TAN_WEI_MING_READ]: json(TAN_WEI_MING),
     });

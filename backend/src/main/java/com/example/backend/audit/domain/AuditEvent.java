@@ -53,11 +53,11 @@ import java.util.UUID;
  *                      operation
  * @param loginMethod   how a {@code LOGIN_SUCCESS} or {@code LOGIN_FAILURE} was attempted —
  *                      {@code password} or {@code sso}, rendered from {@link AuditLoginMethod}
- *                      (D15) — or {@code null} for every other operation
- * @param mfaFactor     the MFA factor an Epic {@code LOGIN_SUCCESS} was made with (D17) —
- *                      {@code idp-attested} while the Epic organisation's MFA is attested, or the
- *                      factor its {@code amr} named — rendered from {@link AuditMfaFactor}, or
- *                      {@code null} for every other event, a password Login's included
+ *                      — or {@code null} for every other operation
+ * @param mfaFactor     the MFA factor an SSO Login's {@code LOGIN_SUCCESS} was made with —
+ *                      {@code idp-attested}, or the factor the identity provider named —
+ *                      rendered from {@link AuditMfaFactor}, or {@code null} for every other
+ *                      event, a password Login's included
  * @param tokenId       the stable id of the connector token a token event concerns — the one
  *                      issued, rotated or revoked, or the one a refused rotation addressed — or
  *                      {@code null} for every other event and a refused issue, which addressed

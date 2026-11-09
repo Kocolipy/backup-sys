@@ -65,7 +65,7 @@ class PasswordRefusalReasonTests {
                 .containsExactly(PasswordRefusalReason.UNKNOWN_ACCOUNT);
     }
 
-    /** The audit trail's vocabulary, which Epic Login's refusals share, under the same name. */
+    /** The audit trail's vocabulary, under the same name. */
     @Test
     void everyReasonIsAuditedUnderTheTrailsReasonOfTheSameName() {
         assertThat(PasswordRefusalReason.values())

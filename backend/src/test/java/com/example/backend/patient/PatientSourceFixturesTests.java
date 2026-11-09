@@ -14,8 +14,8 @@ import tools.jackson.databind.JsonNode;
 
 /**
  * The patient source's development fixtures, read from the stub files the local mock serves
- * ({@code patient-source-mock/mappings}): four dummy patients under ids borrowed from Epic's
- * public sandbox test patients, covering every gender code, each with an NRIC that cannot be a
+ * ({@code patient-source-mock/mappings}): four dummy patients under ids borrowed from an EHR
+ * vendor's public sandbox test patients, covering every gender code, each with an NRIC that cannot be a
  * real person's (/docs/domain/patient.md, "The patient source's fixtures"). Each fixture's values
  * as the service reads them are {@code PatientStoreContract}'s. Beside them, the fault stubs serve
  * each way the source fails, under ids of their own.
@@ -49,12 +49,9 @@ class PatientSourceFixturesTests {
                 .findFirst();
     }
 
-    /**
-     * The ids the Medplum seed also names ({@code fhircast-shim/src/seed-patients.mjs}), so a
-     * launch naming any of them finds it here.
-     */
+    /** The four fixtures, under the sandbox ids /docs/domain/patient.md lists. */
     @Test
-    void theFixturesAreFourPatientsUnderEpicSandboxIds() {
+    void theFixturesAreFourPatientsUnderSandboxIds() {
         assertThat(FIXTURES).extracting(fixture -> fixture.get("id").asString())
                 .containsExactlyInAnyOrder(
                         "eq081-VQEgP8drUUqCWzHfw3",

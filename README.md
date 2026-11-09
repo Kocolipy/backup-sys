@@ -19,18 +19,16 @@ Every toolchain version is pinned in the repo, so every machine resolves the sam
 
 | Tool     | Pinned in                                                                                                                           | Enforced by                                                                 |
 | -------- | ----------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| Node     | `/.nvmrc`, `/.tool-versions`, `frontend/package.json` `engines`, and the FHIRcast shim's `node` image in `backend/compose.yaml`     | `frontend/.npmrc` (`engine-strict`), `scripts/lib.sh`                       |
+| Node     | `/.nvmrc`, `/.tool-versions`, `frontend/package.json` `engines`                                                                     | `frontend/.npmrc` (`engine-strict`), `scripts/lib.sh`                       |
 | npm      | `frontend/package.json` `packageManager`                                                                                            | Corepack, plus `engines.npm`                                                |
 | Maven    | `backend/.mvn/wrapper/maven-wrapper.properties`, `/.tool-versions`                                                                  | `backend/mvnw` (checksum-verified download), Enforcer `requireMavenVersion` |
 | JDK      | `/.tool-versions`                                                                                                                   | Enforcer `requireJavaVersion` in `backend/pom.xml` (`[25,26)`)              |
-| Medplum  | `backend/compose.yaml`: `medplum/medplum-server` and `medplum/medplum-app`, one release for both                                    | the tag and digest pulled (below)                                           |
 | WireMock | `backend/compose.yaml`: the patient source's mock, `wiremock/wiremock`; `backend/pom.xml`: `wiremock.version`, one release for both | the tag and digest pulled (below); Enforcer `wiremock-test-scope-only`      |
 
 A bump to Node, Maven, or the JDK lands in every row of its line in the same
 commit — a pin that disagrees with its neighbour surfaces as a build error
-somewhere unrelated. The two Medplum images move together, as one Medplum
-release, the shim's `node` image moves with the Node pin, and the patient
-source's mock image moves with the backend's WireMock test dependency.
+somewhere unrelated. The patient source's mock image moves with the backend's
+WireMock test dependency.
 
 Activate the Node and JDK pins with `nvm use` (reads `/.nvmrc`), or
 `asdf install` / `mise install` (both read `/.tool-versions`) from the repo
@@ -49,12 +47,9 @@ The SQL Server image is pinned twice — `backend/compose.yaml` and
 backend's gate scripts read their shared test server's from `compose.yaml`); it is
 reviewed monthly (ADR 0013, "Database patching"). It is x86_64 only: Apple
 Silicon is not a supported development platform
-(`backend/docs/configuration/database.md`, "Local setup"). The local Epic
-stand-in pins Medplum (`medplum/medplum-server` and `medplum/medplum-app`),
-its Postgres and Redis, and the shim's `node` image the same way, tag and digest
-(`backend/docs/configuration/epic-login.md`, "Local Epic stand-in"), and so
-does the in-house patient source's mock, `wiremock/wiremock`, which `make
-infra-up` starts beside SQL Server and Redis
+(`backend/docs/configuration/database.md`, "Local setup"). The in-house
+patient source's mock, `wiremock/wiremock`, which `make infra-up` starts beside
+SQL Server and Redis, is pinned the same way, tag and digest
 (`backend/docs/configuration/patient-source.md`).
 
 ## Releasing and deploying

@@ -84,19 +84,13 @@ Playwright `setup` project makes that change on first run, moving `admin` to
 this is one-way for that database. The specs read these variables; the SPA
 reads none:
 
-| Variable                                                  | Default                          | Used for                                                                                                                                                                                            |
-| --------------------------------------------------------- | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `E2E_ADMIN_PASSWORD`                                      | `E2e-Bootstrap-Secret-4m`        | the seeded Admin's password in the suite                                                                                                                                                            |
-| `APP_LOCKOUT_MAX_ATTEMPTS`                                | `3`                              | the backend's lockout threshold, mirrored by the lockout specs (`make integration-test` exports it from `backend/.env`)                                                                             |
-| `APP_DEV_FIXTURES_PASSWORD`                               | `P@ssw0rd`                       | the development fixture Users' password (`make integration-test` exports it from `backend/.env`)                                                                                                    |
-| `SERVER_PORT`                                             | `8080`                           | the backend's port, which the SCIM and actuator calls that bypass the Vite proxy reach, as the proxy does (`make integration-test` exports it from `backend/.env`)                                  |
-| `E2E_EPIC_SHIM_CONTAINER`                                 | none — required by the Epic spec | the FHIRcast shim's Docker container, which fronts Medplum's token endpoint, paused for one callback to make it unreachable (`make integration-test` sets it)                                       |
-| `E2E_EPIC_CLINICIANS`                                     | none — required by the Epic spec | the clinicians the seed makes for the Epic spec's cases, as `email=Practitioner id` pairs, comma-separated (`make integration-test` reads `SEED_EPIC_LOGIN_CLINICIANS` from `backend/compose.yaml`) |
-| `E2E_FHIRCAST_MEDPLUM_URL`                                | none — required by the Epic spec | Medplum's base URL, as the FHIRcast shim answers for it (`make integration-test` sets it)                                                                                                           |
-| `E2E_FHIRCAST_FHIR_BASE`                                  | none (unset)                     | Medplum's FHIR base, the launch `iss`, which the backend's `APP_EPIC_FHIR_BASE` equals; declares the `epic` project (`make integration-test` sets it)                                               |
-| `E2E_FHIRCAST_ADMIN_EMAIL`, `E2E_FHIRCAST_ADMIN_PASSWORD` | none — required by the Epic spec | Medplum's super admin, who creates launches (`make integration-test` reads them from `backend/compose.yaml`)                                                                                        |
-| `E2E_FHIRCAST_CLINICIAN_PASSWORD`                         | none — required by the Epic spec | the password every clinician the seed makes signs in with on Medplum's page (`make integration-test` reads it from `backend/compose.yaml`)                                                          |
-| `E2E_PACKAGED_BASE_URL`                                   | none (unset)                     | the packaged JAR's origin; declares the `packaged` project (`make integration-test` sets it)                                                                                                        |
+| Variable                    | Default                   | Used for                                                                                                                                                           |
+| --------------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `E2E_ADMIN_PASSWORD`        | `E2e-Bootstrap-Secret-4m` | the seeded Admin's password in the suite                                                                                                                           |
+| `APP_LOCKOUT_MAX_ATTEMPTS`  | `3`                       | the backend's lockout threshold, mirrored by the lockout specs (`make integration-test` exports it from `backend/.env`)                                            |
+| `APP_DEV_FIXTURES_PASSWORD` | `P@ssw0rd`                | the development fixture Users' password (`make integration-test` exports it from `backend/.env`)                                                                   |
+| `SERVER_PORT`               | `8080`                    | the backend's port, which the SCIM and actuator calls that bypass the Vite proxy reach, as the proxy does (`make integration-test` exports it from `backend/.env`) |
+| `E2E_PACKAGED_BASE_URL`     | none (unset)              | the packaged JAR's origin; declares the `packaged` project (`make integration-test` sets it)                                                                       |
 
 The specs sign in as the backend's development fixtures (one User per
 development Group, whose Permissions the `local` profile seeds, plus `user` and
@@ -106,4 +100,4 @@ development Group, whose Permissions the `local` profile seeds, plus `user` and
 ## Backend contract
 
 `docs/BACKEND_CONTRACT.md` is the authority on the runtime contract: CSRF,
-the `401`/`403` split, the session window, Epic Login's landing, and the CSP.
+the `401`/`403` split, the session window, and the CSP.

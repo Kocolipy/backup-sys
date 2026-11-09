@@ -9,7 +9,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 
 /**
  * What an upstream fault tells its record: the category and the reason it was raised with, and
- * whether a person must follow it up — ADR 0012's table for a failed outbound call, where no
+ * whether a person must follow it up — ADR 0014's table for a failed outbound call, where no
  * answer and a {@code 5xx} pass on their own and an answer the service cannot use does not.
  */
 class UpstreamFaultExceptionTests {

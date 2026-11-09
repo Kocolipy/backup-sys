@@ -94,10 +94,6 @@ public class ScimSeedConfig {
                                 .map(fixture -> new GroupPermissionFixture(
                                         fixture.group(), fixture.permissions()))
                                 .toList());
-                if (devFixtures.epicClinician() != null && !devFixtures.epicClinician().isBlank()) {
-                    seeding.seedEpicClinicianFixture(devFixtures.epicClinician(),
-                            devFixtures.epicClinicianDisplayName(), devFixtures.password());
-                }
                 if (devFixtures.dormantMember() != null) {
                     // A day past the revocation window, so the startup dormancy run locks it
                     // and removes every membership it was put back into.

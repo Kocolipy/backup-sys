@@ -112,78 +112,6 @@ class LoginIdentityServiceTests {
                 .hasMessage("User not found");
     }
 
-    // Linking an Epic Login's Practitioner ID to a User
-
-    @Test
-    void anEpicPractitionerIdLinksToTheUserWhoseUserNameItIs() {
-        users.given(ScimIdentities.user("eABC123"));
-
-        assertThat(service.loadEpicLinkedUser("eABC123"))
-                .map(UserDetails::getUsername)
-                .contains("eABC123");
-    }
-
-    /**
-     * Epic IDs are case-sensitive (D3) while the directory's lookup normalizes, so an ID that
-     * differs from the stored {@code userName} only in case links to nobody.
-     */
-    @Test
-    void anEpicPractitionerIdDifferingOnlyInCaseLinksToNoUser() {
-        users.given(ScimIdentities.user("eABC123"));
-
-        assertThat(service.loadEpicLinkedUser("eabc123")).isEmpty();
-    }
-
-    /** The Bootstrap Admin links to nothing whatever its name (D6): password Login recovers it. */
-    @Test
-    void anEpicPractitionerIdNamingTheBootstrapAdminLinksToNoUser() {
-        users.createReserved(ScimIdentities.user("eRECOVERY"), ReservedResourceName.BOOTSTRAP_ADMIN);
-
-        assertThat(service.loadEpicLinkedUser("eRECOVERY")).isEmpty();
-    }
-
-    /** A flagged User the Epic path links to is still reported locked when it is locked. */
-    @Test
-    void anEpicLoginReportsAFlaggedLockedUserAsLocked() {
-        users.given(ScimIdentities.userWithLoginState("eGRACE1", new ScimLoginState(
-                "hash", 3, Instant.parse("2026-09-24T07:00:00Z"), null, ScimIdentities.NOW)));
-
-        assertThat(service.loadEpicLinkedUser("eGRACE1").map(UserDetails::isAccountNonLocked))
-                .contains(false);
-    }
-
-    /** And deactivated when it is deactivated: only the authorities ignore the flag. */
-    @Test
-    void anEpicLoginReportsAFlaggedInactiveUserAsDisabled() {
-        ScimUser retired = users.given(ScimIdentities.inactiveUser("eRETIRED1"));
-        ScimIdentities.storePasswordChangeRequired(users, retired.id(), ScimIdentities.NOW);
-
-        assertThat(service.loadEpicLinkedUser("eRETIRED1").map(UserDetails::isEnabled))
-                .contains(false);
-    }
-
-    /** No Practitioner ID links to nobody, rather than failing the way normalizing one would. */
-    @Test
-    void aBlankOrMissingEpicPractitionerIdLinksToNoUser() {
-        users.given(ScimIdentities.user("eABC123"));
-
-        assertThat(Stream.of("   ", null).map(service::loadEpicLinkedUser))
-                .containsOnly(Optional.empty());
-    }
-
-    /**
-     * A Practitioner ID of no-break spaces alone links to nobody, as any ID naming no User does,
-     * rather than failing: Java does not count them blank, but normalization makes them ordinary
-     * spaces, which no {@code userName} is.
-     */
-    @ParameterizedTest
-    @ValueSource(strings = {"\u00A0", "\u2007", "\u202F", "\u00A0\u2007\u202F"})
-    void anEpicPractitionerIdOfNoBreakSpacesAloneLinksToNoUser(String practitionerId) {
-        users.given(ScimIdentities.user("eABC123"));
-
-        assertThat(service.loadEpicLinkedUser(practitionerId)).isEmpty();
-    }
-
     /**
      * A blank or missing submission cannot normalize, and it is refused as the unknown name it is
      * rather than as a different, distinguishable kind of failure — which would tell a caller its
@@ -243,16 +171,6 @@ class LoginIdentityServiceTests {
                         refusal -> assertThat(refusal.userId()).isEqualTo(stored.id()));
     }
 
-    /** It still has an Epic Login: Epic checked the credential, not this service (D20). */
-    @Test
-    void anEpicPractitionerIdLinksToACredentiallessUser() {
-        users.given(ScimIdentities.credentiallessUser("eNOPASS1"));
-
-        assertThat(service.loadEpicLinkedUser("eNOPASS1"))
-                .map(UserDetails::getUsername)
-                .contains("eNOPASS1");
-    }
-
     // Resolving the stable id
 
     /**
@@ -264,14 +182,6 @@ class LoginIdentityServiceTests {
         ScimUser stored = users.given(ScimIdentities.user("Ada"));
 
         assertThat(service.loadUserByUsername("ADA").userId()).isEqualTo(stored.id());
-    }
-
-    @Test
-    void theEpicLinkedPrincipalCarriesTheUsersStableId() {
-        ScimUser stored = users.given(ScimIdentities.user("eADA"));
-
-        assertThat(service.loadEpicLinkedUser("eADA").orElseThrow().userId())
-                .isEqualTo(stored.id());
     }
 
     // Authority, which is derived from Group membership rather than stored
@@ -458,22 +368,6 @@ class LoginIdentityServiceTests {
     }
 
     /**
-     * An Epic Login's session is issued with exactly the authorities the login decision resolved:
-     * Epic checked the credential, so there is no factor of this service's to keep beside them.
-     */
-    @Test
-    void anEpicLoginsSessionHoldsExactlyTheAuthoritiesItIsIssuedWith() {
-        users.given(ScimIdentities.user("eGRACE"));
-
-        Authentication issued = service.issued(service.loadEpicLinkedUser("eGRACE").orElseThrow(),
-                List.of(new SimpleGrantedAuthority("ROLE_USER")));
-
-        assertThat(issued.getAuthorities())
-                .extracting(GrantedAuthority::getAuthority)
-                .containsExactly("ROLE_USER");
-    }
-
-    /**
      * The User the authentication read carries no authority of its own: what the session may do
      * is read under the User's lock, in the Login's decision, and that read alone is issued.
      */
@@ -482,9 +376,7 @@ class LoginIdentityServiceTests {
         ScimUser grace = users.given(ScimIdentities.user("grace"));
         givenAdminGroup(grace);
 
-        assertThat(List.of(authoritiesOf(mapped.loadUserByUsername("grace")),
-                        authoritiesOf(mapped.loadEpicLinkedUser("grace").orElseThrow())))
-                .containsOnly(List.of());
+        assertThat(authoritiesOf(mapped.loadUserByUsername("grace"))).isEmpty();
     }
 
     /**

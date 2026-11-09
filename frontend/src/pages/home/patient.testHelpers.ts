@@ -1,7 +1,7 @@
 import { screen, within } from "@testing-library/react";
 import type { Patient } from "fhir/r5";
 
-import { adoptLaunchLanding } from "@/auth/ehr-context";
+import { setEhrContext } from "@/auth/ehr-context";
 
 /**
  * The read of Tan Wei Ming, one of the seeder's development fixtures, as an
@@ -21,11 +21,8 @@ export const TAN_WEI_MING = {
   resourceType: "Patient",
 } satisfies Patient;
 
-/** The tab loaded at an Epic landing with Patient `patientId` in context. */
-export const landedFromEpicWith = (patientId: string) => {
-  window.history.replaceState(null, "", `/#patient=${patientId}`);
-  adoptLaunchLanding();
-};
+/** The tab holds Patient `patientId` in its EHR context. */
+export const withPatientInContext = (patientId: string) => setEhrContext({ patient: patientId });
 
 /**
  * The patient reads among `sent`, in order, as answer-table keys to compare

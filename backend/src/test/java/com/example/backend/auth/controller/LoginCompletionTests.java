@@ -8,27 +8,19 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import com.example.backend.SessionCookie;
 import com.example.backend.audit.CapturedLog;
 import com.example.backend.audit.RecordingAuditTrail;
-import com.example.backend.audit.domain.AuditMfaFactor;
 import com.example.backend.auth.LoginHarness;
 import com.example.backend.auth.MutableClock;
 import com.example.backend.auth.RecordingLoginCounts;
-import com.example.backend.auth.application.LoginOutcome.EpicRefused;
-import com.example.backend.auth.application.LoginOutcome.FailedCall;
-import com.example.backend.auth.application.LoginOutcome.SignedIn;
-import com.example.backend.auth.application.LoginOutcome.Unavailable;
 import com.example.backend.auth.application.LoginOutcomeService;
 import com.example.backend.auth.application.LoginService;
 import com.example.backend.auth.application.LoginService.LoginDecision;
 import com.example.backend.auth.config.SecurityConfig;
-import com.example.backend.auth.domain.EpicLoginFailureReason;
 import com.example.backend.observability.LogEvent;
-import com.example.backend.observability.LogEvent.ErrorCategory;
 import com.example.backend.observability.SessionHash;
 import com.example.backend.scim.InMemoryScimUserRepository;
 import com.example.backend.scim.ScimIdentities;
 import com.example.backend.scim.domain.ScimUser;
 import jakarta.servlet.http.Cookie;
-import jakarta.servlet.http.HttpSession;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -49,7 +41,7 @@ import org.springframework.session.FindByIndexNameSessionRepository;
 import org.springframework.session.web.http.DefaultCookieSerializer;
 
 /**
- * How a Login is completed ({@link LoginCompletion}), by either login method: the login decision,
+ * How a Login is completed ({@link LoginCompletion}): the login decision,
  * then the session established from it, then its ending recorded, once — or, on a refusal, the
  * browser's session ended. Driven over the real login decision and outcome module, as
  * {@link LoginHarness} assembles them, and the real session step, so the order asserted here is
@@ -91,7 +83,7 @@ class LoginCompletionTests {
 
     /**
      * The ending is recorded after the session is signed in, so it names the session the User
-     * goes on to use — rotated, never the pre-login one — by hash, exactly as an Epic Login's.
+     * goes on to use — rotated, never the pre-login one — by hash.
      */
     @Test
     void anAcceptedLoginIsRecordedOnceNamingTheSessionItSignedIn() {
@@ -111,7 +103,7 @@ class LoginCompletionTests {
     }
 
     @Test
-    void anAcceptedLoginIsCountedOnceAsASuccessOfItsMethod() {
+    void anAcceptedLoginIsCountedOnceAsASuccess() {
         completion.complete(
                 password(PASSWORD), new MockHttpServletRequest(), new MockHttpServletResponse());
 
@@ -182,51 +174,9 @@ class LoginCompletionTests {
                 .isEqualTo(ada.toString());
     }
 
-    /** A login method's own work on the session — Epic's tokens — is handed the signed-in one. */
-    @Test
-    void theSignedInWorkIsHandedTheSessionTheLoginSignedIn() {
-        List<HttpSession> handed = new ArrayList<>();
-
-        Optional<LoginCompletion.EstablishedLogin> signedIn = completion.complete(password(PASSWORD),
-                handed::add, new MockHttpServletRequest(), new MockHttpServletResponse());
-
-        assertThat(handed).containsExactly(signedIn.orElseThrow().session());
-    }
-
-    /** That work is part of signing in: a Login whose work fails is not logged a success either. */
-    @Test
-    void aLoginWhoseSignedInWorkFailsRecordsNoSuccess() {
-        try (CapturedLog captured = CapturedLog.attach()) {
-            assertThatThrownBy(() -> completion.complete(password(PASSWORD), session -> {
-                throw new IllegalStateException("the tokens could not be kept");
-            }, new MockHttpServletRequest(), new MockHttpServletResponse()))
-                    .isInstanceOf(IllegalStateException.class);
-
-            assertThat(accepted(captured)).isEmpty();
-        }
-    }
-
-    /** An Epic Login is completed by the same steps, under its own login method (D15). */
-    @Test
-    void anAcceptedEpicLoginIsSignedInAndRecordedUnderSso() {
-        users.given(ScimIdentities.user("eACTIVE"));
-
-        try (CapturedLog captured = CapturedLog.attach()) {
-            completion.complete(
-                    retained -> login.logInFromEpic("eACTIVE", retained, AuditMfaFactor.OTP),
-                    new MockHttpServletRequest(), new MockHttpServletResponse());
-
-            assertThat(captured.withAction(Level.TRACE, LogEvent.ACTION, "session-start"))
-                    .singleElement()
-                    .satisfies(record -> assertThat(CapturedLog.fields(record))
-                            .containsEntry(LogEvent.LOGIN_METHOD, "sso"));
-        }
-        assertThat(counts.moved()).containsExactly("sso:success");
-    }
-
     // ---- refused ----------------------------------------------------------------------------
 
-    /** D24 and its password analogue: a shared browser is not left signed in as the last User. */
+    /** A shared browser is not left signed in as the last User. */
     @Test
     void aRefusedLoginEndsTheSessionTheBrowserHeld() {
         MockHttpServletRequest request = new MockHttpServletRequest();
@@ -266,75 +216,6 @@ class LoginCompletionTests {
         assertThat(completion.complete(
                 password("wrong"), new MockHttpServletRequest(), new MockHttpServletResponse()))
                 .isEmpty();
-    }
-
-    @Test
-    void aRefusedLoginRunsNoSignedInWork() {
-        List<HttpSession> handed = new ArrayList<>();
-
-        completion.complete(password("wrong"), handed::add, new MockHttpServletRequest(),
-                new MockHttpServletResponse());
-
-        assertThat(handed).isEmpty();
-    }
-
-    // ---- ended before any login decision ------------------------------------------------------
-
-    /** Its records name the session the Login ran in, which it then ends. */
-    @Test
-    void anUndecidedEndingIsRecordedNamingTheSessionTheBrowserHeld() {
-        MockHttpServletRequest request = new MockHttpServletRequest();
-        String held = request.getSession().getId();
-
-        try (CapturedLog captured = CapturedLog.attach()) {
-            completion.endUndecided(EpicRefused.because(EpicLoginFailureReason.INVALID_STATE),
-                    request, new MockHttpServletResponse());
-
-            assertThat(captured.withAction(Level.WARN, LogEvent.ACTION, "user-authentication"))
-                    .singleElement()
-                    .satisfies(record -> assertThat(CapturedLog.fields(record))
-                            .containsEntry(LogEvent.SESSION_HASH, SessionHash.of(held)));
-        }
-    }
-
-    @Test
-    void anUndecidedEndingIsRecordedOnce() {
-        completion.endUndecided(new Unavailable(new FailedCall("token", ErrorCategory.SERVER, 503)),
-                new MockHttpServletRequest(), new MockHttpServletResponse());
-
-        assertThat(counts.moved()).containsExactly("failed_call:token:server", "sso:unavailable");
-    }
-
-    @Test
-    void anUndecidedEndingEndsTheSessionTheBrowserHeld() {
-        MockHttpServletRequest request = new MockHttpServletRequest();
-        MockHttpSession held = (MockHttpSession) request.getSession();
-
-        completion.endUndecided(EpicRefused.because(EpicLoginFailureReason.INVALID_STATE),
-                request, new MockHttpServletResponse());
-
-        assertThat(held.isInvalid()).isTrue();
-    }
-
-    @Test
-    void anUndecidedEndingExpiresTheSessionCookieAndClearsNoSiteData() {
-        MockHttpServletRequest request = new MockHttpServletRequest();
-        request.getSession();
-        MockHttpServletResponse response = new MockHttpServletResponse();
-
-        completion.endUndecided(EpicRefused.because(EpicLoginFailureReason.INVALID_STATE),
-                request, response);
-
-        assertExpiredWithoutClearSiteData(response);
-    }
-
-    /** Signing in takes a decision; an ending that skipped it cannot be one, nor record one. */
-    @Test
-    void aSignedInLoginCannotEndUndecided() {
-        assertThatThrownBy(() -> completion.endUndecided(SignedIn.password(ada),
-                new MockHttpServletRequest(), new MockHttpServletResponse()))
-                .isInstanceOf(IllegalArgumentException.class);
-        assertThat(counts.moved()).isEmpty();
     }
 
     // ---- helpers ----------------------------------------------------------------------------

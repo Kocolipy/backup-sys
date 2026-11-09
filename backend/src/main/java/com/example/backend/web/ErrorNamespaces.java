@@ -28,7 +28,7 @@ import tools.jackson.databind.json.JsonMapper;
  * </ul>
  *
  * <p>Every layer that can refuse a request asks it: the app-wide exception handler, the
- * application chain's entry point and access-denied handler, the Epic release gate, the
+ * application chain's entry point and access-denied handler, the
  * {@code sendError} adapter ({@link ErrorDocumentFilter}) and, to choose the advice that answers
  * a handler's failure, {@link NamespaceExceptionResolver}. A path in no namespace — the
  * single-page application's — has no document, and keeps the container's handling.

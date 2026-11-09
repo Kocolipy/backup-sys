@@ -260,7 +260,7 @@ class AuditListingEndToEndIntegrationTests {
         expect(failedLogin, null, "User", member, "failedLoginAttempts");
         assertThat(failedLogin.get("errorCode").asText()).isEqualTo("BAD_CREDENTIALS");
         assertThat(List.of(acceptedLogin, failedLogin))
-                .as("D15: each login is listed with the method it was attempted by")
+                .as("each login is listed with the method it was attempted by")
                 .allSatisfy(login -> assertThat(login.path("loginMethod").asText())
                         .isEqualTo("password"));
         assertThat(single(memberEvents, "PASSWORD_CHANGE", "SUCCESS").get("loginMethod").isNull())

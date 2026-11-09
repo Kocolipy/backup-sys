@@ -3,7 +3,6 @@ package com.example.backend.contract;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.backend.ContainerTestConfiguration;
-import com.example.backend.auth.epic.EpicLoginOnContext;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
@@ -28,28 +27,14 @@ import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandl
  *
  * <p>The actuator's operations are not controller routes; that they exist and answer as documented
  * is {@link ApiContractFixtureTests}' to show.
- *
- * <p>With Epic Login on, because that is the state in which its routes are served: while it is
- * off they are not mapped at all, and the release gate answers {@code 404} for each
- * ({@code EpicReleaseGateIntegrationTests}).
  */
 @SpringBootTest
 @Import(ContainerTestConfiguration.class)
 @AutoConfigureMetrics
-class RouteContractTests extends EpicLoginOnContext {
+class RouteContractTests {
 
     /** The namespaces whose routes the contract covers. */
     private static final List<String> NAMESPACES = List.of("/api/", "/scim/v2/");
-
-    /**
-     * Documented operations a security filter serves rather than a controller, so the handler
-     * mapping cannot show them. Each is held by its own integration tests instead.
-     */
-    private static final Set<String> FILTER_SERVED = Set.of(
-            // Epic Login's callback: the OAuth 2.0 login filter's processing URL, which answers
-            // every request to it while Epic Login is on (EpicLoginIntegrationTests), and which
-            // the release gate answers 404 while it is off.
-            "GET /api/auth/epic/callback");
 
     /** What a mapping with no method condition answers: every method the contract names. */
     private static final List<String> ALL_METHODS = List.of("GET", "POST", "PUT", "PATCH", "DELETE");
@@ -84,11 +69,6 @@ class RouteContractTests extends EpicLoginOnContext {
         assertThat(mapped).as("the handler mapping was read").isNotEmpty();
         assertThat(mapped).as("mapped routes docs/openapi.yaml does not document")
                 .isSubsetOf(documented);
-        assertThat(mapped).as("a filter-served operation is not also a controller route")
-                .doesNotContainAnyElementsOf(FILTER_SERVED);
-        assertThat(documented).as("filter-served operations are documented")
-                .containsAll(FILTER_SERVED);
-        documented.removeAll(FILTER_SERVED);
         assertThat(documented).as("documented operations no handler maps")
                 .isSubsetOf(mapped);
     }

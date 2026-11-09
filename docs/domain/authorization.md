@@ -28,7 +28,7 @@ chain.
 
 **Superuser** — the one session authority that is not a Permission, so it can
 never be put on a Group. A User is a Superuser when it is a _direct_ member of
-the [Admin group](./directory.md), by password Login or Epic Login alike. At
+the [Admin group](./directory.md). At
 sign-in such a session gets `ROLE_SUPERUSER` plus every delegatable Permission,
 expanded in code — no Spring `RoleHierarchy`, no stored list — added to
 whatever its other Groups carry. `GET /api/auth/me` reports it as `superuser`, beside
@@ -66,8 +66,7 @@ Every operation of the application chain declares what it needs, and whatever
 declares nothing is refused. Four kinds of operation:
 
 - **Public** — `POST /api/auth/login`, `GET /api/auth/csrf`,
-  `/actuator/health`, and, while Epic Login is on, its JWKS and three browser
-  routes ([Epic Login](./epic-login.md)), reachable with no session.
+  `/actuator/health`, reachable with no session.
 - **Self-service** — authenticated, no Permission: the four baseline routes
   above. They act only on the session's own User and take no User id from the
   request, so there is no caller-supplied id to check ownership against.
@@ -137,8 +136,7 @@ access without a configuration change or a redeploy (ADR 0015). The rules:
   after the password comparison — the same moment its Lockout and deactivation
   are checked — never from the read that found the User by name, so a membership
   removed or a Group's Permissions reduced while the password was compared is not
-  in the session, and one gained then may already be. The same holds for an Epic
-  Login. A confined session holds none. Nothing about the Group Permissions is
+  in the session, and one gained then may already be. A confined session holds none. Nothing about the Group Permissions is
   recorded on the session.
 - **Losing Permissions ends the sessions they were issued to; gaining waits for
   Login.** A SCIM write that removes a User from a Group that carries
@@ -229,12 +227,7 @@ with one User in it: Auditors and Helpdesk. The Superuser's User is the
 Bootstrap Admin. Their Users get `APP_DEV_FIXTURES_PASSWORD`, never
 overwriting one that exists, together with two Users in no Group: `guest`,
 holding only baseline access, and `dormant`, put past the dormancy lockout window
-at every startup. A third, optional User in no Group, the `epic-clinician`
-(`APP_DEV_FIXTURES_EPIC_CLINICIAN`), is the local exception to "a clinician is a
-User because SCIM provisioned it" ([Epic Login](epic-login.md)): its `userName` is
-the local Epic stand-in's Practitioner id, it holds baseline access only and is
-no administrator, and it is seeded only when the variable is set. Like every
-fixture it is off unless the fixtures are enabled and refused outside the `local`
+at every startup. Every fixture is off unless the fixtures are enabled and refused outside the `local`
 profile. What each Group confers is a separate block active under the
 `local` profile alone, applied at startup only to a Group that carries nothing
 yet; no other profile seeds a Group Permission. The Auditors hold every read —

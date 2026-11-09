@@ -45,7 +45,7 @@ these:
 ```
 
 - **`id`** — the Patient's **EHR's FHIR id**, its id at the patient source and its
-  FHIR resource id here, so the patient an EHR launch names is read by that id
+  FHIR resource id here, so the patient the EHR context names is read by that id
   directly, unchanged: there is no mapping between ids. The service assigns no id
   of its own. Any value in FHIR's id grammar, `[A-Za-z0-9\-.]{1,64}` (letters,
   digits, `-` and `.`, 1 to 64 of them), is well-formed; anything else is refused
@@ -146,9 +146,8 @@ Every layer answers in this one shape, and the backend's `web` module owns it
   `PatientSourceException`, an `observability.UpstreamFaultException`, so that
   `web` answers it with no edge to `patient`) and a fault on this side — and maps it
   to an `error.category`: `data` for the `400` and the `404`; for the `502`,
-  in its one `ERROR` fault record, the failure's own, as ADR 0012's table has
-  it for an outbound call (ADR 0012, D23, through the classifier every outbound
-  call uses) — `network` for no answer (unreachable or timed out, while
+  in its one `ERROR` fault record, the failure's own, as ADR 0014's table has
+  it for an outbound call (through the classifier every outbound call uses) — `network` for no answer (unreachable or timed out, while
   reading the body too) and `server` for the source's `5xx`, neither needing
   follow-up, and `data`, needing follow-up, for another status or a body that
   arrived whole and the service cannot hold; and
@@ -245,8 +244,8 @@ a test states the day it runs on and the age never depends on the viewer's zone.
 ## The patient in context
 
 Home's **Patient card** shows the patient in context, and only that patient: the
-patient of the tab's **EHR context**, which the Launch context an EHR launch
-passes to the SPA seeds ([Epic Login](./epic-login.md)). With none in context it
+patient of the tab's **EHR context**, which nothing sets yet, so a running
+application shows none. With none in context it
 shows "No patient in context" and reads nothing, and a `404` for the id in
 context shows the same. The top bar names the same patient by name and NRIC.
 Both render from **one reader** of the patient in context, which the signed-in
@@ -281,16 +280,12 @@ reaches a deployed environment. The backend holds no fixture of its own.
   the read timeout, `fault-server-error` answers `503`, and `fault-no-nric`,
   `fault-no-official-name`, `fault-no-name-text`, `fault-no-gender` and
   `fault-no-birth-date` each answer a Patient breaking that one rule. A fault
-  stub is no fixture: the Medplum seed makes no Patient under its id, and
-  every reader of the fixtures leaves it out. Its NRIC, where it has one, is as
+  stub is no fixture: every reader of the fixtures leaves it out. Its NRIC, where it has one, is as
   dummy as a fixture's, and the tests hold it to the same check.
 - **More than the five elements.** Each stub is an R4 Patient as a real source
   would answer it — an MRN identifier ahead of the NRIC, `usual` and `maiden`
   names beside the official one, `meta`, `active`, `telecom`, `address` — so
   the tests read the selection, not merely the copy.
-- **The same ids as the Medplum seed.** The local Epic stand-in's seed
-  (`backend/fhircast-shim/src/seed-patients.mjs`) makes a Medplum Patient under
-  each fixture's id, so an EHR launch names a patient the mock holds.
 - **Dummy NRICs.** Every fixture's NRIC has the NRIC shape — a prefix letter,
   seven digits and a check letter — but carries a **deliberately wrong check
   letter**, so it cannot be a real person's: Tan Wei Ming's `S1234567A`
@@ -309,11 +304,10 @@ a name splits — family and given, given only, neither — and all four gender
 codes, so each rendering path the resource has is exercised by real data.
 
 A Patient's id is its EHR's FHIR id, so each fixture borrows the id of one of
-Epic's public sandbox test patients (fhir.epic.com, "Sandbox Test Data"), named
-in the table. Only the id is borrowed: the name, NRIC, gender and birth date are
+an EHR vendor's public sandbox test patients, named in the table. Only the id is borrowed: the name, NRIC, gender and birth date are
 the fixture's own.
 
-| Id (Epic sandbox patient it borrows from)    | `name.text`                  | `family`   | `given`             | Gender    | NRIC (valid letter) | Purpose                                                                                         |
+| Id (sandbox patient it borrows from)         | `name.text`                  | `family`   | `given`             | Gender    | NRIC (valid letter) | Purpose                                                                                         |
 | -------------------------------------------- | ---------------------------- | ---------- | ------------------- | --------- | ------------------- | ----------------------------------------------------------------------------------------------- |
 | `eq081-VQEgP8drUUqCWzHfw3` (Derrick Lin)     | `Tan Wei Ming`               | `Tan`      | `Wei`, `Ming`       | `male`    | `S1234567A` (`D`)   | A Chinese name, family name first                                                               |
 | `erXuFYUfucBZaryVksYEcMg3` (Camila Lopez)    | `Siti Nurhaliza binte Ahmad` | —          | —                   | `female`  | `S9212345A` (`F`)   | A Malay name: `binte Ahmad` is a patronymic, not a family name, so the name is not split at all |

@@ -196,7 +196,7 @@ class AuditTrailServiceTests {
         assertThat(event.id()).isNotNull();
     }
 
-    /** D15: each login event carries how it was attempted, in the recorded spelling. */
+    /** Each login event carries how it was attempted, in the recorded spelling. */
     @Test
     void anAcceptedLoginRecordsItsLoginMethod() {
         trail.append(new Audited.LoginSuccess(SUBJECT, AuditLoginMethod.PASSWORD));
@@ -263,31 +263,6 @@ class AuditTrailServiceTests {
         assertThat(event.errorCode()).isEqualTo("BAD_CREDENTIALS");
         assertThat(event.statusClass()).isEqualTo("client_error");
         assertThat(event.changedPaths()).containsExactly("failedLoginAttempts");
-    }
-
-    /**
-     * A refusal that counted toward no failure run (an Epic Login's, D12) is the same
-     * {@code LOGIN_FAILURE}, and does not claim a failure-run change that never happened.
-     */
-    @Test
-    void aRefusalThatCountsTowardNoFailureRunNamesNoChangedPath() {
-        trail.append(new Audited.LoginRefusal(
-                SUBJECT, AuditRefusalReason.ACCOUNT_LOCKED, AuditLoginMethod.SSO));
-
-        AuditEvent event = events.only();
-        assertThat(event.changedPaths()).isEmpty();
-    }
-
-    @Test
-    void aRefusalThatCountsTowardNoFailureRunIsALoginFailureNamingItsReasonAndMethod() {
-        trail.append(new Audited.LoginRefusal(
-                SUBJECT, AuditRefusalReason.ACCOUNT_LOCKED, AuditLoginMethod.SSO));
-
-        AuditEvent event = events.only();
-        assertThat(List.<Object>of(event.operation(), event.outcome(), event.subjectId(),
-                        event.errorCode(), event.loginMethod()))
-                .containsExactly(AuditOperation.LOGIN_FAILURE, AuditOutcome.FAILURE, SUBJECT,
-                        "ACCOUNT_LOCKED", "sso");
     }
 
     /**
@@ -1039,9 +1014,9 @@ class AuditTrailServiceTests {
                 .containsExactly("DEACTIVATED,USER_NAME_CHANGED", "FAILURE_RUN_LOCKOUT");
     }
 
-    /** D17: an Epic success records its MFA factor by its own spelling. */
+    /** An SSO Login's success records its MFA factor by its own spelling. */
     @Test
-    void anEpicLoginSuccessRecordsItsMfaFactor() {
+    void anSsoLoginSuccessRecordsItsMfaFactor() {
         trail.append(new Audited.LoginSuccess(SUBJECT, AuditLoginMethod.SSO, AuditMfaFactor.OTP));
 
         assertThat(events.only().mfaFactor()).isEqualTo("otp");
@@ -1262,7 +1237,6 @@ class AuditTrailServiceTests {
     private static final Map<Class<? extends Audited>, Semantics> ADR_0004 = Map.ofEntries(
             Map.entry(Audited.LoginSuccess.class, Semantics.FAIL_CLOSED),
             Map.entry(Audited.LoginFailure.class, Semantics.FAIL_OPEN),
-            Map.entry(Audited.LoginRefusal.class, Semantics.FAIL_OPEN),
             Map.entry(Audited.Logout.class, Semantics.FAIL_CLOSED),
             // A success, but riding a refused Login: fail-open.
             Map.entry(Audited.LockoutSet.class, Semantics.FAIL_OPEN),

@@ -7,7 +7,7 @@ import org.springframework.security.web.util.matcher.RequestMatcher;
 
 /**
  * The one answer to what a read of a path is, for every filter-chain rule that permits one: the
- * application chain's own rules and the ones Epic Login adds to it.
+ * application chain's.
  *
  * <p>A read is {@code GET}, and the {@code HEAD} the dispatcher answers with the same handler. A
  * rule for {@code GET} alone would leave {@code HEAD} to the chain's deny-all rule, refusing a

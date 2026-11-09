@@ -13,7 +13,7 @@ The SPA's reference docs. The rules an agent must hold are in `../AGENTS.md`; th
 
 # Contracts
 
-- [Backend contract](BACKEND_CONTRACT.md) - The runtime contract with the backend: CSRF, 401 versus 403, the session bounds, Epic Login's landing, and the CSP.
+- [Backend contract](BACKEND_CONTRACT.md) - The runtime contract with the backend: CSRF, 401 versus 403, the session bounds, and the CSP.
 
 # Testing
 

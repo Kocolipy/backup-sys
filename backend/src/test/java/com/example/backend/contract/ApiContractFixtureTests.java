@@ -8,7 +8,6 @@ import com.example.backend.ScimTestRows;
 import com.example.backend.SessionCookie;
 import com.example.backend.SessionCsrf;
 import com.example.backend.ContainerTestConfiguration;
-import com.example.backend.auth.epic.EpicLoginOnContext;
 import com.example.backend.DatabaseLogins;
 import com.example.backend.ForcedDeadlock;
 import com.example.backend.TokenPermissions;
@@ -73,7 +72,7 @@ import tools.jackson.databind.json.JsonMapper;
 @Import(ContainerTestConfiguration.class)
 @AutoConfigureMetrics
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
-class ApiContractFixtureTests extends EpicLoginOnContext {
+class ApiContractFixtureTests {
 
     private static final String ADMIN = "test-admin";
 
@@ -91,12 +90,6 @@ class ApiContractFixtureTests extends EpicLoginOnContext {
     private static final Set<String> NOT_PRODUCIBLE = Set.of(
             // Needs a dependency to be DOWN; this context's SQL Server and Redis are up by design.
             "GET /actuator/health 503",
-            // Needs Epic Login OFF; this context has it on, to serve the JWKS. The switch-off 404
-            // is EpicReleaseGateIntegrationTests', in a context with no Epic variable at all.
-            "GET /api/auth/epic/jwks.json 404",
-            "GET /api/auth/epic/launch 404",
-            "GET /api/auth/epic/authorize 404",
-            "GET /api/auth/epic/callback 404",
             // Needs the patient read to fail on this side, not the patient source's (the 502); no
             // read here fails so. The fault's outcome is PatientControllerTests', against a store
             // whose reads fail.
@@ -214,34 +207,6 @@ class ApiContractFixtureTests extends EpicLoginOnContext {
     // ---- /api/auth --------------------------------------------------------------------
 
     private static void authentication(List<Fixture> all) {
-        add(all, "epic jwks: 200 to a caller with no session, the active then the next key", t -> {
-            JsonNode keys = json(t.expect(t.get("/api/auth/epic/jwks.json"), 200)).get("keys");
-            assertThat(List.of(keys.get(0).get("kid").asText(), keys.get(1).get("kid").asText()))
-                    .containsExactly("active-2026-04", "next-2026-10");
-        });
-        // The happy path redirects to Epic, which this context has none of; it is
-        // EpicLoginIntegrationTests', against a fake Epic. These redirects need no Epic at all.
-        add(all, "epic launch: 302 to the authorize hop for the configured iss", t ->
-                assertThat(t.expect(t.get("/api/auth/epic/launch")
-                                .param("iss", "https://fhir.example.org/api/FHIR/R4")
-                                .param("launch", "launch-context"), 302)
-                        .getResponse().getRedirectedUrl())
-                        .isEqualTo("/api/auth/epic/authorize"));
-        add(all, "epic launch: 302 refused for any other iss", t ->
-                assertThat(t.expect(t.get("/api/auth/epic/launch")
-                                .param("iss", "https://fhir.example.org/api/FHIR/R4/")
-                                .param("launch", "launch-context"), 302)
-                        .getResponse().getRedirectedUrl())
-                        .isEqualTo("/login?signin=refused"));
-        add(all, "epic authorize: 302 refused with no launch pending", t ->
-                assertThat(t.expect(t.get("/api/auth/epic/authorize"), 302)
-                        .getResponse().getRedirectedUrl())
-                        .isEqualTo("/login?signin=refused"));
-        add(all, "epic callback: 302 refused with no authorization pending", t ->
-                assertThat(t.expect(t.get("/api/auth/epic/callback")
-                                .param("code", "a-code").param("state", "a-state"), 302)
-                        .getResponse().getRedirectedUrl())
-                        .isEqualTo("/login?signin=refused"));
         add(all, "csrf: 200 with the session's token in the body, never cached", t -> {
             MvcResult issued = t.expect(t.get(SessionCsrf.PATH), 200);
             assertThat(issued.getResponse().getHeader(HttpHeaders.CACHE_CONTROL))

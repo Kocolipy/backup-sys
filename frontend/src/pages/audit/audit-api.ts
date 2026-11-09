@@ -61,7 +61,7 @@ export type AuditOutcome = (typeof AUDIT_OUTCOMES)[number];
 
 /**
  * How a `LOGIN_SUCCESS` or `LOGIN_FAILURE` was attempted, mirroring
- * `AuditLoginMethod`: password Login, or an EHR launch from Epic (`sso`).
+ * `AuditLoginMethod`: password Login, or an SSO Login (`sso`).
  */
 const AUDIT_LOGIN_METHODS = ["password", "sso"] as const;
 

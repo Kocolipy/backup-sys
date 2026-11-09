@@ -2,24 +2,21 @@ package com.example.backend.auth.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.example.backend.audit.domain.AuditLoginMethod;
 import com.example.backend.audit.domain.AuditRefusalReason;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.Tag;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.EnumSource;
 
 /**
- * {@link LoginMetrics}, the adapter the alert rules read: one {@code login} counter for both login
- * methods, whose series exist from startup at zero, spelled as the rules spell them, each with the
- * same tag keys, and each count moving its one series.
+ * {@link LoginMetrics}, the adapter the alert rules read: one {@code login} counter, whose series
+ * exist from startup at zero, spelled as the rules spell them, each with the same tag keys, and
+ * each count moving its one series.
  */
 class LoginMetricsTests {
 
@@ -29,26 +26,21 @@ class LoginMetricsTests {
 
     /**
      * An alert on a count's increase sees the first event only if the series was there at 0. The
-     * series are spelled out as the alert rules spell them, and are exactly these: each method's
-     * own outcomes and reasons, so a reason added to either closed set fails here until it is.
+     * series are spelled out as the alert rules spell them, and are exactly these: a success and
+     * each refusal reason, so a reason added to the closed set fails here until it is.
      */
     @Test
     void exactlyTheseSeriesExistAtZeroFromTheStart() {
-        List<String> password = List.of("BAD_CREDENTIALS", "UNKNOWN_ACCOUNT", "ACCOUNT_LOCKED",
-                "ACCOUNT_DISABLED", "OTHER");
-        List<String> epic = List.of("INVALID_LAUNCH", "ISS_MISMATCH", "INVALID_STATE",
-                "INVALID_CODE", "IDP_ERROR", "TOKEN_EXCHANGE_FAILED", "INVALID_SIGNATURE",
-                "INVALID_CLAIMS", "INVALID_FHIR_USER", "UNKNOWN_ACCOUNT", "ACCOUNT_DISABLED",
-                "ACCOUNT_LOCKED");
-        List<String> expected = new ArrayList<>(List.of(
-                "password,success,none", "sso,success,none", "sso,unavailable,EPIC_UNAVAILABLE"));
-        password.forEach(reason -> expected.add("password,refused," + reason));
-        epic.forEach(reason -> expected.add("sso,refused," + reason));
-
         assertThat(registry.find("login").counters())
                 .extracting(counter -> counter.getId().getTag("method") + ","
                         + counter.getId().getTag("outcome") + "," + counter.getId().getTag("reason"))
-                .containsExactlyInAnyOrderElementsOf(expected);
+                .containsExactlyInAnyOrder(
+                        "password,success,none",
+                        "password,refused,BAD_CREDENTIALS",
+                        "password,refused,UNKNOWN_ACCOUNT",
+                        "password,refused,ACCOUNT_LOCKED",
+                        "password,refused,ACCOUNT_DISABLED",
+                        "password,refused,OTHER");
         assertThat(totalEndings()).isZero();
     }
 
@@ -59,31 +51,28 @@ class LoginMetricsTests {
                 assertThat(tagKeys(counter)).containsExactlyInAnyOrder("method", "outcome", "reason"));
     }
 
-    @ParameterizedTest
-    @CsvSource({"PASSWORD, password", "SSO, sso"})
-    void aSignedInLoginIsCountedAsItsMethodsSuccessAndNothingElse(
-            AuditLoginMethod signedIn, String method) {
-        metrics.signedIn(signedIn);
-
-        assertThat(ending(method, "success", "none").count()).isEqualTo(1.0);
-        assertThat(totalEndings()).isEqualTo(1.0);
-    }
-
-    @ParameterizedTest
-    @CsvSource({"PASSWORD, password, ACCOUNT_LOCKED", "SSO, sso, INVALID_STATE"})
-    void aRefusalIsCountedUnderItsMethodAndReasonAndNothingElse(
-            AuditLoginMethod refused, String method, AuditRefusalReason reason) {
-        metrics.refused(refused, reason);
-
-        assertThat(ending(method, "refused", reason.name()).count()).isEqualTo(1.0);
-        assertThat(totalEndings()).isEqualTo(1.0);
+    /** The scrape's {@code # HELP} line for the meter, as an operator reads it. */
+    @Test
+    void theMeterSaysWhatItCounts() {
+        assertThat(ending("password", "success", "none").getId().getDescription())
+                .isEqualTo("Logins that ended, by login method, outcome and refusal reason");
     }
 
     @Test
-    void anUnavailableLoginIsCountedUnderItsOneReasonAndNothingElse() {
-        metrics.unavailable();
+    void aSignedInLoginIsCountedAsASuccessAndNothingElse() {
+        metrics.signedIn();
 
-        assertThat(ending("sso", "unavailable", "EPIC_UNAVAILABLE").count()).isEqualTo(1.0);
+        assertThat(ending("password", "success", "none").count()).isEqualTo(1.0);
+        assertThat(totalEndings()).isEqualTo(1.0);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = AuditRefusalReason.class,
+            names = {"BAD_CREDENTIALS", "UNKNOWN_ACCOUNT", "ACCOUNT_LOCKED"})
+    void aRefusalIsCountedUnderItsReasonAndNothingElse(AuditRefusalReason reason) {
+        metrics.refused(reason);
+
+        assertThat(ending("password", "refused", reason.name()).count()).isEqualTo(1.0);
         assertThat(totalEndings()).isEqualTo(1.0);
     }
 

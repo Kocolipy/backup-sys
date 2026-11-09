@@ -37,7 +37,6 @@ MVN=${MVN:-./mvnw}
 FAST_GATE=(
   arch/ArchitectureTest
   arch/DeadlockRetryRulesTests
-  arch/EpicTokenRulesTests
   arch/ModuleRulesTests
   arch/NamedTargetRulesTests
   arch/TestHelperRulesTests
@@ -61,7 +60,6 @@ FAST_GATE=(
   com/example/backend/audit/infrastructure/request/HttpAuditRequestContextAdapterTests
   com/example/backend/auth/InMemoryAccountSessionsContractTests
   com/example/backend/auth/application/DormancyServiceTests
-  com/example/backend/auth/application/EpicLoginDecisionTests
   com/example/backend/auth/application/GroupMemberPageTests
   com/example/backend/auth/application/GroupPermissionAdministrationServiceTests
   com/example/backend/auth/application/IdentityAdministrationServiceTests
@@ -98,29 +96,8 @@ FAST_GATE=(
   com/example/backend/auth/controller/SessionEstablishmentTests
   com/example/backend/auth/controller/SessionUserLogContextFilterTests
   com/example/backend/auth/domain/AbsoluteSessionLifetimePolicyTests
-  com/example/backend/auth/domain/EpicInputBoundsTests
-  com/example/backend/auth/domain/EpicMfaEvidenceTests
-  com/example/backend/auth/domain/EpicTokenSetTests
   com/example/backend/auth/domain/SignedInSessionTests
-  com/example/backend/auth/epic/EcP384PrivateKeyPemTests
-  com/example/backend/auth/epic/EnvironmentKeyClientAssertionSignerTests
-  com/example/backend/auth/epic/EpicIdentityTests
-  com/example/backend/auth/epic/EpicJwksTests
-  com/example/backend/auth/epic/EpicLoginPropertiesTests
-  com/example/backend/auth/epic/EpicLoginTests
-  com/example/backend/auth/epic/EpicProviderMetadataTests
-  com/example/backend/auth/epic/EpicSigningKeyTests
-  com/example/backend/auth/epic/FhirUserReferenceTests
-  com/example/backend/auth/epic/LaunchContextTests
-  com/example/backend/auth/epic/config/EpicCallMetricsTests
-  com/example/backend/auth/epic/config/EpicIdTokenChecksTests
-  com/example/backend/auth/epic/config/EpicIdentityClaimsTests
-  com/example/backend/auth/epic/config/EpicLoginConfigTests
-  com/example/backend/auth/epic/config/EpicReleaseGateFilterTests
-  com/example/backend/auth/epic/controller/EpicTokenCaptureTests
   com/example/backend/auth/infrastructure/session/AccountSessionsAdapterTests
-  com/example/backend/auth/infrastructure/session/EpicTokensAdapterTests
-  com/example/backend/auth/infrastructure/session/SpringSessionAttributesTests
   com/example/backend/auth/infrastructure/transaction/AfterCommitAdapterTests
   com/example/backend/auth/infrastructure/transaction/AfterCommitRevocationTests
   com/example/backend/authorization/config/AuthorizationChangeMetricsTests

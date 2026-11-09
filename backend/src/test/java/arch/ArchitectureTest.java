@@ -258,26 +258,6 @@ public class ArchitectureTest {
             .because("an infrastructure package the onion rule does not name is in no layer, so"
                     + " nothing holds its dependencies inward");
 
-    /**
-     * The one package of a layered module that sits in none of its layers, with its sub-packages,
-     * and why. The Epic package root holds adapter-grade code — Micrometer meters, key signing,
-     * bound properties — and its {@code config} and {@code controller} sub-packages are onion
-     * adapters by pattern already; {@link #inner_layers_never_reach_the_epic_root} holds the inner
-     * layers away from the root by hand.
-     */
-    private static final String EPIC_ROOT =
-            com.example.backend.auth.epic.EpicLogin.class.getPackageName();
-
-    // The onion rule above cannot see this: the auth.epic root matches no layer, yet it holds
-    // adapter-grade code (Micrometer meters, key signing, bound properties).
-    @com.tngtech.archunit.junit.ArchTest
-    static final ArchRule inner_layers_never_reach_the_epic_root =
-        noClasses()
-            .that().resideInAnyPackage("com.example.backend..application..", "com.example.backend..domain..")
-            .should().dependOnClassesThat().resideInAPackage(EPIC_ROOT)
-            .because("Dependencies point inward: the Epic package root is adapter code, which the"
-                    + " application and domain layers must not depend on");
-
     @com.tngtech.archunit.junit.ArchTest
     static final ArchRule no_domain_infrastructure_imports =
         noClasses()
@@ -384,10 +364,6 @@ public class ArchitectureTest {
                     "a refused Login's login-state event, or an accepted Login's, decided, counted"
                             + " and recorded in the one transaction logIn opens by hand once the"
                             + " Argon2id comparison is done: not a SCIM or administrative write"),
-            Map.entry("com.example.backend.auth.application.LoginService#logInFromEpic",
-                    "an Epic Login (ADR 0012): an accepted or refused Epic Login's login-state"
-                            + " event, not a SCIM or administrative write; the clinician launches"
-                            + " again"),
             Map.entry("com.example.backend.auth.application.PasswordChangeService#changePassword",
                     "the signed-in User's own password change, and a refused one's login-state"
                             + " event: self-service, not a SCIM or administrative write; the User"
@@ -405,8 +381,6 @@ public class ArchitectureTest {
                     "startup seeding, before any request is served: a failure fails the start,"
                             + " and the next start seeds"),
             Map.entry("com.example.backend.scim.application.ScimSeedService#seedDevFixtures",
-                    "startup seeding of the development fixtures: the next start seeds"),
-            Map.entry("com.example.backend.scim.application.ScimSeedService#seedEpicClinicianFixture",
                     "startup seeding of the development fixtures: the next start seeds"),
             Map.entry("com.example.backend.scim.application.ScimSeedService#seedDormantDevFixture",
                     "startup seeding of the development fixtures: the next start seeds"),
@@ -780,11 +754,7 @@ public class ArchitectureTest {
      */
     private static final Set<String> SELF_SERVICE_OR_PUBLIC_CONTROLLERS = Set.of(
             "com.example.backend.auth.controller.AuthController",
-            "com.example.backend.auth.controller.SelfController",
-            // Our public JWKS, which Epic fetches with no session (D14).
-            "com.example.backend.auth.epic.controller.EpicJwksController",
-            // The EHR launch, which the browser opens from Epic with no session of ours (D1).
-            "com.example.backend.auth.epic.controller.EpicLaunchController");
+            "com.example.backend.auth.controller.SelfController");
 
     /**
      * The bearer-chain (SCIM) adapters whose handlers need a valid connector token and NO
@@ -844,8 +814,8 @@ public class ArchitectureTest {
             Map.entry("authorization", Set.of()),
             // The shared base every module logs through, so it knows none of them.
             Map.entry("observability", Set.of()),
-            // The developer profile's name, read by the development-fixture guard (scim) and Epic
-            // Login's configuration (auth), so it knows neither of them.
+            // The developer profile's name, read by the development-fixture guard (scim), so it
+            // knows nothing of it.
             Map.entry("profile", Set.of()),
             // The rules every paged read coerces its startIndex and count by: SCIM's collection
             // query, the administrative projections and the audit listing. Below all of them,
@@ -878,15 +848,15 @@ public class ArchitectureTest {
                     "audit", "authorization", "database", "observability", "paging", "profile",
                     "web")),
             Map.entry("auth", Set.of(
-                    "audit", "authorization", "observability", "paging", "profile", "scheduling",
-                    "scim", "web")),
+                    "audit", "authorization", "observability", "paging", "scheduling", "scim",
+                    "web")),
             // patient and lifecycle are leaves, which no entry names: removing one must not break
             // another module. patient reaches no module that holds state. It reaches
             // observability for one thing: a failure of the patient source carries its cause
             // redacted to its type (RedactedFaultException), so a client's or a parser's message
             // never puts the patient into the fault's record (ADR 0014, "The module's edges").
             Map.entry("patient", Set.of("observability")),
-            Map.entry("lifecycle", Set.of("audit", "auth", "observability", "scim")));
+            Map.entry("lifecycle", Set.of("audit", "observability", "scim")));
 
     private static final String ROOT_PACKAGE = "com.example.backend";
 
@@ -946,9 +916,6 @@ public class ArchitectureTest {
      * declared once and then dropped by every class would admit a new one unremarked.
      */
     private static final Map<Edge, String> DECLARED_UNOBSERVED_EDGES = Map.of(
-            new Edge("auth", "profile"),
-            "real in source, invisible in bytecode: @Profile(LocalProfile.NAME) on Epic Login's"
-                    + " configuration inlines the compile-time constant",
             new Edge("scim", "profile"),
             "real in source, invisible in bytecode: @Profile(LocalProfile.NAME) on the"
                     + " development-fixture guard inlines the compile-time constant");
@@ -1071,14 +1038,11 @@ public class ArchitectureTest {
     static final ArchRule every_class_in_a_layered_module_sits_in_a_layer =
         classes()
             .that().resideInAPackage(ROOT_PACKAGE + ".*..")
-            .should(new ArchCondition<JavaClass>("sit in one of its module's layers, or under the"
-                    + " Epic package root") {
+            .should(new ArchCondition<JavaClass>("sit in one of its module's layers") {
                 @Override
                 public void check(JavaClass type, ConditionEvents events) {
                     String module = moduleOf(type).orElseThrow();
-                    boolean epic = type.getPackageName().equals(EPIC_ROOT)
-                            || type.getPackageName().startsWith(EPIC_ROOT + ".");
-                    if (!epic && !LAYERLESS_MODULES.contains(module)
+                    if (!LAYERLESS_MODULES.contains(module)
                             && layerOf(type).filter(LAYERS::contains).isEmpty()) {
                         events.add(SimpleConditionEvent.violated(type, type.getName()
                                 + " is in no layer of module '" + module + "'; its classes sit"
@@ -1097,9 +1061,8 @@ public class ArchitectureTest {
      * one, so a new reach into another module's internals is a choice someone writes down here.
      */
     private static final Set<String> CROSS_MODULE_INTERNALS_EXEMPT = Set.of(
-            // The startup record logs every module's effective settings, so it reads the two that
-            // live in their module's adapter code: whether SCIM is open (scim.config) and the Epic
-            // Login switch with its signing keys' kids (the auth.epic root).
+            // The startup record logs every module's effective settings, so it reads the one that
+            // lives in its module's adapter code: whether SCIM is open (scim.config).
             "com.example.backend.lifecycle.config.ApplicationLifecycleLog");
 
     /** The layer a class sits in within its module: the package segment after the module's. */
@@ -1147,27 +1110,24 @@ public class ArchitectureTest {
                     + " hold for every caller");
 
     /**
-     * Outbound HTTP lives in two adapters: Epic's and the in-house patient source's.
+     * Outbound HTTP lives in one adapter: the in-house patient source's.
      *
-     * <p>ADR 0012: Epic is reached through the one outbound client, {@code epicRestClient}, which
-     * carries the timeouts (D25), the outbound log line and the call metrics. ADR 0014: the
-     * patient source is reached through its own adapter, {@code PatientSourceAdapter}, which
-     * carries its timeouts and keeps the patient out of every failure it raises. A client
-     * anywhere else would make calls with none of that.
+     * <p>ADR 0014: the patient source is reached through its own adapter,
+     * {@code PatientSourceAdapter}, which carries its timeouts and keeps the patient out of every
+     * failure it raises. A client anywhere else would make calls with none of that.
      */
     @com.tngtech.archunit.junit.ArchTest
     static final ArchRule one_outbound_http_client =
         noClasses()
-            .that().resideOutsideOfPackage("com.example.backend.auth.epic..")
-            .and().resideOutsideOfPackage("com.example.backend.patient.infrastructure.http..")
+            .that().resideOutsideOfPackage("com.example.backend.patient.infrastructure.http..")
             .should().dependOnClassesThat().resideInAnyPackage(
                     "org.springframework.web.client..",
                     "org.springframework.web.reactive.function.client..",
                     "java.net.http..")
             .orShould().dependOnClassesThat().haveFullyQualifiedName("java.net.HttpURLConnection")
             .allowEmptyShould(true)
-            .because("ADR 0012 and ADR 0014: every outbound call goes through epicRestClient or the"
-                    + " patient source's adapter, which carry the timeouts and the redaction");
+            .because("ADR 0014: every outbound call goes through the patient source's adapter,"
+                    + " which carries the timeouts and the redaction");
 
     // Error namespaces
 
@@ -2045,50 +2005,6 @@ public class ArchitectureTest {
                     + " that guarantee would be bypassed");
 
     /**
-     * Epic's tokens never reach a response.
-     *
-     * <p>{@link com.example.backend.auth.domain.EpicTokenSet} holds the access token, refresh
-     * token and {@code id_token} an Epic Login kept for its session (ADR 0012, D29), and
-     * {@link com.example.backend.auth.domain.EpicTokens} hands them out. They are
-     * for the backend to act at Epic on the clinician's behalf, never for the browser, so no REST
-     * controller may depend on either: a handler that could take them could render them. The one
-     * web adapter that writes them, Epic Login's success handler, is a filter-chain handler and
-     * answers only with a redirect.
-     */
-    @com.tngtech.archunit.junit.ArchTest
-    static final ArchRule epic_tokens_never_reach_a_rest_controller =
-        noClasses()
-            .that().areAnnotatedWith(RestController.class)
-            .should().dependOnClassesThat()
-                .haveNameMatching(withNested(com.example.backend.auth.domain.EpicTokenSet.class,
-                        com.example.backend.auth.domain.EpicTokens.class))
-            .allowEmptyShould(true)
-            .because("ADR 0012, D29: Epic's tokens are held server-side and"
-                    + " never returned to the browser, so no handler can be handed them");
-
-    /**
-     * The application chain knows Epic Login through one seam.
-     *
-     * <p>Whether Epic Login is on, and everything it adds to the chain while it is — the release
-     * gate while off; the callback filter, {@code oauth2Login}, its routes' rules and its handlers
-     * while on — is the Epic module's, behind {@code EpicLogin#applyTo}. The shared chain makes that
-     * one call and names no other Epic type, so turning Epic Login on or off, or changing what it
-     * adds, never touches the chain every other request goes through.
-     */
-    @com.tngtech.archunit.junit.ArchTest
-    static final ArchRule the_application_chain_knows_epic_login_through_one_seam =
-        noClasses()
-            .that().haveFullyQualifiedName("com.example.backend.auth.config.SecurityConfig")
-            .should().dependOnClassesThat(DescribedPredicate.describe(
-                    "are Epic types other than EpicLogin",
-                    (com.tngtech.archunit.core.domain.JavaClass type) ->
-                            type.getPackageName().startsWith(EPIC_ROOT)
-                                    && !type.isEquivalentTo(
-                                            com.example.backend.auth.epic.EpicLogin.class)))
-            .because("Epic Login plugs into the application chain at one seam, EpicLogin, which"
-                    + " owns its gate, routes and handlers");
-
-    /**
      * The self-read's projection has nowhere to put lockout state or a failure run.
      *
      * <p>{@code SelfRecord} is serialised as-is, so what it cannot hold cannot reach the wire.
@@ -2192,12 +2108,6 @@ public class ArchitectureTest {
      * and lets the request go on as a stranger's. It expires no cookie, because the same request
      * may go on to open the next session, and it records its own {@code session-end}. It ends no
      * session at the caller's request, so it is not one of the module's reasons.
-     *
-     * <p>And a second: {@code EpicLaunchController}'s accepted launch, which replaces the session
-     * rather than ending it (ADR 0012, D9). It invalidates the session the browser held and opens
-     * the Login's new one in the same response, whose cookie names the new session; expiring the
-     * cookie there would contradict it. Its refusals end the session through
-     * {@code SessionEnding}, like every other Login that signed nobody in.
      */
     @com.tngtech.archunit.junit.ArchTest
     static final ArchRule only_session_ending_ends_the_callers_session =
@@ -2206,8 +2116,6 @@ public class ArchitectureTest {
             .and().haveNameNotMatching("com\\.example\\.backend\\.auth\\.controller\\.SessionEnding(\\$.*)?")
             .and().doNotHaveFullyQualifiedName(
                     "com.example.backend.auth.controller.AbsoluteSessionLifetimeFilter")
-            .and().doNotHaveFullyQualifiedName(
-                    "com.example.backend.auth.epic.controller.EpicLaunchController")
             .should().callMethod(jakarta.servlet.http.HttpSession.class, "invalidate")
             .orShould().callMethod(
                     org.springframework.security.core.context.SecurityContextHolder.class,
@@ -2227,24 +2135,18 @@ public class ArchitectureTest {
             .should().haveFullyQualifiedName("com.example.backend.auth.domain.SignedInSession")
             .because("the signed-in session module is the one type of that name");
 
-    /** Spring Session's read-only adapter, package-private, so named by string. */
-    private static final Named SPRING_SESSION_ATTRIBUTES =
-            Named.type("com.example.backend.auth.infrastructure.session.SpringSessionAttributes");
-
     /**
-     * The signed-in session's attributes are adapted twice, once per session API: the servlet
-     * container's {@code HttpSession}, for the web handlers and the application chain's session
-     * filters alike (the filters are web-layer beans the security configuration places by name),
-     * and Spring Session's stored session, read-only. A third would be a copy that can drift.
+     * The signed-in session's attributes are adapted once: the servlet container's
+     * {@code HttpSession}, for the web handlers and the application chain's session filters alike
+     * (the filters are web-layer beans the security configuration places by name). A second would
+     * be a copy that can drift.
      */
     @com.tngtech.archunit.junit.ArchTest
-    static final ArchRule the_signed_in_session_has_one_adapter_per_session_api =
+    static final ArchRule the_signed_in_session_has_one_adapter =
         classes()
             .that().implement("com.example.backend.auth.domain.SignedInSession$Attributes")
             .should().haveFullyQualifiedName("com.example.backend.auth.controller.HttpSessionAttributes")
-            .orShould().haveFullyQualifiedName(SPRING_SESSION_ATTRIBUTES.type())
-            .because("one servlet adapter and one Spring Session adapter serve every reader of the"
-                    + " signed-in session");
+            .because("one servlet adapter serves every reader of the signed-in session");
 
     /** The attribute methods of the servlet {@code HttpSession} and of Spring Session's session. */
     private static final Set<String> SESSION_ATTRIBUTE_METHODS = Set.of(
@@ -2252,23 +2154,16 @@ public class ArchitectureTest {
             "getRequiredAttribute", "getAttributeOrDefault");
 
     /**
-     * A session's attributes are touched by three named owners, nested classes included.
-     *
-     * <p>The two {@code SignedInSession.Attributes} adapters, one per session API, through which
-     * every read and write of the signed-in session's own attributes goes: the servlet
-     * {@code HttpSessionAttributes} and Spring Session's read-only {@code SpringSessionAttributes}.
-     * And {@code EpicLaunchValue}, which hands the pre-login {@code launch} value from the EHR
-     * launch to the authorize hop (ADR 0012): no signed-in session holds it yet, so it is not one
-     * of {@code SignedInSession}'s attributes. A new reader adapts its session through
-     * {@code SignedInSession} rather than calling {@code getAttribute}.
+     * A session's attributes are touched by one named owner, nested classes included: the
+     * {@code SignedInSession.Attributes} adapter, {@code HttpSessionAttributes}, through which
+     * every read and write of the signed-in session's own attributes goes. A new reader adapts its
+     * session through {@code SignedInSession} rather than calling {@code getAttribute}.
      */
     @com.tngtech.archunit.junit.ArchTest
     static final ArchRule only_the_named_owners_touch_session_attributes =
         noClasses()
             .that().haveNameNotMatching(withNested(
-                    com.example.backend.auth.controller.HttpSessionAttributes.class.getName(),
-                    SPRING_SESSION_ATTRIBUTES.type(),
-                    com.example.backend.auth.epic.EpicLaunchValue.class.getName()))
+                    com.example.backend.auth.controller.HttpSessionAttributes.class.getName()))
             .should().callMethodWhere(DescribedPredicate.describe(
                     "an attribute method of HttpSession or Spring Session's Session",
                     (JavaMethodCall call) -> SESSION_ATTRIBUTE_METHODS.contains(call.getName())

@@ -1,7 +1,7 @@
 ---
 type: Decision Record
 title: "ADR 0001: Counting Login attempts and ending every Login"
-description: The login path counts each attempt itself rather than through a framework listener, and one module ends every password and Epic Login in one order — decide, establish, the method's work, record.
+description: The login path counts each attempt itself rather than through a framework listener, and one module ends every Login in one order — decide, establish, record, or end the browser's session.
 tags: [authentication, login, lockout, audit]
 ---
 
@@ -11,8 +11,7 @@ Date: 2026-09-24
 
 ## Status
 
-Accepted. ADR 0012 stays the authority on Epic Login itself; this ADR decides
-how a password Login and an Epic Login are counted and how they end.
+Accepted.
 
 ## Context
 
@@ -38,8 +37,8 @@ the domain (`ScimLoginState` decides what counts as locked), the application lay
 
 ### How a Login ends
 
-Password Login and Epic Login (ADR 0012) must end a Login alike, and the ending
-is where two methods drift apart unnoticed:
+Every Login must end alike, and the ending is where two code paths drift apart
+unnoticed:
 
 - **What a refusal says.** The account reasons belong in the audit trail only
   (Logging §2.2); a refusal `WARN` carrying the exception type tells its reader
@@ -49,7 +48,8 @@ is where two methods drift apart unnoticed:
   established is logged "Login accepted" even when the session step then fails,
   naming no session.
 
-Each method reassembling those steps itself, in its own order, is how they drift.
+Each entry point reassembling those steps itself, in its own order, is how they
+drift.
 
 ## Decision
 
@@ -104,18 +104,16 @@ password Login or a SCIM write to the User never waits on the change's Argon2id.
 Because that recording is inside the module that authenticates, it cannot be
 skipped by a caller: an entry point either goes through `LoginService` and gets
 the failure run with it, or it does not authenticate submitted credentials at all.
-Both login methods' caller is `LoginCompletion` (below).
+Its caller is `LoginCompletion` (below).
 
 ### One module records every ending
 
-`LoginOutcomeService` records how a Login ended, by either method. It writes each
-ending's log line and counts, and an Epic Login's failure record; a password
-Login's audit records are written by its decision, with the count they record
-(above). `LoginOutcome` is one of:
+`LoginOutcomeService` records how a Login ended. It writes each ending's log line
+and counts; the Login's audit records are written by its decision, with the
+count they record (above). `LoginOutcome` is one of:
 
-- signed in (`SignedIn`, with the login method, and an MFA factor for `sso` only);
-- refused (`PasswordRefused` or `EpicRefused`);
-- unavailable (Epic only).
+- signed in (`SignedIn`);
+- refused (`PasswordRefused`).
 
 A refusal reached by the login decision is recorded by the decision, so no caller
 can refuse a Login without the record.
@@ -125,12 +123,11 @@ can refuse a Login without the record.
 - a `LOGIN_FAILURE`, written by `LoginService` in the decision's transaction,
   under method `password`, with its reason from the closed set
   `PasswordRefusalReason` (`BAD_CREDENTIALS`, `UNKNOWN_ACCOUNT`, `ACCOUNT_LOCKED`,
-  `ACCOUNT_DISABLED` or `OTHER`), the password analogue of
-  `EpicLoginFailureReason`. It names the User the submitted name matched — or,
+  `ACCOUNT_DISABLED` or `OTHER`). It names the User the submitted name matched — or,
   for a refusal on the User's standing after authentication, the User the
   authentication resolved, by its stable id, so a rename landing in between
-  cannot move it — and counts toward that User's failure run. It is a guess at
-  our credential, unlike an Epic refusal (ADR 0012, D12). A User with no
+  cannot move it — and counts toward that User's failure run: it is a guess at
+  our credential. A User with no
   password is the exception: there is no credential to guess, so its refusal
   counts toward nothing (ADR 0007, "The failure lockout");
 - one `WARN`, "Login refused", with `app.login.method=password` and `session.hash`
@@ -143,20 +140,18 @@ password's. It also costs the same single Argon2id verification (ADR 0007, "The 
 
 ### One `login` counter
 
-`login` is tagged `method` (`password` or `sso`), `outcome` (`success`, `refused`,
-or `unavailable` for `sso` only) and `reason` (`none` for a success). Every series
-of both methods is registered at zero at startup with the same tag keys. Its
-adapter, `LoginMetrics` (`com.example.backend.auth.config`), is registered
-unconditionally by `LoginMetricsConfig` behind the `LoginCounts` port, because
-password Login exists whether Epic Login is on or not. `epic.login.failed_calls`
-stays Epic's (ADR 0012, "Metrics").
+`login` is tagged `method` (`password`), `outcome` (`success` or `refused`) and
+`reason` (`none` for a success). Every series is registered at zero at startup
+with the same tag keys. Its adapter, `LoginMetrics`
+(`com.example.backend.auth.config`), is registered by `LoginMetricsConfig` behind
+the `LoginCounts` port.
 
 ### One module, one order
 
 `LoginCompletion`, a web adapter in `com.example.backend.auth.controller`, runs
-every Login's ending, for both methods, in this order:
+every Login's ending in this order:
 
-1. **Decide.** `LoginService.logIn` or `logInFromEpic`, handed the id of the session
+1. **Decide.** `LoginService.logIn`, handed the id of the session
    the browser holds, returns a `LoginService.LoginDecision`: an accepted Login
    carrying its `SignedIn`, or a refusal. A password refusal is returned, not
    thrown, and is still recorded and counted toward the failure run inside the
@@ -179,33 +174,21 @@ every Login's ending, for both methods, in this order:
    `session-start`. It is package-private and called only by
    `LoginCompletion`, so no adapter can sign a session in without the rest of the
    Login around it.
-3. **The method's own work** on the signed-in session: Epic Login keeps Epic's
-   tokens there (ADR 0012, D29), under the rotated id alone.
-4. **Record** the success once, through `LoginOutcomeService`: the
+3. **Record** the success once, through `LoginOutcomeService`: the
    `user-authentication` record and the `login` success count, naming the signed-in
-   session by `session.hash`. A Login whose session step or method work fails
-   records no success.
-5. **On a refusal, end the browser's session**, whoever it belonged to, through
+   session by `session.hash`. A Login whose session step fails records no success.
+4. **On a refusal, end the browser's session**, whoever it belonged to, through
    `SessionEnding` with the reason `LOGIN_SIGNED_NOBODY_IN` — the one module that
    ends the caller's own session, shared with Logout and the password change. The
-   answer (a bare `401` or Epic's redirect) expires the session cookie, with no
-   `Clear-Site-Data`. This is ADR 0012's D24, extended to password Login, so a
-   shared browser is never left signed in as the previous User after a Login that
-   signed nobody in. A refused Login that arrived without a session creates none.
-
-An Epic Login that fails before any decision (at the launch, the authorize hop or
-the callback, through `EpicLoginFailureHandler`) is ended by
-`LoginCompletion.endUndecided`. Its outcome is recorded once, naming the session it
-ran in, and then that session is ended.
+   bare `401` expires the session cookie, with no `Clear-Site-Data`, so a shared
+   browser is never left signed in as the previous User after a Login that signed
+   nobody in. A refused Login that arrived without a session creates none.
 
 ### The adapters only shape the answer
 
 `AuthController.login` answers either the signed-in account or a bare `401`. Every
 refusal leaves through one `LoginRefusedException` and one handler, so a locked
-account's answer matches a wrong password's byte for byte. The Epic handlers
-redirect through one package-private `EpicLanding` to `/`,
-`/login?signin=refused` or `/login?signin=unavailable`, relative to the context
-path.
+account's answer matches a wrong password's byte for byte.
 
 ## Consequences
 
@@ -217,14 +200,11 @@ path.
   exchange, HTTP Basic re-enabled on the filter chain — gets **no** Lockout. A
   listener would have covered those for free. This is the cost we accept, and the
   reason the recording sits behind one module rather than at an endpoint: adding
-  such a path means routing it through `LoginService`, as Epic Login's callback is
-  (`logInFromEpic`).
+  such a path means routing it through `LoginService`.
 - Events remain unpublished by this path, so nothing else can observe Logins by
-  subscribing. Auditing is recorded here instead: `LoginService` appends either
-  method's `LOGIN_SUCCESS`, and a password Login's `LOGIN_FAILURE` beside the
-  failure run it counts, in the decision's one transaction;
-  `LoginOutcomeService` appends an Epic Login's `LOGIN_FAILURE`; and
-  `LoginStateService` appends every other login-state event's records, once the
+  subscribing. Auditing is recorded here instead: `LoginService` appends a
+  Login's `LOGIN_SUCCESS`, and its `LOGIN_FAILURE` beside the failure run it
+  counts, in the decision's one transaction; and `LoginStateService` appends every other login-state event's records, once the
   state is written and before any revocation is queued for the commit: the
   `LOCKOUT_SET` or `DORMANCY_LOCKOUT` of a Lockout it imposes, a password
   change's `PASSWORD_CHANGE`, accepted or refused, and an Unlock's
@@ -233,11 +213,11 @@ path.
   a dormancy lock imposed or already locked, a password change completed,
   refused by the check or refused by the policy — and no caller decides
   anything from the raw change.
-- A password Login's rule — what is counted, what is recorded, in which
+- A Login's rule — what is counted, what is recorded, in which
   transaction — changes in `LoginService` alone, and the state it writes in
   `LoginStateService` alone.
 - A success is counted only once its session exists, and its record names the
-  session the User goes on to use. That holds for both methods.
+  session the User goes on to use.
 - The password refusal's `WARN` does not reveal whether the account exists or its
   state. An investigation reads the reason from the audit trail or the `login`
   counter's `reason` tag, which counts events and names no account.
@@ -245,8 +225,9 @@ path.
   bound to it. The SPA discards the token on the `401`, and a retry fetches the next
   session's (ADR 0009; `/frontend/AGENTS.md`, "Backend
   contract").
-- A third login method needs a `LoginOutcome` variant and a call into
-  `LoginCompletion`. The order, the records and the session handling come with it.
+- A future SSO Login is designed on its own terms; the audit trail keeps its
+  login method, `sso`, and its MFA factor ready for it, and nothing else here
+  anticipates it.
 
 ## Alternatives considered
 
@@ -255,7 +236,7 @@ every authentication mechanism automatically, including ones added later, and is
 the framework-idiomatic option. Rejected because the Lockout rule would then have
 no visible call site at all: reading the login path would not reveal that attempts
 are counted, and testing it would mean asserting on a published event or standing
-up a context to publish one. Every login method goes through `LoginService`, so
+up a context to publish one. Every Login goes through `LoginService`, so
 the coverage it buys is hypothetical while the indirection is immediate.
 
 **Counting inside `LoginIdentityService.loadUserByUsername`.** Rejected: that method
@@ -263,10 +244,9 @@ is called before the password is compared, so it cannot know whether the attempt
 ended in a refusal, and it is deliberately the read-only half of the login
 identity: writes belong to the services that own a change.
 
-**Keep the ending's recording in each method's adapter.** Rejected: two
+**Keep the ending's recording in each entry point's adapter.** Rejected: two
 pipelines diverge. Each fix has to be made twice, and the second copy is the one
 that drifts.
 
 **An application service instead of a web adapter for `LoginCompletion`.**
-Rejected: establishing and ending a session is servlet work. `LoginCompletion`
-depends on no Epic bean, so it exists whether Epic Login is on or not.
+Rejected: establishing and ending a session is servlet work.

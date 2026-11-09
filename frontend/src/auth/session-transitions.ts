@@ -10,8 +10,8 @@
  * *which* transition happened; none of them reaches the token itself.
  *
  * Ending a session also forgets the tab's EHR context (`ehr-context.ts`): the
- * patient an EHR launch put in context belongs to the session it signed in,
- * and is not shown to whoever signs in next.
+ * patient in context belongs to the session it was set in, and is not shown to
+ * whoever signs in next.
  *
  * Two transitions change the auth state without changing the session, and so
  * keep the token: a start-up check that did not answer (`checkFailed`), which

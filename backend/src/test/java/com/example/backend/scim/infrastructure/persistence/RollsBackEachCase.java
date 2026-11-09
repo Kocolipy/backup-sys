@@ -19,7 +19,7 @@ import org.springframework.transaction.TransactionStatus;
  * transactions read {@code @Transactional} off the class declaring the test method, which is the
  * contract, so the annotation on the subclass opens nothing. Registered with
  * {@code @ExtendWith} after {@code @SpringBootTest}, its callbacks run inside the
- * {@code SpringExtension}'s test, as {@code EpicTestEnvironment}'s do.
+ * {@code SpringExtension}'s test.
  */
 final class RollsBackEachCase implements BeforeEachCallback, AfterEachCallback {
 

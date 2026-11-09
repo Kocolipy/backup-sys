@@ -18,9 +18,6 @@ their written copy. Why each rule is what it is lives in
 | `Operation`                      | `event.action`         | `app.event.action`                        |
 | -------------------------------- | ---------------------- | ----------------------------------------- |
 | `LOGIN`                          | `user-authentication`  | —                                         |
-| `EPIC_LOGIN`                     | `user-authentication`  | `epic.login`                              |
-| `EPIC_OUTBOUND`                  | `user-authentication`  | `epic.outbound`                           |
-| `EPIC_JWKS_REFETCH`              | `user-authentication`  | `epic.jwks_refetch`                       |
 | `UNLOCK`                         | `access-control`       | `identity.unlock`                         |
 | `PASSWORD_CHANGE`                | `user-administration`  | `identity.password_change`                |
 | `DORMANCY`                       | `user-administration`  | `identity.dormancy`                       |
@@ -64,8 +61,6 @@ their written copy. Why each rule is what it is lives in
 | `jobEnd`                                           | `INFO`                    | `success`, `event.duration_ms`, `batch.job.status` `completed`, or `skipped` with `event.reason` `lock-held` |
 | `jobFailed`                                        | `ERROR`                   | `error.code` `500`, `failure`, `batch.job.status` `failed`, `event.severity` `high`, `event.duration_ms`     |
 | `requestEnd`                                       | by status                 | `http.response.status_code`, `event.duration_ms`, `event.outcome`                                            |
-| `outboundStart` / `outboundEnd` / `outboundFailed` | `INFO` / `INFO` / `ERROR` | the outbound call's fields (Epic Login, below)                                                               |
-| `jwksRefetchWarning`                               | `WARN`                    | `app.retry.attempt`, no outcome                                                                              |
 | `deadlockRetried`                                  | `WARN`                    | `error.category` `database`, `app.retry.attempt` `1`, `event.reason` `deadlock`, no outcome (below)          |
 
 `withError` is public for the one `WARN` that carries a `data` error
@@ -83,7 +78,6 @@ classification (`http.request.refusal`).
 | request record, FHIR-path 4xx the handler answered | the status   | `data`                                                 | none                                      |
 | app-wide handler, unexpected exception             | the status   | the mapping for a database failure, else `application` | whole; redacted for a data-access failure |
 | app-wide handler, upstream fault (`502`)           | `502`        | the fault's: `network`, `server` or `data`             | whole, its own cause redacted             |
-| Epic call with no answer                           | `502`        | `network`                                              | redacted copy                             |
 
 ## Records
 
@@ -117,9 +111,7 @@ changes behaviour:
 
 - `app.scim.enabled`;
 - `app.dormancy.lockout.window` and `app.dormancy.membership_revocation.window`;
-- `app.audit.retention.period`;
-- Epic Login's `app.epic.enabled` and its two `kid`s (ADR 0012, D14), from its own
-  startup record.
+- `app.audit.retention.period`.
 
 `application-shutdown` is written on `ContextClosedEvent`, with the uptime as
 `event.duration_ms`. Each answers only for its own context. No datasource, Redis,
@@ -146,19 +138,16 @@ token, not even a prefix or the lookup id, reaches a record.
 
 ### Login
 
-Both login methods' endings are written by one module,
-`LoginOutcomeService` (ADR 0001):
+Every Login's ending is written by one module, `LoginOutcomeService` (ADR 0001):
 
 - An accepted Login is one `INFO` `user-authentication`, "Login accepted". It is
   written after its session is signed in, and carries `user.id`,
-  `app.login.method` (`password` or `sso`) and `session.hash` of the signed-in
-  session. An Epic one also carries `app.login.mfa_factor`.
-- A refusal is one `WARN`, "Login refused" or "Epic sign-in refused". It carries
+  `app.login.method` (`password`) and `session.hash` of the signed-in session.
+- A refusal is one `WARN`, "Login refused". It carries
   `app.login.method` and `session.hash` of the session the Login ran in. It has no
   user field and no `event.reason`, so a locked or deactivated User's refusal reads
-  exactly as a wrong password's. An Epic input refusal also names the field and the
-  rule it broke. The refusal's reason goes to the audit trail and to the `login`
-  counter's `reason` tag only (ADR 0012, "the account reasons are audit-only").
+  exactly as a wrong password's. The refusal's reason goes to the audit trail and
+  to the `login` counter's `reason` tag only (ADR 0001).
 
 `session.hash` is the first 64 bits of the SHA-256 of a session id
 (`SessionHash`), so a refusal, which names no user, can be correlated beyond
@@ -234,7 +223,7 @@ page, which quoted the path.
   arrived whole and could not be read), or the domain rule a Patient broke
   (`no-nric`, `no-official-name`, `no-name-text`, `no-gender`,
   `no-birth-date`, `birth-date-not-to-the-day`, `another-resource`) — and its
-  `error.category` is the fault's own, as ADR 0012's table has it for an
+  `error.category` is the fault's own, as ADR 0014's table has it for an
   outbound call: `network` and `server` with no follow-up, `data` with one.
 - A `4xx` that Spring MVC maps (validation, an unreadable body, an unbindable
   parameter) is one `WARN` `http.request.refusal`, classified `data` with no
@@ -311,24 +300,3 @@ generic reason (`INVALID_PERMISSIONS`, `UNKNOWN_RESOURCE`, `PROTECTED_RESOURCE`)
 carries after is the audit trail's (`GROUP_PERMISSIONS_CHANGE`). The
 authorization-change counter's `group-permissions-change` tag is a metric tag, not
 a log field: `event.action` stays on the standard's closed list.
-
-### Epic Login's outbound calls
-
-ADR 0012 decides the calls (D23, D25, D26). `EpicOutboundInterceptor`
-writes "Epic outbound call started" and "completed" (`INFO`, whatever the status),
-or "failed" (`ERROR`, `network`, no answer at all). An answer whose headers came
-but whose body then stalled past the read timeout, or whose connection dropped,
-is no answer either: its "completed" is followed by "failed" when the read of the
-body fails. The records carry:
-
-- `app.epic.call` (`discovery`, `jwks` or `token`);
-- `http.request.method`;
-- `url.full`, narrowed to scheme, host, port and path;
-- on the end record, the status, `event.duration_ms` and `event.outcome`.
-
-Neither a body nor a header is read. A JWKS refetch for an unknown `kid` is a
-`WARN` with `app.retry.attempt`, and a `kid` still unknown after the refetches is
-an `ERROR` (`data`). An Epic call that answered but ended the Login (a `5xx`, a
-refused credential, an unusable answer) is "Epic sign-in failed" at `ERROR` when
-the Login ends. Its follow-up flag comes from ADR 0012's error-category table:
-`network` and `server` need no person, while `cert/auth` and `data` do.

@@ -6,28 +6,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import com.example.backend.audit.CapturedLog;
-import com.example.backend.audit.RecordingAuditTrail;
-import com.example.backend.audit.domain.AuditLoginMethod;
-import com.example.backend.audit.domain.AuditMfaFactor;
-import com.example.backend.audit.domain.AuditOperation;
-import com.example.backend.audit.domain.AuditRefusalReason;
 import com.example.backend.auth.RecordingLoginCounts;
-import com.example.backend.auth.application.LoginOutcome.FailedCall;
 import com.example.backend.auth.application.LoginOutcome.PasswordRefused;
-import com.example.backend.auth.application.LoginOutcome.EpicRefused;
 import com.example.backend.auth.application.LoginOutcome.SignedIn;
-import com.example.backend.auth.application.LoginOutcome.Unavailable;
-import com.example.backend.auth.domain.EpicInputField;
-import com.example.backend.auth.domain.EpicInputRule;
-import com.example.backend.auth.domain.EpicLoginFailureReason;
 import com.example.backend.observability.LogContext;
 import com.example.backend.observability.LogEvent;
-import com.example.backend.observability.LogEvent.ErrorCategory;
 import com.example.backend.observability.SessionHash;
 import com.example.backend.scim.InMemoryScimUserRepository;
 import com.example.backend.scim.ScimIdentities;
-import com.example.backend.scim.domain.ScimLoginState;
-import com.example.backend.scim.domain.ScimUser;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -35,64 +21,26 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
 /**
- * How a Login's ending is recorded ({@link LoginOutcomeService}), by either login method: for each
- * outcome, the audit record, the log records and the counts it moves — the whole table at one
- * interface.
+ * How a Login's ending is recorded ({@link LoginOutcomeService}): for each outcome, the log
+ * records and the counts it moves — the whole table at one interface.
  */
 class LoginOutcomeServiceTests {
 
-    private static final String SESSION = "the-launch-session";
-
-    // Built per test, not once per class: a call built in a static initializer is built before
-    // any mutant of FailedCall is in place, so no assertion on it could catch one.
-    private final FailedCall tokenTimedOut = new FailedCall("token", ErrorCategory.NETWORK, 502);
-
-    private final FailedCall token5xx = new FailedCall("token", ErrorCategory.SERVER, 503);
-
-    private final FailedCall credentialRefused =
-            new FailedCall("token", ErrorCategory.CERT_AUTH, 401);
-
-    private final RecordingAuditTrail audit = new RecordingAuditTrail();
+    private static final String SESSION = "the-login-session";
 
     private final RecordingLoginCounts counts = new RecordingLoginCounts();
 
     private final InMemoryScimUserRepository users = new InMemoryScimUserRepository();
 
-    private final LoginOutcomeService outcomes = new LoginOutcomeService(audit, counts, counts);
+    private final LoginOutcomeService outcomes = new LoginOutcomeService(counts);
 
     // ---- signed in ----------------------------------------------------------------------------
 
     @Test
-    void aSignedInLoginIsOneInfoNamingTheUserMethodFactorAndSession() {
+    void aSignedInLoginIsOneInfoNamingTheUserMethodAndSession() {
         UUID user = UUID.randomUUID();
 
-        List<ILoggingEvent> records = recording(
-                SignedIn.epic(user, AuditMfaFactor.HWK), SESSION);
-
-        assertThat(records).singleElement().satisfies(record -> {
-            assertThat(record.getLevel()).isEqualTo(Level.INFO);
-            assertThat(record.getMDCPropertyMap()).containsEntry(LogContext.USER_ID, user.toString());
-            assertThat(CapturedLog.fields(record))
-                    .containsEntry(LogEvent.LOGIN_METHOD, "sso")
-                    .containsEntry(EpicLoginLogFields.MFA_FACTOR, "hwk")
-                    .containsEntry(LogEvent.SESSION_HASH, SessionHash.of(SESSION));
-        });
-        assertThat(counts.moved()).containsExactly("sso:success");
-    }
-
-    /** The {@code LOGIN_SUCCESS} is fail-closed, so the login decision's transaction writes it. */
-    @Test
-    void aSignedInLoginWritesNoAuditRecordOfItsOwn() {
-        outcomes.record(SignedIn.epic(UUID.randomUUID(), AuditMfaFactor.IDP_ATTESTED), SESSION);
-
-        assertThat(audit.recorded()).isEmpty();
-    }
-
-    @Test
-    void aSignedInPasswordLoginIsOneInfoNamingTheUserAndMethodAndNoFactor() {
-        UUID user = UUID.randomUUID();
-
-        List<ILoggingEvent> records = recording(SignedIn.password(user), null);
+        List<ILoggingEvent> records = recording(new SignedIn(user), SESSION);
 
         assertThat(records).singleElement().satisfies(record -> {
             assertThat(record.getLevel()).isEqualTo(Level.INFO);
@@ -100,33 +48,39 @@ class LoginOutcomeServiceTests {
             assertThat(record.getMDCPropertyMap()).containsEntry(LogContext.USER_ID, user.toString());
             assertThat(CapturedLog.fields(record))
                     .containsEntry(LogEvent.LOGIN_METHOD, "password")
-                    .doesNotContainKeys(EpicLoginLogFields.MFA_FACTOR, LogEvent.SESSION_HASH);
+                    .containsEntry(LogEvent.SESSION_HASH, SessionHash.of(SESSION));
         });
         assertThat(counts.moved()).containsExactly("password:success");
-        assertThat(audit.recorded()).isEmpty();
+    }
+
+    /** A browser with no session is named by nothing, not by a hash of nothing. */
+    @Test
+    void aSignedInLoginWithNoSessionCarriesNoSessionHash() {
+        List<ILoggingEvent> records = recording(new SignedIn(UUID.randomUUID()), null);
+
+        assertThat(CapturedLog.fields(records.getFirst())).doesNotContainKey(LogEvent.SESSION_HASH);
     }
 
     // ---- password refused ---------------------------------------------------------------------
 
     /**
-     * A password refusal is counted and audited by the login decision that refused it
-     * ({@code PasswordLoginRecordingTests}), so recording its ending writes no audit record and
-     * counts toward no failure run.
+     * A password refusal is counted by the login decision that refused it
+     * ({@code PasswordLoginRecordingTests}), so recording its ending counts toward no failure
+     * run.
      */
     @Test
-    void aPasswordRefusalWritesNoAuditRecordAndCountsTowardNoFailureRun() {
+    void aPasswordRefusalCountsTowardNoFailureRun() {
         UUID ada = users.given(ScimIdentities.user("ada")).id();
 
         outcomes.record(new PasswordRefused(ada, PasswordRefusalReason.BAD_CREDENTIALS), SESSION);
 
-        assertThat(audit.recorded()).isEmpty();
         assertThat(users.require("ada").login().failedLoginAttempts()).isZero();
     }
 
     /**
      * Logging §2.2: the reason tells whether the account exists, so the operational log says only
-     * that the Login was refused — the password analogue of "Epic sign-in refused" — and names
-     * the session it ran in, but neither a user nor the submitted name.
+     * that the Login was refused, and names the session it ran in, but neither a user nor the
+     * submitted name.
      */
     @ParameterizedTest(name = "{0} is one generic WARN")
     @EnumSource(value = PasswordRefusalReason.class,
@@ -185,8 +139,7 @@ class LoginOutcomeServiceTests {
 
     /**
      * Spring Security never reports an unknown account — recording the refusal settles it — so a
-     * refusal for one is a caller's bug, refused rather than recorded. The Epic reasons cannot be
-     * a password Login's at all: they are not in its closed set.
+     * refusal for one is a caller's bug, refused rather than recorded.
      */
     @Test
     void aPasswordRefusalHasOnlyAReasonSpringSecurityReports() {
@@ -196,187 +149,7 @@ class LoginOutcomeServiceTests {
                 .hasMessage("not a password Login's refusal: UNKNOWN_ACCOUNT");
     }
 
-    /** A password Login carries no MFA factor; an Epic Login always does (D17). */
-    @Test
-    void onlyAnEpicLoginCarriesAnMfaFactor() {
-        assertThatThrownBy(() -> new SignedIn(
-                        UUID.randomUUID(), AuditLoginMethod.PASSWORD, AuditMfaFactor.MFA))
-                .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new SignedIn(UUID.randomUUID(), AuditLoginMethod.SSO, null))
-                .isInstanceOf(NullPointerException.class);
-    }
-
-    // ---- refused ------------------------------------------------------------------------------
-
-    @Test
-    void aRefusalIsAuditedWithItsReasonAndSubjectUnderSso() {
-        UUID refused = UUID.randomUUID();
-
-        outcomes.record(EpicRefused.account(refused, EpicLoginFailureReason.ACCOUNT_LOCKED), SESSION);
-
-        assertThat(audit.recorded()).containsExactly(new RecordingAuditTrail.Recorded(
-                AuditOperation.LOGIN_FAILURE, null, refused, "ACCOUNT_LOCKED"));
-        assertThat(audit.loginMethods()).containsExactly(AuditLoginMethod.SSO);
-    }
-
-    /**
-     * D12: Epic checked the credential, not us, so an Epic refusal of a User who has a failure
-     * run under way neither lengthens it nor records a change to the account.
-     */
-    @Test
-    void anEpicRefusalOfAUserCountsTowardNoFailureRun() {
-        ScimUser ada = users.given(ScimIdentities.userWithLoginState("ada",
-                new ScimLoginState("hash", 2, null)));
-
-        outcomes.record(EpicRefused.account(ada.id(), EpicLoginFailureReason.ACCOUNT_LOCKED),
-                SESSION);
-
-        assertThat(users.require("ada").login().failedLoginAttempts()).isEqualTo(2);
-    }
-
-    /**
-     * ADR 0012, "Audit": an Epic {@code LOGIN_FAILURE} carries its reason spelled as the reason's
-     * own name — every reason on the list, so one added to it is held to the same.
-     */
-    @ParameterizedTest(name = "{0} is audited as {0}")
-    @EnumSource(value = EpicLoginFailureReason.class, mode = EnumSource.Mode.EXCLUDE,
-            names = "EPIC_UNAVAILABLE")
-    void everyRefusalIsAuditedUnderItsOwnName(EpicLoginFailureReason reason) {
-        outcomes.record(EpicRefused.because(reason), SESSION);
-
-        assertThat(audit.recorded()).extracting(RecordingAuditTrail.Recorded::detail)
-                .containsExactly(reason.name());
-    }
-
-    @Test
-    void aRefusalIsOneGenericWarnWithNoReasonNoUserAndTheSessionsHash() {
-        List<ILoggingEvent> records;
-        try (LogContext.Scope colleague = LogContext.userId(UUID.randomUUID())) {
-            records = recording(
-                    EpicRefused.account(UUID.randomUUID(), EpicLoginFailureReason.ACCOUNT_DISABLED),
-                    SESSION);
-        }
-
-        assertThat(records).singleElement().satisfies(record -> {
-            assertThat(record.getLevel()).isEqualTo(Level.WARN);
-            assertThat(record.getFormattedMessage()).isEqualTo("Epic sign-in refused");
-            assertThat(record.getMDCPropertyMap()).doesNotContainKey(LogContext.USER_ID);
-            assertThat(CapturedLog.fields(record))
-                    .containsEntry(LogEvent.LOGIN_METHOD, "sso")
-                    .containsEntry(LogEvent.SESSION_HASH, SessionHash.of(SESSION))
-                    .doesNotContainKey(LogEvent.REASON);
-        });
-        assertThat(counts.moved()).containsExactly("sso:refused:ACCOUNT_DISABLED");
-    }
-
-    @Test
-    void aRefusedInputNamesItsFieldAndRule() {
-        List<ILoggingEvent> records = recording(EpicRefused.input(EpicLoginFailureReason.INVALID_LAUNCH,
-                EpicInputField.LAUNCH, EpicInputRule.LENGTH), SESSION);
-
-        assertThat(CapturedLog.fields(records.getFirst()))
-                .containsEntry(EpicLoginLogFields.EPIC_INPUT_FIELD, "launch")
-                .containsEntry(EpicLoginLogFields.EPIC_INPUT_RULE, "length");
-    }
-
-    /** A refusal of nothing in particular names no input. */
-    @Test
-    void aRefusalOfNoInputNamesNone() {
-        List<ILoggingEvent> records =
-                recording(EpicRefused.because(EpicLoginFailureReason.INVALID_STATE), SESSION);
-
-        assertThat(CapturedLog.fields(records.getFirst()))
-                .doesNotContainKeys(
-                        EpicLoginLogFields.EPIC_INPUT_FIELD, EpicLoginLogFields.EPIC_INPUT_RULE);
-    }
-
-    /** A browser with no session is named by nothing, not by a hash of nothing. */
-    @Test
-    void aRefusalWithNoSessionCarriesNoSessionHash() {
-        List<ILoggingEvent> records =
-                recording(EpicRefused.because(EpicLoginFailureReason.INVALID_STATE), null);
-
-        assertThat(CapturedLog.fields(records.getFirst())).doesNotContainKey(LogEvent.SESSION_HASH);
-    }
-
-    /** {@code invalid_client}: likely a key or a registration, so it needs a person. */
-    @Test
-    void aRefusedCredentialIsAlsoTheCallsFollowedUpError() {
-        List<ILoggingEvent> records = recording(
-                EpicRefused.call(EpicLoginFailureReason.TOKEN_EXCHANGE_FAILED, credentialRefused),
-                SESSION);
-
-        assertThat(records).extracting(ILoggingEvent::getLevel)
-                .containsExactly(Level.ERROR, Level.WARN);
-        assertThat(CapturedLog.fields(records.getFirst()))
-                .containsEntry(LogEvent.ERROR_CATEGORY, "cert/auth")
-                .containsEntry(LogEvent.ERROR_CODE, 401)
-                .containsEntry(LogEvent.ERROR_FOLLOW_UP_ACTION, true)
-                .containsEntry(LogEvent.EPIC_CALL, "token")
-                .containsEntry(LogEvent.SESSION_HASH, SessionHash.of(SESSION));
-        assertThat(counts.moved()).containsExactly(
-                "failed_call:token:cert/auth", "sso:refused:TOKEN_EXCHANGE_FAILED");
-    }
-
-    /** The browser's session is not whom the launch was for, on the call's record too. */
-    @Test
-    void aFailedCallsErrorNamesNoUserEvenWhenTheBrowserCarriedOne() {
-        List<ILoggingEvent> records;
-        try (LogContext.Scope colleague = LogContext.userId(UUID.randomUUID())) {
-            records = recording(
-                    EpicRefused.call(EpicLoginFailureReason.TOKEN_EXCHANGE_FAILED, credentialRefused),
-                    SESSION);
-        }
-
-        assertThat(records).allSatisfy(record ->
-                assertThat(record.getMDCPropertyMap()).doesNotContainKey(LogContext.USER_ID));
-    }
-
-    // ---- unavailable --------------------------------------------------------------------------
-
-    @Test
-    void anUnavailableLoginIsAuditedAsEpicUnavailableNamingNobody() {
-        outcomes.record(new Unavailable(token5xx), SESSION);
-
-        assertThat(audit.recorded()).containsExactly(new RecordingAuditTrail.Recorded(
-                AuditOperation.LOGIN_FAILURE, null, null, "EPIC_UNAVAILABLE"));
-    }
-
-    @Test
-    void anEpic5xxIsOneErrorNeedingNoFollowUp() {
-        List<ILoggingEvent> records = recording(new Unavailable(token5xx), SESSION);
-
-        assertThat(records).singleElement().satisfies(record -> {
-            assertThat(record.getLevel()).isEqualTo(Level.ERROR);
-            assertThat(CapturedLog.fields(record))
-                    .containsEntry(LogEvent.ERROR_CATEGORY, "server")
-                    .containsEntry(LogEvent.ERROR_CODE, 503)
-                    .containsEntry(LogEvent.ERROR_FOLLOW_UP_ACTION, false)
-                    .containsEntry(LogEvent.EPIC_CALL, "token");
-        });
-        assertThat(counts.moved()).containsExactly("failed_call:token:server", "sso:unavailable");
-    }
-
-    /**
-     * Logging §3.3: a call that got no answer was logged at {@code ERROR} by the outbound
-     * interceptor that saw it fail, so the ending logs it no second time.
-     */
-    @Test
-    void aCallThatGotNoAnswerIsNotLoggedASecondTime() {
-        assertThat(recording(new Unavailable(tokenTimedOut), SESSION)).isEmpty();
-        assertThat(counts.moved()).containsExactly("failed_call:token:network", "sso:unavailable");
-    }
-
     // ---- what an outcome can be ---------------------------------------------------------------
-
-    @Test
-    void epicBeingUnavailableIsNoRefusal() {
-        assertThatThrownBy(() -> EpicRefused.because(EpicLoginFailureReason.EPIC_UNAVAILABLE))
-                .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> EpicRefused.call(
-                        EpicLoginFailureReason.TOKEN_EXCHANGE_FAILED, token5xx))
-                .isInstanceOf(IllegalArgumentException.class);
-    }
 
     /** No outcome is no ending: nothing to record, and a caller's bug rather than a refusal. */
     @Test
@@ -387,29 +160,11 @@ class LoginOutcomeServiceTests {
 
     @Test
     void anOutcomeLacksNothingItRecords() {
-        assertThatThrownBy(() -> SignedIn.epic(null, AuditMfaFactor.MFA))
-                .isInstanceOf(NullPointerException.class);
-        assertThatThrownBy(() -> SignedIn.epic(UUID.randomUUID(), null))
-                .isInstanceOf(NullPointerException.class);
-        assertThatThrownBy(() -> SignedIn.password(null))
-                .isInstanceOf(NullPointerException.class);
-        assertThatThrownBy(() -> new SignedIn(UUID.randomUUID(), null, null))
+        assertThatThrownBy(() -> new SignedIn(null))
                 .isInstanceOf(NullPointerException.class);
         assertThatThrownBy(() -> new PasswordRefused(UUID.randomUUID(), null))
                 .isInstanceOf(NullPointerException.class)
                 .hasMessage("a refusal has a reason");
-        assertThatThrownBy(() -> EpicRefused.because(null))
-                .isInstanceOf(NullPointerException.class);
-        assertThatThrownBy(() -> new FailedCall(null, ErrorCategory.DATA, 502))
-                .isInstanceOf(NullPointerException.class);
-        assertThatThrownBy(() -> new FailedCall("token", null, 502))
-                .isInstanceOf(NullPointerException.class);
-    }
-
-    @Test
-    void aCallEpicAnsweredIsNotEpicUnavailable() {
-        assertThatThrownBy(() -> new Unavailable(credentialRefused))
-                .isInstanceOf(IllegalArgumentException.class);
     }
 
     /** The {@code user-authentication} records written while {@code outcome} is recorded. */

@@ -122,7 +122,7 @@ class PatientSourceAdapter implements PatientStore {
     }
 
     /**
-     * A call that failed with no status, after {@code waited}, as ADR 0012's table has it
+     * A call that failed with no status, after {@code waited}, as ADR 0014's table has it
      * ({@link OutboundCallFailure}): no answer — before the headers, or while reading the body —
      * timed out or found the source unreachable, and anything else was an answer that could not
      * be read. The call is timed, since Spring's JDK client cuts a stalled body off at the read

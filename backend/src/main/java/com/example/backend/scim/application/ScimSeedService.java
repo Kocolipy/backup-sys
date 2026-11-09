@@ -194,31 +194,6 @@ public class ScimSeedService {
         }
     }
 
-    /**
-     * The development fixture for an Epic EHR launch: one User in no Group, so it holds the
-     * baseline Permissions and nothing else, whose userName is a Practitioner id. Epic Login
-     * links a clinician to the User whose userName equals the Practitioner id character for
-     * character (ADR 0012 D3), which outside a developer's machine is a User only because
-     * SCIM provisioned it; under the {@code local} profile this seeds that User directly, so the
-     * local Epic stand-in's clinician signs in without a step by hand.
-     *
-     * <p>Created when absent and otherwise left alone, like the other fixtures, and not audited.
-     * Called only when {@code app.dev-fixtures.enabled} is set and an Epic clinician is named.
-     *
-     * @param userName    the Practitioner id the User is linked by
-     * @param displayName the User's displayName; {@code null} or blank for its userName, as every
-     *                    other fixture User has
-     * @param password    the fixture password, as for {@link #seedDevFixtures}
-     */
-    @Transactional
-    public void seedEpicClinicianFixture(String userName, String displayName, String password) {
-        requireFixturePassword(password);
-        seedLock.acquire();
-        findOrCreate(userName,
-                displayName == null || displayName.isBlank() ? userName : displayName,
-                password, clock.instant());
-    }
-
     private static void requireFixturePassword(String password) {
         if (password == null || password.isBlank()) {
             throw new IllegalStateException(
@@ -358,15 +333,9 @@ public class ScimSeedService {
      * is fatal here.
      */
     private ScimUser findOrCreate(String userName, String password, Instant now) {
-        return findOrCreate(userName, userName, password, now);
-    }
-
-    /** As {@link #findOrCreate(String, String, Instant)}, created with {@code displayName}. */
-    private ScimUser findOrCreate(
-            String userName, String displayName, String password, Instant now) {
         return users.findByNormalizedUserName(NormalizedUserName.of(userName))
                 .orElseGet(() -> users.create(
-                        newUser(new SeededIdentity(userName, password), displayName, now)));
+                        newUser(new SeededIdentity(userName, password), userName, now)));
     }
 
     /**

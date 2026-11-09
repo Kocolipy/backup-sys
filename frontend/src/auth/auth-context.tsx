@@ -83,8 +83,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // A refused login ends whatever session the browser held, so the
         // Guest's token goes with it and a retry fetches the next session's.
         // Any other outcome reached no verdict and changes nothing. A password
-        // Login puts no patient in context, so it forgets any an earlier EHR
-        // launch in this tab left (its EHR context, `ehr-context.ts`).
+        // Login puts no patient in context, so it forgets any an earlier
+        // session in this tab left (its EHR context, `ehr-context.ts`).
         if (outcome.kind === "signed-in") {
           clearEhrContext();
           signIn(outcome.user);

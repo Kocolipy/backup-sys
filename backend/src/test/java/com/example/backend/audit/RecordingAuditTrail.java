@@ -118,7 +118,6 @@ public final class RecordingAuditTrail implements AuditTrail {
                 mfaFactors.add(e.factor());
             }
             case Audited.LoginFailure e -> loginMethods.add(e.method());
-            case Audited.LoginRefusal e -> loginMethods.add(e.method());
             case Audited.AccessDenied e -> accessDeniedRequests.add(e.operation());
             case Audited.ConnectorAccessDenied e -> accessDeniedRequests.add(e.operation());
             default -> {

@@ -1,7 +1,7 @@
 ---
 type: Contract
 title: Backend contract
-description: The runtime contract the SPA honours with the backend — CSRF synchronizer token, 401 versus 403, JSON request bodies, the session bounds, one session per User, Epic Login's landing and the EHR context its Launch context seeds, logout's Clear-Site-Data, and the CSP.
+description: The runtime contract the SPA honours with the backend — CSRF synchronizer token, 401 versus 403, JSON request bodies, the session bounds, one session per User, the EHR context, logout's Clear-Site-Data, and the CSP.
 tags: [csrf, sessions, csp, contract]
 ---
 
@@ -179,51 +179,23 @@ change, when the backend side moves. What the SPA has to honour:
   which: either presents as the ordinary `401` path above.
 - **One session per User.** A login ends every other session the same User
   holds, so signing in from a second browser or profile signs the first
-  out; the first presents as the ordinary `401` path above. Epic Login counts
-  too: a password Login and an EHR launch for the same User share the rule.
-- **Epic Login reaches the SPA as a full-page navigation, never a request the
-  SPA makes.** Epic opens `GET /api/auth/epic/launch` in the clinician's
-  browser; the backend redirects through `GET /api/auth/epic/authorize` to
-  Epic and back to `GET /api/auth/epic/callback`, and on success answers
-  `302 /` with the session already signed in (session id rotated, pre-login
-  CSRF token dropped) and the Launch context in the fragment (next item), so
-  the ordinary start-up `GET /api/auth/me` renders Home. Failures land on the
-  login page, signed out, with a marker carrying no
-  detail: `/login?signin=refused` (a refused launch; the reason never reaches
-  the browser) or `/login?signin=unavailable` (Epic gave no answer within the
-  backend's timeouts, or a `5xx`, on discovery, the JWKS or the token call).
-  The two are distinct on purpose (ADR 0012, D23): a refused clinician should
-  not retry, an unavailable one should. Either notice wins over router state. `src/auth/sign-in-reason.ts` is the
-  only place that reads the markers, decides that precedence, or holds the
-  copy; the login page renders what its `signInNoticeFor` returns. All four Epic routes (the three
-  above and the public `jwks.json`) are `404` while `APP_EPIC_ENABLED` is off.
-  The SPA never calls them, and they need no CSRF token: each is a `GET`.
-- **An Epic landing carries the Launch context in its fragment, which seeds the
-  tab's EHR context, and only the tab keeps it.** The success landing is
-  `/#patient=<id>&encounter=<id>` with whichever of the token response's
-  `patient` and `encounter` is a FHIR id, `[A-Za-z0-9\-.]{1,64}`, in that order,
-  and the bare marker `/#launch` when neither is; the refused and unavailable
-  landings carry no fragment. The backend keeps neither value — not in the
-  session, Redis or the Epic tokens — and a fragment is never sent back to it.
-  `src/auth/ehr-context.ts` is the only place that reads it:
-  `adoptLaunchLanding()`, called by `main.tsx` before the router reads the URL,
-  takes a fragment that is the bare marker or names `patient` or `encounter` as
-  a landing, checks each value against the same grammar (a value outside it is
-  ignored, the other kept), keeps the result in `sessionStorage` under
-  `ehr-context` — per tab — as the tab's **EHR context**, and strips the
-  fragment with `history.replaceState`. Any other fragment is left alone. The
-  lifecycle: every landing, the bare marker included, **replaces** the tab's EHR
-  context; a reload carries no fragment and **keeps** it; every session end
-  (`end(reason)` in `session-transitions.ts`: sign-out, expiry, an Idle
-  sign-out, a password change that ends the session, a refused login) and a
-  password Login **clear** it. What is read back from storage is held to the
-  grammar again. Only a landing seeds it: nothing moves it while the session
-  lasts. The EHR context is a subscribable store (`useEhrContext`), so the
-  Patient card re-renders when it changes, not only on load. Home's Patient card
-  reads the patient in context through the patient read below, and shows "No
-  patient in context" with none; the encounter is held but unused. The read is
-  not bound to the EHR context: `patient:read` reads any id, so editing the
-  fragment changes only which patient the same User views (ADR 0012, D8).
+  out; the first presents as the ordinary `401` path above.
+- **The tab's EHR context is the SPA's alone.** The backend keeps no patient
+  or encounter in context, and the SPA sends it none but the patient read
+  below. `src/auth/ehr-context.ts` keeps the tab's **EHR context** — a patient
+  and an encounter, each held to FHIR's id grammar, `[A-Za-z0-9\-.]{1,64}` (a
+  value outside it is left out, the other kept) — in `sessionStorage` under
+  `ehr-context`, per tab. The lifecycle: `setEhrContext` **replaces** it, and
+  nothing in the SPA calls it yet, so a tab holds none; a reload **keeps** it;
+  every session end (`end(reason)` in `session-transitions.ts`: sign-out,
+  expiry, an Idle sign-out, a password change that ends the session, a refused
+  login) and a password Login **clear** it. What is read back from storage is
+  held to the grammar again. The EHR context is a subscribable store
+  (`useEhrContext`), so the Patient card re-renders when it changes, not only
+  on load. Home's Patient card reads the patient in context through the
+  patient read below, and shows "No patient in context" with none; the
+  encounter is held but unused. The read is not bound to the EHR context:
+  `patient:read` reads any id.
 - **Logout answers `Clear-Site-Data: "cache","cookies","storage"`** — on a
   successful logout and on the `401` a logout with no live session gets. The
   browser drops anything in `localStorage` / `sessionStorage` along with the
@@ -233,7 +205,6 @@ change, when the backend side moves. What the SPA has to honour:
   CSRF token is unaffected: it lives in memory only and in the session the
   logout ended, and the SPA discards it on logout anyway.
 - **The CSP forbids inline script, `eval`, and every third-party origin** for
-  scripts, styles, fonts, images and `fetch`: `connect-src` is `'self'`, and no
-  Epic origin is admitted. Self-host instead of adding a CDN, and prefer Vite
+  scripts, styles, fonts, images and `fetch`: `connect-src` is `'self'`. Self-host instead of adding a CDN, and prefer Vite
   plugins that keep their output out of an inline `<script>`. Inline _styles_
   are allowed.

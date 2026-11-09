@@ -6,7 +6,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.example.backend.ServerSession;
 import com.example.backend.ContainerTestConfiguration;
 import com.example.backend.TokenPermissions;
-import com.example.backend.auth.epic.EpicLoginOnContext;
 import com.example.backend.observability.EcsLogCapture;
 import com.example.backend.scim.application.ConnectorAdministrationService;
 import java.net.URI;
@@ -52,7 +51,7 @@ import tools.jackson.databind.JsonNode;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Import(ContainerTestConfiguration.class)
 @AutoConfigureMetrics
-class PatientErrorContractIntegrationTests extends EpicLoginOnContext {
+class PatientErrorContractIntegrationTests {
 
     private static final String FHIR_JSON_R5 = "application/fhir+json;fhirVersion=5.0";
 

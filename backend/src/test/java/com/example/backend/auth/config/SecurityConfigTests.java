@@ -214,7 +214,7 @@ class SecurityConfigTests {
                 .andExpect(status().isOk());
     }
 
-    /** Every directive admits the SPA's own origin at most: no Epic origin, no other host. */
+    /** Every directive admits the SPA's own origin at most: no other host. */
     @Test
     void theContentSecurityPolicyAdmitsNoOtherOrigin() throws Exception {
         String policy = mvc.perform(get("/")).andReturn().getResponse()

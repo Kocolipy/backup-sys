@@ -56,8 +56,7 @@ a key (`a b`) is accepted, and every other attribute keeps the whitespace it was
 sent. The same rule reaches authentication. A password Login whose username has
 edge whitespace is an unknown account, decided before any lookup: the same bare
 `401`, the same subject-less `LOGIN_FAILURE` (`UNKNOWN_ACCOUNT`) and count, and
-nothing recorded against the User the trimmed name would find. An Epic `id_token`
-whose `iss` or `sub` has edge whitespace is an invalid token (`INVALID_CLAIMS`).
+nothing recorded against the User the trimmed name would find.
 The reason is the engine, not the value: SQL Server ignores trailing spaces when it
 compares, so `alice` and `alice ` would collide as keys and match each other in a
 lookup; refusing them keeps a key meaning exactly the value the connector holds

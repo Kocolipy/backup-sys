@@ -52,12 +52,6 @@ describe("App", () => {
     expect(window.location.pathname).toBe("/login");
   });
 
-  it("shows the refused notice on /login?signin=refused", async () => {
-    renderApp(GUEST, "/login?signin=refused");
-
-    expect(await screen.findByRole("status")).toHaveTextContent(/^Sign-in from Epic was refused$/);
-  });
-
   it("sends a User's visit to a path with no route of its own on to Home", async () => {
     renderApp(SIGNED_IN, "/no-such-page");
 

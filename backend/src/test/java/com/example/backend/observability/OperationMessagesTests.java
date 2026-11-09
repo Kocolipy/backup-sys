@@ -55,7 +55,7 @@ class OperationMessagesTests {
 
     /** The operations written only by shapes whose message is the same for every operation. */
     private static final Set<Operation> FIXED_MESSAGE_OPERATIONS =
-            EnumSet.of(Operation.EPIC_OUTBOUND, Operation.HTTP_REQUEST);
+            EnumSet.of(Operation.HTTP_REQUEST);
 
     private static Map<Operation, Set<MessageSlot>> needs;
 

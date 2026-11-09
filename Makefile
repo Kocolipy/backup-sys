@@ -23,7 +23,7 @@ MVN ?= $(CURDIR)/backend/mvnw
 COMPOSE ?= docker compose -f backend/compose.yaml
 IMAGE ?= backup-sys
 TAG ?= local
-# `make infra-down VOL=1` (or fhircast-down) also removes the named volumes,
+# `make infra-down VOL=1` also removes the named volumes,
 # wiping the local databases. Make reads a bare `-v` as its own flag, hence the
 # variable.
 COMPOSE_DOWN_FLAGS := $(if $(filter 1,$(VOL)),-v)
@@ -31,7 +31,7 @@ COMPOSE_DOWN_FLAGS := $(if $(filter 1,$(VOL)),-v)
 export NPM
 export MVN
 
-.PHONY: help bootstrap infra-up infra-down infra-logs fhircast-up fhircast-down \
+.PHONY: help bootstrap infra-up infra-down infra-logs \
         dev dev-stop verify-frontend verify-backend verify-contract verify integration-test package \
         container clean
 
@@ -51,19 +51,6 @@ infra-down: ## Stop SQL Server, Redis and the patient source's mock (volumes are
 
 infra-logs: ## Tail the dependency logs
 	$(COMPOSE) logs -f
-
-# Opt-in: the local Epic stand-in sits behind the `fhircast` compose profile,
-# so `infra-up` above never starts it (`integration-test` starts its own).
-# Medplum as the SMART EHR launcher, fronted by the FHIRcast shim, on
-# 127.0.0.1:8103 (and its sign-in page on 127.0.0.1:3103). The script
-# seeds Medplum, keeps the managed block in backend/.env that points `make dev`
-# at it, and prints the launch URL and the clinician to sign in as;
-# backend/docs/configuration/epic-login.md, "Local Epic stand-in", has the rest.
-fhircast-up: ## Start the local Epic stand-in (Medplum and the FHIRcast shim), seed Medplum, set up backend/.env, and print the launch URL
-	@scripts/fhircast-up.sh
-
-fhircast-down: ## Stop the local Epic stand-in and the dependencies (volumes are kept; VOL=1 removes them)
-	$(COMPOSE) --profile fhircast down $(COMPOSE_DOWN_FLAGS)
 
 dev: ## Run backend and frontend together (Ctrl-C stops both)
 	@scripts/dev.sh
@@ -88,7 +75,7 @@ verify-contract: ## SPA–API contract check: hold the SPA's mirrored vocabulary
 
 verify: verify-frontend verify-backend verify-contract ## Run both app gates, then the SPA–API contract check, serially
 
-integration-test: ## Test the FHIRcast shim, package the JAR, start it with the dependencies and the local Epic stand-in, then run every Playwright project
+integration-test: ## Package the JAR, start it with the dependencies, then run every Playwright project
 	@scripts/integration-test.sh
 
 package: ## Build the SPA and package it into the Spring Boot JAR

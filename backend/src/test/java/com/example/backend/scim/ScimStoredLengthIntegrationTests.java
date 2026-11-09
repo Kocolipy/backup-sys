@@ -16,8 +16,6 @@ import com.example.backend.CreatedScimRows;
 import com.example.backend.DatabaseLogins;
 import com.example.backend.ScimTestRows;
 import com.example.backend.TokenPermissions;
-import com.example.backend.auth.application.LoginIdentityService;
-import com.example.backend.auth.application.LoginPrincipal;
 import com.example.backend.observability.RequestIdFilter;
 import com.example.backend.scim.application.ConnectorAdministrationService;
 import jakarta.servlet.Filter;
@@ -107,10 +105,6 @@ class ScimStoredLengthIntegrationTests {
 
     @Autowired
     private RequestIdFilter requestIdFilter;
-
-    /** The Epic Login's lookup of the User a Practitioner ID links to. */
-    @Autowired
-    private LoginIdentityService loginIdentities;
 
     @Autowired
     @Qualifier("springSecurityFilterChain")
@@ -269,26 +263,6 @@ class ScimStoredLengthIntegrationTests {
                 .getFirst().values())
                 .containsExactly(at256, at256, at256, at256, at256, at64, at64, at64, at256,
                         at32, at256);
-    }
-
-    /**
-     * An Epic Login's identity is the Practitioner ID its {@code userName} holds (ADR 0012, D2),
-     * so the SSO claim is stored in that column and nowhere else: one of the column's full 256
-     * code points, every one non-ASCII — two-, three- and four-byte characters alike — is stored,
-     * and the Epic Login's lookup finds the User by it. Its first four code points are minted per
-     * run, so a rerun against a database that kept an earlier run's User still creates one.
-     */
-    @Test
-    void a_non_ascii_sso_claim_at_its_limit_is_stored_and_links_its_user() throws Exception {
-        String practitionerId = uniqueCjk(4) + ("é" + "漢" + SUPPLEMENTARY + "Ж").repeat(63);
-        MvcResult stored = createUser("""
-                {"schemas":["%s"],"userName":"%s"}""".formatted(USER_SCHEMA, practitionerId));
-
-        assertThat(stored.getResponse().getStatus())
-                .as(stored.getResponse().getContentAsString()).isEqualTo(201);
-        assertThat(loginIdentities.loadEpicLinkedUser(practitionerId))
-                .map(LoginPrincipal::userId)
-                .contains(id(stored));
     }
 
     /** A connector's display name, the one administrator-written label, at its 200 code points. */
@@ -580,16 +554,6 @@ class ScimStoredLengthIntegrationTests {
     }
 
     // ---- harness ---------------------------------------------------------------------------
-
-    /** {@code count} three-byte CJK code points drawn from a random UUID, unique per call. */
-    private static String uniqueCjk(int count) {
-        long bits = UUID.randomUUID().getLeastSignificantBits();
-        StringBuilder minted = new StringBuilder();
-        for (int i = 0; i < count; i++) {
-            minted.appendCodePoint(0x4E00 + (int) ((bits >>> (16 * i)) & 0xFFFF) % 0x5000);
-        }
-        return minted.toString();
-    }
 
     private static String userBody(String userName, UserAttribute attribute, String value) {
         if (attribute == null) {

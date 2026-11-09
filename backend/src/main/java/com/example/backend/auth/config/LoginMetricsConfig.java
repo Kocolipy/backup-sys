@@ -4,10 +4,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-/**
- * The {@code login} counter, always registered: password Login exists whether or not Epic Login is
- * on, and both methods' endings are counted on the one meter.
- */
+/** The {@code login} counter, on which every Login's ending is counted. */
 @Configuration
 public class LoginMetricsConfig {
 

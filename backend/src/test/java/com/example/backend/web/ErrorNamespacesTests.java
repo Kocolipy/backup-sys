@@ -49,7 +49,7 @@ class ErrorNamespacesTests {
         "/api,                   /api",
         "/api/admin/connectors,  /api",
         "/api/patients,          /api",
-        "/api/auth/epic/launch,  /api",
+        "/api/auth/login,        /api",
         "/scim/v2,               /scim/v2",
         "/scim/v2/Users,         /scim/v2",
         // Decoded, as Spring routes on it: these reach the same handlers.

@@ -1,26 +1,17 @@
 /**
- * The **EHR context**: what the EHR has open for this tab — a
- * patient and an encounter, each a FHIR id, either possibly absent — kept for
- * this tab alone, under one `sessionStorage` key.
+ * The **EHR context**: the patient and encounter this tab has in context, each
+ * a FHIR id, either possibly absent — kept for this tab alone, under one
+ * `sessionStorage` key. The backend keeps none of it.
  *
- * The backend keeps none of it. A successful Epic Login lands at
- * `/#patient=<id>&encounter=<id>`, carrying whichever of the two it had, or at
- * the bare marker `/#launch` with neither (ADR 0012, D8): that fragment is the
- * **Launch context**, and it seeds the EHR context. On load the SPA reads it,
- * holds each value to FHIR's id grammar, strips the fragment from the URL, and
- * keeps what passed. Its lifecycle (`docs/BACKEND_CONTRACT.md`):
+ * Its lifecycle (`docs/BACKEND_CONTRACT.md`):
  *
- * - every Epic landing, the bare marker included, **replaces** it;
- * - a reload carries no fragment, so it **keeps** it;
+ * - {@link setEhrContext} **replaces** it, holding each value to FHIR's id
+ *   grammar and keeping what passes; nothing in the SPA sets it yet, so a tab
+ *   holds none;
+ * - a reload **keeps** it, since `sessionStorage` outlives the page;
  * - every end of the session — sign-out, expiry, an Idle sign-out, a password
  *   change — and a password Login **clear** it (`session-transitions.ts`,
  *   `auth-context.tsx`).
- *
- * Only a landing seeds it: nothing else moves it while the session lasts.
- *
- * Whether the key exists at all says whether this tab's session began with an
- * EHR launch: present, even naming nothing, after any landing; absent after a
- * password Login or once cleared.
  *
  * It is a subscribable store, shaped for `useSyncExternalStore`
  * ({@link useEhrContext}): the signed-in layout's read of the patient in
@@ -38,11 +29,8 @@ export interface EhrContext {
   patient?: string;
 }
 
-/** FHIR's id grammar, as the backend's `PatientId` and `LaunchContext` hold it. */
+/** FHIR's id grammar, as the backend's `PatientId` holds it. */
 const FHIR_ID = /^[A-Za-z0-9\-.]{1,64}$/;
-
-/** The fragment of a landing with nothing to put in context. */
-const BARE_MARKER = "#launch";
 
 const STORAGE_KEY = "ehr-context";
 
@@ -57,32 +45,8 @@ function withinGrammar(patient: unknown, encounter: unknown): EhrContext {
   };
 }
 
-/**
- * The Launch context a URL fragment carries, or `null` for a fragment that is
- * no Epic landing — which names neither member and is not the bare marker.
- */
-function landingIn(hash: string): EhrContext | null {
-  if (hash === BARE_MARKER) return {};
-  const members = new URLSearchParams(hash.slice(1));
-  if (!members.has("patient") && !members.has("encounter")) return null;
-  return withinGrammar(members.get("patient"), members.get("encounter"));
-}
-
 /** Whoever is watching the EHR context, told when it changes. */
 const watching = watchers();
-
-/**
- * On load: an Epic landing's fragment, its Launch context, replaces the tab's
- * EHR context and is stripped from the URL, so neither a bookmark, a shared
- * link nor the history entry keeps it. Any other URL changes nothing.
- */
-export function adoptLaunchLanding(): void {
-  const landed = landingIn(window.location.hash);
-  if (landed === null) return;
-  const { pathname, search } = window.location;
-  window.history.replaceState(window.history.state, "", `${pathname}${search}`);
-  keep(landed);
-}
 
 /** What the stored text decodes to: held to the grammar again rather than trusted. */
 function decoded(stored: string): EhrContext {
@@ -123,9 +87,13 @@ export function useEhrContext(): EhrContext | null {
   return useSyncExternalStore(subscribeEhrContext, ehrContext);
 }
 
-/** Keeps `context` as the tab's EHR context, and tells every watcher. */
-function keep(context: EhrContext): void {
-  window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(context));
+/**
+ * Replaces the tab's EHR context with whichever of `context`'s values is a
+ * FHIR id, and tells every watcher. A value outside the grammar is left out.
+ */
+export function setEhrContext(context: EhrContext): void {
+  const kept = withinGrammar(context.patient, context.encounter);
+  window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(kept));
   watching.changed();
 }
 

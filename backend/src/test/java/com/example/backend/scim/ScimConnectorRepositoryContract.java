@@ -112,8 +112,8 @@ public abstract class ScimConnectorRepositoryContract {
     /** Names are compared exactly, as the binary collation compares them: case tells two apart. */
     @Test
     void a_name_differing_only_in_case_is_another_name() {
-        ScimConnector upper = connector("Epic");
-        ScimConnector lower = connector("epic");
+        ScimConnector upper = connector("Acme");
+        ScimConnector lower = connector("acme");
         connectors().save(upper);
 
         connectors().save(lower);

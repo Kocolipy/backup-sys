@@ -132,8 +132,7 @@ the decision, so the decision and its compliance conditions are one record.
   `BIN2` collation; refusing edge whitespace on every key keeps behaviour
   deterministic without SQL tricks. The same rule reaches authentication: a
   password Login whose username has edge whitespace is treated as an unknown
-  account before any lookup, and an Epic `iss` or `sub` claim with edge whitespace
-  is refused as an invalid token.
+  account before any lookup.
 - **Token permissions are a child table**,
   `scim_connector_token_permissions(token_id, permission)`, keyed on both columns,
   with a CHECK limiting `permission` to the token-grantable directory
@@ -309,8 +308,8 @@ two places `/README.md` names.
   Secrets Manager and the deploy role's administration. It encrypts storage,
   automated backups, snapshots, Performance Insights and the database secrets.
 
-These close as-8, ck-4 and dp-3 for the database (ADR 0011's entries record it);
-as-8 and ck-4 stay open for the Epic signing key until its KMS signer exists.
+These close as-8 and ck-4, and dp-3 for the database (ADR 0011's entries record
+it).
 
 ### App-Standards requirements
 
@@ -346,8 +345,7 @@ as-8 and ck-4 stay open for the Epic signing key until its KMS signer exists.
   the right instant. The driver refuses `getObject(…, Instant.class)`.
 - **The RDS CA trust store is driver-scoped.** Only the SQL Server connection uses
   it, through the JDBC URL's `trustStore`, with its password from Secrets Manager.
-  The JVM's default trust store stays untouched for the identity provider, JWKS
-  and Epic.
+  The JVM's default trust store stays untouched for every other outbound call.
 - **Existing Hikari settings keep binding.** Declaring a second DataSource makes
   Boot's DataSource auto-configuration back off, so the primary is declared
   explicitly and still binds `spring.datasource.hikari.*`; the retention pool binds
@@ -363,13 +361,12 @@ as-8 and ck-4 stay open for the Epic signing key until its KMS signer exists.
   Development fixtures stay gated by `APP_DEV_FIXTURES_ENABLED`, off in the
   deployed stack.
 - **Every `VARCHAR` column is classified** as ASCII-only (keeps `n`) or
-  Unicode-capable (`4n`, or `VARCHAR(MAX)` where unbounded), Epic identity columns
-  included, and a new column is classified when it is added. The SCIM page query's `UNION ALL` casts a branch's text `NULL` to a
+  Unicode-capable (`4n`, or `VARCHAR(MAX)` where unbounded), and a new column is classified when it is added. The SCIM page query's `UNION ALL` casts a branch's text `NULL` to a
   `VARCHAR` that must be at least as wide as the widest text column it is unioned
   with (`ScimQuerySql.NULL_TEXT_TYPE`), so widening a sort column means
   widening that cast in `ScimQuerySql` too.
-- **No first-login insert to make race-safe.** Only SCIM provisions Users: Epic
-  Login never creates one (ADR 0012, no just-in-time provisioning).
+- **No first-login insert to make race-safe.** Only SCIM provisions Users: a
+  Login never creates one.
 - **Database patching.** RDS applies minor versions automatically, and the pinned
   SQL Server image tag used locally and in tests is reviewed monthly. A repo-wide
   dependency-CVE gate is a separate concern, not part of this decision.

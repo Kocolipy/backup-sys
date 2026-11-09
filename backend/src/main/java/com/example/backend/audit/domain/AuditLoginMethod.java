@@ -1,21 +1,19 @@
 package com.example.backend.audit.domain;
 
 /**
- * How a Login proved who was signing in (ADR 0012, D15): the login method a
- * {@code LOGIN_SUCCESS} and a {@code LOGIN_FAILURE} carry, and the operational
- * {@code session-start} with them.
+ * How a Login proved who was signing in: the login method a {@code LOGIN_SUCCESS} and a
+ * {@code LOGIN_FAILURE} carry, and the operational {@code session-start} with them.
  *
- * <p>A closed set, as every classification crossing the {@link AuditTrail} is. While a
- * deployment serves exactly one Epic organisation (D4), {@link #SSO} means Epic Login; it is
- * not named after Epic so that the recorded vocabulary does not change if the organisation
- * behind it ever does.
+ * <p>A closed set, as every classification crossing the {@link AuditTrail} is, and the one the
+ * {@code login_method} column's CHECK constraint holds. Password Login is the only login method
+ * there is; {@link #SSO} is kept, with {@link AuditMfaFactor}, for an SSO Login.
  */
 public enum AuditLoginMethod {
 
     /** Password Login: submitted credentials, checked here. */
     PASSWORD("password"),
 
-    /** Epic Login: an EHR launch, the clinician proven by Epic's {@code id_token}. */
+    /** SSO Login: the credential checked by an external identity provider, not here. */
     SSO("sso");
 
     private final String value;

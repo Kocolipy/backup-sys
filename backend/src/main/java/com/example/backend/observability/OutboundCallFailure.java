@@ -6,12 +6,12 @@ import java.time.Duration;
 import java.util.List;
 
 /**
- * A call to another service that failed, as ADR 0012's table for an outbound call reports it:
+ * A call to another service that failed, as ADR 0014's table for an outbound call reports it:
  * its {@link Reason}, the {@code error.category} that follows from it ({@link #category()}), and
  * its {@code error.code} — the other service's status when it answered one, {@code 502} when it
- * gave none worth keeping. The one classifier every outbound adapter uses, the Epic calls and the
- * patient source's alike. It names no HTTP client's type, which only those adapters may
- * (ADR 0012, D25; ADR 0014): each hands it what its client reported in neutral terms — the status
+ * gave none worth keeping. The one classifier every outbound adapter uses — the patient source's
+ * is the one there is. It names no HTTP client's type, which only an adapter may (ADR 0014): it
+ * hands it what its client reported in neutral terms — the status
  * it answered, or the failure it raised, the type of its client's own timeout failure and, when
  * the adapter times its calls, how long it had waited against its read timeout.
  *
@@ -38,7 +38,7 @@ import java.util.List;
  */
 public record OutboundCallFailure(Reason reason, int code) {
 
-    /** Every way an outbound call fails, each under the {@code error.category} ADR 0012 gives it. */
+    /** Every way an outbound call fails, each under the {@code error.category} ADR 0014 gives it. */
     public enum Reason {
         /** No answer within a timeout: the connect timeout, or the read timeout. */
         TIMED_OUT(ErrorCategory.NETWORK),
@@ -59,13 +59,13 @@ public record OutboundCallFailure(Reason reason, int code) {
             this.category = category;
         }
 
-        /** The {@code error.category} ADR 0012 gives this reason. */
+        /** The {@code error.category} ADR 0014 gives this reason. */
         public ErrorCategory category() {
             return category;
         }
     }
 
-    /** The {@code error.category} ADR 0012 gives the {@link #reason()}. */
+    /** The {@code error.category} ADR 0014 gives the {@link #reason()}. */
     public ErrorCategory category() {
         return reason.category();
     }
@@ -91,7 +91,7 @@ public record OutboundCallFailure(Reason reason, int code) {
      * I/O failure, as a reset's or a dropped connection's is, and only the time tells them apart.
      *
      * @param clientTimeout the type of the client's own timeout failure, named by the adapter:
-     *                      only it may name an HTTP client's types (ADR 0012, D25)
+     *                      only it may name an HTTP client's types (ADR 0014)
      */
     public static OutboundCallFailure failed(Throwable failure,
             Class<? extends Throwable> clientTimeout, Duration waited, Duration readTimeout) {

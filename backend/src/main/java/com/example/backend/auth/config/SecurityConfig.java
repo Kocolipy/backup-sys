@@ -5,7 +5,6 @@ import static com.example.backend.web.ReadRequests.read;
 import com.example.backend.audit.domain.AuditTrail;
 import com.example.backend.auth.application.PasswordLoginProvider;
 import com.example.backend.auth.domain.AbsoluteSessionLifetimePolicy;
-import com.example.backend.auth.epic.EpicLogin;
 import com.example.backend.authorization.domain.Permission;
 import com.example.backend.observability.AccessRefusalLog;
 import com.example.backend.observability.RouteTemplates;
@@ -67,8 +66,7 @@ public class SecurityConfig {
      * The single-page application loads only same-origin module scripts and a
      * same-origin stylesheet, so everything can be locked to {@code 'self'}.
      * Inline styles stay allowed because component libraries inject style
-     * elements at runtime; inline script is not allowed at all. No Epic origin is added: the
-     * browser never calls Epic.
+     * elements at runtime; inline script is not allowed at all.
      */
     private static final String CONTENT_SECURITY_POLICY = String.join("; ",
             "default-src 'self'",
@@ -252,8 +250,7 @@ public class SecurityConfig {
             AccessRefusalLog accessRefusalLog,
             AuditTrail auditTrail,
             RouteTemplates routeTemplates,
-            ErrorNamespaces errorNamespaces,
-            EpicLogin epicLogin) {
+            ErrorNamespaces errorNamespaces) {
         // Both refusals record themselves before answering, in the request's namespace's error
         // document. The access-denied handler is the chain's one handler, and the CSRF filter
         // answers through the same one, so a missing token and a missing Permission are each
@@ -263,13 +260,6 @@ public class SecurityConfig {
                 new SessionAuthenticationEntryPoint(accessRefusalLog, errorNamespaces);
         AccessDeniedHandler forbidden = new RefusalLoggingAccessDeniedHandler(
                 accessRefusalLog, auditTrail, routeTemplates, errorNamespaces);
-        // Epic Login (ADR 0012), whichever state APP_EPIC_ENABLED puts it in, and everything it
-        // adds to this chain. Off, its release gate is ordered first, as the SCIM one is in its
-        // chain, so every request under /api/auth/epic is answered 404 before any session, CSRF
-        // or authorization filter decides anything. On, its filters serve the authorize hop and
-        // the callback, and its routes are public, by rules ahead of every rule below —
-        // none of which names an Epic route.
-        epicLogin.applyTo(http);
         return http
                 // The default request handler: it XOR-masks the token it exposes
                 // (so GET /api/auth/csrf never returns the same bytes twice, which

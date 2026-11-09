@@ -145,7 +145,7 @@ class AuditEventRecordingIntegrationTests {
         assertThat(event.get("occurred_at")).isNotNull();
     }
 
-    /** D15: password Login records method {@code password}, accepted or refused. */
+    /** A password Login records method {@code password}, accepted or refused. */
     @Test
     void passwordLoginRecordsMethodPasswordOnSuccessAndOnFailure() throws Exception {
         attemptLogIn(mvc, USER, "not-the-password").andExpect(status().isUnauthorized());

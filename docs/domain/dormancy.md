@@ -9,8 +9,8 @@ tags: [dormancy, scheduled-jobs, retention]
 
 **Dormancy basis** — the instant a User's dormancy is measured from: its
 `lastAuthenticatedAt` — set by every successful Login whose session is not
-confined (a password Login made while no password change is required, and every
-Epic Login), by a completed self-service change, by an explicit reactivation and
+confined (a password Login made while no password change is required), by a
+completed self-service change, by an explicit reactivation and
 by an administrator's Unlock of a lock — or, for a User that has had none of
 those, its creation time. The fallback keeps a User provisioned without a password
 from being dormant the moment it exists. A confined session's Login does not move

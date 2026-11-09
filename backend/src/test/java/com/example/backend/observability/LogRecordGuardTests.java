@@ -69,13 +69,12 @@ class LogRecordGuardTests {
         assertThat(named).containsExactlyInAnyOrderElementsOf(shapes());
     }
 
-    /** The module's shapes are the fifteen names docs/LOG_RECORDS.md lists under "Shapes". */
+    /** The module's shapes are the eleven names docs/LOG_RECORDS.md lists under "Shapes". */
     @Test
     void theModuleExposesTheShapesTheAdrNames() {
         assertThat(shapes()).containsExactlyInAnyOrder(
                 "success", "successAtWarn", "refused", "error", "withError", "jobScheduled",
-                "jobStart", "jobEnd", "jobFailed", "requestEnd", "outboundStart",
-                "outboundEnd", "outboundFailed", "jwksRefetchWarning", "deadlockRetried");
+                "jobStart", "jobEnd", "jobFailed", "requestEnd", "deadlockRetried");
     }
 
     /**

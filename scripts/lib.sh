@@ -276,15 +276,14 @@ stack_cleanup() {
   exit "$status"
 }
 
-# stack_up <description> [compose profile...]
+# stack_up <description>
 #
-# Checks the toolchain, starts the compose services (with each profile given),
+# Checks the toolchain, starts the compose services,
 # exports backend/.env and sets BACKEND_PORT. Refuses to run against a leftover
 # backend or dev server: the suite would pass or fail against code that is not
 # the tree under test.
 stack_up() {
-  local description=$1 profile
-  shift
+  local description=$1
   require_node
   require_maven
   require_cmd curl
@@ -293,7 +292,6 @@ stack_up() {
     die "frontend/node_modules missing — run 'make bootstrap' first."
 
   STACK_COMPOSE=(docker compose -f "$BACKEND_DIR/compose.yaml")
-  for profile in "$@"; do STACK_COMPOSE+=(--profile "$profile"); done
   trap stack_cleanup INT TERM EXIT
 
   log "starting $description"
@@ -330,57 +328,4 @@ stack_e2e() {
   local script=$1
   log "running 'npm run $script' (Playwright starts the Vite dev server itself)"
   (cd "$FRONTEND_DIR" && "$NPM" run "$script")
-}
-
-# --- The local Epic stand-in ------------------------------------------------
-#
-# Medplum and the FHIRcast shim, the compose `fhircast` profile
-# (backend/docs/configuration/epic-login.md, "Local Epic stand-in").
-
-# fhircast_seed <compose array name>
-#
-# Seeds Medplum through the one-shot `medplum-init`, in the foreground so a
-# failure stops the caller, and sets FHIRCAST_CLIENT_ID and FHIRCAST_LAUNCH_ID
-# (the SmartAppLaunch that opens Tan Wei Ming) from what it prints.
-# The seed's first run on a fresh
-# volume replaces Medplum's signing key, which Medplum reads at startup alone,
-# so that run restarts Medplum, and the shim, whose Medplum token the old key
-# signed, and seeds once more.
-fhircast_seed() {
-  local -n _compose=$1
-  local seeded
-  seeded="$("${_compose[@]}" run --rm -T medplum-init)" ||
-    die "seeding Medplum failed — see the medplum-init output above."
-  if [[ $seeded == *MEDPLUM_RESTART_REQUIRED=true* ]]; then
-    log "Medplum's signing key was replaced: restarting Medplum and the shim to load it"
-    "${_compose[@]}" restart medplum fhircast-shim
-    "${_compose[@]}" up -d --wait
-    seeded="$("${_compose[@]}" run --rm -T medplum-init)" ||
-      die "seeding Medplum failed — see the medplum-init output above."
-  fi
-  FHIRCAST_CLIENT_ID="$(sed -n 's/^MEDPLUM_CLIENT_ID=//p' <<<"$seeded")"
-  [[ -n $FHIRCAST_CLIENT_ID ]] || die "the Medplum seed printed no client id"
-  FHIRCAST_LAUNCH_ID="$(sed -n 's/^MEDPLUM_LAUNCH_ID=//p' <<<"$seeded")"
-  [[ -n $FHIRCAST_LAUNCH_ID ]] || die "the Medplum seed printed no launch id"
-}
-
-# compose_env <compose array name> <service> <variable>
-#
-# Prints one environment value of a compose service as compose resolves it, so
-# a caller reads the stand-in's settings from compose.yaml, their one home,
-# rather than repeating them. The `init` profile is added so that the
-# one-shots' settings resolve too.
-compose_env() {
-  local -n _compose_cmd=$1
-  "${_compose_cmd[@]}" --profile init config --format json |
-    node -e '
-      let text = "";
-      process.stdin.on("data", (chunk) => (text += chunk));
-      process.stdin.on("end", () => {
-        const env = JSON.parse(text).services[process.argv[1]]?.environment ?? {};
-        const value = env[process.argv[2]];
-        if (value === undefined || value === null) process.exit(1);
-        process.stdout.write(String(value));
-      });
-    ' "$2" "$3" || die "compose.yaml sets no $3 on $2"
 }

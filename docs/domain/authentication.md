@@ -7,8 +7,7 @@ tags: [authentication, login, lockout]
 
 # Authentication
 
-Epic's login method has its own rules in [Epic Login](./epic-login.md); passwords
-and the change-required flag are in [Passwords](./passwords.md).
+Passwords and the change-required flag are in [Passwords](./passwords.md).
 
 ## Login
 
@@ -25,16 +24,15 @@ username with [edge whitespace](./directory.md) names no User and is refused as 
 unknown one before any lookup, so its failure lengthens no failure run.
 
 **A User with no password has no password Login** — whatever is submitted, a
-credentialless User (one provisioned without a password, as a clinician who signs
-in only through Epic is) is refused as an unknown name is, and at the same cost:
+credentialless User (one provisioned without a password) is refused as an unknown name is, and at the same cost:
 one Argon2id verification against Spring Security's own dummy hash, which no
 submitted string matches. Its refusal is audited as `BAD_CREDENTIALS`,
 naming the User, and lengthens no failure run — there is no password to guess,
-so a run of attempts never locks out a User who signs in only through Epic.
+so a run of attempts never locks out a User that has none.
 
 **A refused Login ends the browser's session** — a refused password Login ends
-whatever session the browser held, whoever it belonged to, before its bare `401`,
-as a refused EHR launch does: a shared browser is never left signed in as the
+whatever session the browser held, whoever it belonged to, before its bare `401`:
+a shared browser is never left signed in as the
 previous User after a sign-in that signed nobody in. The CSRF token was bound to
 that session, so the SPA discards it, and a retry fetches the next session's. A
 refused Login that arrived without a session creates none. It is audited as a
@@ -59,8 +57,7 @@ session revocation for a User that no longer exists. Whether the User is gone is
 decided by the login-state module, never by a caller: every caller hands it the
 User's stable id, and it reads the User under its lock and reports it gone when
 it is missing there; the caller then records the outcome its own rules give gone
-— a password Login's refusal against nobody here, an
-[Epic Login's](./epic-login.md) `ACCOUNT_DISABLED` naming the User. The
+— for a password Login, a refusal against nobody. The
 submitted name is never looked up again, so a directory rename landing during the
 password comparison — one User renamed away, another given its old name — cannot
 move the failure, a Lockout it imposes, its session revocation or the
@@ -136,7 +133,7 @@ clock. A lock keeps the cause it was first imposed for.
   on the standing read under the User's lock, and is refused there, writing
   nothing: no cleared run, no `LOGIN_SUCCESS`, no session. It is answered and
   recorded as the refusal the check would have made a moment later —
-  `ACCOUNT_LOCKED` or `ACCOUNT_DISABLED` — and the same holds for an Epic Login.
+  `ACCOUNT_LOCKED` or `ACCOUNT_DISABLED`.
   A password Login's refusal there is counted as that refusal is, from the state
   it was decided on, under the same lock and in the same transaction, so nothing
   can commit between the decision and its count.
@@ -155,8 +152,7 @@ clock. A lock keeps the cause it was first imposed for.
   basis, no `LOGIN_SUCCESS`, no other session revoked, no session issued — so the
   replacement's own revocation of the User's sessions is never undone by a Login
   that was in flight. The standing is decided first: a User locked as well is
-  refused as locked. An Epic Login presents no password of this service's, so it
-  is never refused by this check.
+  refused as locked.
 - Imposing it **revokes the User's live sessions**, after the transaction
   commits, so a locked User stops acting immediately rather than when the session
   it already held expires. What a newly imposed Lockout implies — its audit event

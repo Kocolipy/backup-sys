@@ -72,16 +72,9 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-security</artifactId>
         </dependency>
-        <!-- Epic SMART on FHIR EHR launch Login (/docs/adr/0012-epic-login.md). Epic Login
-             applies oauth2Login itself (EpicLoginFlow) with its own ClientRegistrationRepository;
-             no client registration is declared in properties. -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-oauth2-client</artifactId>
-        </dependency>
-        <!-- Spring Boot's auto-configured RestClient.Builder, which epicRestClient is built
-             from (D25) so every Epic call carries the shared observation (http.client.requests,
-             a client span) and the converters Boot configures. -->
+        <!-- Spring Boot's auto-configured RestClient.Builder, which the patient source's client
+             is built from (ADR 0014) so every outbound call carries the shared observation
+             (http.client.requests, a client span) and the converters Boot configures. -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-restclient</artifactId>
@@ -442,26 +435,12 @@
                         <excludedEnvironmentVariable>APP_SESSION_ABSOLUTE_LIFETIME</excludedEnvironmentVariable>
                         <excludedEnvironmentVariable>APP_DEV_FIXTURES_ENABLED</excludedEnvironmentVariable>
                         <excludedEnvironmentVariable>APP_DEV_FIXTURES_PASSWORD</excludedEnvironmentVariable>
-                        <excludedEnvironmentVariable>APP_DEV_FIXTURES_EPIC_CLINICIAN</excludedEnvironmentVariable>
-                        <excludedEnvironmentVariable>APP_DEV_FIXTURES_EPIC_CLINICIAN_DISPLAY_NAME</excludedEnvironmentVariable>
                         <excludedEnvironmentVariable>APP_AUDIT_POOL_SIZE</excludedEnvironmentVariable>
                         <excludedEnvironmentVariable>APP_AUDIT_POOL_TIMEOUT</excludedEnvironmentVariable>
                         <excludedEnvironmentVariable>APP_AUDIT_RETENTION_PERIOD</excludedEnvironmentVariable>
                         <excludedEnvironmentVariable>APP_AUDIT_RETENTION_SCHEDULE</excludedEnvironmentVariable>
                         <excludedEnvironmentVariable>APP_DORMANCY_LOCKOUT_WINDOW</excludedEnvironmentVariable>
                         <excludedEnvironmentVariable>APP_DORMANCY_MEMBERSHIP_REVOCATION_WINDOW</excludedEnvironmentVariable>
-                        <excludedEnvironmentVariable>APP_EPIC_ENABLED</excludedEnvironmentVariable>
-                        <excludedEnvironmentVariable>APP_EPIC_CLIENT_ID</excludedEnvironmentVariable>
-                        <excludedEnvironmentVariable>APP_EPIC_CLIENT_KEY</excludedEnvironmentVariable>
-                        <excludedEnvironmentVariable>APP_EPIC_CLIENT_KEY_ID</excludedEnvironmentVariable>
-                        <excludedEnvironmentVariable>APP_EPIC_CLIENT_NEXT_KEY</excludedEnvironmentVariable>
-                        <excludedEnvironmentVariable>APP_EPIC_CLIENT_NEXT_KEY_ID</excludedEnvironmentVariable>
-                        <excludedEnvironmentVariable>APP_EPIC_CONNECT_TIMEOUT</excludedEnvironmentVariable>
-                        <excludedEnvironmentVariable>APP_EPIC_READ_TIMEOUT</excludedEnvironmentVariable>
-                        <excludedEnvironmentVariable>APP_EPIC_FHIR_BASE</excludedEnvironmentVariable>
-                        <excludedEnvironmentVariable>APP_EPIC_OAUTH_ISSUER</excludedEnvironmentVariable>
-                        <excludedEnvironmentVariable>APP_EPIC_REDIRECT_URI</excludedEnvironmentVariable>
-                        <excludedEnvironmentVariable>APP_EPIC_MFA_EVIDENCE_REQUIRED</excludedEnvironmentVariable>
                         <excludedEnvironmentVariable>APP_PATIENT_SOURCE_BASE_URL</excludedEnvironmentVariable>
                         <excludedEnvironmentVariable>APP_PATIENT_SOURCE_READ_TIMEOUT</excludedEnvironmentVariable>
                     </excludedEnvironmentVariables>

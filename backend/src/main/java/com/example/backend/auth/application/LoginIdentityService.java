@@ -5,7 +5,6 @@ import com.example.backend.authorization.domain.GroupPermissions;
 import com.example.backend.authorization.domain.Permission;
 import com.example.backend.scim.domain.EdgeWhitespace;
 import com.example.backend.scim.domain.NormalizedUserName;
-import com.example.backend.scim.domain.ReservedResourceName;
 import com.example.backend.scim.domain.ScimGroupReference;
 import com.example.backend.scim.domain.ScimGroupRepository;
 import com.example.backend.scim.domain.ScimUser;
@@ -56,10 +55,9 @@ import org.springframework.stereotype.Service;
  * unpredictable moment and would put a database read on every authenticated request.
  *
  * <p>Derived under the User's lock, in the Login's decision: the login-state module asks for them
- * once it has read the User's standing there ({@link LoginStateService#passwordLogin},
- * {@link LoginStateService#epicLogin}), so they come from the same moment that accepted the
- * Login, after the password comparison. The User read before the lock — Spring Security's
- * {@link #loadUserByUsername}, and the Epic link's {@link #loadEpicLinkedUser} — carries none: a
+ * once it has read the User's standing there ({@link LoginStateService#passwordLogin}), so they
+ * come from the same moment that accepted the Login, after the password comparison. The User read
+ * before the lock — Spring Security's {@link #loadUserByUsername} — carries none: a
  * Group membership removed, or a Group's Permissions reduced, while the password was compared
  * commits a revocation that finds no session of this Login yet, so authorities taken from that
  * earlier read would sign the removed power in (ADR 0002).
@@ -99,8 +97,7 @@ public class LoginIdentityService implements UserDetailsService {
     /**
      * The only authority a password Login by a User with a pending required password change
      * receives: it may read its own requirement, submit the change and log out, and nothing else.
-     * An Epic Login is not confined by the flag ({@link LoginStateService#epicLogin}). Deliberately
-     * not a role and not combined with {@code ROLE_USER} or any Permission — a flagged Superuser holds no
+     * Deliberately not a role and not combined with {@code ROLE_USER} or any Permission — a flagged Superuser holds no
      * administrative authority until the credential is replaced, and the filter chain, which grants
      * every other application endpoint to {@code ROLE_USER} or a Permission only, refuses it
      * everywhere else.
@@ -112,13 +109,6 @@ public class LoginIdentityService implements UserDetailsService {
      * every session.
      */
     public static final String PASSWORD_CHANGE_REQUIRED_AUTHORITY = "PASSWORD_CHANGE_REQUIRED";
-
-    /**
-     * The password an Epic Login's principal carries: none. An Epic Login presents no password of
-     * this service's (D20), so nothing compares against it, and Spring Security's {@code User}
-     * refuses a {@code null}.
-     */
-    private static final String NO_PASSWORD = "";
 
     private final ScimUserRepository users;
     private final ScimGroupRepository groups;
@@ -189,44 +179,12 @@ public class LoginIdentityService implements UserDetailsService {
     }
 
     /**
-     * The User an Epic Login's Practitioner ID links to (D2), reported to the caller as
-     * {@link #loadUserByUsername} reports it to Spring Security — the same locked and disabled
-     * flags, and no authority, which the login decision reads under the User's lock — or empty
-     * when it links to none.
-     *
-     * <p>The change-required flag does not confine an Epic Login ({@link LoginStateService#epicLogin}):
-     * an Epic Login presents no password of ours (D20), so the imposed credential the flag marks is
-     * not what it used, and confining the session would protect nothing. The flag itself is
-     * neither read into the session nor cleared, so a password Login by the same User is still
-     * confined until it replaces the password (ADR 0007).
-     *
-     * <p>Found through the normal {@link NormalizedUserName} lookup, and then accepted only when
-     * the stored {@code userName} equals the Practitioner ID character for character (D3):
-     * normalization lowercases, and Epic IDs are case-sensitive, so {@code eabc} never signs in
-     * the User provisioned as {@code eABC}. The Bootstrap Admin, recognised by its reservation
-     * marker, links to nothing whatever its name (D6): password Login is its recovery path.
-     *
-     * <p>The lookup key is the password Login's ({@link #lookupKeyOf}), so an ID that can name no
-     * User — blank, or bordered by whitespace, such as one made only of no-break spaces, which
-     * Java does not count blank and normalization turns into ordinary spaces — links to none,
-     * as an ID matching nobody does, rather than failing to normalize.
-     */
-    public Optional<LoginPrincipal> loadEpicLinkedUser(String practitionerId) {
-        return lookupKeyOf(practitionerId)
-                .flatMap(users::findByNormalizedUserName)
-                .filter(user -> user.profile().userName().equals(practitionerId))
-                .filter(user -> user.reservedName() != ReservedResourceName.BOOTSTRAP_ADMIN)
-                .map(user -> userDetailsOf(user, NO_PASSWORD));
-    }
-
-    /**
      * The User as a {@link LoginPrincipal}: Spring Security's view of it, carrying the stable id
      * the rest of the Login works from, so nothing after authentication reads the User by name.
      *
      * <p>It holds no authority. What the session may do is decided once, under the User's lock, in
      * the Login's decision, from the state the login-state module reads there
-     * ({@link LoginStateService#passwordLogin} for a password Login,
-     * {@link LoginStateService#epicLogin} for an Epic one; {@link #sessionAuthorities}), and
+     * ({@link LoginStateService#passwordLogin}; {@link #sessionAuthorities}), and
      * applied by {@link #issued} — not from this read, which a change committed while the
      * password was compared would leave behind: a change required, a Group membership removed, a
      * Group's Permissions reduced. Deriving it here too would only leave a second, staler answer
@@ -270,27 +228,12 @@ public class LoginIdentityService implements UserDetailsService {
      */
     Authentication issued(
             Authentication authenticated, Collection<? extends GrantedAuthority> authorities) {
-        return issued((LoginPrincipal) authenticated.getPrincipal(), authorities,
-                authenticated.getAuthorities().stream()
-                        .filter(FactorGrantedAuthority.class::isInstance)
-                        .toList());
-    }
-
-    /**
-     * The authentication an accepted Epic Login's session is issued with: {@code user}, holding
-     * {@code authorities} as {@link #issued(Authentication, Collection)} has it, and no credential.
-     * There is no authentication factor of this service's to keep: Epic checked the credential.
-     */
-    Authentication issued(LoginPrincipal user, Collection<? extends GrantedAuthority> authorities) {
-        return issued(user, authorities, List.of());
-    }
-
-    private static Authentication issued(LoginPrincipal user,
-            Collection<? extends GrantedAuthority> authorities,
-            Collection<? extends GrantedAuthority> factors) {
-        LoginPrincipal holding = user.holding(authorities);
+        LoginPrincipal holding =
+                ((LoginPrincipal) authenticated.getPrincipal()).holding(authorities);
         List<GrantedAuthority> issued = new ArrayList<>(holding.getAuthorities());
-        issued.addAll(factors);
+        authenticated.getAuthorities().stream()
+                .filter(FactorGrantedAuthority.class::isInstance)
+                .forEach(issued::add);
         return UsernamePasswordAuthenticationToken.authenticated(holding, null, issued);
     }
 
@@ -356,8 +299,7 @@ public class LoginIdentityService implements UserDetailsService {
      * {@code alice}, sign in as her and lengthen her failure run. Refused here, it is an unknown
      * account on every engine. The password Login's one lookup takes its key from this rule, and
      * its failure is counted against the User that lookup found, so the two cannot disagree
-     * about who an attempt was against. The Epic link takes its key from it too
-     * ({@link #loadEpicLinkedUser}).
+     * about who an attempt was against.
      */
     private static Optional<NormalizedUserName> lookupKeyOf(String username) {
         if (username == null || username.isBlank() || EdgeWhitespace.borders(username)) {

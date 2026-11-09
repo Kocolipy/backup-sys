@@ -196,13 +196,6 @@ class ModuleRulesTests {
     }
 
     @Test
-    void a_class_in_the_epic_root_is_not_reported() {
-        assertThat(violations(ArchitectureTest.every_class_in_a_layered_module_sits_in_a_layer,
-                        "com.example.backend.auth.epic.Planted"))
-                .isEmpty();
-    }
-
-    @Test
     void a_class_in_a_layerless_modules_root_is_not_reported() {
         assertThat(violations(ArchitectureTest.every_class_in_a_layered_module_sits_in_a_layer,
                         "com.example.backend.profile.Planted"))
