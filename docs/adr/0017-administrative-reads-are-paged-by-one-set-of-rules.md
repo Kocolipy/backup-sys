@@ -31,14 +31,12 @@ bound as a statement parameter. A Group's direct members are read a page at a
 time through it.
 
 Once a projection is a page, an order the browser imposes on the rows in hand
-sorts twenty rows, not the directory: the first page of a sort by display name
-has to be the directory's first twenty display names, which only the query that
+sorts one page, not the directory: the first page of a sort by display name
+has to hold the directory's first display names, which only the query that
 selects the page can answer. SCIM's collection query already sorts, for
 `/scim/v2/Users`.
 
-The audit listing paged on a model of its own — a zero-based `page` and a `size`,
-`400` for an out-of-range value — with a second, hand-built pager in the SPA to
-match. Its paging rules could not be SCIM's either, while they lived in `scim`:
+The audit listing is paged too, but it cannot reach rules that live in `scim`:
 `scim` depends on `audit`, which records its events, so the audit listing
 reaching them would be a module cycle, and a copy would be a second rule to
 drift.
@@ -65,9 +63,9 @@ value that is not an integer at all is `400` — the binder's on the
 administrative reads, SCIM's `invalidValue` on SCIM's own. By default
 the Users come in normalized `userName` order and the Groups in normalized
 display-name order (D5 lets the caller ask for another); a connector's active
-tokens always come newest issue first, ties broken by token id. The Accounts
-page asks for twenty rows at a time, and five tokens at a time in each connector
-section, and the Audit page for 50, through one pager.
+tokens always come newest issue first, ties broken by token id. The SPA moves
+through every listing with one pager (`/docs/domain/administration.md` has each
+page's size).
 
 **D2. The projections are searched by name.** A `search` parameter narrows the
 Users to those whose `userName` or display name contains it, and the Groups to
@@ -131,7 +129,7 @@ statement. `audit`, `scim` and `auth` all use these types, so SCIM discovery's
 ## Consequences
 
 - **An operator never sees the whole directory at once.** The Users card
-  shows twenty Users and the total. Finding one means searching for its name or
+  shows one page of Users and the total. Finding one means searching for its name or
   paging to it, and no single screen reviews every User who can log in or every
   Group that confers something. A review that needs the whole directory, such as
   every locked User or every member of the Admin group, takes paging or
@@ -161,3 +159,10 @@ statement. `audit`, `scim` and `auth` all use these types, so SCIM discovery's
   Refresh, or any filter change (Apply, Reset, or a change in the Operation or
   Outcome control), is the way on from a failed move, and a failed Refresh keeps
   the pager and the page it counts from.
+
+## Alternatives considered
+
+**A paging model per read** — the audit listing's own zero-based `page` and
+`size`, refusing an out-of-range value `400`, with a pager in the SPA to match.
+Rejected: two sets of paging rules, and two pagers, drift apart, and a client
+learns different answers to the same out-of-range question.

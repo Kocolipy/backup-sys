@@ -70,7 +70,7 @@ Tailwind CSS v4, CSS-first — there is **no `tailwind.config.js`**.
 mapped onto Tailwind colour utilities by an `@theme inline` block, and the only
 file allowed a raw colour value (`npm run test:arch` fails on one elsewhere).
 Dark mode is a `dark` class on an ancestor, so it can be toggled in-app; nothing
-toggles it yet.
+toggles it.
 
 ## Testing
 
