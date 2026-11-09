@@ -31,7 +31,7 @@ COMPOSE_DOWN_FLAGS := $(if $(filter 1,$(VOL)),-v)
 export NPM
 export MVN
 
-.PHONY: help bootstrap infra-up infra-down infra-logs fhircast-up fhircast-publish fhircast-down \
+.PHONY: help bootstrap infra-up infra-down infra-logs fhircast-up fhircast-down \
         dev dev-stop verify-frontend verify-backend verify-contract verify integration-test package \
         container clean
 
@@ -54,17 +54,13 @@ infra-logs: ## Tail the dependency logs
 
 # Opt-in: the local Epic stand-in sits behind the `fhircast` compose profile,
 # so `infra-up` above never starts it (`integration-test` starts its own).
-# Medplum as the SMART EHR launcher and FHIRcast hub, fronted by the FHIRcast
-# shim, which holds the hub to the SMART access token and the subscription's
-# lease, on 127.0.0.1:8103 (and its sign-in page on 127.0.0.1:3103). The script
+# Medplum as the SMART EHR launcher, fronted by the FHIRcast shim, on
+# 127.0.0.1:8103 (and its sign-in page on 127.0.0.1:3103). The script
 # seeds Medplum, keeps the managed block in backend/.env that points `make dev`
 # at it, and prints the launch URL and the clinician to sign in as;
 # backend/docs/configuration/epic-login.md, "Local Epic stand-in", has the rest.
 fhircast-up: ## Start the local Epic stand-in (Medplum and the FHIRcast shim), seed Medplum, set up backend/.env, and print the launch URL
 	@scripts/fhircast-up.sh
-
-fhircast-publish: ## Publish a FHIRcast event to the local Epic stand-in's hub: EVENT=Patient-open|Patient-close PATIENT=<id> [TOPIC=<topic>]
-	@TOPIC="$(TOPIC)" scripts/fhircast-publish.sh "$(EVENT)" "$(PATIENT)"
 
 fhircast-down: ## Stop the local Epic stand-in and the dependencies (volumes are kept; VOL=1 removes them)
 	$(COMPOSE) --profile fhircast down $(COMPOSE_DOWN_FLAGS)

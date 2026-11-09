@@ -1,7 +1,7 @@
 ---
 type: Contract
 title: Backend contract
-description: The runtime contract the SPA honours with the backend — CSRF synchronizer token, 401 versus 403, JSON request bodies, the session bounds, one session per User, Epic Login's landing and the EHR context its Launch context seeds, the FHIRcast release, the FHIRcast connection's session-long lifetime and what the tab keeps of it, logout's Clear-Site-Data and FHIRcast cleanup, and the CSP with its loopback hub entries.
+description: The runtime contract the SPA honours with the backend — CSRF synchronizer token, 401 versus 403, JSON request bodies, the session bounds, one session per User, Epic Login's landing and the EHR context its Launch context seeds, logout's Clear-Site-Data, and the CSP.
 tags: [csrf, sessions, csp, contract]
 ---
 
@@ -199,143 +199,41 @@ change, when the backend side moves. What the SPA has to honour:
   above and the public `jwks.json`) are `404` while `APP_EPIC_ENABLED` is off.
   The SPA never calls them, and they need no CSRF token: each is a `GET`.
 - **An Epic landing carries the Launch context in its fragment, which seeds the
-  tab's EHR context, and only the tab keeps it.** The success landing is `/#patient=<id>&encounter=<id>` with
-  whichever of the token response's `patient` and `encounter` is a FHIR id,
-  `[A-Za-z0-9\-.]{1,64}`, in that order, and the bare marker `/#launch` when
-  neither is; the refused and unavailable landings carry no fragment. The
-  backend keeps neither value — not in the session, Redis or the Epic tokens —
-  and a fragment is never sent back to it. `src/auth/ehr-context.ts` is the
-  only place that reads it: `adoptLaunchLanding()`, called by `main.tsx` before
-  the router reads the URL, takes a fragment that is the bare marker or names
-  `patient` or `encounter` as a landing, checks each value against the same
-  grammar (a value outside it is ignored, the other kept), keeps the result in
-  `sessionStorage` under `ehr-context` — per tab — as the tab's **EHR context**,
-  and strips the fragment with `history.replaceState`. Any other fragment is
-  left alone. The lifecycle: every landing, the bare marker included,
-  **replaces** the tab's EHR context; a reload carries no fragment and **keeps** it; every session end
+  tab's EHR context, and only the tab keeps it.** The success landing is
+  `/#patient=<id>&encounter=<id>` with whichever of the token response's
+  `patient` and `encounter` is a FHIR id, `[A-Za-z0-9\-.]{1,64}`, in that order,
+  and the bare marker `/#launch` when neither is; the refused and unavailable
+  landings carry no fragment. The backend keeps neither value — not in the
+  session, Redis or the Epic tokens — and a fragment is never sent back to it.
+  `src/auth/ehr-context.ts` is the only place that reads it:
+  `adoptLaunchLanding()`, called by `main.tsx` before the router reads the URL,
+  takes a fragment that is the bare marker or names `patient` or `encounter` as
+  a landing, checks each value against the same grammar (a value outside it is
+  ignored, the other kept), keeps the result in `sessionStorage` under
+  `ehr-context` — per tab — as the tab's **EHR context**, and strips the
+  fragment with `history.replaceState`. Any other fragment is left alone. The
+  lifecycle: every landing, the bare marker included, **replaces** the tab's EHR
+  context; a reload carries no fragment and **keeps** it; every session end
   (`end(reason)` in `session-transitions.ts`: sign-out, expiry, an Idle
   sign-out, a password change that ends the session, a refused login) and a
   password Login **clear** it. What is read back from storage is held to the
-  grammar again. The EHR context is a subscribable store (`useEhrContext`), so
-  Home, the Patient card and the FHIRcast card's gate re-render when it
-  changes, not only on load. Home's Patient card reads the patient in context through
-  the patient read below, and shows "No patient in context" with none; the
-  FHIRcast card shows whenever the key exists, the bare marker's included; the
-  encounter is held but unused. The read is not bound to the EHR context:
-  `patient:read` reads any id, so editing the fragment changes only which
-  patient the same User views (ADR 0012, D8).
+  grammar again. Only a landing seeds it: nothing moves it while the session
+  lasts. The EHR context is a subscribable store (`useEhrContext`), so the
+  Patient card re-renders when it changes, not only on load. Home's Patient card
+  reads the patient in context through the patient read below, and shows "No
+  patient in context" with none; the encounter is held but unused. The read is
+  not bound to the EHR context: `patient:read` reads any id, so editing the
+  fragment changes only which patient the same User views (ADR 0012, D8).
 - **Logout answers `Clear-Site-Data: "cache","cookies","storage"`** — on a
   successful logout and on the `401` a logout with no live session gets. The
   browser drops anything in `localStorage` / `sessionStorage` along with the
   session cookie — the tab's EHR context included, which the SPA clears on
   logout itself too. Nothing in the SPA may rely on storage surviving logout, and the SPA keeps
-  nothing there but the EHR context and the FHIRcast module's entries
-  (`test/arch/webStorage.test.ts`). The
+  nothing there but the EHR context (`test/arch/webStorage.test.ts`). The
   CSRF token is unaffected: it lives in memory only and in the session the
   logout ended, and the SPA discards it on logout anyway.
-- **An Epic session's FHIRcast release is `GET /api/auth/epic/fhircast`** (ADR 0016) — self-service, no Permission, no CSRF token (a `GET`). It answers the
-  session's SMART access token, `expiresAt`, the granted `scope` (sorted),
-  `hubUrl` and `hubTopic`, with `Cache-Control: no-store`; never the `id_token`
-  or a refresh token. `404` — one answer for every reason — means nothing is
-  released: a password session, an Epic session that kept no hub, an expired
-  access token, or Epic Login off. The SPA asks for it only in a signed-in tab
-  an EHR launch began (the tab holds an EHR context), through
-  `useSessionRequest` (`use-session-fhircast.ts`), so a `401` ends the session
-  as anywhere else: once per session, and again on each Retry. The FHIRcast
-  module (`src/lib/fhircast/`, its hub protocol `protocol.ts` and its socket
-  `notifications.ts`) then talks to the hub directly; no hub call goes through
-  `apiFetch`.
-- **The FHIRcast connection lasts the session, not a page** (ADR 0016, "The
-  connection's lifetime"). The FHIRcast module holds the session's connection
-  as a module-level singleton, with an idempotent start and a Retry. The
-  signed-in layout starts it while the session is signed in and the tab holds
-  an EHR context, on whichever signed-in page the tab is on; it keeps running
-  across navigation and Home remounts, so leaving Home and coming back neither
-  subscribes nor reconnects again, and an event sent meanwhile is the card's
-  last event on return. The FHIRcast card is only a view of it.
-  Only the end of the session tears it down (`endFhircast`, next items),
-  resetting it so the next session connects anew.
-- **The FHIRcast connection ends with the SMART access token** (ADR 0016,
-  "The SPA connects"). Once the hub denies the live Hub Subscription on its
-  socket (`hub.mode` `denied`), or the release's `expiresAt` passes on the
-  browser's clock, it stops — no renewal, no reconnect, the socket closed —
-  and the card shows "FHIRcast ended. Reopen the application from Epic.", with
-  no Retry and nothing of the denial's `hub.reason`. A release whose
-  `expiresAt` has already passed is never taken to the hub. On a reload or
-  Retry the release `404` reads as that same state, asking the hub nothing,
-  once the expiry the tab kept (`fhircast-token-expiry`, below) has passed;
-  otherwise as "FHIRcast unavailable". The SPA asks for no refresh token.
-- **The Patient card follows FHIRcast** (ADR 0016, "The events and the EHR
-  context"). Every event the connection hears moves the tab's EHR context,
-  on whichever signed-in page the tab is on (`followPatientEvent`, routed by
-  `use-session-fhircast.ts`, so `src/lib/` still imports nothing of
-  `src/auth/`): a `Patient-open` naming a FHIR id sets the patient and drops
-  the encounter; one naming none is ignored; a `Patient-close`, whatever it
-  names, empties the context but keeps its key, so the FHIRcast card and its
-  connection stay. An event never creates a context. A new patient in context
-  is one new `GET /api/patient/{id}`, read once by the signed-in layout for the
-  card and the top bar both: the card shows "Loading the patient…" at
-  once, a `404` shows "No patient in context", any other failure "Couldn't load
-  patient" on the error line, and a late answer for an earlier patient never
-  lands; the same patient opened again reads nothing. The context is kept as
-  last known across a reload and while the connection is reconnecting,
-  disconnected, unavailable, blocked or ended; the FHIRcast card's status says
-  the Patient card may be out of date.
-- **What the FHIRcast module keeps is in `sessionStorage`**
-  (`src/lib/fhircast/storage.ts`), per tab, as two JSON entries. Under
-  `fhircast-connection`, the tab's hub and its one live Hub Subscription: the
-  hub URL and topic, and the subscription's channel endpoint and the instant
-  its lease runs out. Under `fhircast-token-expiry`, the instant the SMART
-  access token the tab was last released expires, in milliseconds since the
-  epoch. Never the SMART access token itself, which the connection holds in
-  memory for its life. The SPA clears both wherever it clears the EHR
-  context — every end of the session and a password Login — and logout's
-  `Clear-Site-Data` drops them too. An accepted deviation (ADR 0011, "FHIRcast in the browser").
-- **A reload resumes the FHIRcast connection** (ADR 0016, "A reload, and one
-  live subscription"). On load the signed-in layout still fetches the release,
-  and its SMART access token with it. The module then decodes what the tab
-  kept: anything malformed or partial is taken for none and cleared, and every
-  URL in it is held to `127.0.0.1` again.
-  - Kept for another hub URL or topic than the release's: forgotten, and the
-    tab subscribes from scratch.
-  - The lease unexpired: the stored channel endpoint is reopened, with no
-    request to the hub, and renewal is due by the stored expiry.
-  - The lease run out, or the hub denies the endpoint: the tab subscribes
-    again with the release's SMART access token.
-
-  A Retry resumes the same way. Whenever the connection moves to a new
-  subscription, it unsubscribes the old endpoint with the SMART access token
-  once the new socket is confirmed; the unsubscription is bounded to 3 seconds
-  and never stops the connection.
-
-- **Logout's FHIRcast cleanup is the SPA's, after the backend's logout** — the
-  backend never reaches the loopback hub, and its logout revokes nothing there.
-  Once a logout answers signed out (and on every other end of the session),
-  the FHIRcast module (`endFhircast`) unsubscribes from the topic at each
-  channel endpoint a connection of this page load holds — the live Hub
-  Subscription's, and any never confirmed — with the SMART access token the
-  connection holds as `Bearer`, then closes the socket. It requests no
-  revocation and no registration deletion. What the tab kept is cleared the
-  moment the session ends, and the steps run from what the module holds in
-  memory; a subscription a page before a reload kept that this page load never
-  resumed is only forgotten. Each unsubscription is bounded to 3 seconds, and
-  none is awaited by the logout: a hub that fails or hangs never keeps the
-  session on screen. None of the steps uses the CSRF token. A logout that may
-  have left the session standing (ADR 0009) leaves the connection standing
-  too. Best-effort, an accepted deviation (ADR 0011); `Clear-Site-Data` stays
-  the backstop.
-- **The CSP forbids inline script, `eval`, and every third-party origin but the
-  loopback FHIRcast Hub** for scripts, styles, fonts, images and `fetch`.
-  `connect-src` is `'self'` plus exactly `http://127.0.0.1:*`,
-  `https://127.0.0.1:*`, `ws://127.0.0.1:*` and `wss://127.0.0.1:*`, for Epic's
-  local hub, whose port and scheme Epic chooses; no Epic origin is admitted, and
-  nothing else may connect to loopback. Self-host instead of adding a CDN, and
-  prefer Vite plugins that keep their output out of an inline `<script>`. Inline
-  _styles_ are allowed.
-- **Chrome's Local Network Access prompt** guards a public origin's requests to
-  `127.0.0.1`. A clinician who refuses it sees "Local hub blocked by browser" on
-  the FHIRcast card, read from the `local-network-access` permission's `denied`
-  state. Synapxe can push Chrome's `LocalNetworkAccessAllowedForUrls` enterprise
-  policy, listing the application's origin, so the prompt never appears on
-  managed workstations. A page served from a loopback origin, as in local
-  development and the E2E run, never prompts.
+- **The CSP forbids inline script, `eval`, and every third-party origin** for
+  scripts, styles, fonts, images and `fetch`: `connect-src` is `'self'`, and no
+  Epic origin is admitted. Self-host instead of adding a CDN, and prefer Vite
+  plugins that keep their output out of an inline `<script>`. Inline _styles_
+  are allowed.

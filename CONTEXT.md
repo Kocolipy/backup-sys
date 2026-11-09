@@ -312,9 +312,9 @@ the tab holds after the landing), `launch` (Epic's opaque launch parameter, a
 different value)
 
 **EHR context**:
-What the EHR has open for this browser tab: a patient and an
-encounter, each a FHIR id, either possibly absent. Kept by the tab alone, never server-side, seeded by an EHR launch's
-Launch context and moved by the FHIRcast hub's events.
+What the EHR had open for this browser tab when it launched the application: a
+patient and an encounter, each a FHIR id, either possibly absent. Kept by the
+tab alone, never server-side, and seeded only by an EHR launch's Launch context.
 _Avoid_: Launch context (for what the tab holds after the landing), SMART
 context, patient context (for the pair), session context
 
@@ -327,44 +327,8 @@ _Avoid_: SSO, sign-on, identity provider (for the organisation)
 **Epic tokens**:
 The access token, refresh token and `id_token` from a successful EHR launch's
 Login, held server-side on the session it signed in, for that session's life.
-The access token alone is released to that session's SPA, as the **SMART access
-token**.
+None of them is ever released to the browser.
 _Avoid_: SMART token, FHIR token, OAuth token
-
-**SMART access token**:
-The one Epic token released to the SPA: the access token of the session's EHR
-launch, fetched from `GET /api/auth/epic/fhircast` with its expiry, granted
-scope and the session's FHIRcast Hub, and presented as `Bearer` only on the
-Hub Subscriptions the SPA makes and cancels at that hub (ADR 0016). The tab
-holds it in memory for as long as its connection to the hub lasts, and never
-stores it, only when it expires. That connection ends with it: once it expires,
-or the hub denies the Hub Subscription made with it, FHIRcast stops until the
-clinician reopens the application from Epic, a fresh Epic Login with a new
-token. The `id_token` and refresh token are never released.
-_Avoid_: SMART token, Epic token (for this one alone), FHIRcast token, Hub Token
-
-**FHIRcast Hub**:
-Epic's local FHIRcast STU3 hub on the clinician's own workstation, which
-announces the chart the clinician opens and closes (`Patient-open`,
-`Patient-close`). An EHR launch's token response names it (`hub.url`) and the
-clinician's topic (`hub.topic`), and the SPA stays connected to it for the whole
-session while the tab holds an EHR context.
-_Avoid_: FHIRcast server, context hub, Medplum (the local stand-in for it)
-
-**Hub Subscription**:
-The SPA's websocket subscription at the FHIRcast Hub, made with the SMART access
-token as `Bearer`, to `Patient-open` and `Patient-close` on the clinician's
-topic, at the channel endpoint the hub answers. One is live at a time; the tab
-keeps it across a reload, renews it with the same token before its lease runs
-out, and unsubscribes it at the hub when the session ends. It lasts no longer
-than that token.
-_Avoid_: listener, FHIRcast session, Hub Registration
-
-**Event Notification**:
-A FHIRcast STU3 message the FHIRcast Hub sends on a connected Hub Subscription's
-socket, naming `hub.topic`, `hub.event` and a `context`. A well-formed
-`Patient-open` or `Patient-close` on the clinician's topic moves the EHR context.
-_Avoid_: FHIRcast message, context change, push
 
 **MFA factor**:
 The second factor an EHR launch's Login was made with, recorded on its

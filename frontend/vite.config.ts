@@ -7,8 +7,7 @@ import { compression } from "vite-plugin-compression2";
 import { backendOrigin } from "./backend-origin";
 
 /**
- * Set by `playwright.config.ts` on the dev server it starts for E2E. A spec
- * holds a page open for minutes (a FHIRcast lease running out), and the Vite
+ * Set by `playwright.config.ts` on the dev server it starts for E2E. The Vite
  * client reloads every open page when its server pushes a full reload (the
  * dependency optimizer running again, an `.html` or tsconfig change) or
  * restarts (an edit to this file, an `.env` or a lockfile). A reload mid-spec

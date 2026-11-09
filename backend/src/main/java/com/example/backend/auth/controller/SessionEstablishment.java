@@ -83,7 +83,7 @@ class SessionEstablishment {
         // attribute), at the application clock's instant, which the absolute session
         // lifetime counts from. Signing in first removes everything an earlier sign-in kept
         // on this session — a password Login over an EHR launch's session keeps none of its
-        // Epic tokens or FHIRcast Hub — and leaves the security context saved above, which
+        // Epic tokens — and leaves the security context saved above, which
         // is not the sign-in's own. The index overrides Spring Session's default
         // principal-index population (which reads Authentication.getName(), i.e. the
         // userName), so AccountSessionsAdapter — and any future stable-id-keyed session

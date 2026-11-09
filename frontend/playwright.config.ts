@@ -9,33 +9,18 @@ import { defineConfig, devices } from "@playwright/test";
  * the stand-in's beside `admin`, `packaged` after both.
  */
 const adminSessionExtras = [
-  // The local Epic stand-in: Medplum as the SMART EHR launcher and the
-  // FHIRcast hub, fronted by the shim, named by Medplum's FHIR base. The
-  // backend's Epic Login points at it, and both projects below run against it.
-  // Each replays the Admin session only to issue its SCIM token: every sign-in
-  // either makes is of a User it provisions itself, so neither ends a session
-  // another project replays.
+  // The local Epic stand-in: Medplum as the SMART EHR launcher, fronted by
+  // the shim, named by Medplum's FHIR base. The backend's Epic Login points at
+  // it, and the project below runs against it. It replays the Admin session
+  // only to issue its SCIM token: every sign-in it makes is of a User it
+  // provisions itself, so it ends no session another project replays.
   ...(process.env.E2E_FHIRCAST_FHIR_BASE
     ? [
-        // The stand-in itself: an EHR launch through Medplum, its hub, the
-        // FHIRcast card connecting to that hub from Home, the Patient card
-        // following the events it publishes, and logout tearing
-        // that connection down.
-        {
-          name: "fhircast",
-          testMatch: /fhircast-(?:card|patient|logout)\.spec\.ts/,
-          dependencies: ["setup"],
-          use: {
-            ...devices["Desktop Chrome"],
-            storageState: "test/e2e/.auth/admin.json",
-          },
-        },
-        // Epic Login. After `fhircast`, not beside it: its unavailable case
-        // pauses the shim, which `fhircast`'s specs reach too.
+        // Epic Login: an EHR launch through Medplum, landing on Home.
         {
           name: "epic",
           testMatch: /epic-launch\.spec\.ts/,
-          dependencies: ["setup", "fhircast"],
+          dependencies: ["setup"],
           use: {
             ...devices["Desktop Chrome"],
             storageState: "test/e2e/.auth/admin.json",
@@ -73,7 +58,7 @@ const adminSessionExtras = [
  * declaration, so `packaged`, declared above it, can name them too.
  */
 function connectorWriters(): string[] {
-  return ["admin", ...(process.env.E2E_FHIRCAST_FHIR_BASE ? ["fhircast", "epic"] : [])];
+  return ["admin", ...(process.env.E2E_FHIRCAST_FHIR_BASE ? ["epic"] : [])];
 }
 
 export default defineConfig({

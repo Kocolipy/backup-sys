@@ -1,37 +1,21 @@
-import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import type { OperationOutcome } from "fhir/r5";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import type { Permission } from "@/auth/api";
-import { adoptLaunchLanding, clearEhrContext } from "@/auth/ehr-context";
-import {
-  bare,
-  deferred,
-  holding,
-  json,
-  type Answers,
-  type WireAnswer,
-} from "@/auth/session-adapter.testHelpers";
-import {
-  fakeHub,
-  HUB_RELEASE,
-  type HubOptions,
-  patientNotification,
-} from "@/lib/fake-hub.testHelpers";
+import { clearEhrContext } from "@/auth/ehr-context";
+import { bare, deferred, holding, json, type WireAnswer } from "@/auth/session-adapter.testHelpers";
 import type { Clock } from "@/lib/time";
 
 import { PatientCard } from "./patient-card";
 import {
   landedFromEpicWith,
-  NO_FHIRCAST_RELEASE,
   page,
   patientReads,
-  SITI,
-  SITI_READ,
   TAN_WEI_MING,
   TAN_WEI_MING_READ,
 } from "./patient.testHelpers";
-import { renderInLayout, renderSignedIn } from "@/shell/signed-in-shell.testHelpers";
+import { renderInLayout } from "@/shell/signed-in-shell.testHelpers";
 
 /** An error answer as the backend sends it: one issue, its diagnostics fixed per code. */
 const outcome = (code: OperationOutcome["issue"][number]["code"]) =>
@@ -65,7 +49,7 @@ const renderCard = (
     [{ element: <PatientCard clock={clock} />, path: "/" }],
     "/",
     holding(permissions),
-    { [TAN_WEI_MING_READ]: answer, ...NO_FHIRCAST_RELEASE },
+    { [TAN_WEI_MING_READ]: answer },
   );
 };
 
@@ -227,263 +211,5 @@ describe("PatientCard with a patient in context", () => {
 
     expect(screen.getByText("Your account has no access to patients.")).toBeInTheDocument();
     expect(patientReads(requests())).toEqual([]);
-  });
-});
-
-describe("PatientCard following the FHIRcast hub", () => {
-  const RELEASE_REQUEST = "GET /api/auth/epic/fhircast";
-
-  /** Every retry a dropped connection gets, each failing, until it is given up. */
-  const RETRIES_RUN_OUT_MS = 1_000 + 2_000 + 4_000 + 8_000 + 16_000 + 1_000;
-
-  /** The FHIRcast card's one status line. */
-  const fhircastStatus = () => screen.getByRole("status", { name: "FHIRcast" });
-
-  /**
-   * Home for an Epic session that landed at `landing`, inside the signed-in
-   * layout that starts the session's FHIRcast connection, the backend
-   * answering `answers` beside the release and the hub `options`; once the
-   * FHIRcast card is connected, the hub, beside what the page sent.
-   */
-  async function connectedHome(landing: string, answers: Answers = {}, options: HubOptions = {}) {
-    window.history.replaceState(null, "", landing);
-    adoptLaunchLanding();
-    const hub = fakeHub(options);
-    const rendered = await renderSignedIn("/", holding(["patient:read"]), {
-      [RELEASE_REQUEST]: json(HUB_RELEASE),
-      ...answers,
-    });
-    await waitFor(() => expect(fhircastStatus()).toHaveTextContent(/^Connected$/));
-    return { hub, ...rendered };
-  }
-
-  /** The hub sends `event` for Patient `patientId`, a notification of its own. */
-  let sent = 0;
-  const publish = (hub: { notify: (message: unknown) => void }, event: string, patientId: string) =>
-    act(() => {
-      sent += 1;
-      hub.notify(patientNotification(event, { id: `event-${sent}`, patientId }));
-    });
-
-  afterEach(() => {
-    window.history.replaceState(null, "", "/");
-  });
-
-  it("shows the patient a Patient-open names, after a launch that named none", async () => {
-    const { hub } = await connectedHome("/#launch", { [TAN_WEI_MING_READ]: json(TAN_WEI_MING) });
-
-    publish(hub, "Patient-open", TAN_WEI_MING.id);
-
-    expect(await page().findByText("Tan Wei Ming")).toBeInTheDocument();
-  });
-
-  it("shows the loading note at once on a Patient-open for another patient, never the previous one", async () => {
-    const siti = deferred();
-    const { hub } = await connectedHome(`/#patient=${TAN_WEI_MING.id}`, {
-      [SITI_READ]: siti.answer,
-      [TAN_WEI_MING_READ]: json(TAN_WEI_MING),
-    });
-    await page().findByText("Tan Wei Ming");
-
-    publish(hub, "Patient-open", SITI.id);
-
-    expect([
-      page().queryByText("Loading the patient…") !== null,
-      page().queryByText("Tan Wei Ming"),
-    ]).toEqual([true, null]);
-  });
-
-  it("shows the other patient a Patient-open names once read", async () => {
-    const { hub } = await connectedHome(`/#patient=${TAN_WEI_MING.id}`, {
-      [SITI_READ]: json(SITI),
-      [TAN_WEI_MING_READ]: json(TAN_WEI_MING),
-    });
-    await page().findByText("Tan Wei Ming");
-
-    publish(hub, "Patient-open", SITI.id);
-
-    expect(await page().findByText("Siti Nurhaliza binte Ahmad")).toBeInTheDocument();
-  });
-
-  it("says no patient is in context when the opened patient reads 404, reporting nothing", async () => {
-    const { hub } = await connectedHome(`/#patient=${TAN_WEI_MING.id}`, {
-      [SITI_READ]: bare(404),
-      [TAN_WEI_MING_READ]: json(TAN_WEI_MING),
-    });
-    await page().findByText("Tan Wei Ming");
-
-    publish(hub, "Patient-open", SITI.id);
-
-    expect(await page().findByText("No patient in context")).toBeInTheDocument();
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-  });
-
-  it("reports any other failure reading the opened patient on the page's error line", async () => {
-    const { hub } = await connectedHome(`/#patient=${TAN_WEI_MING.id}`, {
-      [SITI_READ]: bare(503),
-      [TAN_WEI_MING_READ]: json(TAN_WEI_MING),
-    });
-    await page().findByText("Tan Wei Ming");
-
-    publish(hub, "Patient-open", SITI.id);
-
-    expect(await screen.findByRole("alert")).toHaveTextContent(/^Couldn't load patient$/);
-  });
-
-  it("never lands a late answer for the patient before on the card", async () => {
-    const tan = deferred();
-    const { hub } = await connectedHome(`/#patient=${TAN_WEI_MING.id}`, {
-      [SITI_READ]: json(SITI),
-      [TAN_WEI_MING_READ]: tan.answer,
-    });
-    publish(hub, "Patient-open", SITI.id);
-    await page().findByText("Siti Nurhaliza binte Ahmad");
-
-    await tan.settle(json(TAN_WEI_MING));
-
-    expect([
-      page().queryByText("Siti Nurhaliza binte Ahmad") !== null,
-      page().queryByText("Tan Wei Ming"),
-    ]).toEqual([true, null]);
-  });
-
-  it("reads nothing again on a Patient-open for the patient already in context", async () => {
-    const { hub, requests } = await connectedHome(`/#patient=${TAN_WEI_MING.id}&encounter=enc-1`, {
-      [TAN_WEI_MING_READ]: json(TAN_WEI_MING),
-    });
-    await page().findByText("Tan Wei Ming");
-
-    publish(hub, "Patient-open", TAN_WEI_MING.id);
-
-    expect([patientReads(requests()), page().queryByText("Tan Wei Ming") !== null]).toEqual([
-      // One read, for the card and the top bar both, and none again.
-      [TAN_WEI_MING_READ],
-      true,
-    ]);
-  });
-
-  it("says no patient is in context on a Patient-close, the FHIRcast card still connected", async () => {
-    const { hub } = await connectedHome(`/#patient=${TAN_WEI_MING.id}`, {
-      [TAN_WEI_MING_READ]: json(TAN_WEI_MING),
-    });
-    await page().findByText("Tan Wei Ming");
-
-    publish(hub, "Patient-close", TAN_WEI_MING.id);
-
-    expect([
-      page().queryByText("No patient in context") !== null,
-      page().queryByText("Tan Wei Ming"),
-      fhircastStatus().textContent,
-    ]).toEqual([true, null, "Connected"]);
-  });
-
-  it("brings the patient back on a Patient-open after a Patient-close", async () => {
-    const { hub } = await connectedHome(`/#patient=${TAN_WEI_MING.id}`, {
-      [TAN_WEI_MING_READ]: json(TAN_WEI_MING),
-    });
-    await page().findByText("Tan Wei Ming");
-    publish(hub, "Patient-close", TAN_WEI_MING.id);
-    await page().findByText("No patient in context");
-
-    publish(hub, "Patient-open", TAN_WEI_MING.id);
-
-    expect(await page().findByText("Tan Wei Ming")).toBeInTheDocument();
-  });
-
-  it("reads the patient again, showing the loading note at once, on a Patient-open after a Patient-close", async () => {
-    const { hub, requests } = await connectedHome(`/#patient=${TAN_WEI_MING.id}`, {
-      [TAN_WEI_MING_READ]: json(TAN_WEI_MING),
-    });
-    await page().findByText("Tan Wei Ming");
-    publish(hub, "Patient-close", TAN_WEI_MING.id);
-    await page().findByText("No patient in context");
-
-    publish(hub, "Patient-open", TAN_WEI_MING.id);
-
-    expect([
-      page().queryByText("Loading the patient…") !== null,
-      page().queryByText("Tan Wei Ming"),
-      patientReads(requests()),
-    ]).toEqual([true, null, [TAN_WEI_MING_READ, TAN_WEI_MING_READ]]);
-  });
-
-  it("shows, back on Home, the patient a Patient-open named while the clinician was on another page", async () => {
-    const { hub } = await connectedHome("/#launch", { [SITI_READ]: json(SITI) });
-    fireEvent.click(screen.getByRole("link", { name: "Open settings" }));
-    await screen.findByRole("heading", { level: 1, name: "Settings" });
-
-    publish(hub, "Patient-open", SITI.id);
-    fireEvent.click(screen.getByRole("link", { name: "Profile" }));
-
-    expect(await page().findByText("Siti Nurhaliza binte Ahmad")).toBeInTheDocument();
-  });
-
-  it("keeps the opened patient while the connection reconnects", async () => {
-    const { hub } = await connectedHome("/#launch", { [SITI_READ]: json(SITI) });
-    publish(hub, "Patient-open", SITI.id);
-    await page().findByText("Siti Nurhaliza binte Ahmad");
-
-    act(() => hub.dropSockets());
-
-    expect([
-      fhircastStatus().textContent,
-      page().queryByText("Siti Nurhaliza binte Ahmad") !== null,
-    ]).toEqual(["Reconnecting", true]);
-  });
-
-  describe("on the clock", () => {
-    beforeEach(() => {
-      vi.useFakeTimers({
-        shouldAdvanceTime: true,
-        toFake: ["setTimeout", "clearTimeout", "Date"],
-      });
-    });
-
-    afterEach(() => {
-      vi.useRealTimers();
-    });
-
-    it("keeps the opened patient once the connection is given up", async () => {
-      const { hub } = await connectedHome(
-        "/#launch",
-        { [SITI_READ]: json(SITI) },
-        { socket: ["confirms", "closes"] },
-      );
-      publish(hub, "Patient-open", SITI.id);
-      await page().findByText("Siti Nurhaliza binte Ahmad");
-      act(() => hub.dropSockets());
-
-      await act(() => vi.advanceTimersByTimeAsync(RETRIES_RUN_OUT_MS));
-      await waitFor(() => expect(fhircastStatus()).toHaveTextContent(/^Disconnected$/));
-
-      expect(page().queryByText("Siti Nurhaliza binte Ahmad")).toBeInTheDocument();
-    });
-  });
-
-  it.each<[string, Answers, HubOptions, string]>([
-    ["the backend releases nothing", { [RELEASE_REQUEST]: bare(404) }, {}, "FHIRcast unavailable"],
-    [
-      "the SMART access token has expired",
-      { [RELEASE_REQUEST]: json({ ...HUB_RELEASE, expiresAt: "2000-01-01T00:00:00Z" }) },
-      {},
-      "FHIRcast ended",
-    ],
-    [
-      "the browser blocks the local hub",
-      {},
-      { localNetworkAccess: "denied", subscription: "unreachable" },
-      "Local hub blocked by browser",
-    ],
-  ])("keeps the launch's patient when %s", async (_name, answers, options, shown) => {
-    landedFromEpicWith(TAN_WEI_MING.id);
-    fakeHub(options);
-    await renderSignedIn("/", holding(["patient:read"]), {
-      [RELEASE_REQUEST]: json(HUB_RELEASE),
-      [TAN_WEI_MING_READ]: json(TAN_WEI_MING),
-      ...answers,
-    });
-
-    await waitFor(() => expect(fhircastStatus()).toHaveTextContent(shown));
-    expect(page().queryByText("Tan Wei Ming")).toBeInTheDocument();
   });
 });

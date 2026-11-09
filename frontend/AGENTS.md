@@ -42,9 +42,7 @@ reasoning behind each rule.
   session holds the declaration's `permission`. A page never calls `apiFetch`
   (`mb-transport-is-behind-the-session-seam`), except `change-password.tsx`,
   whose marked `401` is about the current password and must not end the
-  session. The shell's FHIRcast start (`useSessionFhircast`, ADR 0016) is the
-  one ungated request — a self-service release no `permission` expresses — still
-  sent through the session seam so a `401` ends the session.
+  session.
 - **A page never imports `src/shell/`** (`mb-pages-do-not-import-the-shell`); a
   new signed-in page is one entry in `SIGNED_IN_PAGES` (`signed-in-pages.tsx`).
 - **No page has a control that writes `active` or Group membership**: the
@@ -114,8 +112,8 @@ the `local` profile, then `npm run test:e2e`. "Epic Login" in the trigger means
 anything on that path: `backend/.../auth/epic/`, the Epic routes' security or
 session handling, `logInFromEpic`, the SPA's handling of the launch landing, and
 the stand-in itself (the compose `fhircast` services, `backend/fhircast-shim`
-and its seed). Three projects run only there — `epic`, `fhircast` and
-`packaged`, the one that loads the JAR's own origin, so an inline script or a
+and its seed). Two projects run only there — `epic` and `packaged`, the one
+that loads the JAR's own origin, so an inline script or a
 third-party origin breaks only there: `npm run dev` serves neither the built
 bundle nor the backend's CSP.
 

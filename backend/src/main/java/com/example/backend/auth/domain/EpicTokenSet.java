@@ -2,7 +2,6 @@ package com.example.backend.auth.domain;
 
 import java.io.Serial;
 import java.io.Serializable;
-import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collections;
@@ -21,8 +20,7 @@ import java.util.TreeSet;
  *
  * <p>All three tokens are D22 values. The access and refresh tokens are bearer credentials at
  * Epic, and the {@code id_token} carries the clinician's identity claims, so none of them may
- * reach a log record, an audit event or an exception message, and only the access token ever
- * reaches the browser — through the FHIRcast release, as a {@link FhircastAccess} (ADR 0016).
+ * reach a log record, an audit event, an exception message or the browser.
  * {@link #toString()} therefore names each by its presence alone, and the type is reachable only
  * through the {@link EpicTokens} port, never from a web adapter's response.
  *
@@ -92,15 +90,6 @@ public final class EpicTokenSet implements Serializable {
     /** The instant the access token stops being valid at Epic. */
     public Instant accessTokenExpiresAt() {
         return accessTokenExpiresAt;
-    }
-
-    /**
-     * Whether the access token has expired by {@code clock}: from its expiry instant on, the token
-     * is no longer one to present. An expired access token leaves the rest of the set as it was —
-     * the refresh token and the {@code id_token} live as long as the session.
-     */
-    public boolean isExpired(Clock clock) {
-        return !clock.instant().isBefore(accessTokenExpiresAt);
     }
 
     /** The scope Epic granted the access token. */

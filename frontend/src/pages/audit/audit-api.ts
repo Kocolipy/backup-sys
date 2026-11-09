@@ -50,7 +50,6 @@ export const AUDIT_OPERATIONS = [
   "PERMISSION_GRANT",
   "PERMISSION_REVOKE",
   "GROUP_PERMISSIONS_CHANGE",
-  "FHIRCAST_TOKEN_RELEASE",
 ] as const;
 
 export type AuditOperation = (typeof AUDIT_OPERATIONS)[number];

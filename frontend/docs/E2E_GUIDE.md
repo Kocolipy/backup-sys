@@ -31,13 +31,13 @@ previous one in `dependencies`:
 
 - `routes` holds `console-errors.spec.ts`, which asserts that every signed-in
   route, Accounts among them, loads with no alert. It follows every project
-  whose specs create and delete connectors (`admin`, and `fhircast` and `epic`
-  when declared): Accounts reads each listed connector's tokens, and a
+  whose specs create and delete connectors (`admin`, and `epic` when
+  declared): Accounts reads each listed connector's tokens, and a
   connector another worker deleted between the listing and that read showed
   an alert there.
-- `guest` follows `routes` (and the `fhircast`, `epic` and `packaged` projects
-  below, when declared) because `login.spec.ts` signs in as the seeded Admin,
-  and beside the `admin` project it turned that project's specs into 401s.
+- `guest` follows `routes` (and the `epic` and `packaged` projects below, when
+  declared) because `login.spec.ts` signs in as the seeded Admin, and beside the
+  `admin` project it turned that project's specs into 401s.
 - `dormancy` runs last and alone: it signs in as the Helpdesk fixture User
   and consumes the `dormant` fixture's locked state, which only a backend
   restart re-arms.
@@ -50,56 +50,25 @@ Running one project alone still runs every project ahead of it in the chain.
 `playwright.config.ts` carries the reason beside each `dependencies` line;
 update both together.
 
-The `fhircast`, `epic` and `packaged` projects sit outside that chain, declared
-only by the environment `make integration-test` sets up, so a bare `npm run
-test:e2e` against a backend started some other way runs without them. Each
-depends on `setup` and replays
-the Admin session, so `fhircast` and `epic` run beside `admin`, `packaged`
-after them for the same reason `routes` does, and `guest` lists each declared
-one in its `dependencies` as well: `login.spec.ts` signing in as the seeded Admin
-would end the session they replay. The routing arch test reads their
-`testMatch` either way:
+The `epic` and `packaged` projects sit outside that chain, declared only by the
+environment `make integration-test` sets up, so a bare `npm run test:e2e`
+against a backend started some other way runs without them. Each depends on
+`setup` and replays the Admin session, so `epic` runs beside `admin`, `packaged`
+after it for the same reason `routes` does, and `guest` lists each declared one
+in its `dependencies` as well: `login.spec.ts` signing in as the seeded Admin
+would end the session they replay. The routing arch test reads their `testMatch`
+either way:
 
-- **`fhircast`** holds `fhircast-card.spec.ts` (Home's FHIRcast card reaching
-  `Connected` after a launch, showing a published `Patient-open` and then the
-  `Patient-close` that replaces it, still showing an event published once the first lease has run
-  out, the hub holding only the new subscription after a renewal, reconnecting
-  after the shim drops its socket, the card's final state once the shim
-  counts the SMART access token expired, a reload reopening the stored
-  subscription's endpoint rather than subscribing again, coming back to the
-  tab once its stored lease has ended and subscribing again, absent after
-  a password Login, and no SMART access token released after a password Login
-  from a stale `/login` tab over the session an EHR launch in another tab
-  signed in), `fhircast-patient.spec.ts` (the Patient card
-  following the hub: a `Patient-open` showing a patient after a launch that
-  named none, replacing the launch's patient with another, published while on
-  another page and shown on Home on return, and kept across a reload; a
-  `Patient-close` emptying the card with the FHIRcast card still `Connected`,
-  staying empty across a reload until the next `Patient-open`) and
-  `fhircast-logout.spec.ts` (after "Sign out", the
-  hub holding no subscription at the card's channel endpoint, and after a
-  reload no subscription left at any endpoint the tab used), and **`epic`**
-  holds `epic-launch.spec.ts`. Both are declared when
+- **`epic`** holds `epic-launch.spec.ts`, and is declared when
   `E2E_FHIRCAST_FHIR_BASE` names Medplum's FHIR base: the backend's Epic Login
-  points at the local Epic stand-in (Medplum and the FHIRcast shim), and both
-  run against it. Its hub accepts the launch's SMART access token as `Bearer`,
-  as Epic's does, and denies a subscription made with it on its socket once
-  that token expires or is revoked; the shim's test-only
-  `POST /shim/test/expire` expires one at once, so a spec need not wait one
-  out (`/backend/docs/configuration/epic-login.md`, "Local Epic stand-in").
-  Each replays the Admin session only to issue a SCIM token; every sign-in
-  either makes, an EHR launch through Medplum, is of a User it provisions
-  itself. `epic` depends on `fhircast` as well, so the two never run
-  at once: its unavailable case pauses the shim `fhircast`'s specs reach.
-  `fhircast.helpers.ts` holds what their specs share: Medplum's sign-in page, a
-  `SmartAppLaunch`, the clinicians the Medplum seed makes, and the backend
-  fixture patients it makes available under their Epic ids (Tan Wei Ming, whom
-  the default launch names, Siti Nurhaliza binte Ahmad, Kumaravel and Marcus
-  Anthony de Souza),
-  publishing `Patient-open` / `Patient-close` to a hub topic, dropping a
-  channel endpoint's sockets through the shim's test-only
-  `POST /shim/test/drop`, and ending a channel endpoint's lease at once
-  through `POST /shim/test/end-lease`, so no case waits a lease out.
+  points at the local Epic stand-in (Medplum and the FHIRcast shim), and the
+  project runs against it (`/backend/docs/configuration/epic-login.md`, "Local
+  Epic stand-in"). It replays the Admin session only to issue a SCIM token;
+  every sign-in it makes, an EHR launch through Medplum, is of a User it
+  provisions itself. `epic-stand-in.helpers.ts` holds what the spec takes from
+  the stand-in: Medplum's sign-in page, a `SmartAppLaunch`, the clinicians the
+  Medplum seed makes, and the backend fixture patients it makes available under
+  their Epic ids (Tan Wei Ming, whom the default launch names).
 - **`packaged`** holds `packaged-csp.spec.ts` and `packaged-type.spec.ts` and
   is declared when
   `E2E_PACKAGED_BASE_URL` names the packaged JAR. Its `baseURL` is the JAR's
@@ -195,19 +164,16 @@ sweep deletes a fixture another spec is still using. Leftovers from a run that
 died before its `finally` are swept once, by `sweepLeftovers()` in
 `auth.setup.ts`, before any other project starts.
 
-The one exception is a `userName` another server holds, which the spec
-cannot give an `e2e-` name: an EHR launch through Medplum signs in the
-Practitioner id Medplum holds, so its User is named with that id — the seeded
-clinician's in `fhircast-card.spec.ts`'s launch case, and in its other cases
-and the `fhircast-patient` and `epic` specs that of the clinician the seed
-makes for each case. The seed makes each at a fixed UUID in
-`compose.yaml`, the only id Medplum takes from a client, so the name is the
-same on every run. Such a User is provisioned only through
+The one exception is a `userName` another server holds, which the spec cannot
+give an `e2e-` name: an EHR launch through Medplum signs in the Practitioner id
+Medplum holds, so its User is named with that id — that of the clinician the
+seed makes for each `epic` case. The seed makes each at a fixed UUID in
+`compose.yaml`, the only id Medplum takes from a client, so the name is the same
+on every run. Such a User is provisioned only through
 `provisionServerNamedUser`, which deletes any User already holding the exact
-name — the leftover `sweepLeftovers()` cannot see — before provisioning its
-own. That is safe only because one spec alone provisions that name; a second
-spec must not share it, which is why the seed makes the `epic` spec clinicians
-of its own rather than letting it reuse the `fhircast` launch's.
+name — the leftover `sweepLeftovers()` cannot see — before provisioning its own.
+That is safe only because one spec alone provisions that name; a second spec
+must not share it, so the seed makes each case a clinician of its own.
 
 A spec that needs a known **backend defect** to be visible marks the test
 `test.fail(true, "#<issue>: …")`: the suite stays green while the issue is open

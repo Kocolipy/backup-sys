@@ -3,8 +3,6 @@ import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { bare, deferred, fakeBackend, json, type Answers } from "@/lib/fake-backend.testHelpers";
-import { fakeHub, fhircastConnected, HUB_URL, requestsSince } from "@/lib/fake-hub.testHelpers";
-import type { FhircastRelease } from "@/lib/fhircast";
 
 import { AuthProvider } from "./auth-context";
 import { AuthContext, useAuthState, type AuthContextState } from "./auth-context-value";
@@ -97,13 +95,6 @@ describe("useSessionRequest, as the session changes under a request", () => {
   const { login: LOGIN, logout: LOGOUT, me: ME } = AUTH_REQUESTS;
   const USER = testUser();
   const PATIENT = "eq081-VQEgP8drUUqCWzHfw3";
-  const RELEASE: FhircastRelease = {
-    accessToken: `smart-${crypto.randomUUID()}`,
-    expiresAt: "2100-01-01T00:00:00Z",
-    hubTopic: "topic-1",
-    hubUrl: HUB_URL,
-    scope: ["fhircast/Patient-open.read"],
-  };
 
   const providerWrapper = ({ children }: { children: ReactNode }) => (
     <AuthProvider>{children}</AuthProvider>
@@ -157,7 +148,7 @@ describe("useSessionRequest, as the session changes under a request", () => {
     }).toEqual({ outcome: { kind: "failed", status: 401 }, signInReason: null, status: "guest" });
   });
 
-  it("leaves a fresh sign-in standing, its EHR context and FHIRcast connection too, on an old session's 401", async () => {
+  it("leaves a fresh sign-in standing, its EHR context too, on an old session's 401", async () => {
     const { read, result } = await signedInWithReadHeld();
     await act(async () => {
       await result.current.auth.logout();
@@ -167,19 +158,14 @@ describe("useSessionRequest, as the session changes under a request", () => {
     });
     window.history.replaceState(null, "", `/#patient=${PATIENT}`);
     adoptLaunchLanding();
-    const hub = fakeHub();
-    await fhircastConnected(RELEASE);
-    const sentToHub = requestsSince(hub);
 
     await read.settle(bare(401));
 
     expect({
       ehrContext: ehrContext(),
-      hub: { open: hub.openSockets(), sent: sentToHub() },
       status: result.current.auth.status,
     }).toEqual({
       ehrContext: { patient: PATIENT },
-      hub: { open: 1, sent: [] },
       status: "authenticated",
     });
   });

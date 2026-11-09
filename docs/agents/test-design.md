@@ -30,8 +30,8 @@ no existing test can.
 
 A rule is tested once, by its owner, across its full table: boundaries, every
 refusal, every equivalent spelling. `PasswordPolicyTests` and
-`PasswordAcceptanceTests` own the password rules, `ConnectorTokenPolicyTests`
-the rotation-overlap arithmetic, and `FhircastHubTests` the hub grammar.
+`PasswordAcceptanceTests` own the password rules, and `ConnectorTokenPolicyTests`
+the rotation-overlap arithmetic.
 
 A layer above the owner asserts **wiring**: one case per argument, proving the
 input reaches the owner and the owner's answer comes back — the refusal

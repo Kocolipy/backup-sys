@@ -78,29 +78,25 @@ straight into `lib/http`) but may never point back up.
 - `session-transitions.ts` — `useSessionTransitions`, the one place the auth
   state (status, user, sign-in reason) changes, as `signIn(user)` or
   `end(reason)`, each forgetting the CSRF token in the same step (ADR 0009);
-  `end` forgets the tab's EHR context too, and stops the session's FHIRcast
-  connection (`endFhircast`).
+  `end` forgets the tab's EHR context too.
   `checkFailed` (status `unchecked`) and `recheck` change the status without
   changing the session, so they keep the token. It also owns the **session
   generation** — which session is current: every `signIn` and every `end`
   starts the next. `generation()` reads it, and `expire(generation)` ends the
   session as `expired` only while that generation is still current, so a
   `401` that lands after a sign-out or a fresh sign-in changes nothing.
-- `ehr-context.ts` — the tab's **EHR context**, what the EHR has open for the
+- `ehr-context.ts` — the tab's **EHR context**, what the EHR had open for the
   tab (a patient and an encounter), as a subscribable store under one
   `sessionStorage` key: `adoptLaunchLanding()` (called by `main.tsx` before
   the router reads the URL) reads an Epic landing's fragment, its Launch
   context, holds each value to FHIR's id grammar, seeds the EHR context with it
   and strips the fragment; `ehrContext()` reads it back, decoded rather than
   trusted, the same value until it changes, and `null` when the tab holds none
-  — which is how Home knows an EHR launch began the session;
+  — which is how the SPA knows an EHR launch began the session;
   `subscribeEhrContext()` / `useEhrContext()` re-render a reader when it
-  changes; `followPatientEvent()` moves it as the FHIRcast hub's
-  `Patient-open` / `Patient-close` say (ADR 0016, "The events and the EHR
-  context"); and `clearEhrContext()` forgets it, on every session end and a
-  password Login. A password Login also calls `clearFhircastStorage()`, and
-  every session end starts `endFhircast()`, unawaited, which reads what the
-  FHIRcast module kept and clears it at once (`docs/BACKEND_CONTRACT.md`).
+  changes; and `clearEhrContext()` forgets it, on every session end and a
+  password Login. Only a landing seeds it: nothing moves it while the session
+  lasts.
 - `auth-context.tsx` — the `AuthProvider`: checks the session on mount and on
   `retrySessionCheck` (`ok` signs in, `401` ends, anything else is
   `checkFailed`) and maps each session event onto a transition with its sign-in
@@ -124,16 +120,6 @@ straight into `lib/http`) but may never point back up.
   so no page can forget to relay a session ending. It reads the session
   generation as it sends a request, and on that request's `401` expires that
   generation, never a later session.
-- `use-session-fhircast.ts` — `useSessionFhircast`, called by the signed-in
-  layout: starts the FHIRcast module's session-long connection while the
-  session is signed in and the tab holds an EHR context, handing it a source
-  for the FHIRcast release (`GET /api/auth/epic/fhircast`) through that seam.
-  Not a declaration: the operation is self-service and carries no Permission,
-  and the module needs only the release or `null`. It also follows the
-  connection's events (`followFhircastEvents`) into the EHR context
-  (`followPatientEvent`), so the Patient card follows the EHR on every
-  signed-in page. The glue is here because `src/lib` imports nothing of
-  `src/auth`.
 - `use-gated-read.ts` / `use-gated-write.ts` — the gated read and write (below).
 - `idle-sign-out.tsx` — `IdleSignOut`, mounted by `AuthProvider` for an
   authenticated session (`docs/BACKEND_CONTRACT.md` has the rule it keeps).
@@ -251,42 +237,22 @@ two pages share moves up to `src/pages/` itself, and imports no page folder
 - `status-badge.tsx` — the one status-to-Badge-variant mapping, for an audit
   outcome and a User's active state (a Deactivated User reads "Deactivated"),
   on Accounts and Audit.
-- `home.tsx` — the Patient card, then beside it the FHIRcast card whenever the
-  tab holds an EHR context, read through `useEhrContext()` so it comes and goes
-  as that changes, then the Pages card: a link to each page the session may
-  open.
-- `fhircast-card.tsx` — the FHIRcast card: a pure view of the session's
-  FHIRcast connection, the singleton `lib/fhircast/session.ts` holds behind
-  the facade (`fhircastSnapshot`, `watchFhircast`, imported from
-  `@/lib/fhircast`), which the signed-in layout starts; it shows a closed set of
-  generic states and starts and closes nothing, so leaving Home keeps the
-  connection and its last event. The module renews the subscription unseen,
-  and reconnects a dropped socket while the card shows `Reconnecting`;
-  once its retries run out the card shows `Disconnected` and a Retry button
-  (`retryFhircast`), which connects again from the release. Once the hub
-  denies the live subscription, or the SMART access token's expiry passes,
-  the connection ends and the card shows its final state, which says to
-  reopen the application from Epic and offers no Retry. While connected or
-  reconnecting it lists the last event the module hands on — name, time, and
-  the Patient id when there is one — held by the module's singleton only, so a
-  reload, or a Retry, starts with none. It reports nothing to the page
-  status: its state is its own line.
+- `home.tsx` — the Patient card.
 - `patient-in-context.ts` / `home-api.ts` — the **one reader of the patient in
   context**. `PatientInContextScope`, which the signed-in layout renders once
   inside its page status, reads `GET /api/patient/{id}` through `PATIENT`
   (opting in to `absent`, a `403` reported as failure) for the EHR context's
   patient, decoding the R5 `Patient` (typed by `@types/fhir`'s `fhir5`); with
-  none in context it reads nothing. The FHIRcast hub's events move that
-  patient: a new id is a new path, so a new first read, and a late answer for
-  the id before never lands. A failure is reported to the page's error line
-  once, by this read. `usePatientInContext()` hands its view — `none`, or the
-  gated read's — to the top bar and the Patient card, which only render it, so
-  each patient change sends one request on every page. The read is a sibling
-  of the layout's children, never their parent, so a patient coming into
-  context or leaving it never remounts the page. It lives in `pages/home/`
+  none in context it reads nothing. A new id is a new path, so a new first read,
+  and a late answer for the id before never lands. A failure is reported to the
+  page's error line once, by this read. `usePatientInContext()` hands its view —
+  `none`, or the gated read's — to the top bar and the Patient card, which only
+  render it, so each patient change sends one request on every page. The read is
+  a sibling of the layout's children, never their parent, so a patient coming
+  into context or leaving it never remounts the page. It lives in `pages/home/`
   because that is the lowest layer both the Shell and the Patient card may
-  import that also holds `PATIENT`: `mb-pages-do-not-import-the-shell` rules
-  out `src/shell/`.
+  import that also holds `PATIENT`: `mb-pages-do-not-import-the-shell` rules out
+  `src/shell/`.
 - `patient-card.tsx` — the Patient card, rendered from `usePatientInContext()`:
   "No patient in context" for none or a `404`, "Loading the patient…", an empty
   card for a failure (its copy is on the error line), or the banner. Every
@@ -365,60 +331,8 @@ not decode is `failed`.
 It lives in `lib/` because `auth/` sits above it and it must not know about
 sessions or React — `mb-lib-is-a-leaf` holds that.
 
-**The one other module that reaches the network is the FHIRcast module,
-`lib/fhircast/`** (ADR 0016). It talks to Epic's local FHIRcast hub on
-`127.0.0.1` — another origin, to which none of `apiFetch`'s session, CSRF or
-status rules apply — so it uses `fetch` and `WebSocket` itself: the
-subscription, with the SMART access token as `Bearer`, and the socket at the
-endpoint the hub answers, each URL the hub names held to loopback, and every
-request bounded: a subscription the hub leaves unanswered for ten seconds is
-aborted and taken for a refusal, so a hung first subscription shows
-`unavailable` and a hung renewal reconnects. The connection holds the token in
-memory for its whole life and never stores it. It reports one closed
-`FhircastStatus` — `connecting`, `connected`, `reconnecting`, `disconnected`,
-`unavailable`, `blocked` or `ended`, the last its only signal of an ending —
-which is the snapshot's status, and never surfaces what the hub said.
-On a connected socket it holds every message to the FHIRcast STU3 notification
-shape, the subscribed events and the session's topic, acknowledges a valid one
-on the socket, and hands the caller only a `PatientEvent`: the event, its
-`timestamp` and a grammar-checked Patient id. Nothing of a message is logged.
-It keeps the tab's hub and its one live Hub Subscription in `sessionStorage`,
-so a reload resumes the subscription rather than subscribing again, and
-unsubscribes each subscription it moves off once the new one's socket is
-confirmed. `endFhircast()`, which the session transitions start on every end
-of the session, clears what the tab kept at once, then tears down at the hub
-every connection this page load made — each endpoint unsubscribed with the
-SMART access token, then the socket closed — best-effort, each unsubscription
-bounded. Every subscription a connection was answered is among them, including
-those of a renewal or retry whose socket was never confirmed, which the
-connection keeps until then rather than cancelling at once; each distinct
-endpoint is unsubscribed once.
-It holds the session's one connection as a module-level singleton
-(`startFhircast`, idempotent; `retryFhircast`; `fhircastSnapshot` and
-`watchFhircast` for the card), which `endFhircast()` resets: no component
-lives as long as the session, so none could own it (ADR 0016, "The
-connection's lifetime"). The release it starts from still comes from the
-backend through the session seam (`auth/use-session-fhircast.ts`).
-
-To the rest of the SPA it is one module: its facade, `lib/fhircast/index.ts`,
-imported as `@/lib/fhircast`, is the only file in the folder anything outside
-may import (`fhircast-only-through-the-facade`), and it holds no code of its
-own. Behind it, each capability is a module of its own, with its tests beside
-it:
-
-| Module             | Owns                                                                                                                                                                                                                                                                                                                                                                                    |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `model.ts`         | the vocabulary the others import: `Hub`, `Subscription`, `Stored`, the `PatientEvent` a caller is handed, the one `FhircastStatus` a connection reports, and the loopback rule every URL a hub names is held to                                                                                                                                                                         |
-| `release.ts`       | the release the backend hands over, and `decodeFhircastRelease`                                                                                                                                                                                                                                                                                                                         |
-| `protocol.ts`      | every HTTP request made of the hub: the subscription and the unsubscription, each with the SMART access token as `Bearer`, and each bounded (10 s and 3 s)                                                                                                                                                                                                                              |
-| `notifications.ts` | the socket at the channel endpoint: the hub's confirmation, the STU3 notification decoder (subscribed events, the session's topic, the Patient id grammar) and the acknowledgement                                                                                                                                                                                                      |
-| `storage.ts`       | the `fhircast-connection` and `fhircast-token-expiry` `sessionStorage` entries, written and decoded, and `clearFhircastStorage`                                                                                                                                                                                                                                                         |
-| `connection.ts`    | the renewing connection, holding the SMART access token: connecting (`blocked` when the `local-network-access` permission is denied), renewal timers, reconnecting with backoff, one live subscription kept in the tab, resuming after a reload, ending with the token — each reported as its one status. It calls the protocol, the socket and storage itself, on the browser's timers |
-| `session.ts`       | the session's one connection, from the release to the teardown at the hub (every endpoint the tab's connections hold unsubscribed once, then the sockets closed): every piece of the module's state (the attempt under way, the connections to tear down, the snapshot)                                                                                                                 |
-
 `test/arch/rawNetwork.test.ts` (`no_raw_network_outside_transport`) names
-`lib/http.ts`, `lib/fhircast/protocol.ts` and `lib/fhircast/notifications.ts`
-and no others.
+`lib/http.ts` and no other module.
 
 ### Why every time goes through `lib/time.ts`
 
@@ -554,9 +468,6 @@ flag still confines a session to `/change-password`, the same form alone. A fail
 session and its token stand (ADR 0009) — and the line goes to the page status.
 The idle warning's Sign out runs the same session action; the Idle sign-out at
 the limit is a separate path, and ends the session even when its logout fails.
-It also starts the session's FHIRcast connection while the tab holds an EHR
-context (`useSessionFhircast`): it outlives every page beneath it, so the
-connection lasts across navigation and Home remounts.
 
 `resolveSessionRoute` is the transition table behind both guards. It sends a
 Guest to login with a return destination and the provider's sign-in reason;
