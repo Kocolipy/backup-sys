@@ -173,94 +173,6 @@ Parameters:
     Type: String
     Default: admin
 
-  # Epic Login (/docs/adr/0012-epic-login.md). Off unless AppEpicEnabled is true, and
-  # then none of the other AppEpic* parameters is read. No default carries a
-  # value: with the switch on, the service refuses to start until every required
-  # one is set and well formed (backend/docs/configuration/epic-login.md). An empty
-  # parameter reaches the service as unset.
-  AppEpicEnabled:
-    Description: Whether this deployment serves Epic Login (APP_EPIC_ENABLED)
-    Type: String
-    Default: "false"
-    AllowedValues: ["true", "false"]
-
-  AppEpicFhirBase:
-    Description: Epic FHIR base URL, https (APP_EPIC_FHIR_BASE); required when enabled
-    Type: String
-    Default: ""
-
-  AppEpicOauthIssuer:
-    Description: Epic OIDC issuer, https (APP_EPIC_OAUTH_ISSUER); required when enabled
-    Type: String
-    Default: ""
-
-  AppEpicClientId:
-    Description: Epic client id (APP_EPIC_CLIENT_ID); required when enabled
-    Type: String
-    NoEcho: true
-    Default: ""
-    # Held in the EpicClientSecret, whose JSON these are spliced into.
-    AllowedPattern: '^[^"\\]*$'
-    ConstraintDescription: must not contain a double quote or a backslash
-
-  AppEpicRedirectUri:
-    Description: >-
-      Absolute https callback URL as registered with Epic, ending /api/auth/epic/callback
-      (APP_EPIC_REDIRECT_URI); required when enabled
-    Type: String
-    Default: ""
-
-  AppEpicClientKey:
-    Description: >-
-      Active signing key, EC P-384 private key as PKCS#8 PEM written on ONE line with no
-      line breaks (APP_EPIC_CLIENT_KEY); required when enabled
-    Type: String
-    NoEcho: true
-    Default: ""
-    # Held in the EpicClientSecret, whose JSON these are spliced into.
-    AllowedPattern: '^[^"\\]*$'
-    ConstraintDescription: must not contain a double quote or a backslash
-
-  AppEpicClientKeyId:
-    Description: The active signing key's kid (APP_EPIC_CLIENT_KEY_ID); required when enabled
-    Type: String
-    Default: ""
-
-  AppEpicClientNextKey:
-    Description: >-
-      Optional next signing key, same format as AppEpicClientKey (APP_EPIC_CLIENT_NEXT_KEY);
-      set together with AppEpicClientNextKeyId
-    Type: String
-    NoEcho: true
-    Default: ""
-    # Held in the EpicClientSecret, whose JSON these are spliced into.
-    AllowedPattern: '^[^"\\]*$'
-    ConstraintDescription: must not contain a double quote or a backslash
-
-  AppEpicClientNextKeyId:
-    Description: >-
-      The next key's kid, different from AppEpicClientKeyId (APP_EPIC_CLIENT_NEXT_KEY_ID)
-    Type: String
-    Default: ""
-
-  AppEpicConnectTimeout:
-    Description: Outbound Epic connect timeout, e.g. 2s (APP_EPIC_CONNECT_TIMEOUT); empty means 2s
-    Type: String
-    Default: ""
-
-  AppEpicReadTimeout:
-    Description: Outbound Epic read timeout, e.g. 5s (APP_EPIC_READ_TIMEOUT); empty means 5s
-    Type: String
-    Default: ""
-
-  AppEpicMfaEvidenceRequired:
-    Description: >-
-      Require MFA evidence in the Epic id_token's amr (APP_EPIC_MFA_EVIDENCE_REQUIRED); turn
-      on only once Epic confirms it sends amr on an EHR launch (ADR 0012, D17)
-    Type: String
-    Default: "false"
-    AllowedValues: ["true", "false"]
-
   # Logging
   AppEnvironment:
     Description: >-
@@ -623,10 +535,9 @@ Resources:
         - Key: Name
           Value: !Sub ${AWS::StackName}-db-trust-store
 
-  # The application's own secrets, held the same way so that UserData carries
+  # The application's own secret, held the same way so that UserData carries
   # none: the Bootstrap Admin's first password (generated; smoke.sh replaces it
-  # on the first deploy and writes the new one back here), and the Epic client
-  # credentials (from the NoEcho parameters, empty while Epic Login is off).
+  # on the first deploy and writes the new one back here).
   AppBootstrapSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
@@ -640,16 +551,6 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub ${AWS::StackName}-app-bootstrap
-
-  EpicClientSecret:
-    Type: AWS::SecretsManager::Secret
-    Properties:
-      Description: !Sub ${AWS::StackName} Epic Login client id and signing keys
-      KmsKeyId: !Ref DBKey
-      SecretString: !Sub '{"clientId":"${AppEpicClientId}","clientKey":"${AppEpicClientKey}","clientNextKey":"${AppEpicClientNextKey}"}'
-      Tags:
-        - Key: Name
-          Value: !Sub ${AWS::StackName}-epic-client
 
   # ============================================
   # RDS for SQL Server 2022, Standard Edition
@@ -846,7 +747,6 @@ Resources:
                   - !Ref DBRetentionSecret
                   - !Ref DBTrustStoreSecret
                   - !Ref AppBootstrapSecret
-                  - !Ref EpicClientSecret
               - Effect: Allow
                 Action: kms:Decrypt
                 Resource: !GetAtt DBKey.Arn
@@ -1195,22 +1095,12 @@ Resources:
             DATABASE_RETENTION_SECRET_ARN=${DBRetentionSecret}
             DATABASE_TRUST_STORE_SECRET_ARN=${DBTrustStoreSecret}
             APP_BOOTSTRAP_SECRET_ARN=${AppBootstrapSecret}
-            APP_EPIC_SECRET_ARN=${EpicClientSecret}
             APP_DEV_FIXTURES_ENABLED=false
             REDIS_HOST=${RedisCluster.RedisEndpoint.Address}
             REDIS_PORT=${RedisCluster.RedisEndpoint.Port}
             SERVER_PORT=8080
             SESSION_TIMEOUT=15m
             SESSION_COOKIE_SECURE=false
-            APP_EPIC_ENABLED=${AppEpicEnabled}
-            APP_EPIC_FHIR_BASE=${AppEpicFhirBase}
-            APP_EPIC_OAUTH_ISSUER=${AppEpicOauthIssuer}
-            APP_EPIC_REDIRECT_URI=${AppEpicRedirectUri}
-            APP_EPIC_CLIENT_KEY_ID=${AppEpicClientKeyId}
-            APP_EPIC_CLIENT_NEXT_KEY_ID=${AppEpicClientNextKeyId}
-            APP_EPIC_CONNECT_TIMEOUT=${AppEpicConnectTimeout}
-            APP_EPIC_READ_TIMEOUT=${AppEpicReadTimeout}
-            APP_EPIC_MFA_EVIDENCE_REQUIRED=${AppEpicMfaEvidenceRequired}
             APP_ENVIRONMENT=${AppEnvironment}
             LOG_FILE=/var/log/backend/backend.json
             EOF
@@ -1233,9 +1123,6 @@ Resources:
             required() {
               printf '%s' "$1" | jq -er --arg f "$2" '.[$f] | strings'
             }
-            optional() {
-              printf '%s' "$1" | jq -r --arg f "$2" '.[$f] // ""'
-            }
 
             # The app login (main and audit append pools) and the retention login.
             # Never the owner's or the master's.
@@ -1256,17 +1143,10 @@ Resources:
             APP_BOOTSTRAP_USERNAME=$(required "$admin" username)
             APP_BOOTSTRAP_PASSWORD=$(required "$admin" password)
 
-            # Empty while Epic Login is off, as an unset variable is.
-            epic=$(secret_json "$APP_EPIC_SECRET_ARN")
-            APP_EPIC_CLIENT_ID=$(optional "$epic" clientId)
-            APP_EPIC_CLIENT_KEY=$(optional "$epic" clientKey)
-            APP_EPIC_CLIENT_NEXT_KEY=$(optional "$epic" clientNextKey)
-
-            unset app retention trust_store admin epic
+            unset app retention trust_store admin
             export DATABASE_USERNAME DATABASE_PASSWORD DATABASE_RETENTION_USERNAME \
               DATABASE_RETENTION_PASSWORD SPRING_DATASOURCE_HIKARI_DATASOURCEPROPERTIES_TRUSTSTOREPASSWORD \
-              APP_BOOTSTRAP_USERNAME APP_BOOTSTRAP_PASSWORD \
-              APP_EPIC_CLIENT_ID APP_EPIC_CLIENT_KEY APP_EPIC_CLIENT_NEXT_KEY
+              APP_BOOTSTRAP_USERNAME APP_BOOTSTRAP_PASSWORD
             exec /usr/bin/java -jar /opt/backend/backend.jar
             EOF
             chown root:root /opt/backend/start.sh
@@ -1582,10 +1462,6 @@ Outputs:
   AppBootstrapSecretArn:
     Description: Bootstrap Admin secret (its current password once smoke.sh has replaced the first one)
     Value: !Ref AppBootstrapSecret
-
-  EpicClientSecretArn:
-    Description: Epic Login client id and signing keys
-    Value: !Ref EpicClientSecret
 
   DBKeyArn:
     Description: Customer-managed key for the database and its secrets

@@ -24,5 +24,4 @@ What the stack does for IM8 as-8, ck-2/ck-4, dp-3 and lm-16 on RDS for SQL Serve
 
 - [Post-deploy smoke](post-deploy-smoke.md) - What smoke.sh checks on a running stack, and the bootstrap hygiene that keeps secrets out of logs.
 - [Operational telemetry](operational-telemetry.md) - The Prometheus scrape, who may read it, keeping it off the internet, and the alert rules.
-- [Parameters reference](parameters.md) - Every CloudFormation parameter, how the Epic parameters reach the service, and the Epic outbound timeouts.
-- [Epic signing-key promotion](epic-signing-keys.md) - Publishing, promoting and removing the Epic signing keys, and withdrawing a compromised one.
+- [Parameters reference](parameters.md) - Every CloudFormation parameter, what it sets and its default.

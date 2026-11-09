@@ -71,34 +71,18 @@ The alert rules are code: `backend/ops/prometheus/alerts.yaml`. Load them with
 `rule_files:` in the Prometheus that scrapes the service. Each rule carries its
 own runbook text:
 
-| Alert                                         | Fires on                                                                         | Usually means                                                                                                                                        |
-| --------------------------------------------- | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ScimAuthenticationFailuresSustained`         | sustained SCIM `401`                                                             | a connector's token expired or was revoked, or probing                                                                                               |
-| `LoginAuthenticationFailuresSustained`        | sustained Login `401`                                                            | a guessing campaign spread across accounts                                                                                                           |
-| `ScimPreconditionFailuresSustained`           | sustained SCIM `412`                                                             | writers colliding on a stale `If-Match` (writes without `If-Match` apply unconditionally; see the `scim:unconditional_writes:rate1h` recording rule) |
-| `ScimUniquenessConflictsSustained`            | sustained SCIM `409`                                                             | a connector re-creating identities it believes are missing                                                                                           |
-| `DormancyJobFailed` / `DormancyJobNotRunning` | the dormancy job throws, or has not succeeded for 26 h                           | dormant accounts are not being locked, nor their Group memberships revoked                                                                           |
-| `EpicJwksFetchFailing`                        | `epic.outbound{call="jwks"}` errors persisting 5 min                             | Epic's `id_token` keys are unreachable (timeouts or Epic `5xx`): launches land at the unavailable notice; password Login is unaffected               |
-| `EpicEndpointUnavailable`                     | `epic.outbound{call="token"\|"discovery"}` errors persisting 5 min               | Epic's token or discovery endpoint is unreachable: launches land at the unavailable notice; password Login is unaffected                             |
-| `EpicClientCredentialRefused`                 | any `epic.login.failed_calls{call="token",error_category="cert/auth"}` in 15 min | Epic refused our client credential (`invalid_client`, assertion rejected): a signing key or the registration is wrong                                |
-| `EpicLoginRefusalsSurge`                      | `login{method="sso",outcome="refused"}` above 3/min for 10 min                   | a broken integration (`ISS_MISMATCH`), unprovisioned Practitioner IDs, or replayed launches; the `reason` label says which                           |
+| Alert                                         | Fires on                                               | Usually means                                                                                                                                        |
+| --------------------------------------------- | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ScimAuthenticationFailuresSustained`         | sustained SCIM `401`                                   | a connector's token expired or was revoked, or probing                                                                                               |
+| `LoginAuthenticationFailuresSustained`        | sustained Login `401`                                  | a guessing campaign spread across accounts                                                                                                           |
+| `ScimPreconditionFailuresSustained`           | sustained SCIM `412`                                   | writers colliding on a stale `If-Match` (writes without `If-Match` apply unconditionally; see the `scim:unconditional_writes:rate1h` recording rule) |
+| `ScimUniquenessConflictsSustained`            | sustained SCIM `409`                                   | a connector re-creating identities it believes are missing                                                                                           |
+| `DormancyJobFailed` / `DormancyJobNotRunning` | the dormancy job throws, or has not succeeded for 26 h | dormant accounts are not being locked, nor their Group memberships revoked                                                                           |
 
 The thresholds are starting points. Tune them against a week of normal traffic.
 The dormancy job publishes its series under `job="dormancy"` from startup.
-With Epic Login on, so does the outbound client: `epic_outbound_seconds` (a timer)
-and `epic_outbound_errors_total` (calls that got no answer or a `5xx`), each
-tagged `call` = `discovery`, `jwks` or `token`, exist at zero from startup, so
-`EpicJwksFetchFailing` — `increase(epic_outbound_errors_total{call="jwks"}[5m]) > 0`
-held for 5 minutes — sees the first error. The JWKS is fetched only when an
-`id_token` names a key the kept JWKS lacks, so the alert fires on real launches
-failing, not on a background poll. `EpicEndpointUnavailable` reads the same series
-for the two calls every launch makes. The Login meters, `login_total` (every
-Login that ended, password and Epic alike, by `method` — `password` or `sso` —
-`outcome` and `reason`) and `epic_login_failed_calls_total` (each failed Epic call
-that ended a Login, by `call` and `error_category`), exist at zero from startup
-whether or not Epic Login is on; `EpicLoginRefusalsSurge` reads
-`login_total{method="sso",outcome="refused"}`. With Epic Login off the outbound series do not
-exist and the outbound rules match nothing.
+The Login meter, `login_total` (every Login that ended, by `method`, `outcome`
+and `reason`), exists at zero from startup.
 `DormancyJobNotRunning` measures from
 the last success **or the last restart**, so an instance that restarts more often
 than daily masks a stuck job. Alert on restarts separately if that happens.

@@ -6,8 +6,7 @@
 #                    (also under --leaks-only)
 #   1. health        /actuator/health through the ALB answers 200
 #      JVM trust     the service's JVM keeps the JDK's default trust store, and
-#                    that JDK fetches the identity provider's discovery
-#                    document and JWKS (Epic's, when Epic Login is on) over it
+#                    that JDK fetches a public AWS HTTPS endpoint over it
 #   2. TLS          the parameter group forces encryption with TLS 1.0 and 1.1
 #                    off; on the instance, a client that cannot do TLS is
 #                    refused (tds-plaintext-probe.py), a session asking for no
@@ -129,11 +128,10 @@ check_alarms() {
 }
 
 # The values to look for: every database password (the master's included,
-# which only the database bootstrap may hold), the trust store's password, the
-# Bootstrap Admin's current and previous password, and the Epic client
-# credentials.
+# which only the database bootstrap may hold), the trust store's password, and
+# the Bootstrap Admin's current and previous password.
 collect_secret_values() {
-  local json arn name stage
+  local json name stage
   SECRET_VALUES=()
   for name in DBMasterSecretArn DBOwnerSecretArn DBAppSecretArn DBRetentionSecretArn \
     DBTrustStoreSecretArn; do
@@ -143,11 +141,6 @@ collect_secret_values() {
   for stage in AWSCURRENT AWSPREVIOUS; do
     json=$(secret_string "$ADMIN_SECRET_ARN" "$REGION" "$stage" 2>/dev/null) || continue
     SECRET_VALUES+=("AppBootstrapSecretArn.password($stage)=$(json_field "$json" password)")
-  done
-  arn=$(stack_output EpicClientSecretArn)
-  json=$(secret_string "$arn" "$REGION")
-  for name in clientId clientKey clientNextKey; do
-    SECRET_VALUES+=("EpicClientSecretArn.$name=$(printf '%s' "$json" | jq -r --arg f "$name" '.[$f] // ""')")
   done
 }
 
@@ -211,10 +204,8 @@ check_service_holds_no_owner_credential() {
 
 # The driver-scoped trust store left the JVM's default trust alone (ADR 0013):
 # the running service's JVM has no javax.net.ssl.trustStore, and the same JDK,
-# with its default trust store, fetches the identity provider's documents over
-# HTTPS — Epic's OIDC discovery document and the JWKS it names when Epic Login
-# is on, which the service fetches on first use, never at startup; a public
-# AWS HTTPS endpoint when it is off. Runs on the instance, as the service user.
+# with its default trust store, fetches a public AWS HTTPS endpoint (the
+# region's RDS CA bundle). Runs on the instance, as the service user.
 check_jvm_default_trust() {
   local out line
   # shellcheck disable=SC2016 # expanded on the instance, not here
@@ -227,15 +218,8 @@ if sudo -u springboot "$jcmd" "$pid" VM.system_properties | grep -q '^javax\.net
   exit 1
 fi
 echo "the service's JVM keeps the JDK's default trust store (no javax.net.ssl.trustStore)"
-urls=()
-if grep -q '^APP_EPIC_ENABLED=true$' /opt/backend/.env; then
-  issuer=$(sed -n 's/^APP_EPIC_OAUTH_ISSUER=//p' /opt/backend/.env)
-  discovery="$issuer/.well-known/openid-configuration"
-  urls+=("$discovery" "$(curl -fsS --max-time 15 "$discovery" | jq -er '.jwks_uri')")
-else
-  region=$(sed -n 's/^AWS_REGION=//p' /opt/backend/.env)
-  urls+=("https://truststore.pki.rds.amazonaws.com/$region/$region-bundle.pem")
-fi
+region=$(sed -n 's/^AWS_REGION=//p' /opt/backend/.env)
+urls=("https://truststore.pki.rds.amazonaws.com/$region/$region-bundle.pem")
 dir=$(mktemp -d)
 chmod 0755 "$dir"
 cat >"$dir/DefaultTrust.java" <<'JAVA'
