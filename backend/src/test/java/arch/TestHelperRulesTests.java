@@ -35,20 +35,20 @@ class TestHelperRulesTests {
 
     @Test
     void a_fake_asserting_is_reported() {
-        assertThat(violations("com.example.backend.auth.epic.FakePlanted",
+        assertThat(violations("com.example.backend.auth.FakePlanted",
                         "org.junit.jupiter.api.Assertions"))
                 .contains("FakePlanted");
     }
 
     @Test
     void a_class_nested_in_a_fake_asserting_is_reported() {
-        assertThat(violations("com.example.backend.auth.epic.FakePlanted$Handler", ASSERTIONS))
+        assertThat(violations("com.example.backend.auth.FakePlanted$Handler", ASSERTIONS))
                 .contains("FakePlanted$Handler");
     }
 
     @Test
     void a_helper_that_only_builds_is_not_reported() {
-        assertThat(violations("com.example.backend.auth.epic.FakePlanted", "java.util.List"))
+        assertThat(violations("com.example.backend.auth.FakePlanted", "java.util.List"))
                 .isEmpty();
     }
 

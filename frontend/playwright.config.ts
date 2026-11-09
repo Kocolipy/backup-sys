@@ -5,29 +5,10 @@ import { defineConfig, devices } from "@playwright/test";
  * when that run's environment names what it needs, so a bare `npm run
  * test:e2e` against a backend started some other way never sees them. Each
  * replays the Admin session `setup` saves, as the `admin` project does, so they
- * run ahead of `guest`, whose sign-in as the seeded Admin ends that session:
- * the stand-in's beside `admin`, `packaged` after both.
+ * run ahead of `guest`, whose sign-in as the seeded Admin ends that session,
+ * and after `admin`.
  */
 const adminSessionExtras = [
-  // The local Epic stand-in: Medplum as the SMART EHR launcher, fronted by
-  // the shim, named by Medplum's FHIR base. The backend's Epic Login points at
-  // it, and the project below runs against it. It replays the Admin session
-  // only to issue its SCIM token: every sign-in it makes is of a User it
-  // provisions itself, so it ends no session another project replays.
-  ...(process.env.E2E_FHIRCAST_FHIR_BASE
-    ? [
-        // Epic Login: an EHR launch through Medplum, landing on Home.
-        {
-          name: "epic",
-          testMatch: /epic-launch\.spec\.ts/,
-          dependencies: ["setup"],
-          use: {
-            ...devices["Desktop Chrome"],
-            storageState: "test/e2e/.auth/admin.json",
-          },
-        },
-      ]
-    : []),
   // The packaged SPA, named by the origin of the packaged JAR, which serves the
   // built SPA under the backend's CSP. The Admin session's cookie is scoped to
   // the host, not the port, so it replays there too; it signs no one in.
@@ -50,15 +31,15 @@ const adminSessionExtras = [
 ];
 
 /**
- * The projects whose specs create and delete connectors of their own: every
- * one but `packaged` among `adminSessionExtras`, and `admin`. A spec asserting
- * that Accounts loads with no alert runs after them, not beside them — Accounts
- * reads each listed connector's tokens, and a connector another worker deletes
- * between the listing and that read fails it with an alert. A function
- * declaration, so `packaged`, declared above it, can name them too.
+ * The projects whose specs create and delete connectors of their own: `admin`.
+ * A spec asserting that Accounts loads with no alert runs after them, not
+ * beside them — Accounts reads each listed connector's tokens, and a connector
+ * another worker deletes between the listing and that read fails it with an
+ * alert. A function declaration, so `packaged`, declared above it, can name
+ * them too.
  */
 function connectorWriters(): string[] {
-  return ["admin", ...(process.env.E2E_FHIRCAST_FHIR_BASE ? ["epic"] : [])];
+  return ["admin"];
 }
 
 export default defineConfig({

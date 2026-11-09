@@ -11,7 +11,7 @@ import java.util.stream.Stream;
  * Patient or a {@code 404}, or a Patient the service cannot hold. A fault of the source, answered
  * {@code 502} with the {@code exception} outcome (/docs/domain/patient.md, "Errors"), its one
  * fault record naming the {@link Failure} as its {@code event.reason} ({@link #reason()}) under
- * the {@code error.category} ADR 0012 gives an outbound call's failure ({@link #category()}):
+ * the {@code error.category} ADR 0014 gives an outbound call's failure ({@link #category()}):
  *
  * <ul>
  *   <li>{@code network}: no answer — {@code timed-out} (the connect or the read timeout ran out)
@@ -33,7 +33,7 @@ public final class PatientSourceException extends UpstreamFaultException {
     /**
      * Every way a read of the source fails: its {@code event.reason}, its fixed message, and the
      * {@code error.category} it is reported under. A failure of the call itself is one of
-     * {@link OutboundCallFailure}'s reasons, under the category ADR 0012 gives it there; a Patient
+     * {@link OutboundCallFailure}'s reasons, under the category ADR 0014 gives it there; a Patient
      * breaking a domain rule is {@code data}.
      */
     enum Failure {

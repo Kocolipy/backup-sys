@@ -70,7 +70,7 @@ required".
 
 - A User is a Superuser when it is a **direct** member of the Admin group, the Group
   with the `admin-group` reserved marker.
-- At sign-in, by password or through Epic, such a session gets `ROLE_SUPERUSER`
+- At sign-in, such a session gets `ROLE_SUPERUSER`
   plus every delegatable Permission, expanded in code. There is no Spring
   `RoleHierarchy` and no stored list.
 - The Superuser is not a member of the `Permission` enum, so no endpoint can put it
@@ -153,8 +153,7 @@ force a change on a Superuser, or end its sessions, by any route.
 **Accepted cost.** No one can require a password change of an unlocked User whose
 password is suspected compromised. Recovery goes through the connector: the
 directory sets a new password, which sets the change-required flag and ends the
-User's sessions, or deactivates the User. An Epic-linked User is handled
-that way (ADR 0012, D20).
+User's sessions, or deactivates the User.
 
 ### Admin group protections
 

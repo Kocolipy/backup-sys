@@ -11,8 +11,8 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
 
 /**
- * The development fixtures as the tests seed them: their password, the Epic clinician, and the
- * one context configuration every class signing in as them shares.
+ * The development fixtures as the tests seed them: their password, and the one context
+ * configuration every class signing in as them shares.
  *
  * <p>One password for all of them, because seeding never overwrites: a fixture User that exists
  * keeps the password it was first seeded with. Contexts that each chose their own would sign in
@@ -22,9 +22,6 @@ public final class DevFixtures {
 
     /** {@code app.dev-fixtures.password} in every test context that seeds the fixtures. */
     public static final String PASSWORD = "dev-fixture-test-password";
-
-    /** The local Epic stand-in's clinician, a Practitioner id (compose.yaml, SEED_CLINICIAN_ID). */
-    public static final String EPIC_CLINICIAN = "af74a102-ebaf-46ef-b445-4f72157c473f";
 
     private DevFixtures() {
     }
@@ -43,7 +40,6 @@ public final class DevFixtures {
     @ActiveProfiles({"dev-fixtures", "local"})
     @TestPropertySource(properties = {
         "app.dev-fixtures.enabled=true",
-        "app.dev-fixtures.epic-clinician=" + EPIC_CLINICIAN,
         "app.dev-fixtures.password=" + PASSWORD})
     public @interface Context {
     }

@@ -16,18 +16,16 @@ from the in-house patient source, and Home's Patient card reads it.
 
 ## Context
 
-Home shows a Patient (`/docs/domain/patient.md`): the one the Launch context of
-an EHR launch names, by its EHR's FHIR id (ADR 0012, D8). Two choices are hard to
-reverse once a client depends on the wire:
+Home shows a Patient (`/docs/domain/patient.md`): the one the tab's EHR context
+names, by its EHR's FHIR id. Two choices are hard to reverse once a client
+depends on the wire:
 
-1. **Which FHIR version.** The EHRs this application launches from are R4: Epic's
-   FHIR API is R4, and the local Epic stand-in, Medplum
-   (`backend/docs/configuration/epic-login.md`, "Local Epic stand-in"), serves
-   `/fhir/R4`.
+1. **Which FHIR version.** The EHR FHIR APIs this application's patients come
+   from are R4, as the in-house source's contract is.
 2. **Where the data comes from.** Real patients come from an in-house system.
    The adapter contract is FHIR R4 `GET {base}/Patient/{id}`, with no request
-   credential and with source failures mapped to `502`. The patient's EHR FHIR
-   id is the id an EHR launch already names. Home's
+   credential and with source failures mapped to `502`. The patient's id is its
+   EHR's FHIR id, the id the EHR context holds. Home's
    wire contract remains base R5 with `identifier`, `name`, `gender` and
    `birthDate`, the `patient:read` gate and the `OperationOutcome` table,
    independent of changes behind the adapter.
@@ -84,14 +82,30 @@ id, sent unchanged: there is no mapping between ids.
   to its type (`observability.RedactedFaultException`): an HTTP client's message
   quotes the URL, and so the id, and a parser's quotes the body. An error
   answer's body is never read. Its one `ERROR` record names the failure or the
-  broken rule, under the `error.category` ADR 0012 gives an outbound call's
-  failure (`network`, `server`, `data`), decided by the classifier the Epic
-  calls use (ADR 0012, D23).
+  broken rule, under the `error.category` of a failed outbound call (below).
+- **A failed call's category says whether a person must follow it up.** One
+  classifier, `observability.OutboundCallFailure`, decides it for every outbound
+  call:
+
+  | Failure                                                                    | `error.category` | Follow-up                              |
+  | -------------------------------------------------------------------------- | ---------------- | -------------------------------------- |
+  | Connect or read timeout, or a dropped call, the answer's body included     | `network`        | no: the source is unavailable          |
+  | The source answers `5xx`                                                   | `server`         | no: the source is unavailable          |
+  | The source answers `401`: it refused this service's own credential         | `cert/auth`      | **yes**: likely a configuration problem |
+  | Another error status, or an answer that is not JSON or not the shape asked for | `data`       | yes                                    |
+
+  Headers that arrived in time do not make an answer of a body that then stalled
+  past the read timeout or whose connection reset, which the client reports as a
+  generic failure to read the response with only an I/O failure beneath: an I/O
+  failure anywhere in the failure's cause chain, other than a failure to parse
+  the message, is no answer. The classifier names no HTTP client's type: the
+  adapter hands it the status its client reported, or the failure and the type
+  of its client's own timeout failure, with how long it waited against its read
+  timeout.
 - **One call per read, nothing cached.** No Patient is kept in Redis or in
   memory: every read calls the source, so what the card shows is what the source
   holds now, and Restricted data rests nowhere in this service.
-- **The outbound rules of ADR 0012's D25, scaled to one call.** The client is
-  built from Spring Boot's `RestClient.Builder`, so a call is observed as every
+- **One outbound client, with fixed timeouts.** The client is built from Spring Boot's `RestClient.Builder`, so a call is observed as every
   client's is (`http.client.requests`, under the URI template, never the id), on
   the JDK client, which follows no redirect, with 2 seconds to connect and 5 to
   answer, and no retry. Nothing here logs.
@@ -103,8 +117,8 @@ id, sent unchanged: there is no mapping between ids.
 
 The source is mocked by WireMock, nested under the backend
 (`backend/patient-source-mock`), serving FHIR R4 `Patient/{id}` for the
-development fixtures — ids borrowed from Epic's public sandbox test patients,
-with dummy values — and a `404` for any other well-formed id. Compose runs it
+development fixtures — ids borrowed from an EHR vendor's public sandbox test
+patients, with dummy values — and a `404` for any other well-formed id. Compose runs it
 beside SQL Server and Redis with no profile, so `make infra-up` and
 `make integration-test` start it; nothing under `infra/` builds or deploys it.
 
@@ -113,8 +127,7 @@ files**, so the mock and the tests cannot drift, and the fixture rules (every
 NRIC carries a wrong check letter) are checked over the stubs themselves.
 WireMock is a **test-scope** dependency only: the Enforcer's
 `wiremock-test-scope-only` fails the build if it resolves in a scope that
-reaches the packaged JAR, as `hapi-test-scope-only` does for HAPI. The Medplum
-seed names the same ids, so an EHR launch names a patient the mock holds.
+reaches the packaged JAR, as `hapi-test-scope-only` does for HAPI.
 
 ### The module's edges
 
@@ -127,13 +140,12 @@ The `patient` module is a leaf, and its one ArchUnit edge
   called service failing this one, which the app-wide handler in `web` answers
   `502` under the fault's own category and reason. Those are the edge's only uses:
   the module writes no log record.
-- No edge to `auth`. The in-house source is not the launching EHR's FHIR API,
-  and the call presents none of the Epic tokens ADR 0012 holds; its handler
-  checks `patient:read` by the authority's name. An authorised call (below)
+- No edge to `auth`. The call presents no credential of the signed-in User's;
+  its handler checks `patient:read` by the authority's name. An authorised call (below)
   declares the edge it needs when it is written.
-- Outbound HTTP is allowed in `patient.infrastructure.http` beside
-  `auth.epic` (`one_outbound_http_client`), and `http` is an infrastructure
-  adapter the onion rule knows.
+- Outbound HTTP is allowed in `patient.infrastructure.http` alone
+  (`one_outbound_http_client`), and `http` is an infrastructure adapter the
+  onion rule knows.
 - **The error `OperationOutcome` is not the module's.** Every error under
   `/api/patient` is answered by a layer outside it — the app-wide exception
   handler, the security chain, the dispatcher — so the shape lives in `web`
@@ -147,7 +159,7 @@ The `patient` module is a leaf, and its one ArchUnit edge
 
 - A Patient's id is the EHR's FHIR id (FHIR's id grammar,
   `[A-Za-z0-9\-.]{1,64}`): the service assigns no id of its own, so the patient
-  a SMART launch names is read by the id the EHR gave it.
+  the EHR context names is read by the id the EHR gave it.
 - **A deployment needs the source's URL.** The stack (`infra/`) does not set
   `APP_PATIENT_SOURCE_BASE_URL`; a deployment must supply it for the service to
   start.
@@ -171,9 +183,9 @@ The `patient` module is a leaf, and its one ArchUnit edge
 - **Hold the Patients in the service's own tables, behind the port.** Rejected:
   a copy of Restricted data at rest, kept fresh by a sync, for a source whose
   contract is unknown; reading through is simpler and keeps no copy.
-- **Proxying the launching EHR's FHIR server, or a HAPI server of the service's
-  own.** Rejected: it would couple every request to an external server's auth
-  and version (R4, above) through the Epic tokens ADR 0012 holds, and a local
+- **Proxying an EHR's FHIR server, or a HAPI server of the service's own.**
+  Rejected: it would couple every request to an external server's auth and
+  version (R4, above), and a local
   FHIR server would be a second datastore for the Patient projection. The
   in-house source is the system real patients come from.
 - **Cache Patients in Redis.** Would spare the source repeated reads of one

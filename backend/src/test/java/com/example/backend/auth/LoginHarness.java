@@ -74,7 +74,7 @@ public final class LoginHarness {
                 sessions, transaction, audit, new RecordingOperationalAlerts());
         loginState = new LoginStateService(users, users, identities, locks, revocation,
                 new LockoutPolicy(builder.lockoutThreshold), audit, clock);
-        outcomes = new LoginOutcomeService(audit, counts, counts);
+        outcomes = new LoginOutcomeService(counts);
         AuthenticationManager real = config.authenticationManager(identities, passwordEncoder);
         login = new LoginService(builder.authentication.apply(real), identities, loginState,
                 revocation, audit, outcomes, transactions);
@@ -137,7 +137,7 @@ public final class LoginHarness {
         return audit;
     }
 
-    /** Every Login count moved, password and Epic alike. */
+    /** Every Login count moved. */
     public RecordingLoginCounts counts() {
         return counts;
     }

@@ -5,7 +5,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 
 import com.example.backend.ContainerTestConfiguration;
 import com.example.backend.ScimTestRows;
-import com.example.backend.auth.epic.EpicLoginOnContext;
 import com.example.backend.SessionCsrf;
 import com.example.backend.TokenPermissions;
 import com.example.backend.auth.application.LoginIdentityService;
@@ -102,7 +101,7 @@ import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandl
 @SpringBootTest
 @Import(ContainerTestConfiguration.class)
 @AutoConfigureMetrics
-class AuthorizationContractTests extends EpicLoginOnContext {
+class AuthorizationContractTests {
 
     private static final String CALLER = "test-user";
 
@@ -328,9 +327,7 @@ class AuthorizationContractTests extends EpicLoginOnContext {
     void public_operations_need_no_session() throws Exception {
         List<Operation> open = withAccess(Access.PUBLIC);
         assertThat(open).extracting(Operation::toString).containsExactlyInAnyOrder(
-                "GET /api/auth/csrf", "POST /api/auth/login", "GET /api/auth/epic/jwks.json",
-                "GET /api/auth/epic/launch", "GET /api/auth/epic/authorize",
-                "GET /api/auth/epic/callback", "GET /actuator/health");
+                "GET /api/auth/csrf", "POST /api/auth/login", "GET /actuator/health");
         for (Operation operation : open) {
             assertThat(call(operation, null)).as("%s with no session", operation)
                     .isNotIn(401, 403);

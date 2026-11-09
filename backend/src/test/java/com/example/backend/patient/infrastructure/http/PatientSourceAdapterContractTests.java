@@ -154,7 +154,7 @@ class PatientSourceAdapterContractTests extends PatientStoreContract {
         assertThat(at(SOURCE.baseUrl() + "/fhir/r4/").findById(PROBE)).isPresent();
     }
 
-    /** The timeouts ADR 0012's outbound calls take, as the configuration docs state them. */
+    /** The timeouts the patient source's calls take, as the configuration docs state them. */
     @Test
     void theSourceIsGivenTwoSecondsToConnectAndFiveToAnswer() {
         assertThat(List.of(PatientSourceAdapter.CONNECT_TIMEOUT,

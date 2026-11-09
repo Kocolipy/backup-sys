@@ -135,9 +135,9 @@ public sealed interface Audited {
     /**
      * An accepted login. A session this service cannot account for is not issued.
      *
-     * @param method how the Login proved who was signing in (D15)
-     * @param factor the MFA factor an Epic Login was made with (D17), or {@code null} for a Login
-     *               that carries none
+     * @param method how the Login proved who was signing in
+     * @param factor the MFA factor an SSO Login was made with, or {@code null} for a Login that
+     *               carries none — a password Login's
      */
     record LoginSuccess(UUID accountId, AuditLoginMethod method, AuditMfaFactor factor)
             implements Accepted {
@@ -163,7 +163,7 @@ public sealed interface Audited {
      * @param subjectId stable id of the account the attempt named, or {@code null} when the
      *                  submitted username names no account — the one thing that must not be
      *                  recorded in its place
-     * @param method    how the refused Login was attempted (D15)
+     * @param method    how the refused Login was attempted
      * @param moved     what counting it moved: the failure run, and the lock when it reached the
      *                  limit — nothing for a locked User, whose attempts neither count nor deepen
      *                  the lock, and nothing for a name that matched no User
@@ -179,24 +179,6 @@ public sealed interface Audited {
         public AuditEvent toEvent(Stamp stamp) {
             return AuditRows.loginFailure(
                     stamp, subjectId, reason, method, AuditAttribute.paths(moved));
-        }
-    }
-
-    /**
-     * A refused login that counted toward no failure run — an Epic Login refused by the login
-     * decision (D12), whose credential Epic checked rather than this service. The same
-     * {@code LOGIN_FAILURE} as {@link LoginFailure}, naming no changed path, because nothing about
-     * the account changed.
-     *
-     * @param subjectId stable id of the account refused, or {@code null} when the attempt named no
-     *                  acceptable account, so that no subject is recorded
-     */
-    record LoginRefusal(UUID subjectId, AuditRefusalReason reason, AuditLoginMethod method)
-            implements Refused {
-
-        @Override
-        public AuditEvent toEvent(Stamp stamp) {
-            return AuditRows.loginFailure(stamp, subjectId, reason, method, NO_PATHS);
         }
     }
 

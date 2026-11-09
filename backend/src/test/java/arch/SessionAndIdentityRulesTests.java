@@ -7,7 +7,6 @@ import com.example.backend.auth.application.SelfRecord;
 import com.example.backend.auth.application.SessionRevocationService;
 import com.example.backend.auth.controller.HttpSessionAttributes;
 import com.example.backend.auth.domain.AccountSessions;
-import com.example.backend.auth.epic.EpicLaunchValue;
 import com.example.backend.auth.infrastructure.session.AccountSessionsAdapter;
 import com.example.backend.scim.domain.ScimGroupRepository;
 import com.example.backend.scim.domain.ScimUserRepository;
@@ -78,12 +77,9 @@ class SessionAndIdentityRulesTests {
     }
 
     @Test
-    void the_named_owners_and_other_session_calls_are_not_reported() throws ClassNotFoundException {
+    void the_named_owner_and_other_session_calls_are_not_reported() {
         assertThat(violations(ArchitectureTest.only_the_named_owners_touch_session_attributes,
                 new ClassFileImporter().importClasses(HttpSessionAttributes.class,
-                        EpicLaunchValue.class,
-                        Class.forName("com.example.backend.auth.infrastructure.session"
-                                + ".SpringSessionAttributes"),
                         ReadsTheSessionId.class)))
                 .isEmpty();
     }

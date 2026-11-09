@@ -188,8 +188,8 @@ its own line, the fixed message of every shape it is written in (`onSuccess`,
 `onRefusal`, `onError`, `onSchedule`, and `onChange` for the one operation whose
 `change` record needs its own). A scheduled run's summary is its `job-end`, so no
 shape writes a summary beside it (`/backend/docs/LOG_RECORDS.md`, "Scheduled jobs"). The shapes with one
-message for every operation (`jobStart`, `jobEnd`, `jobFailed`, `requestEnd`, the
-outbound records, `jwksRefetchWarning` and `deadlockRetried`) need none. `OperationMessagesTests` reads the
+message for every operation (`jobStart`, `jobEnd`, `jobFailed`, `requestEnd` and
+`deadlockRetried`) need none. `OperationMessagesTests` reads the
 compiled production call sites that hand an operation to a shape, and fails for a
 message an operation needs and does not declare, or declares and no call site
 needs. A shape given an operation with no message for it still writes the shape's
@@ -197,10 +197,10 @@ generic message ("Operation completed") rather than throwing, because a record i
 never worth failing the path that writes it.
 
 **Field names live beside their feature.** `LogEvent` keeps the ECS and
-`Log_Schema.md` fields, the ones its own shapes write (`app.epic.call`, the cron
-and job fields), and the session, login and host fields several modules share. A
-key only one feature adds to its records is declared in that feature:
-`DormancyLogFields` and `EpicLoginLogFields` in `auth.application`,
+`Log_Schema.md` fields, the ones its own shapes write (the cron and job
+fields), and the session, login and host fields several modules share. A key
+only one feature adds to its records is declared in that feature:
+`DormancyLogFields` in `auth.application`,
 `AuditLogFields` in `audit.application`, `ScimLogFields` in `scim.application`, and
 `PermissionLogFields` in `authorization.domain`. Each is a list of names only, so the
 dependency still runs from the feature to `observability`, and the records are
@@ -226,8 +226,8 @@ it through `semgrep --test` before the scan.
 
 ### Error classification
 
-**Every `ERROR` is classified.** `LogEvent`'s `ERROR` shapes (`error`, `jobFailed`,
-`outboundFailed`) are the only ways to write one, and `be-log-error-without-error-fields` refuses any other
+**Every `ERROR` is classified.** `LogEvent`'s `ERROR` shapes (`error`, `jobFailed`)
+are the only ways to write one, and `be-log-error-without-error-fields` refuses any other
 `ERROR` record in production code. The fields:
 
 - `error.code` is an HTTP status and only that, `100`–`599` as the Log Schema
@@ -238,8 +238,8 @@ it through `semgrep --test` before the scan.
   unusable answer from a service this one called), `network`, `server` or
   `cert/auth`. A failure the database raised takes its category from
   `DatabaseFailureCategory` (below).
-- `error.follow_up_action` is `true`, except on the Epic categories that need no
-  person (below).
+- `error.follow_up_action` is `true`, except where a called service was merely
+  unavailable, which needs no person (ADR 0014, "A failed call's category").
 
 **The `error.*` remap.** Call sites write `error_code`, `error_category` and
 `error_follow_up_action` with underscores, because a dotted `error.code` would make
@@ -330,8 +330,7 @@ connection.
 **No double `ERROR`.** A handler that writes a request's fault `ERROR` marks the
 request (`RequestFault`), and `RequestIdFilter` then writes that request's record at
 `WARN`, unclassified: still the `5xx` and still `failure`, but not the same failure
-twice. An Epic call that got no answer is logged at `ERROR` once, by the outbound
-interceptor, not again when the Login ends for it.
+twice.
 
 ### SQL exception text
 
@@ -402,8 +401,8 @@ rules behind them:
   dormancy Membership revocation (what the User lost).
 - **A refused Login carries no reason and no user field**, so a locked or
   deactivated User's refusal reads exactly as a wrong password's. The reason goes
-  to the audit trail and the `login` counter's `reason` tag only (ADR 0012, "the
-  account reasons are audit-only"). `session.hash`, the first 64 bits of the
+  to the audit trail and the `login` counter's `reason` tag only (ADR 0001).
+  `session.hash`, the first 64 bits of the
   SHA-256 of a session id, correlates it beyond `trace.id`: a session id is a
   random UUID, so its hash cannot be guessed back the way a password's can. No
   record carries the session id or the cookie value.
@@ -433,29 +432,15 @@ that do not exist yet. Neither alone is the property.
   the production encoder, and asserts no fixture credential or identifier appears
   anywhere in the bytes: `EcsLogFormatTests` (logins and an administrative change),
   `JdbcErrorLogRedactionTests` and `DatabaseFailureLogIntegrationTests` (driver and
-  database errors), `StartupLogConnectionDetailsTests` (start-up),
-  `EpicLoginRedactionIntegrationTests` and `EpicDiscoveryIntegrationTests` (every
-  Epic Login outcome, against ADR 0012's D22), and
+  database errors), `StartupLogConnectionDetailsTests` (start-up), and
   `PatientErrorContractIntegrationTests` (patient reads).
 
 - **Scans.** `be-log-message-concatenation` refuses a value concatenated into a
   message. `be-log-sensitive-value` refuses a value whose name says it is an
   identifier or a secret being passed to a logging call, including as a `{}`
-  parameter. Its names come in two families:
-  - Names matched anywhere in the argument: password, token (which covers
-    `id_token`, `access_token` and `refresh_token`), hash, and similar — and a
-    Patient's `nric` (but not the tail of `enrich`), a patient being logged by its
-    id alone (`docs/domain/patient.md`).
-  - D22's other names (`code`, `authorizationCode`, `state`, `nonce`, `launch`, the
-    verifier, the assertion, `privateKey`, `pem`, `clientKey`, `clientNextKey`, and
-    the two key variables), matched as a whole identifier only. Otherwise
-    `statusCode` or `stateRule` would be refused.
-
-  The signing keys' `kid`s are deliberately outside both families: a `kid` is
-  public, and the startup record logs both. `EpicTokenSet.toString()` names each
-  token by its presence alone. One call site is suppressed, with its reason, in
-  `LoginOutcomeService`: the failed-call `ERROR` passes `failed.code()`, an HTTP
-  status, not anything Epic sent.
+  parameter. Its names are matched anywhere in the argument: password, token,
+  hash, and similar — and a Patient's `nric` (but not the tail of `enrich`), a
+  patient being logged by its id alone (`docs/domain/patient.md`).
 
 A client-influenced value that genuinely must be recorded, such as a PATCH attribute
 path or a `scimType`, is emitted as a sanitized field, never concatenated.

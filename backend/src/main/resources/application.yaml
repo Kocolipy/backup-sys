@@ -102,11 +102,6 @@ app:
     # namespace, discovery included, still answers 401 without a connector token.
     #
     # Turn SCIM off with APP_SCIM_ENABLED=false; see docs/configuration/scim.md.
-  epic:
-    # Epic Login. Absent on purpose, every key of it: EpicLoginProperties binds the
-    # APP_EPIC_* variables by relaxed binding, and owns the only defaults there are
-    # (both switches off, timeouts 2s / 5s). No URL, client id or key may ever get a
-    # fallback here — this repository is public. See docs/configuration/epic-login.md.
   patient-source:
     # The in-house patient source's FHIR base: the backend reads each Patient from
     # {base}/Patient/{id} on every read, as FHIR R4, presenting no credential (ADR 0014).

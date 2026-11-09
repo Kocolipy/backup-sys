@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.example.backend.BackendApplication;
-import com.example.backend.auth.epic.InvalidEpicConfigurationException;
 import com.example.backend.authorization.domain.InvalidGroupPermissionsException;
 import com.example.backend.observability.LogEvent;
 import com.example.backend.observability.infrastructure.transaction.DeadlockRetryAdapter;
@@ -89,7 +88,7 @@ class UtilityClassRulesTests {
     void the_shapes_false_positives_are_not_held_to_it() {
         // Each of these is non-final with a public constructor, so selecting one would report it.
         JavaClasses classes = new ClassFileImporter().importClasses(
-                InvalidEpicConfigurationException.class, InvalidGroupPermissionsException.class,
+                InvalidGroupPermissionsException.class,
                 DeadlockRetryAdapter.class, BackendApplication.class, LogEvent.class);
 
         assertThat(violations(classes)).isEmpty();

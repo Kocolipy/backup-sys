@@ -9,7 +9,6 @@ import com.example.backend.CreatedScimRows;
 import com.example.backend.ScimTestRows;
 import com.example.backend.ServerSession;
 import com.example.backend.TokenPermissions;
-import com.example.backend.auth.epic.EpicLoginOnContext;
 import com.example.backend.scim.application.ConnectorAdministrationService;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -44,7 +43,7 @@ import tools.jackson.databind.JsonNode;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Import(ContainerTestConfiguration.class)
 @AutoConfigureMetrics
-class RefusalLogIntegrationTests extends EpicLoginOnContext {
+class RefusalLogIntegrationTests {
 
     private static final String REQUEST_RECORD = "HTTP request completed";
 

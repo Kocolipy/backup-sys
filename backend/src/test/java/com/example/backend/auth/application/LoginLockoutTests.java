@@ -1,6 +1,7 @@
 package com.example.backend.auth.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
 
@@ -32,6 +33,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -133,9 +135,33 @@ class LoginLockoutTests {
 
     /** The decision hands back what the accepted Login is recorded as once it is signed in. */
     @Test
-    void anAcceptedLoginEndsSignedInAsItsUserByPassword() {
+    void anAcceptedLoginEndsSignedInAsItsUser() {
         assertThat(login.logIn("ada", CORRECT_PASSWORD).outcome())
-                .isEqualTo(LoginOutcome.SignedIn.password(users.require("ada").id()));
+                .isEqualTo(new LoginOutcome.SignedIn(users.require("ada").id()));
+    }
+
+    /** Exactly a signed-in decision carries the accepted Login a session is established from. */
+    @Test
+    void onlyASignedInDecisionCarriesAnAcceptedLogin() {
+        AcceptedLogin accepted = accepted("ada");
+        LoginOutcome refused = login.logIn("ada", "wrong-password").outcome();
+
+        assertSoftly(softly -> {
+            softly.assertThatThrownBy(() -> new LoginDecision(accepted.signedIn(), Optional.empty()))
+                    .isInstanceOf(IllegalArgumentException.class);
+            softly.assertThatThrownBy(() -> new LoginDecision(refused, Optional.of(accepted)))
+                    .isInstanceOf(IllegalArgumentException.class);
+        });
+    }
+
+    /** A decision ends in its accepted Login's own outcome, never another User's. */
+    @Test
+    void aSignedInDecisionCannotEndInAnotherUsersOutcome() {
+        AcceptedLogin accepted = accepted("ada");
+        LoginOutcome.SignedIn someoneElse = new LoginOutcome.SignedIn(users.require(BOOTSTRAP_ADMIN).id());
+
+        assertThatThrownBy(() -> new LoginDecision(someoneElse, Optional.of(accepted)))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     /**
@@ -426,7 +452,7 @@ class LoginLockoutTests {
 
     /**
      * There is no password to guess, so its refusals lengthen no failure run, and a run of them
-     * never locks out a User who signs in only through Epic.
+     * never locks it out.
      */
     @Test
     void aUserWithNoPasswordsRefusalsLengthenNoFailureRun() {

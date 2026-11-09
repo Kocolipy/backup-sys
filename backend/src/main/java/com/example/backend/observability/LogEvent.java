@@ -41,9 +41,7 @@ import org.slf4j.spi.LoggingEventBuilder;
  * <p>A record is built here whole, not assembled at its call site: {@link #success},
  * {@link #refused}, {@link #error}, the scheduled-run records ({@link #jobScheduled},
  * {@link #jobStart}, {@link #jobEnd}, {@link #jobFailed}), the request record
- * ({@link #requestEnd}), the outbound-call records ({@link #outboundStart},
- * {@link #outboundEnd}, {@link #outboundFailed}) and the retry warnings
- * ({@link #jwksRefetchWarning}, {@link #deadlockRetried}) each open the record at its level, classify it, set
+ * ({@link #requestEnd}) and the retry warning ({@link #deadlockRetried}) each open the record at its level, classify it, set
  * {@link #OUTCOME} and {@link #DURATION_MS} where the shape has them, and set the operation's
  * fixed message for that shape. A caller names the operation, adds only the ids and counts it
  * alone can supply, and calls {@code log()}. {@code be-log-record-outside-log-event} holds
@@ -200,21 +198,6 @@ public final class LogEvent {
     public static final String HTTP_STATUS_CODE = "http.response.status_code";
 
     /**
-     * Where an outbound call went, as scheme, host, port and path only: never a query, a fragment
-     * or user info, any of which may carry a value no record may hold. ECS {@code url.full},
-     * narrowed so.
-     */
-    public static final String URL_FULL = "url.full";
-
-    /**
-     * Which Epic call an outbound record or an Epic Login failure is about — {@code discovery},
-     * {@code jwks} or {@code token} (ADR 0012, D25) — the same name the
-     * {@code epic.outbound} meters are tagged with. Under this service's own {@code app}
-     * namespace: ECS names no such field.
-     */
-    public static final String EPIC_CALL = "app.epic.call";
-
-    /**
      * Which retry of an operation a record reports, from 1. Under this service's own {@code app}
      * namespace: ECS names no such field.
      */
@@ -231,7 +214,7 @@ public final class LogEvent {
     public static final String SESSION_MAX_INACTIVE_INTERVAL = "session.max_inactive_interval";
 
     /**
-     * How a Login proved who signed in, {@code password} or {@code sso} (Epic Login, D15), on the
+     * How a Login proved who signed in, {@code password} — or {@code sso} for an SSO Login — on the
      * accepted {@code user-authentication} and the {@code session-start} records — the same
      * spelling the audit trail's login events carry.
      * ECS names no such field, so it is under this service's own {@code app} namespace.
@@ -240,7 +223,7 @@ public final class LogEvent {
 
     /**
      * The session a record concerns, as {@link SessionHash} names it — never by its id. On the
-     * records an Epic Login ends in, so a refusal, which names no user, still correlates with the
+     * records a Login ends in, so a refusal, which names no user, still correlates with the
      * browser session it happened in. Log_Schema {@code session.hash}.
      */
     public static final String SESSION_HASH = "session.hash";
@@ -265,10 +248,6 @@ public final class LogEvent {
     /** {@link #deadlockRetried}'s message: fixed text, naming no row, table or value. */
     private static final String DEADLOCK_RETRIED_MESSAGE =
             "Database deadlock: the write is retried once";
-
-    /** {@link #jwksRefetchWarning}'s message: fixed text, naming the key's role and no value. */
-    private static final String JWKS_REFETCH_MESSAGE =
-            "Epic JWKS refetched: it lacked the id_token's key";
 
     /* The messages several operations share, so each is spelled once. */
     private static final String ADMINISTRATIVE_CHANGE_APPLIED =
@@ -344,9 +323,8 @@ public final class LogEvent {
 
     /**
      * {@link #error(Logger, Operation, int, ErrorCategory, Category, Type...)} for a failure that
-     * is not this service's to fix, and so may need no person: ADR 0012's error-category table says
-     * whether each of its categories does — a timeout or an Epic {@code 5xx} passes on its own,
-     * a refused credential does not.
+     * is not this service's to fix, and so may need no person: a called service being unavailable
+     * passes on its own ({@link ErrorCategory#unavailable}).
      *
      * @param followUp {@code error.follow_up_action}: whether a person must act on the error
      */
@@ -357,60 +335,6 @@ public final class LogEvent {
                         operation, category, types)
                 .addKeyValue(OUTCOME, FAILURE)
                 .setMessage(message(operation, MessageSlot.ERROR));
-    }
-
-    /**
-     * The record of an Epic call about to be sent: {@code INFO}, which call, its method and
-     * where it goes ({@link #URL_FULL}, never a query).
-     */
-    public static LoggingEventBuilder outboundStart(
-            Logger log, String call, String method, String url) {
-        return outbound(log.atInfo(), call, method, url, Type.START)
-                .setMessage("Epic outbound call started");
-    }
-
-    /**
-     * The record of an Epic call that was answered, whatever the status: {@code INFO},
-     * {@code http.response.status_code}, {@code event.duration_ms}, and {@code event.outcome}
-     * {@code success} below {@code 400}. What the status means for the operation is its own
-     * record's to say.
-     */
-    public static LoggingEventBuilder outboundEnd(Logger log, String call, String method,
-            String url, int status, long durationMs) {
-        return outbound(log.atInfo(), call, method, url, Type.END)
-                .addKeyValue(HTTP_STATUS_CODE, status)
-                .addKeyValue(DURATION_MS, durationMs)
-                .addKeyValue(OUTCOME, status < 400 ? SUCCESS : FAILURE)
-                .setMessage("Epic outbound call completed");
-    }
-
-    /**
-     * The record of an Epic call that got no answer — a timeout, or no connection: {@code
-     * ERROR} with {@code error.code} {@code 502}, {@code error.category} {@code network} and no
-     * follow-up (the other service being down needs none of ours), {@code event.outcome}
-     * {@code failure} and {@code event.duration_ms}. The caller attaches a
-     * {@link RedactedFaultException} in place of the failure.
-     */
-    public static LoggingEventBuilder outboundFailed(Logger log, String call, String method,
-            String url, long durationMs) {
-        return outbound(withError(log.atError(), BAD_GATEWAY_ERROR_CODE, ErrorCategory.NETWORK,
-                        false), call, method, url, Type.ERROR)
-                .addKeyValue(DURATION_MS, durationMs)
-                .addKeyValue(OUTCOME, FAILURE)
-                .setMessage("Epic outbound call failed");
-    }
-
-    /**
-     * The record of a JWKS refetch about to be made (D26): {@code WARN},
-     * {@link Operation#EPIC_JWKS_REFETCH}, {@link #RETRY_ATTEMPT}, and no outcome — the refetch
-     * has none yet. Its failure, should every refetch fail, is that operation's {@link #error}
-     * record.
-     */
-    public static LoggingEventBuilder jwksRefetchWarning(Logger log, int attempt) {
-        return classify(log.atWarn(), Operation.EPIC_JWKS_REFETCH, Category.NETWORK,
-                        Type.CONNECTION, Type.START)
-                .addKeyValue(RETRY_ATTEMPT, attempt)
-                .setMessage(JWKS_REFETCH_MESSAGE);
     }
 
     /**
@@ -428,15 +352,6 @@ public final class LogEvent {
                 .addKeyValue(RETRY_ATTEMPT, 1)
                 .addKeyValue(REASON, REASON_DEADLOCK)
                 .setMessage(DEADLOCK_RETRIED_MESSAGE);
-    }
-
-    /** The outbound records' common shape: an {@link Operation#EPIC_OUTBOUND} connection. */
-    private static LoggingEventBuilder outbound(LoggingEventBuilder opened, String call,
-            String method, String url, Type type) {
-        return classify(opened, Operation.EPIC_OUTBOUND, Category.NETWORK, Type.CONNECTION, type)
-                .addKeyValue(EPIC_CALL, call)
-                .addKeyValue(HTTP_METHOD, method)
-                .addKeyValue(URL_FULL, url);
     }
 
     /**
@@ -576,9 +491,8 @@ public final class LogEvent {
     /**
      * An {@code ERROR} record, already carrying its {@code Log_Schema.md} §Error
      * classification, with {@code error.follow_up_action} {@code true}: an {@code ERROR} needs a
-     * person unless its shape says otherwise. The shapes that may need none —
-     * {@link #outboundFailed}, and {@link #error} with {@code followUp} {@code false} — open
-     * through {@link #withError} instead, and {@code be-log-error-without-error-fields} keeps
+     * person unless its shape says otherwise. The shape that may need none — {@link #error} with
+     * {@code followUp} {@code false} — opens through {@link #withError} instead, and {@code be-log-error-without-error-fields} keeps
      * any other opener out of production code, so no {@code ERROR} record can reach the stream
      * without {@code error.code}, {@code error.category} and {@code error.follow_up_action}.
      */
@@ -618,17 +532,12 @@ public final class LogEvent {
      * {@code OperationMessagesTests} reads the production call sites that hand an operation to a
      * shape and fails for a message the operation does not declare. The shapes whose message is
      * the same whatever the operation — {@link LogEvent#jobStart}, {@link LogEvent#jobEnd},
-     * {@link LogEvent#jobFailed}, {@link LogEvent#requestEnd}, the outbound records,
-     * {@link LogEvent#jwksRefetchWarning} and {@link LogEvent#deadlockRetried} — need none.
+     * {@link LogEvent#jobFailed}, {@link LogEvent#requestEnd} and {@link LogEvent#deadlockRetried}
+     * — need none.
      */
     public enum Operation {
         LOGIN(Action.USER_AUTHENTICATION, null,
                 onSuccess("Login accepted"), onRefusal("Login refused")),
-        EPIC_LOGIN(Action.USER_AUTHENTICATION, "epic.login",
-                onRefusal("Epic sign-in refused"), onError("Epic sign-in failed")),
-        EPIC_OUTBOUND(Action.USER_AUTHENTICATION, "epic.outbound"),
-        EPIC_JWKS_REFETCH(Action.USER_AUTHENTICATION, "epic.jwks_refetch",
-                onError("Epic JWKS still lacks the id_token's key after its refetches")),
         UNLOCK(Action.ACCESS_CONTROL, "identity.unlock",
                 onSuccess(ADMINISTRATIVE_CHANGE_APPLIED), onRefusal(ADMINISTRATIVE_CHANGE_REFUSED)),
         PASSWORD_CHANGE(Action.USER_ADMINISTRATION, "identity.password_change",
@@ -888,17 +797,16 @@ public final class LogEvent {
         DATABASE("database"),
         /**
          * Input the service refused: the caller's error, not the service's — or an answer from a
-         * service this one called that it could not use (ADR 0012's malformed Epic
-         * response).
+         * service this one called that it could not use (ADR 0014, "A failed call's
+         * category").
          */
         DATA("data"),
-        /** A call to another service timed out or could not connect (ADR 0012, "Log"). */
+        /** A call to another service timed out or could not connect (ADR 0014). */
         NETWORK("network"),
-        /** Another service answered {@code 5xx} (ADR 0012, "Log"). */
+        /** Another service answered {@code 5xx} (ADR 0014). */
         SERVER("server"),
         /**
-         * Another service refused this one's own credential — Epic's {@code invalid_client}, or
-         * Epic rejecting our client assertion (ADR 0012, "Log"): likely a key or a registration
+         * Another service refused this one's own credential (ADR 0014): likely a configuration
          * problem.
          */
         CERT_AUTH("cert/auth");
@@ -916,7 +824,7 @@ public final class LogEvent {
         /**
          * Whether a failed call to another service found it unavailable — no answer
          * ({@code network}) or a {@code 5xx} ({@code server}) — which passes on its own, so needs
-         * no follow-up: ADR 0012's table for a failed outbound call, the one place it is kept.
+         * no follow-up: ADR 0014's table for a failed outbound call, the one place it is kept.
          * Every other category is a refusal or an answer the service cannot use, which a person
          * must follow up.
          */

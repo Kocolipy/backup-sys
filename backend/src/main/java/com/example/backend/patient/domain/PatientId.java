@@ -4,7 +4,7 @@ import java.util.Objects;
 import java.util.regex.Pattern;
 
 /**
- * A Patient's id: its EHR's FHIR id, so the patient an EHR launch names is read by that id
+ * A Patient's id: its EHR's FHIR id, so the patient the EHR context names is read by that id
  * directly (ADR 0014, /docs/domain/patient.md). It takes exactly FHIR's id grammar,
  * {@code [A-Za-z0-9\-.]{1,64}}, and nothing else.
  *

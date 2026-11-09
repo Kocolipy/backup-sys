@@ -88,22 +88,4 @@ class HttpSessionAttributesTests {
         assertThat(new HttpSessionAttributes(session).createdAt())
                 .isEqualTo(Instant.parse("2026-10-10T08:00:00Z"));
     }
-
-    /** The servlet API counts the idle bound in seconds. */
-    @Test
-    void theIdleBoundIsTheSessionsMaxInactiveInterval() {
-        MockHttpSession session = new MockHttpSession();
-        session.setMaxInactiveInterval(1800);
-
-        assertThat(new HttpSessionAttributes(session).idleBound()).isEqualTo(Duration.ofMinutes(30));
-    }
-
-    @Test
-    void settingTheIdleBoundSetsTheSessionsMaxInactiveIntervalInSeconds() {
-        MockHttpSession session = new MockHttpSession();
-
-        new HttpSessionAttributes(session).setIdleBound(Duration.ofSeconds(869));
-
-        assertThat(session.getMaxInactiveInterval()).isEqualTo(869);
-    }
 }

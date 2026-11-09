@@ -18,7 +18,6 @@ import com.example.backend.auth.application.LoginStateService.LoginVerdict;
 import com.example.backend.auth.application.LoginStateService.PasswordChangeVerdict;
 import com.example.backend.auth.application.LoginStateService.UnlockVerdict;
 import com.example.backend.auth.application.LoginStateService.VerifiedPassword;
-import com.example.backend.auth.domain.EpicLoginFailureReason;
 import com.example.backend.authorization.TestGroupPermissions;
 import com.example.backend.scim.InMemoryScimGroupRepository;
 import com.example.backend.scim.InMemoryScimPasswordHistoryRepository;
@@ -55,7 +54,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.security.core.GrantedAuthority;
 
 /**
- * The login-state module: what each event — a password Login, an Epic Login, a self-service
+ * The login-state module: what each event — a password Login, a self-service
  * change's wrong current password, a completed password change, an Unlock of a locked User, a
  * dormancy lock — leaves stored as the User's login state, read under the User's lock from the
  * stable id the event names, and that a User gone there is answered as gone, with nothing written
@@ -65,7 +64,7 @@ import org.springframework.security.core.GrantedAuthority;
  *
  * <p>The paths that report the events are tested for what is theirs alone (their refusal event,
  * their response, the order their refusal lands in) in {@link PasswordLoginRecordingTests},
- * {@link EpicLoginDecisionTests}, {@link PasswordChangeServiceTests} and
+ * {@link PasswordChangeServiceTests} and
  * {@link IdentityAdministrationServiceTests}; nothing about the rules themselves is restated there.
  */
 class LoginStateServiceTests {
@@ -113,19 +112,14 @@ class LoginStateServiceTests {
                 .acceptForNewUser("a-brand-new-passphrase", "ada");
     }
 
-    /** The route a Login came by, naming each parameterized case. */
-    private enum Route { PASSWORD, EPIC }
-
-    /** A Login by {@code route} of the User {@code userId}, its password verified: its verdict. */
-    private LoginVerdict<?> verdictOf(Route route, UUID userId) {
-        return route == Route.PASSWORD
-                ? loginState.passwordLogin(userId, PASSWORD).orElseThrow()
-                : loginState.epicLogin(userId).orElseThrow();
+    /** A password Login of the User {@code userId}, its password verified: its verdict. */
+    private LoginVerdict verdictOf(UUID userId) {
+        return loginState.passwordLogin(userId, PASSWORD).orElseThrow();
     }
 
-    /** A Login by {@code route} of the User {@code userId}, its password verified, as decided. */
-    private Decided logIn(Route route, UUID userId) {
-        return decided(verdictOf(route, userId));
+    /** A password Login of the User {@code userId}, its password verified, as decided. */
+    private Decided logIn(UUID userId) {
+        return decided(verdictOf(userId));
     }
 
     /** A password Login of the User {@code userId} that verified {@code credential}, as decided. */
@@ -133,19 +127,18 @@ class LoginStateServiceTests {
         return decided(loginState.passwordLogin(userId, credential).orElseThrow());
     }
 
-    private static Decided decided(LoginVerdict<?> verdict) {
+    private static Decided decided(LoginVerdict verdict) {
         return switch (verdict) {
-            case LoginVerdict.Refused<?> refused -> new Decided(true, refused.reason(), false);
-            case LoginVerdict.Accepted<?> accepted -> new Decided(false, null, accepted.confined());
+            case LoginVerdict.Refused refused -> new Decided(true, refused.reason(), false);
+            case LoginVerdict.Accepted accepted -> new Decided(false, null, accepted.confined());
         };
     }
 
     /**
-     * A Login's verdict as either route reports it: whether it was refused, the refusal in the
-     * route's own terms — a password Login's {@link PasswordRefusalReason}, an Epic Login's
-     * {@link EpicLoginFailureReason} — and whether the accepted Login is confined.
+     * A Login's verdict: whether it was refused, the {@link PasswordRefusalReason} it was refused
+     * for, and whether the accepted Login is confined.
      */
-    private record Decided(boolean refused, Object refusal, boolean confined) {
+    private record Decided(boolean refused, PasswordRefusalReason refusal, boolean confined) {
     }
 
     // ---- the rules, one row per case ---------------------------------------------------------
@@ -164,7 +157,6 @@ class LoginStateServiceTests {
                 module.passwordLogin(user, PASSWORD).map(LoginVerdict::change)),
         PASSWORD_LOGIN_WITH_A_REPLACED_CREDENTIAL((module, user) -> module.passwordLogin(
                 user, VerifiedPassword.of("old-hash")).map(LoginVerdict::change)),
-        EPIC_LOGIN((module, user) -> module.epicLogin(user).map(LoginVerdict::change)),
         PASSWORD_CHANGED((module, user) -> module.passwordChange(user, PASSWORD, accepted("new-hash"))
                 .map(PasswordChangeVerdict::change)),
         UNLOCKED((module, user) -> module.unlocked(user, ACTOR).map(UnlockVerdict::change)),
@@ -232,9 +224,6 @@ class LoginStateServiceTests {
                 row("a confined Login does not move the dormancy basis",
                         Event.PASSWORD_LOGIN, false, flaggedWithRun(2),
                         new ScimLoginState("hash", 0, null, null, EARLIER, EARLIER)),
-                row("an Epic Login is never confined: it moves the basis and leaves the flag set",
-                        Event.EPIC_LOGIN, false, flaggedWithRun(2),
-                        new ScimLoginState("hash", 0, null, null, NOW, EARLIER)),
                 row("a password Login refused for a replaced credential lengthens the run",
                         Event.PASSWORD_LOGIN_WITH_A_REPLACED_CREDENTIAL, false, run(1),
                         new ScimLoginState("hash", 2, null, null, EARLIER, null)),
@@ -327,8 +316,6 @@ class LoginStateServiceTests {
                         Event.PASSWORD_LOGIN, false, run(0), BASIS),
                 moved("a confined Login moves the run it clears and not the basis",
                         Event.PASSWORD_LOGIN, false, flaggedWithRun(2), RUN),
-                moved("an Epic Login by a flagged User moves the run and the basis, not the flag",
-                        Event.EPIC_LOGIN, false, flaggedWithRun(2), RUN, BASIS),
                 moved("a password Login refused for a replaced credential moves the run",
                         Event.PASSWORD_LOGIN_WITH_A_REPLACED_CREDENTIAL, false, run(1), RUN),
                 moved("a password Login refused for a replaced credential at the limit moves the"
@@ -559,28 +546,22 @@ class LoginStateServiceTests {
      * check read the User unlocked — refuses the Login, and the lock stands: an Unlock is the only
      * exit (ADR 0007).
      */
-    @ParameterizedTest(name = "{0} by a User locked for {1}")
-    @MethodSource("loginsAndLockCauses")
-    void aLoginByALockedUserLeavesTheLockStanding(Route route, LockCause cause, Object refusal) {
+    @ParameterizedTest(name = "a Login by a User locked for {0}")
+    @EnumSource(LockCause.class)
+    void aLoginByALockedUserLeavesTheLockStanding(LockCause cause) {
         ScimUser stored = users.given(ScimIdentities.userWithLoginState("ada", locked(cause)));
 
-        logIn(route, stored.id());
+        logIn(stored.id());
 
         assertThat(users.require("ada").login()).isEqualTo(locked(cause));
     }
 
-    @ParameterizedTest(name = "{0} by a User locked for {1}")
-    @MethodSource("loginsAndLockCauses")
-    void aLoginByALockedUserIsRefusedAsLocked(Route route, LockCause cause, Object refusal) {
+    @ParameterizedTest(name = "a Login by a User locked for {0}")
+    @EnumSource(LockCause.class)
+    void aLoginByALockedUserIsRefusedAsLocked(LockCause cause) {
         ScimUser stored = users.given(ScimIdentities.userWithLoginState("ada", locked(cause)));
 
-        assertThat(logIn(route, stored.id()).refusal()).isEqualTo(refusal);
-    }
-
-    static Stream<Arguments> loginsAndLockCauses() {
-        return Stream.of(LockCause.values()).flatMap(cause -> Stream.of(
-                Arguments.of(Route.PASSWORD, cause, PasswordRefusalReason.ACCOUNT_LOCKED),
-                Arguments.of(Route.EPIC, cause, EpicLoginFailureReason.ACCOUNT_LOCKED)));
+        assertThat(logIn(stored.id()).refusal()).isEqualTo(PasswordRefusalReason.ACCOUNT_LOCKED);
     }
 
     /** A Login refused for a Lockout hands back the state it read under the lock, unmoved. */
@@ -596,42 +577,13 @@ class LoginStateServiceTests {
                 .containsExactly(locked(LockCause.FAILURES), Set.of());
     }
 
-    /** An Epic Login counts toward no failure run (D12), so its refusal moves nothing. */
-    @Test
-    void anEpicLoginRefusedOnADeactivationHandsBackTheStateUnmoved() {
-        ScimUser stored = users.given(ScimIdentities.withActive(
-                ScimIdentities.userWithLoginState("ada", run(2)), false, run(2)));
-
-        LoginStateChange change = loginState.epicLogin(stored.id()).orElseThrow().change();
-
-        assertThat(List.of(change.after(), change.moved())).containsExactly(run(2), Set.of());
-    }
-
-    /** A deactivation refuses an Epic Login, and clears no run. */
-    @Test
-    void anEpicLoginByADeactivatedUserLeavesItsRun() {
-        ScimUser stored = users.given(ScimIdentities.withActive(
-                ScimIdentities.userWithLoginState("ada", run(2)), false, run(2)));
-
-        loginState.epicLogin(stored.id());
-
-        assertThat(users.require("ada").login()).isEqualTo(run(2));
-    }
-
     /** A deactivation committed while the password was being compared refuses the Login. */
-    @ParameterizedTest(name = "{0}")
-    @MethodSource("loginsByADeactivatedUser")
-    void aLoginByADeactivatedUserIsRefusedAsDeactivated(Route route, Object refusal) {
+    @Test
+    void aLoginByADeactivatedUserIsRefusedAsDeactivated() {
         ScimUser stored = users.given(ScimIdentities.withActive(
                 ScimIdentities.userWithLoginState("ada", run(2)), false, run(2)));
 
-        assertThat(logIn(route, stored.id()).refusal()).isEqualTo(refusal);
-    }
-
-    static Stream<Arguments> loginsByADeactivatedUser() {
-        return Stream.of(
-                Arguments.of(Route.PASSWORD, PasswordRefusalReason.ACCOUNT_DISABLED),
-                Arguments.of(Route.EPIC, EpicLoginFailureReason.ACCOUNT_DISABLED));
+        assertThat(logIn(stored.id()).refusal()).isEqualTo(PasswordRefusalReason.ACCOUNT_DISABLED);
     }
 
     /** Locked and deactivated at once is refused as locked, the check made first. */
@@ -641,17 +593,16 @@ class LoginStateServiceTests {
                 ScimIdentities.userWithLoginState("ada", locked(LockCause.FAILURES)), false,
                 locked(LockCause.FAILURES)));
 
-        assertThat(logIn(Route.PASSWORD, stored.id()).refusal())
+        assertThat(logIn(stored.id()).refusal())
                 .isEqualTo(PasswordRefusalReason.ACCOUNT_LOCKED);
     }
 
     /** An admissible User's Login is accepted. */
-    @ParameterizedTest(name = "{0}")
-    @EnumSource(Route.class)
-    void aLoginByAnActiveUnlockedUserIsAccepted(Route route) {
+    @Test
+    void aLoginByAnActiveUnlockedUserIsAccepted() {
         ScimUser stored = users.given(ScimIdentities.userWithLoginState("ada", run(2)));
 
-        assertThat(logIn(route, stored.id()).refused()).isFalse();
+        assertThat(logIn(stored.id()).refused()).isFalse();
     }
 
     // ---- an accepted password Login whose credential was replaced under it -------------------
@@ -674,7 +625,7 @@ class LoginStateServiceTests {
         ScimUser stored = users.given(
                 ScimIdentities.userWithLoginState("ada", passwordlessWithRun(0)));
 
-        assertThat(logIn(Route.PASSWORD, stored.id()).refused()).isTrue();
+        assertThat(logIn(stored.id()).refused()).isTrue();
     }
 
     /** The standing is decided first, as the authentication checks it: locked over replaced. */
@@ -685,15 +636,6 @@ class LoginStateServiceTests {
 
         assertThat(logIn(stored.id(), VerifiedPassword.of("old-hash")).refusal())
                 .isEqualTo(PasswordRefusalReason.ACCOUNT_LOCKED);
-    }
-
-    /** An Epic Login presented no password of ours, so whatever the credential, none was replaced. */
-    @Test
-    void anEpicLoginIsNotRefusedForTheStoredCredential() {
-        ScimUser stored = users.given(
-                ScimIdentities.userWithLoginState("ada", passwordlessWithRun(0)));
-
-        assertThat(logIn(Route.EPIC, stored.id()).refused()).isFalse();
     }
 
     // ---- a password Login's decision, its refusal counted under the same lock ----------------
@@ -708,7 +650,7 @@ class LoginStateServiceTests {
         ScimUser stored = users.given(ScimIdentities.withActive(
                 ScimIdentities.userWithLoginState("ada", run(1)), false, run(1)));
 
-        Decided refused = logIn(Route.PASSWORD, stored.id());
+        Decided refused = logIn(stored.id());
 
         assertThat(List.of(refused.refusal(), users.require("ada").login().failedLoginAttempts()))
                 .containsExactly(PasswordRefusalReason.ACCOUNT_DISABLED, 2);
@@ -741,7 +683,7 @@ class LoginStateServiceTests {
     void anAcceptedPasswordLoginIsNotRefusedAndNotConfined() {
         ScimUser stored = users.given(ScimIdentities.userWithLoginState("ada", run(2)));
 
-        Decided accepted = logIn(Route.PASSWORD, stored.id());
+        Decided accepted = logIn(stored.id());
 
         assertThat(List.of(accepted.refused(), accepted.confined())).containsExactly(false, false);
     }
@@ -795,26 +737,26 @@ class LoginStateServiceTests {
     @Test
     void anAcceptedVerdictHandsBackWhatItMoved() {
         assertThatNullPointerException().isThrownBy(() ->
-                new LoginVerdict.Accepted<PasswordRefusalReason>(null, false, List.of()));
+                new LoginVerdict.Accepted(null, false, List.of()));
     }
 
     @Test
     void aRefusedVerdictHandsBackWhatItMoved() {
-        assertThatNullPointerException().isThrownBy(() -> new LoginVerdict.Refused<>(
+        assertThatNullPointerException().isThrownBy(() -> new LoginVerdict.Refused(
                 null, PasswordRefusalReason.BAD_CREDENTIALS));
     }
 
     @Test
     void aRefusedVerdictHasAReason() {
         assertThatNullPointerException().isThrownBy(() ->
-                new LoginVerdict.Refused<PasswordRefusalReason>(LoginStateChange.none(run(0)), null));
+                new LoginVerdict.Refused(LoginStateChange.none(run(0)), null));
     }
 
     @Test
     void anAcceptedVerdictsAuthoritiesCannotChangeOnceIssued() {
         List<GrantedAuthority> read = new ArrayList<>();
-        LoginVerdict.Accepted<PasswordRefusalReason> accepted =
-                new LoginVerdict.Accepted<>(LoginStateChange.none(run(0)), false, read);
+        LoginVerdict.Accepted accepted =
+                new LoginVerdict.Accepted(LoginStateChange.none(run(0)), false, read);
 
         read.add(() -> "ROLE_SUPERUSER");
 
@@ -825,10 +767,8 @@ class LoginStateServiceTests {
 
     static Stream<Arguments> confinementUnderTheLock() {
         return Stream.of(
-                Arguments.of(Route.PASSWORD, flaggedWithRun(0), true),
-                Arguments.of(Route.PASSWORD, run(0), false),
-                Arguments.of(Route.EPIC, flaggedWithRun(0), false),
-                Arguments.of(Route.EPIC, run(0), false));
+                Arguments.of(flaggedWithRun(0), true),
+                Arguments.of(run(0), false));
     }
 
     /**
@@ -836,14 +776,14 @@ class LoginStateServiceTests {
      * state that decides the dormancy basis — and handed back with the decision: each User here
      * shows no flag until just before the lock is granted.
      */
-    @ParameterizedTest(name = "{0} Login of {1}: confined {2}")
+    @ParameterizedTest(name = "a Login of {0}: confined {1}")
     @MethodSource("confinementUnderTheLock")
     void anAcceptedLoginSaysWhetherItIsConfinedFromTheStoredState(
-            Route route, ScimLoginState storedByThen, boolean confined) {
+            ScimLoginState storedByThen, boolean confined) {
         ScimUser stored = users.given(ScimIdentities.userWithLoginState("ada", run(0)));
         storeBeforeTheLock(stored, storedByThen);
 
-        assertThat(logIn(route, stored.id()).confined()).isEqualTo(confined);
+        assertThat(logIn(stored.id()).confined()).isEqualTo(confined);
     }
 
     // ---- the authority an accepted Login's session is issued with -------------------------
@@ -851,17 +791,16 @@ class LoginStateServiceTests {
     /**
      * The authority is read under the lock, with the standing that accepted the Login: a User
      * made a direct member of the Admin group just before the lock is granted is issued the
-     * Superuser's session by either route.
+     * Superuser's session.
      */
-    @ParameterizedTest(name = "{0}")
-    @EnumSource(Route.class)
-    void anAcceptedLoginIsIssuedWhatItsUsersGroupsConferUnderTheLock(Route route) {
+    @Test
+    void anAcceptedLoginIsIssuedWhatItsUsersGroupsConferUnderTheLock() {
         ScimUser stored = users.given(ScimIdentities.userWithLoginState("ada", run(0)));
         locks.beforeNextGrant(() -> groups.given(ScimGroup.created(
                 TestGroupPermissions.SUPERUSER_GROUP_ID, "Admins",
                 List.of(ScimGroupMember.reference(stored.id())), NOW)));
 
-        assertThat(authoritiesOf(verdictOf(route, stored.id())))
+        assertThat(authoritiesOf(verdictOf(stored.id())))
                 .containsExactlyInAnyOrder(TestGroupPermissions.SUPERUSER_AUTHORITIES);
     }
 
@@ -872,13 +811,13 @@ class LoginStateServiceTests {
         groups.given(ScimGroup.created(TestGroupPermissions.SUPERUSER_GROUP_ID, "Admins",
                 List.of(ScimGroupMember.reference(stored.id())), NOW));
 
-        assertThat(authoritiesOf(verdictOf(Route.PASSWORD, stored.id())))
+        assertThat(authoritiesOf(verdictOf(stored.id())))
                 .containsExactly(LoginIdentityService.PASSWORD_CHANGE_REQUIRED_AUTHORITY);
     }
 
     /** The authorities an accepted verdict issues; none for a refused one, which issues nothing. */
-    private static List<String> authoritiesOf(LoginVerdict<?> verdict) {
-        return verdict instanceof LoginVerdict.Accepted<?> accepted
+    private static List<String> authoritiesOf(LoginVerdict verdict) {
+        return verdict instanceof LoginVerdict.Accepted accepted
                 ? accepted.authorities().stream().map(GrantedAuthority::getAuthority).toList()
                 : List.of();
     }

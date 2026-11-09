@@ -10,8 +10,7 @@ import org.springframework.security.core.AuthenticationException;
 
 /**
  * Why a password Login was refused: the closed list a password {@code LOGIN_FAILURE} carries
- * exactly one of, and the {@code reason} tag of the {@code login} counter's password series — the
- * password analogue of {@code EpicLoginFailureReason}.
+ * exactly one of, and the {@code reason} tag of the {@code login} counter's refused series.
  *
  * <p>Each reason owns every fact about itself, so a reason added here needs no other edit:
  *
@@ -31,7 +30,7 @@ import org.springframework.security.core.AuthenticationException;
  * mapped, so no other layer has to know the library's exception hierarchy and no exception object
  * — whose message may name the submitted username — travels further than the login decision.
  *
- * <p>The reasons are audit-only, as Epic Login's are: the caller is answered the same bare
+ * <p>The reasons are audit-only: the caller is answered the same bare
  * {@code 401} for every one, and the refusal's {@code WARN} names none (Logging §2.2).
  */
 public enum PasswordRefusalReason {

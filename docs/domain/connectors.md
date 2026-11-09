@@ -15,7 +15,7 @@ Permission included, gets the generic `403` that names no Permission or policy.
 
 **A connector's name is its own among the live ones.** The name is stored
 without the whitespace at its edges, and a create under a name a live connector
-already holds — compared exactly, case included, so `Epic` and `epic` may
+already holds — compared exactly, case included, so `Acme` and `acme` may
 coexist — is refused `409` with `CONNECTOR_NAME_TAKEN`, nothing written. A name
 blank once trimmed is refused `400` as an empty one is. A
 [Deleted SCIM connector](#deleted-scim-connector) holds no name, so its name is

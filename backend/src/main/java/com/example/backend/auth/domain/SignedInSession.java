@@ -1,6 +1,5 @@
 package com.example.backend.auth.domain;
 
-import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
@@ -8,16 +7,14 @@ import java.util.UUID;
 
 /**
  * The signed-in session's own state, and the one place that reads or writes it: whose session it
- * is, when it was signed in, and the Epic tokens an Epic Login kept on it. Its callers ask it
- * questions — who owns this session, which tokens does it hold — rather than reading the attribute
- * map, so the shape is defined once and every caller gets the same answer from it.
+ * is, and when it was signed in. Its callers ask it questions — who owns this session, has it
+ * outlived its lifetime — rather than reading the attribute map, so the shape is defined once and every caller gets the same answer from it.
  *
  * <ul>
  *   <li><b>Signing in starts from nothing.</b> Every attribute this module writes belongs to one
  *       sign-in, and {@link #signIn} removes them all before it records the new one, so a Login
- *       over a session another Login signed in — a password Login in a browser an EHR launch
- *       signed in, say — carries none of the earlier sign-in's state over: not its owner, not its
- *       Epic tokens. The module writes only the members of one closed set,
+ *       over a session another Login signed in carries none of the earlier sign-in's state over:
+ *       not its owner, not its sign-in instant. The module writes only the members of one closed set,
  *       so an attribute added later is one more member, and reset with the rest. What the module
  *       does not write — the security context, the CSRF token, the framework's own — is left
  *       to its owner.
@@ -31,18 +28,11 @@ import java.util.UUID;
  *       the instant {@link #signIn} records. A session nobody signed in to — a Guest's, minted to
  *       hold a CSRF token — counts from its creation, and so does one whose sign-in instant is
  *       missing or of another type, which only shortens its life.
- *   <li><b>The Epic tokens</b> are kept on the signed-in session for exactly its life (ADR 0012,
- *       D29), and are never handed out once the session has outlived its absolute lifetime,
- *       whatever the store still holds.
- *   <li><b>The idle bound</b> of a session holding them is cut to what remains of that lifetime
- *       once that is the shorter ({@link AbsoluteSessionLifetimePolicy#idleBoundAt}), so the store
- *       never keeps the session, and the tokens with it, past the lifetime's end. Applied when the
- *       tokens are kept, and again on each later request, whose renewal would otherwise undo it.
  * </ul>
  *
  * <p>Domain code over a session it does not own: the session is whatever {@link Attributes} the
- * caller adapts — the servlet container's {@code HttpSession} at a web adapter, a Spring Session
- * {@code Session} found by id at a store adapter — so the shape stays plain Java, and its tests
+ * caller adapts — the servlet container's {@code HttpSession} at a web adapter — so the shape
+ * stays plain Java, and its tests
  * run over a map. Clock-free, as {@link AbsoluteSessionLifetimePolicy} is: a question about the
  * lifetime is asked of a policy at an instant the caller read from the injected clock, and a
  * sign-in is recorded at one.
@@ -58,9 +48,6 @@ public final class SignedInSession {
     public static final String OWNER_ATTRIBUTE =
             "org.springframework.session.FindByIndexNameSessionRepository.PRINCIPAL_NAME_INDEX_NAME";
 
-    /** The attribute an Epic Login keeps its tokens under, read by {@link EpicTokens}. */
-    public static final String EPIC_TOKENS_ATTRIBUTE = "app.epic.tokens";
-
     /**
      * The attribute the instant the session was signed in at is kept under, which its absolute
      * lifetime counts from.
@@ -74,8 +61,7 @@ public final class SignedInSession {
      */
     private enum SignInAttribute {
         OWNER(OWNER_ATTRIBUTE),
-        SIGNED_IN_AT(SIGNED_IN_AT_ATTRIBUTE),
-        EPIC_TOKENS(EPIC_TOKENS_ATTRIBUTE);
+        SIGNED_IN_AT(SIGNED_IN_AT_ATTRIBUTE);
 
         private final String name;
 
@@ -85,9 +71,8 @@ public final class SignedInSession {
     }
 
     /**
-     * A session as this module sees it: an attribute map, a creation time and an idle bound — what
-     * both the servlet container's session and Spring Session's offer, so an adapter implements it
-     * by delegating.
+     * A session as this module sees it: an attribute map and a creation time — what the servlet
+     * container's session offers, so an adapter implements it by delegating.
      */
     public interface Attributes {
 
@@ -102,12 +87,6 @@ public final class SignedInSession {
 
         /** When the session was created. */
         Instant createdAt();
-
-        /** How long the session survives without a request. */
-        Duration idleBound();
-
-        /** Sets how long the session survives without a request. */
-        void setIdleBound(Duration idleBound);
     }
 
     private final Attributes session;
@@ -166,46 +145,6 @@ public final class SignedInSession {
         return read(SignInAttribute.SIGNED_IN_AT) instanceof Instant signedInAt
                 ? signedInAt
                 : session.createdAt();
-    }
-
-    /**
-     * Keeps Epic's tokens on the session, and bounds how long the store keeps it by what remains of
-     * {@code lifetime} as of {@code now} ({@link #boundByLifetime}), so the tokens are never stored
-     * past its end.
-     */
-    public void keepEpicTokens(EpicTokenSet tokens, AbsoluteSessionLifetimePolicy lifetime,
-            Instant now) {
-        write(SignInAttribute.EPIC_TOKENS, tokens);
-        boundByLifetime(lifetime, now);
-    }
-
-    /**
-     * The Epic tokens the session holds, as of {@code now}.
-     *
-     * @return the tokens; empty for a session holding none — a password Login's — and for one that
-     *     has outlived {@code lifetime}, which has ended whatever the store still holds
-     */
-    public Optional<EpicTokenSet> epicTokens(AbsoluteSessionLifetimePolicy lifetime, Instant now) {
-        if (hasOutlived(lifetime, now)) {
-            return Optional.empty();
-        }
-        return read(SignInAttribute.EPIC_TOKENS) instanceof EpicTokenSet tokens
-                ? Optional.of(tokens)
-                : Optional.empty();
-    }
-
-    /**
-     * Cuts the idle bound of a session holding Epic tokens back to what remains of
-     * {@code lifetime} as of {@code now}, once that is the shorter, so the store keeps it no longer
-     * than the lifetime allows (ADR 0012, D29). Far from the end the idle bound is untouched, and a
-     * session holding nothing under the tokens' name is never touched. Whatever is stored there is
-     * bounded, a well-formed token set or not, because the bound is about what the store keeps.
-     */
-    public void boundByLifetime(AbsoluteSessionLifetimePolicy lifetime, Instant now) {
-        if (read(SignInAttribute.EPIC_TOKENS) != null) {
-            session.setIdleBound(
-                    lifetime.idleBoundAt(session.idleBound(), lifetimeStart(), now));
-        }
     }
 
     /** Every read this module makes: of a member of the one set {@link #signIn} resets. */

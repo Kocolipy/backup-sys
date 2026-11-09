@@ -70,14 +70,6 @@ info:
     here therefore also has a `404` that means "not served by this deployment" rather
     than "no such resource"; it is not repeated on each operation.
 
-    **The Epic Login namespace is behind a release gate that is OFF by default.**
-    While `APP_EPIC_ENABLED` is unset or `false`, every path below `/api/auth/epic`
-    answers `404` with the generic `ApiError` body (`request-refused`), ahead of the
-    session, CSRF and authorization checks, so the namespace cannot be probed for
-    whether it exists. Its operations are the public JWKS and the browser
-    navigations of an EHR launch — `launch`, `authorize` and `callback` — each of
-    which answers with a redirect rather than a body.
-
     SCIM requests and responses use `application/scim+json`; `application/json` is
     accepted and understood, and a response defaults to `application/scim+json`.
     SCIM errors are documents of their own shape (`ScimError`) and never the
@@ -305,7 +297,7 @@ paths:
         do is its Permissions, and whether it is the Superuser.
 
         `superuser` is true exactly when the session's User was a direct member of
-        the Admin group when it signed in, by password or through Epic. It is not
+        the Admin group when it signed in. It is not
         a Permission and is never among `permissions`, but a Superuser's
         `permissions` include every delegatable Permission. Holding every
         Permission does not make a session the Superuser.
@@ -459,213 +451,6 @@ paths:
                   - $ref: "#/components/schemas/ApiError"
         "403":
           $ref: "#/components/responses/CsrfTokenRejected"
-  /api/auth/epic/jwks.json:
-    get:
-      tags: [Authentication]
-      summary: Get our public JWKS for Epic
-      description: |
-        The public keys Epic verifies our `private_key_jwt` client assertions
-        against (Epic Login, `/docs/adr/0012-epic-login.md`, D7 and D14): the active
-        signing key and, when `APP_EPIC_CLIENT_NEXT_KEY` is configured, the next
-        key, in that order. Each is an EC P-384 public key for ES384 signatures,
-        under its configured `kid`. Assertions are signed by the active key only;
-        the next key is published ahead of its promotion. No private parameter is
-        ever present.
-
-        Public: Epic fetches it with no session. While `APP_EPIC_ENABLED` is off
-        it answers `404`, as every path under `/api/auth/epic` does, before any
-        session, CSRF or authorization check.
-      operationId: getEpicJwks
-      security: []
-      responses:
-        "200":
-          description: Our public JWKS.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/JwkSet"
-        "404":
-          description: Epic Login is off (`APP_EPIC_ENABLED` is not `true`).
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-  /api/auth/epic/launch:
-    get:
-      tags: [Authentication]
-      summary: Start an Epic Login (EHR launch)
-      description: |
-        The launch URL registered with Epic, which Epic opens in the clinician's
-        system browser (Epic Login, ADR 0012, D1). Every launch is a fresh Login
-        (D9): any session the browser holds is ended here, whoever it belongs
-        to, and the launch continues in a new one.
-
-        `iss` must equal `APP_EPIC_FHIR_BASE` exactly, compared as a string and
-        never normalized (D10), and `launch` must be 1–8192 characters of
-        printable ASCII with no whitespace (D18); the launch is then held in the
-        new session and the browser is sent on to `/api/auth/epic/authorize`.
-        Anything else lands at `/login?signin=refused`, with no further detail, and
-        is audited as `ISS_MISMATCH` or `INVALID_LAUNCH`.
-
-        Public: the browser arrives from Epic with no session of ours. A
-        navigation, not an API call: every answer is a redirect.
-      operationId: launchEpicLogin
-      security: []
-      parameters:
-        - name: iss
-          in: query
-          description: The FHIR base Epic launched from; must be `APP_EPIC_FHIR_BASE` exactly.
-          schema:
-            type: string
-        - name: launch
-          in: query
-          description: Epic's opaque launch context, sent on to its authorization endpoint.
-          schema:
-            type: string
-      responses:
-        "302":
-          description: |
-            To `/api/auth/epic/authorize` for an accepted launch, or to
-            `/login?signin=refused` for a refused one, its session ended.
-          headers:
-            Location:
-              description: Where the browser goes next.
-              schema:
-                type: string
-            Set-Cookie:
-              description: |
-                On a redirect to `/login?signin=refused` or `/login?signin=unavailable`, an
-                expired session cookie, so the browser stops sending an id that
-                names nothing. No `Clear-Site-Data`.
-              schema:
-                type: string
-        "404":
-          description: Epic Login is off (`APP_EPIC_ENABLED` is not `true`).
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-  /api/auth/epic/authorize:
-    get:
-      tags: [Authentication]
-      summary: Redirect to Epic's authorization endpoint
-      description: |
-        The internal hop between the launch and Epic (ADR 0012, flow step 2). With a launch
-        pending, the browser is redirected to Epic's discovered
-        `authorization_endpoint` with `response_type=code`, `client_id`, the
-        registered `redirect_uri`, `scope=launch openid fhirUser`, the pending
-        `launch`, `aud` set to `APP_EPIC_FHIR_BASE`, a `state`, a `nonce`, and a
-        PKCE S256 `code_challenge`. The pending request is kept for this session
-        alone, in the session store, until the callback takes it (D27).
-
-        Epic's endpoints come from OIDC discovery, read here on first use and kept
-        for 24 hours (D26). When Epic gives no answer within the read or connect
-        timeout, or answers `5xx`, the browser lands at `/login?signin=unavailable`; a
-        discovery answer that is no usable document lands at `/login?signin=refused`.
-        With no launch pending it lands at `/login?signin=refused`. Either way its
-        session is ended (D23, D24).
-      operationId: authorizeEpicLogin
-      security: []
-      responses:
-        "302":
-          description: >-
-            To Epic's authorization endpoint, to `/login?signin=refused`, or — Epic
-            unavailable — to `/login?signin=unavailable`.
-          headers:
-            Location:
-              description: Where the browser goes next.
-              schema:
-                type: string
-            Set-Cookie:
-              description: |
-                On a redirect to `/login?signin=refused` or `/login?signin=unavailable`, an
-                expired session cookie, so the browser stops sending an id that
-                names nothing. No `Clear-Site-Data`.
-              schema:
-                type: string
-        "404":
-          description: Epic Login is off (`APP_EPIC_ENABLED` is not `true`).
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
-  /api/auth/epic/callback:
-    get:
-      tags: [Authentication]
-      summary: Complete an Epic Login
-      description: |
-        The redirect URI registered with Epic, whose absolute URL is
-        `APP_EPIC_REDIRECT_URI` (ADR 0012, flow steps 3–7). The pending request is taken
-        out of the store first, atomically, so a replayed or concurrent callback
-        finds none and Epic is not called (D27). `state` is compared with it in
-        constant time, an OAuth `error` from Epic is refused, and `code` must be
-        1–8192 characters of printable ASCII with no whitespace (D18). The code
-        is then redeemed once at Epic's token endpoint with the PKCE verifier and
-        our `private_key_jwt` client assertion. The `id_token` is validated
-        against Epic's JWKS — RS256 only; `iss`, `aud`, `azp`, `exp` and `iat`
-        with a 30-second skew; the `nonce`, in constant time; and neither `iss`
-        nor `sub` may begin or end with whitespace — and its
-        `fhirUser` must be `{APP_EPIC_FHIR_BASE}/Practitioner/{id}`. The User
-        whose `userName` equals that id exactly is signed in as password Login
-        would sign it in — the same authorities, a rotated session id, the
-        pre-login CSRF token dropped — and the browser lands at `/`, where the
-        SPA's `GET /api/auth/me` takes over. Epic's tokens are kept on the
-        signed-in session (D29). The token response's `patient` and `encounter`,
-        the Launch context, are passed to the SPA in the landing's fragment,
-        `/#patient=<id>&encounter=<id>`, each only when it is a FHIR id
-        (`[A-Za-z0-9\-.]{1,64}`), and the bare `/#launch` when neither is; they
-        are kept nowhere server-side. The rest of the token response is
-        discarded (D8).
-
-        Any OAuth error or failed check lands at `/login?signin=refused`, audited
-        with its reason (`INVALID_STATE`, `INVALID_CODE`, `IDP_ERROR`,
-        `TOKEN_EXCHANGE_FAILED`, `INVALID_SIGNATURE`, `INVALID_CLAIMS`,
-        `INVALID_FHIR_USER`, or an account reason). Epic being
-        unavailable — no answer within the timeouts, or a `5xx`, from discovery,
-        the JWKS or the token endpoint — lands at `/login?signin=unavailable` instead.
-        The token call is made exactly once, never retried (D26). Either way the
-        session is ended, with no further detail (D23, D24).
-
-        Served by filters on the application chain — the callback check ahead of
-        the OAuth 2.0 login filter — rather than by a controller.
-      operationId: completeEpicLogin
-      security: []
-      parameters:
-        - name: code
-          in: query
-          description: Epic's single-use authorization code.
-          schema:
-            type: string
-        - name: state
-          in: query
-          description: The `state` the authorize redirect sent.
-          schema:
-            type: string
-      responses:
-        "302":
-          description: >-
-            To `/` signed in — `/#patient=<id>&encounter=<id>` with whichever of
-            the Launch context passed, or `/#launch` — to `/login?signin=refused`,
-            or — Epic unavailable — to `/login?signin=unavailable`, neither of
-            which carries a fragment.
-          headers:
-            Location:
-              description: Where the browser goes next.
-              schema:
-                type: string
-            Set-Cookie:
-              description: |
-                On a redirect to `/login?signin=refused` or `/login?signin=unavailable`, an
-                expired session cookie, so the browser stops sending an id that
-                names nothing. No `Clear-Site-Data`.
-              schema:
-                type: string
-        "404":
-          description: Epic Login is off (`APP_EPIC_ENABLED` is not `true`).
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiError"
   /api/self:
     get:
       tags: [Authentication]
@@ -3440,46 +3225,6 @@ components:
           schema:
             $ref: "#/components/schemas/ScimError"
   schemas:
-    JwkSet:
-      type: object
-      additionalProperties: false
-      required: [keys]
-      description: |
-        A JSON Web Key Set (RFC 7517) of EC P-384 public signing keys. The
-        closed property list is the guarantee that no private parameter (`d`)
-        is published.
-      properties:
-        keys:
-          type: array
-          minItems: 1
-          maxItems: 2
-          description: The active key, then the next key when one is configured.
-          items:
-            type: object
-            additionalProperties: false
-            required: [kty, crv, x, y, kid, use, alg]
-            properties:
-              kty:
-                type: string
-                enum: [EC]
-              crv:
-                type: string
-                enum: [P-384]
-              x:
-                type: string
-                description: The public point's x coordinate, base64url (RFC 7518).
-              y:
-                type: string
-                description: The public point's y coordinate, base64url (RFC 7518).
-              kid:
-                type: string
-                description: The key's configured `kid`.
-              use:
-                type: string
-                enum: [sig]
-              alg:
-                type: string
-                enum: [ES384]
     ApiError:
       type: object
       required: [status, code, detail]
@@ -3586,7 +3331,7 @@ components:
           type: boolean
           description: |
             Whether this session is the Superuser's: its User was a direct member
-            of the Admin group when it signed in, by password or through Epic. Not
+            of the Admin group when it signed in. Not
             a Permission and never listed in `permissions`; no Group can carry it.
             Connector creation and deletion and every token operation require it.
             False while `passwordChangeRequired` is true.
@@ -3596,9 +3341,8 @@ components:
             Whether this session is confined to the change flow. While true, the
             session may call `GET /api/auth/me`, `POST /api/auth/change-password`
             and `DELETE /api/auth/logout`; every other endpoint, `/api/admin/**`
-            included, answers 403. Only a password login's session is confined,
-            when the User's change-required flag is set; an Epic Login's session
-            never is, so this is false for it even while the flag is set.
+            included, answers 403. A session is confined when the User's
+            change-required flag was set as it signed in.
         idleTimeoutSeconds:
           type: integer
           minimum: 1
@@ -3662,8 +3406,7 @@ components:
           type: boolean
           description: |
             Whether the caller's change-required flag is set. Reports the flag,
-            not the session: an Epic Login's session is never confined, and still
-            reads true here while the flag is set.
+            not the session.
         lastAuthenticatedAt:
           type: [string, "null"]
           format: date-time
@@ -3827,7 +3570,7 @@ components:
           description: |
             The change-required flag: whether the identity must replace its
             password before a password login may do anything but submit that
-            change or log out. An Epic Login is not confined by it.
+            change or log out.
             Set by every connector password write and by `unlock` of an identity
             that has a password; cleared only by a successful
             `POST /api/auth/change-password`.
@@ -3836,7 +3579,7 @@ components:
           format: date-time
           description: |
             The last successful login whose session was not confined (a password
-            login made while no password change was required, or any Epic Login),
+            login made while no password change was required),
             completed self-service change, explicit reactivation or Unlock — the
             dormancy basis; null for an identity that has had none.
             Application-owned; not a SCIM attribute.
@@ -4218,9 +3961,8 @@ components:
           enum: [password, sso, null]
           description: |
             How a `LOGIN_SUCCESS` or `LOGIN_FAILURE` was attempted: `password`
-            for password Login, `sso` for an EHR launch from Epic (Epic Login,
-            D15; one Epic organisation per deployment, so `sso` means Epic).
-            `null` for every other operation.
+            for password Login, `sso` for an SSO Login, which the trail keeps
+            ready for one. `null` for every other operation.
         mfaFactor:
           type: [string, "null"]
           enum:
@@ -4241,11 +3983,10 @@ components:
               null,
             ]
           description: |
-            The MFA factor an Epic `LOGIN_SUCCESS` was made with (Epic Login, D17):
-            `idp-attested` while the Epic organisation's MFA is an attestation,
-            or — once `APP_EPIC_MFA_EVIDENCE_REQUIRED` is on — the RFC 8176 factor
-            the `id_token`'s `amr` named. `null` for every other event, a password
-            Login's included.
+            The MFA factor an SSO Login's `LOGIN_SUCCESS` was made with:
+            `idp-attested` when the identity provider attests that its sign-in
+            enforces MFA, or the RFC 8176 factor it named. `null` for every other
+            event, a password Login's included.
         tokenId:
           type: [string, "null"]
           format: uuid

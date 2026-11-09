@@ -54,8 +54,7 @@ they have.
 
 **Home**:
 The signed-in landing page at `/`: where a User arrives after signing in with no
-Return destination, and where a successful Epic Login lands. The login page is
-`/login`.
+Return destination. The login page is `/login`.
 
 **Shell**:
 The layout every signed-in page renders inside — who is signed in, the page
@@ -66,9 +65,8 @@ _Avoid_: frame, app layout
 
 **Sign-in reason**:
 Why a Guest is at the login page — an Expired session, an Idle sign-out, a
-password change, a Lockout that a password change ran into, or an Epic Login
-that was refused or found Epic unavailable — and so what the page says. A cold
-arrival has none.
+password change, or a Lockout that a password change ran into — and so what
+the page says. A cold arrival has none.
 _Avoid_: provenance, login notice flag
 
 **Idle timeout**:
@@ -181,8 +179,8 @@ unconditional.
 
 **Edge whitespace**:
 Whitespace (any Unicode `White_Space` character) at the start or end of a key —
-a unique or looked-up User or Group attribute, a password Login's username, or an
-Epic `id_token`'s `iss` or `sub` — which is refused rather than trimmed.
+a unique or looked-up User or Group attribute, or a password Login's username —
+which is refused rather than trimmed.
 _Avoid_: padding, trailing spaces (the rule covers both edges and every kind of whitespace)
 
 **Practical SCIM protocol profile**:
@@ -283,57 +281,32 @@ _Avoid_: forbidden (for a CSRF refusal, which is not an authorization decision)
 ### Authentication
 
 Rules: [authentication](docs/domain/authentication.md),
-[passwords](docs/domain/passwords.md),
-[epic-login](docs/domain/epic-login.md).
+[passwords](docs/domain/passwords.md).
 
 **Login**:
-The one operation that turns submitted credentials _or an EHR launch_ into a
-session or a refusal. Its login method, `password` or `sso`, is recorded on the
-audit trail's login events and on `session-start`.
+The one operation that turns submitted credentials into a session or a refusal.
+Its login method is recorded on the audit trail's login events and on
+`session-start`: `password`, the only method there is, or `sso`, which the audit
+trail reserves for an SSO Login.
 _Avoid_: sign-on, authenticate (as a noun for the operation), database login
 (a SQL Server principal, see Database)
 
-**EHR launch**:
-Epic opening this application in the clinician's system browser, which signs the
-clinician in through the Epic issuer instead of a password — the User whose
-`userName` is exactly the Practitioner ID Epic proved — and lands on Home with
-its Launch context, which seeds the tab's EHR context. Recorded as login method
-`sso`.
-_Avoid_: SSO, sign-on
-
-**Launch context**:
-What an EHR launch's landing carried — the patient and encounter Epic's token
-response put in context, each a FHIR id, either possibly absent — which seeds
-the EHR context. Passed to the SPA in the landing's fragment, never kept
-server-side, and gone from the URL once read: what the tab then holds is the
-EHR context.
-_Avoid_: SMART context, patient context (for the pair), EHR context (for what
-the tab holds after the landing), `launch` (Epic's opaque launch parameter, a
-different value)
+**SSO Login**:
+A Login whose credential an external identity provider checks rather than this
+service. None exists: the audit trail keeps its login method, `sso`, and its MFA
+factor ready for one.
+_Avoid_: single sign-on (spelled out), federated login
 
 **EHR context**:
-What the EHR had open for this browser tab when it launched the application: a
-patient and an encounter, each a FHIR id, either possibly absent. Kept by the
-tab alone, never server-side, and seeded only by an EHR launch's Launch context.
-_Avoid_: Launch context (for what the tab holds after the landing), SMART
-context, patient context (for the pair), session context
-
-**Epic issuer**:
-The one Epic organisation a deployment trusts to sign clinicians in, named by its
-FHIR base (`APP_EPIC_FHIR_BASE`) and its OpenID Connect issuer
-(`APP_EPIC_OAUTH_ISSUER`).
-_Avoid_: SSO, sign-on, identity provider (for the organisation)
-
-**Epic tokens**:
-The access token, refresh token and `id_token` from a successful EHR launch's
-Login, held server-side on the session it signed in, for that session's life.
-None of them is ever released to the browser.
-_Avoid_: SMART token, FHIR token, OAuth token
+The patient and encounter this browser tab has in context, each a FHIR id,
+either possibly absent. Kept by the tab alone, never server-side, and ended with
+the session. Nothing sets it yet, so a tab holds none.
+_Avoid_: patient context (for the pair), session context
 
 **MFA factor**:
-The second factor an EHR launch's Login was made with, recorded on its
-`LOGIN_SUCCESS`: `idp-attested`, or the factor the `id_token`'s `amr` named. A
-password Login carries none.
+The second factor an SSO Login was made with, recorded on its `LOGIN_SUCCESS`:
+`idp-attested`, or an RFC 8176 factor the identity provider named. A password
+Login carries none.
 _Avoid_: MFA method, authentication method, acr
 
 **Failure run**:

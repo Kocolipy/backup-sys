@@ -9,7 +9,7 @@ import type { Clock } from "@/lib/time";
 
 import { PatientCard } from "./patient-card";
 import {
-  landedFromEpicWith,
+  withPatientInContext,
   page,
   patientReads,
   TAN_WEI_MING,
@@ -44,7 +44,7 @@ const renderCard = (
   clock: Clock = ON_THE_BIRTHDAY,
   permissions: Permission[] = ["patient:read"],
 ) => {
-  landedFromEpicWith(TAN_WEI_MING.id);
+  withPatientInContext(TAN_WEI_MING.id);
   return renderInLayout(
     [{ element: <PatientCard clock={clock} />, path: "/" }],
     "/",

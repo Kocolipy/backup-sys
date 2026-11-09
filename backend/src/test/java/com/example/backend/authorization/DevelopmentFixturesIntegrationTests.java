@@ -126,19 +126,6 @@ class DevelopmentFixturesIntegrationTests {
     }
 
     /**
-     * The Epic clinician the fixtures seed signs in on the fixture password, in no Group and so
-     * holding the baseline Permissions alone, and is not the Superuser.
-     */
-    @Test
-    void theEpicClinicianSignsInHoldingTheBaselinePermissionsAlone() throws Exception {
-        Cookie session = logIn(mvc, DevFixtures.EPIC_CLINICIAN, FIXTURE_PASSWORD);
-
-        assertThat(permissionsOnMe(session)).containsExactly("patient:read");
-        assertThat(me(session).get("superuser").asBoolean()).isFalse();
-        assertThat(groups.findGroupsOfUser(userId(DevFixtures.EPIC_CLINICIAN))).isEmpty();
-    }
-
-    /**
      * The Bootstrap Admin is a direct member of the Admin group, which carries no Permission: it
      * holds everything because it is the Superuser, expanded in code.
      */

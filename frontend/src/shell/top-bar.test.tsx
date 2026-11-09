@@ -6,7 +6,7 @@ import type { Permission } from "@/auth/api";
 import { clearEhrContext } from "@/auth/ehr-context";
 import { bare, holding, json, type Answers } from "@/auth/session-adapter.testHelpers";
 import {
-  landedFromEpicWith,
+  withPatientInContext,
   patientReads,
   TAN_WEI_MING,
   TAN_WEI_MING_READ,
@@ -14,8 +14,8 @@ import {
 
 import { renderInLayout, renderSignedIn } from "./signed-in-shell.testHelpers";
 
-/** The tab loaded at an Epic landing with Tan Wei Ming in context. */
-const landedWithTanWeiMing = () => landedFromEpicWith(TAN_WEI_MING.id);
+/** The tab holds Tan Wei Ming in its EHR context. */
+const withTanWeiMingInContext = () => withPatientInContext(TAN_WEI_MING.id);
 
 /** The layout over a page that reads nothing, for a session holding `permissions`. */
 const renderBar = (permissions: Permission[], answers: Answers = {}) =>
@@ -61,7 +61,7 @@ describe("TopBar", () => {
   });
 
   it("names the patient in context by name and NRIC", async () => {
-    landedWithTanWeiMing();
+    withTanWeiMingInContext();
     await renderBar(["patient:read"], { [TAN_WEI_MING_READ]: json(TAN_WEI_MING) });
 
     expect((await screen.findByRole("region", { name: "Patient in context" })).textContent).toBe(
@@ -70,7 +70,7 @@ describe("TopBar", () => {
   });
 
   it("reads the patient in context once on a page that shows no patient", async () => {
-    landedWithTanWeiMing();
+    withTanWeiMingInContext();
     const { requests } = await renderSignedIn("/settings", holding(["patient:read"]), {
       [TAN_WEI_MING_READ]: json(TAN_WEI_MING),
     });
@@ -86,14 +86,14 @@ describe("TopBar", () => {
   });
 
   it("names no patient, and asks nothing, for a session without patient:read", async () => {
-    landedWithTanWeiMing();
+    withTanWeiMingInContext();
     const { requests } = await renderBar([]);
 
     expect([patientInContext(), patientReads(requests())]).toEqual([null, []]);
   });
 
   it("names no patient, and reports nothing, for a patient that is not there", async () => {
-    landedWithTanWeiMing();
+    withTanWeiMingInContext();
     const { requests } = await renderBar(["patient:read"], { [TAN_WEI_MING_READ]: bare(404) });
     await act(async () => {});
 
@@ -107,7 +107,7 @@ describe("TopBar", () => {
   it.each([403, 503])(
     "reports a %i on the page's error line as a failed read, naming no patient",
     async (status) => {
-      landedWithTanWeiMing();
+      withTanWeiMingInContext();
       await renderBar(["patient:read"], { [TAN_WEI_MING_READ]: bare(status) });
 
       expect(await screen.findByRole("alert")).toHaveTextContent(/^Couldn't load patient$/);
@@ -116,7 +116,7 @@ describe("TopBar", () => {
   );
 
   it("drops the patient as soon as the tab's EHR context is cleared", async () => {
-    landedWithTanWeiMing();
+    withTanWeiMingInContext();
     await renderBar(["patient:read"], { [TAN_WEI_MING_READ]: json(TAN_WEI_MING) });
     await screen.findByRole("region", { name: "Patient in context" });
 

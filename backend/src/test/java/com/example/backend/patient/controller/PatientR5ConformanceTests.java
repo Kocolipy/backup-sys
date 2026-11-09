@@ -100,11 +100,11 @@ class PatientR5ConformanceTests {
     }
 
     /**
-     * Tan Wei Ming is read by his EHR's FHIR id — the Epic sandbox id he borrows — and the resource
+     * Tan Wei Ming is read by his EHR's FHIR id — the sandbox id he borrows — and the resource
      * carries that id as its own.
      */
     @Test
-    void tanWeiMingIsReadByHisEpicSandboxId() throws Exception {
+    void tanWeiMingIsReadByHisSandboxId() throws Exception {
         MockHttpServletResponse response = read("eq081-VQEgP8drUUqCWzHfw3");
 
         assertThat(json.readTree(response.getContentAsString()).get("id").asString())

@@ -135,7 +135,7 @@ class LogEventTests {
     }
 
     /**
-     * ADR 0012's table for a failed outbound call: no answer and a {@code 5xx} are the service
+     * ADR 0014's table for a failed outbound call: no answer and a {@code 5xx} are the service
      * called being unavailable, which passes on its own; every other category needs a person.
      */
     @ParameterizedTest
@@ -530,8 +530,6 @@ class LogEventTests {
             "SCIM_REFUSAL | SCIM request refused",
             "AUDIT_APPEND | Audit event could not be appended; the request was not altered",
             "HTTP_REQUEST_FAULT | Request failed with an unexpected exception",
-            "EPIC_LOGIN | Epic sign-in failed",
-            "EPIC_JWKS_REFETCH | Epic JWKS still lacks the id_token's key after its refetches",
             "LOGIN | Operation failed"})
     void eachOperationsErrorMessage(Operation operation, String message) {
         assertThat(LogEvent.message(operation, LogEvent.MessageSlot.ERROR)).isEqualTo(message);
@@ -593,100 +591,27 @@ class LogEventTests {
                 .isEqualTo("session.max_inactive_interval");
     }
 
-    // ---- Epic Login's outbound records (ADR 0012, D25) ----------------------------------------
+    // ---- an error that needs no person -------------------------------------------------------
 
-    /** {@code error} with its follow-up chosen: Epic being down needs no person of ours. */
+    /** {@code error} with its follow-up chosen: a called service being down needs no person. */
     @Test
     void errorWithoutFollowUpSaysSo() {
-        ILoggingEvent record = only(() -> LogEvent.error(log, Operation.EPIC_LOGIN, 503,
+        ILoggingEvent record = only(() -> LogEvent.error(log, Operation.HTTP_REQUEST_FAULT, 502,
                 ErrorCategory.SERVER, false, Category.NETWORK, Type.ERROR));
 
         assertThat(record.getLevel()).isEqualTo(Level.ERROR);
-        assertThat(record.getMessage()).isEqualTo("Epic sign-in failed");
+        assertThat(record.getMessage()).isEqualTo("Request failed with an unexpected exception");
         assertThat(CapturedLog.fields(record))
-                .containsEntry(LogEvent.ERROR_CODE, 503)
+                .containsEntry(LogEvent.ERROR_CODE, 502)
                 .containsEntry(LogEvent.ERROR_CATEGORY, "server")
                 .containsEntry(LogEvent.ERROR_FOLLOW_UP_ACTION, false)
                 .containsEntry(LogEvent.OUTCOME, "failure")
-                .containsEntry(LogEvent.ACTION, "user-authentication");
+                .containsEntry(LogEvent.LOCAL_ACTION, "http.request.fault");
     }
 
     @Test
-    void outboundStartNamesTheCallItsMethodAndWhereItGoes() {
-        ILoggingEvent record = only(() -> LogEvent.outboundStart(log,
-                "token", "POST", "https://epic.example.org/oauth2/token"));
-
-        assertThat(record.getLevel()).isEqualTo(Level.INFO);
-        assertThat(record.getMessage()).isEqualTo("Epic outbound call started");
-        assertThat(CapturedLog.fields(record))
-                .containsEntry(LogEvent.EPIC_CALL, "token")
-                .containsEntry(LogEvent.HTTP_METHOD, "POST")
-                .containsEntry(LogEvent.URL_FULL, "https://epic.example.org/oauth2/token")
-                .containsEntry(LogEvent.LOCAL_ACTION, "epic.outbound")
-                .containsEntry(LogEvent.CATEGORY, List.of("network"))
-                .containsEntry(LogEvent.TYPE, List.of("connection", "start"))
-                .doesNotContainKeys(LogEvent.OUTCOME, LogEvent.DURATION_MS);
-    }
-
-    @Test
-    void outboundEndCarriesTheStatusTheDurationAndTheOutcome() {
-        ILoggingEvent record = only(() -> LogEvent.outboundEnd(log,
-                "jwks", "GET", "https://epic.example.org/oauth2/jwks", 200, 42));
-
-        assertThat(record.getLevel()).isEqualTo(Level.INFO);
-        assertThat(record.getMessage()).isEqualTo("Epic outbound call completed");
-        assertThat(CapturedLog.fields(record))
-                .containsEntry(LogEvent.HTTP_STATUS_CODE, 200)
-                .containsEntry(LogEvent.DURATION_MS, 42L)
-                .containsEntry(LogEvent.OUTCOME, "success")
-                .containsEntry(LogEvent.TYPE, List.of("connection", "end"));
-    }
-
-    /** A {@code 5xx} is an answer, so still {@code INFO}; the failure is the operation's to log. */
-    @ParameterizedTest
-    @CsvSource({"399, success", "400, failure", "503, failure"})
-    void outboundEndsOutcomeFollowsTheStatus(int status, String outcome) {
-        ILoggingEvent record = only(() -> LogEvent.outboundEnd(log,
-                "token", "POST", "https://epic.example.org/oauth2/token", status, 1));
-
-        assertThat(record.getLevel()).isEqualTo(Level.INFO);
-        assertThat(CapturedLog.fields(record)).containsEntry(LogEvent.OUTCOME, outcome);
-    }
-
-    @Test
-    void outboundFailedIsAnErrorUnderTheNetworkCategoryWithNoFollowUp() {
-        ILoggingEvent record = only(() -> LogEvent.outboundFailed(log,
-                "discovery", "GET", "https://epic.example.org/oauth2/.well-known/x", 5001));
-
-        assertThat(record.getLevel()).isEqualTo(Level.ERROR);
-        assertThat(record.getMessage()).isEqualTo("Epic outbound call failed");
-        assertThat(CapturedLog.fields(record))
-                .containsEntry(LogEvent.ERROR_CODE, 502)
-                .containsEntry(LogEvent.ERROR_CATEGORY, "network")
-                .containsEntry(LogEvent.ERROR_FOLLOW_UP_ACTION, false)
-                .containsEntry(LogEvent.OUTCOME, "failure")
-                .containsEntry(LogEvent.DURATION_MS, 5001L)
-                .containsEntry(LogEvent.EPIC_CALL, "discovery")
-                .containsEntry(LogEvent.TYPE, List.of("connection", "error"));
-    }
-
-    @Test
-    void jwksRefetchWarningNamesTheAttemptAndHasNoOutcomeYet() {
-        ILoggingEvent record = only(() -> LogEvent.jwksRefetchWarning(log, 2));
-
-        assertThat(record.getLevel()).isEqualTo(Level.WARN);
-        assertThat(record.getMessage())
-                .isEqualTo("Epic JWKS refetched: it lacked the id_token's key");
-        assertThat(CapturedLog.fields(record))
-                .containsEntry(LogEvent.RETRY_ATTEMPT, 2)
-                .containsEntry(LogEvent.LOCAL_ACTION, "epic.jwks_refetch")
-                .doesNotContainKey(LogEvent.OUTCOME);
-    }
-
-    @Test
-    void theOutboundKeysAreTheirSpellings() {
-        assertThat(List.of(LogEvent.URL_FULL, LogEvent.EPIC_CALL, LogEvent.RETRY_ATTEMPT))
-                .containsExactly("url.full", "app.epic.call", "app.retry.attempt");
+    void theRetryKeyIsItsSpelling() {
+        assertThat(LogEvent.RETRY_ATTEMPT).isEqualTo("app.retry.attempt");
     }
 
     private static Map<String, Object> classified(

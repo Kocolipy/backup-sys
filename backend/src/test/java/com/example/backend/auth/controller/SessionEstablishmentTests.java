@@ -43,7 +43,7 @@ class SessionEstablishmentTests {
             "ada", null, AuthorityUtils.createAuthorityList("ROLE_USER"));
 
     private final AcceptedLogin passwordLogin =
-            new AcceptedLogin(authentication, SignedIn.password(USER_ID));
+            new AcceptedLogin(authentication, new SignedIn(USER_ID));
 
     /**
      * The application's clock, a day after the test's sessions are created: what the session is
@@ -195,19 +195,17 @@ class SessionEstablishmentTests {
         }
     }
 
-    /** D15: the record says how the Login proved who signed in, as the audit trail spells it. */
+    /** The record says how the Login proved who signed in, as the audit trail spells it. */
     @Test
     void theSessionStartRecordCarriesTheLoginMethod() {
         try (CapturedLog captured = CapturedLog.attach()) {
-            establishment.establish(
-                    new AcceptedLogin(authentication, SignedIn.epic(USER_ID, AuditMfaFactor.OTP)),
-                    new MockHttpServletRequest(),
+            establishment.establish(passwordLogin, new MockHttpServletRequest(),
                     new MockHttpServletResponse());
 
             assertThat(captured.withAction(Level.TRACE, LogEvent.ACTION, "session-start"))
                     .singleElement()
                     .satisfies(record -> assertThat(CapturedLog.fields(record))
-                            .containsEntry(LogEvent.LOGIN_METHOD, "sso"));
+                            .containsEntry(LogEvent.LOGIN_METHOD, "password"));
         }
     }
 }

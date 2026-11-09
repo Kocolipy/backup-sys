@@ -31,9 +31,8 @@ export default defineConfig({
       // To the backend on SERVER_PORT, 8080 when unset (backend-origin.ts).
       // Not the string shorthand, which also sets `changeOrigin: true`: the
       // backend must see the browser's own Host, as it does in production where
-      // it serves the SPA itself, or its redirects — Epic Login's `302 /` among
-      // them — name the backend's own port, where there is no SPA, instead of
-      // this server.
+      // it serves the SPA itself, or its redirects name the backend's own port,
+      // where there is no SPA, instead of this server.
       "/api": { target: backendOrigin(process.env.SERVER_PORT), changeOrigin: false },
     },
     // Vite full-reloads *every* connected page when a watched `.html` under

@@ -6,16 +6,14 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.session.FindByIndexNameSessionRepository;
 
 /**
  * The signed-in session's shape, over a map-backed session: the module reads and writes nothing
- * but the attribute map, the creation time and the idle bound, so a map stands in for the
- * servlet container's session and for Spring Session's alike.
+ * but the attribute map and the creation time, so a map stands in for the servlet container's
+ * session.
  */
 class SignedInSessionTests {
 
@@ -24,10 +22,6 @@ class SignedInSessionTests {
     /** Eight hours from a creation at 08:00Z: the lifetime ends at 16:00Z. */
     private static final AbsoluteSessionLifetimePolicy LIFETIME =
             new AbsoluteSessionLifetimePolicy(Duration.ofHours(8));
-
-    private static final EpicTokenSet TOKENS = EpicTokenSet.issued("access-token-value",
-            Duration.ofHours(1), Instant.parse("2026-10-10T08:00:00Z"), Set.of("openid"),
-            Optional.empty(), "id-token-value");
 
     // ---- the owner's stable id ------------------------------------------------------------------
 
@@ -117,21 +111,6 @@ class SignedInSessionTests {
     }
 
     /**
-     * A Login over a session an EHR launch signed in: the launch's Epic tokens are not the new
-     * User's, and are gone.
-     */
-    @Test
-    void signingInOverAnEarlierSignInLeavesNoEpicTokens() {
-        SignedInSession session = SignedInSession.of(new MapBackedSession());
-        session.signIn(ADA, Instant.parse("2026-10-10T09:00:00Z"));
-        session.keepEpicTokens(TOKENS, LIFETIME, Instant.parse("2026-10-10T09:00:00Z"));
-
-        session.signIn(GRACE, NOON);
-
-        assertThat(session.epicTokens(LIFETIME, NOON)).isEmpty();
-    }
-
-    /**
      * Everything an earlier sign-in kept goes, whatever it was: what is left is the new sign-in
      * alone, the new owner and when it began.
      */
@@ -140,7 +119,6 @@ class SignedInSessionTests {
         MapBackedSession stored = new MapBackedSession();
         SignedInSession session = SignedInSession.of(stored);
         session.signIn(ADA, Instant.parse("2026-10-10T09:00:00Z"));
-        session.keepEpicTokens(TOKENS, LIFETIME, Instant.parse("2026-10-10T09:00:00Z"));
 
         session.signIn(GRACE, NOON);
 
@@ -225,134 +203,9 @@ class SignedInSessionTests {
                 .hasOutlived(LIFETIME, Instant.parse("2026-10-10T16:00:00Z"))).isFalse();
     }
 
-    // ---- Epic tokens ---------------------------------------------------------------------------
-
-    @Test
-    void aSessionKeepingEpicTokensHandsThemOut() {
-        SignedInSession signedIn = SignedInSession.of(new MapBackedSession());
-
-        signedIn.keepEpicTokens(TOKENS, LIFETIME, Instant.parse("2026-10-10T09:00:00Z"));
-
-        assertThat(signedIn.epicTokens(LIFETIME, Instant.parse("2026-10-10T09:00:00Z")))
-                .containsSame(TOKENS);
-    }
-
-    /** A password Login's session: signed in, but nothing of Epic's in it. */
-    @Test
-    void aSessionHoldingNoEpicTokensHandsOutNone() {
-        assertThat(SignedInSession.of(new MapBackedSession())
-                .epicTokens(LIFETIME, Instant.parse("2026-10-10T09:00:00Z"))).isEmpty();
-    }
-
-    /** A session that has ended by its age hands out nothing, whatever the store still holds. */
-    @Test
-    void aSessionPastItsAbsoluteLifetimeHandsOutNoEpicTokens() {
-        MapBackedSession session = new MapBackedSession();
-        session.attributes.put(SignedInSession.EPIC_TOKENS_ATTRIBUTE, TOKENS);
-
-        assertThat(SignedInSession.of(session)
-                .epicTokens(LIFETIME, Instant.parse("2026-10-10T16:00:01Z"))).isEmpty();
-    }
-
-    @Test
-    void aSessionExactlyAtItsAbsoluteLifetimeStillHandsOutItsEpicTokens() {
-        MapBackedSession session = new MapBackedSession();
-        session.attributes.put(SignedInSession.EPIC_TOKENS_ATTRIBUTE, TOKENS);
-
-        assertThat(SignedInSession.of(session)
-                .epicTokens(LIFETIME, Instant.parse("2026-10-10T16:00:00Z"))).containsSame(TOKENS);
-    }
-
-    /** Something else under the tokens' name is not a token set, and is not handed out. */
-    @Test
-    void anEpicTokensAttributeOfAnotherTypeHandsOutNone() {
-        MapBackedSession session = new MapBackedSession();
-        session.attributes.put(SignedInSession.EPIC_TOKENS_ATTRIBUTE, "not a token set");
-
-        assertThat(SignedInSession.of(session)
-                .epicTokens(LIFETIME, Instant.parse("2026-10-10T09:00:00Z"))).isEmpty();
-    }
-
-    // ---- the idle bound, cut to the lifetime's end ----------------------------------------------
-
     /**
-     * The lifetime's end is the Login's: signed in at noon and kept at 19:50Z, ten minutes remain,
-     * though eight hours from the session's creation would be long past.
-     */
-    @Test
-    void keepingEpicTokensCutsTheIdleBoundToWhatRemainsSinceTheLogin() {
-        MapBackedSession stored = new MapBackedSession();
-        SignedInSession session = SignedInSession.of(stored);
-        session.signIn(ADA, NOON);
-
-        session.keepEpicTokens(TOKENS, LIFETIME, Instant.parse("2026-10-10T19:50:00Z"));
-
-        assertThat(stored.idleBound).isEqualTo(Duration.ofMinutes(10));
-    }
-
-    /**
-     * Kept with ten minutes of the lifetime left and a thirty-minute idle bound: the store may
-     * keep the session ten minutes, so the tokens are never stored past the lifetime's end.
-     */
-    @Test
-    void keepingEpicTokensNearTheLifetimesEndCutsTheIdleBoundToWhatRemains() {
-        MapBackedSession session = new MapBackedSession();
-
-        SignedInSession.of(session)
-                .keepEpicTokens(TOKENS, LIFETIME, Instant.parse("2026-10-10T15:50:00Z"));
-
-        assertThat(session.idleBound).isEqualTo(Duration.ofMinutes(10));
-    }
-
-    @Test
-    void keepingEpicTokensFarFromTheLifetimesEndLeavesTheIdleBound() {
-        MapBackedSession session = new MapBackedSession();
-
-        SignedInSession.of(session)
-                .keepEpicTokens(TOKENS, LIFETIME, Instant.parse("2026-10-10T09:00:00Z"));
-
-        assertThat(session.idleBound).isEqualTo(Duration.ofMinutes(30));
-    }
-
-    /** What remains, 14m 29.5s, is counted in whole seconds rounded down. */
-    @Test
-    void aSessionHoldingEpicTokensNearTheLifetimesEndIsBoundedByWhatRemains() {
-        MapBackedSession session = new MapBackedSession();
-        session.attributes.put(SignedInSession.EPIC_TOKENS_ATTRIBUTE, TOKENS);
-
-        SignedInSession.of(session)
-                .boundByLifetime(LIFETIME, Instant.parse("2026-10-10T15:45:30.500Z"));
-
-        assertThat(session.idleBound).isEqualTo(Duration.ofSeconds(869));
-    }
-
-    /** Only a session holding Epic tokens is bounded; any other keeps its idle bound. */
-    @Test
-    void aSessionHoldingNoEpicTokensKeepsItsIdleBoundNearTheLifetimesEnd() {
-        MapBackedSession session = new MapBackedSession();
-
-        SignedInSession.of(session).boundByLifetime(LIFETIME, Instant.parse("2026-10-10T15:50:00Z"));
-
-        assertThat(session.idleBound).isEqualTo(Duration.ofMinutes(30));
-    }
-
-    /**
-     * Whatever is stored under the tokens' name is bounded, not only a well-formed token set: the
-     * bound is about what the store keeps, and it keeps that value as long as the session.
-     */
-    @Test
-    void anythingUnderTheEpicTokensNameIsBoundedByWhatRemains() {
-        MapBackedSession session = new MapBackedSession();
-        session.attributes.put(SignedInSession.EPIC_TOKENS_ATTRIBUTE, "not a token set");
-
-        SignedInSession.of(session).boundByLifetime(LIFETIME, Instant.parse("2026-10-10T15:50:00Z"));
-
-        assertThat(session.idleBound).isEqualTo(Duration.ofMinutes(10));
-    }
-
-    /**
-     * A session as a map of attributes, a creation time and an idle bound: the three things the
-     * module reads and writes.
+     * A session as a map of attributes and a creation time: the two things the module reads and
+     * writes.
      */
     static final class MapBackedSession implements SignedInSession.Attributes {
 
@@ -360,15 +213,12 @@ class SignedInSessionTests {
 
         final Instant createdAt;
 
-        Duration idleBound;
-
         MapBackedSession() {
-            this(Instant.parse("2026-10-10T08:00:00Z"), Duration.ofMinutes(30));
+            this(Instant.parse("2026-10-10T08:00:00Z"));
         }
 
-        MapBackedSession(Instant createdAt, Duration idleBound) {
+        MapBackedSession(Instant createdAt) {
             this.createdAt = createdAt;
-            this.idleBound = idleBound;
         }
 
         @Override
@@ -389,16 +239,6 @@ class SignedInSessionTests {
         @Override
         public Instant createdAt() {
             return createdAt;
-        }
-
-        @Override
-        public Duration idleBound() {
-            return idleBound;
-        }
-
-        @Override
-        public void setIdleBound(Duration idleBound) {
-            this.idleBound = idleBound;
         }
     }
 }

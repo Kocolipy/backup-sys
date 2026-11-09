@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.backend.ServerSession;
 import com.example.backend.ContainerTestConfiguration;
-import com.example.backend.auth.epic.EpicLoginOnContext;
 import com.example.backend.observability.EcsLogCapture;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -40,7 +39,7 @@ import tools.jackson.databind.JsonNode;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Import(ContainerTestConfiguration.class)
 @AutoConfigureMetrics
-class ApiErrorBodyIntegrationTests extends EpicLoginOnContext {
+class ApiErrorBodyIntegrationTests {
 
     private static final String REQUEST_RECORD = "HTTP request completed";
 

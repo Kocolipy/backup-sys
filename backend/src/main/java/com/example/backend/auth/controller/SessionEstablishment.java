@@ -1,6 +1,6 @@
 package com.example.backend.auth.controller;
 
-import com.example.backend.audit.domain.AuditLoginMethod;
+import com.example.backend.auth.application.LoginOutcome;
 import com.example.backend.auth.application.LoginService.AcceptedLogin;
 import com.example.backend.observability.LogContext;
 import com.example.backend.observability.LogEvent;
@@ -31,8 +31,7 @@ import org.springframework.stereotype.Component;
  *
  * <p>A component over the chain's own repositories, and package-private: its one caller is
  * {@link LoginCompletion}, which runs it between the login decision and recording the Login's
- * ending, so no login method's web adapter can sign a session in without the rest of the Login
- * around it.
+ * ending, so no web adapter can sign a session in without the rest of the Login around it.
  */
 @Component
 class SessionEstablishment {
@@ -63,7 +62,7 @@ class SessionEstablishment {
     /**
      * Signs the caller's session in as the Login {@code accepted}: as its authentication, with
      * the authorities the login resolved; indexed and logged by the User's stable id; and with a
-     * {@code session-start} naming its login method (D15).
+     * {@code session-start} naming its login method.
      *
      * @return the signed-in session, under its rotated id
      */
@@ -82,8 +81,7 @@ class SessionEstablishment {
         // Signs the session in to the User's SCIM stable id (SignedInSession owns the
         // attribute), at the application clock's instant, which the absolute session
         // lifetime counts from. Signing in first removes everything an earlier sign-in kept
-        // on this session — a password Login over an EHR launch's session keeps none of its
-        // Epic tokens — and leaves the security context saved above, which
+        // on this session, and leaves the security context saved above, which
         // is not the sign-in's own. The index overrides Spring Session's default
         // principal-index population (which reads Authentication.getName(), i.e. the
         // userName), so AccountSessionsAdapter — and any future stable-id-keyed session
@@ -101,7 +99,7 @@ class SessionEstablishment {
         // before authentication is refused after it; the SPA fetches a new one.
         csrfTokenRepository.saveToken(null, request, response);
 
-        recordSessionStart(accepted.userId(), accepted.signedIn().method(), signedIn);
+        recordSessionStart(accepted.userId(), signedIn);
         return signedIn;
     }
 
@@ -115,20 +113,18 @@ class SessionEstablishment {
      * Writing it here also means the record can carry the User's stable id, which no
      * creation-time record could.
      *
-     * <p>It carries the login method (D15), so the operational stream tells a password Login
-     * from an EHR launch without the audit trail.
+     * <p>It carries the login method, {@code password}, as the audit trail's login events do.
      *
      * <p>The record names the session by nothing: not its id, nor anything derived from it,
      * because the id is the session's bearer credential.
      */
-    private static void recordSessionStart(
-            UUID userId, AuditLoginMethod method, HttpSession session) {
+    private static void recordSessionStart(UUID userId, HttpSession session) {
         try (LogContext.Scope scope = LogContext.userId(userId)) {
             LogEvent.success(log, Operation.SESSION_START, Category.PROCESS, Type.START)
                     .addKeyValue(LogEvent.SEVERITY, Severity.LOW.value())
                     .addKeyValue(LogEvent.SESSION_MAX_INACTIVE_INTERVAL,
                             session.getMaxInactiveInterval())
-                    .addKeyValue(LogEvent.LOGIN_METHOD, method.value())
+                    .addKeyValue(LogEvent.LOGIN_METHOD, LoginOutcome.loginMethod())
                     .log();
         }
     }

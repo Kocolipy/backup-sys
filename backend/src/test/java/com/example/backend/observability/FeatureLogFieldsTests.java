@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.backend.audit.application.AuditLogFields;
 import com.example.backend.auth.application.DormancyLogFields;
-import com.example.backend.auth.application.EpicLoginLogFields;
 import com.example.backend.authorization.domain.PermissionLogFields;
 import com.example.backend.scim.application.ScimLogFields;
 import java.util.List;
@@ -40,14 +39,6 @@ class FeatureLogFieldsTests {
                         PermissionLogFields.PERMISSIONS_LOST))
                 .containsExactly("app.authorization.group_permissions",
                         "app.authorization.permissions_lost");
-    }
-
-    @Test
-    void epicLoginsFieldsKeepTheirSpellings() {
-        assertThat(List.of(EpicLoginLogFields.EPIC_INPUT_FIELD,
-                        EpicLoginLogFields.EPIC_INPUT_RULE, EpicLoginLogFields.MFA_FACTOR))
-                .containsExactly("app.epic.input.field", "app.epic.input.rule",
-                        "app.login.mfa_factor");
     }
 
     @Test

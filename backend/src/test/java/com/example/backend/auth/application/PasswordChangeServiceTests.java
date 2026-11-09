@@ -400,13 +400,13 @@ class PasswordChangeServiceTests {
     }
 
     /**
-     * As on the Login path: a User who signs in only through Epic cannot be locked out by
-     * submitting the change, however often.
+     * As on the Login path: a User with no password cannot be locked out by submitting the
+     * change, however often, nor have its sessions ended by it.
      */
     @Test
     void aUserWithNoCredentialIsNeverLockedOutByRepeatedChanges() {
         ScimUser carol = users.given(ScimIdentities.credentiallessUser("carol"));
-        accountSessions.open(carol.id(), "epic-session");
+        accountSessions.open(carol.id(), "carols-session");
 
         for (int attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
             assertThatThrownBy(() -> service.changePassword(carol.id(), "anything-at-all", NEXT))
@@ -415,7 +415,7 @@ class PasswordChangeServiceTests {
         transaction.commit();
 
         assertThat(users.require("carol").login().isLocked()).isFalse();
-        assertThat(accountSessions.sessionsOf(carol.id())).containsExactly("epic-session");
+        assertThat(accountSessions.sessionsOf(carol.id())).containsExactly("carols-session");
     }
 
     /**

@@ -76,9 +76,8 @@ also an `index.css` change never reaches the page.
 ## Backend contract
 
 **Read `docs/BACKEND_CONTRACT.md`** before changing anything that issues a
-request, reads a status, or touches the CSRF token, the session window, logout,
-Epic Login's landing or the CSP — and update it in the same change when the
-backend side moves.
+request, reads a status, or touches the CSRF token, the session window, logout
+or the CSP — and update it in the same change when the backend side moves.
 
 The closed sets decoded strictly from the API, and every declaration's
 `permission`, are held to `/backend/docs/openapi.yaml` by the root's
@@ -99,21 +98,17 @@ yours.
 
 ### Conditional gates
 
-| Gate               | Command                                              | Trigger                                                                                                                                                                                                           | Done when                                                                                                                                          |
-| ------------------ | ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **scoped Stryker** | `npx stryker run --mutate '<src-glob>,!<test-glob>'` | you wrote or changed a unit test                                                                                                                                                                                  | every mutant killed, or a survivor whose mutated line you read and confirmed leaves observable behaviour unchanged — both go in the change summary |
-| **E2E**            | `make integration-test` (repo root)                  | routes, request handling, the session contract, Epic Login on either side, `index.html`, `vite.config.ts`, a dependency that emits script or style, or the backend's CSP, response headers or SPA serving changed | the script exits zero, every Playwright project green                                                                                              |
-| **fallow audit**   | `npx fallow audit`                                   | you added or deleted an export, a file or a dependency                                                                                                                                                            | zero findings — dead code sits at zero, so any finding is this changeset's                                                                         |
+| Gate               | Command                                              | Trigger                                                                                                                                                                                                          | Done when                                                                                                                                          |
+| ------------------ | ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **scoped Stryker** | `npx stryker run --mutate '<src-glob>,!<test-glob>'` | you wrote or changed a unit test                                                                                                                                                                                 | every mutant killed, or a survivor whose mutated line you read and confirmed leaves observable behaviour unchanged — both go in the change summary |
+| **E2E**            | `make integration-test` (repo root)                  | routes, request handling, the session contract, the Login on either side, `index.html`, `vite.config.ts`, a dependency that emits script or style, or the backend's CSP, response headers or SPA serving changed | the script exits zero, every Playwright project green                                                                                              |
+| **fallow audit**   | `npx fallow audit`                                   | you added or deleted an export, a file or a dependency                                                                                                                                                           | zero findings — dead code sits at zero, so any finding is this changeset's                                                                         |
 
 **E2E** is one run of every Playwright project against one stack:
 `make integration-test` packages the JAR with the SPA, starts SQL Server, Redis
-and the local Epic stand-in (Medplum and the FHIRcast shim), runs the JAR in
-the `local` profile, then `npm run test:e2e`. "Epic Login" in the trigger means
-anything on that path: `backend/.../auth/epic/`, the Epic routes' security or
-session handling, `logInFromEpic`, the SPA's handling of the launch landing, and
-the stand-in itself (the compose `fhircast` services, `backend/fhircast-shim`
-and its seed). Two projects run only there — `epic` and `packaged`, the one
-that loads the JAR's own origin, so an inline script or a
+and the patient source's mock, runs the JAR in the `local` profile, then `npm
+run test:e2e`. One project runs only there — `packaged`, the one that loads the
+JAR's own origin, so an inline script or a
 third-party origin breaks only there: `npm run dev` serves neither the built
 bundle nor the backend's CSP.
 

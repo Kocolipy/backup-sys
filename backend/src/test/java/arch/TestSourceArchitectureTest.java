@@ -23,7 +23,7 @@ public class TestSourceArchitectureTest {
 
     /**
      * The test helpers, by name: a {@code *Fixture} or {@code *Fixtures} class ({@code DevFixtures},
-     * {@code DatabaseConnectionsFixture}) or a {@code Fake*} stand-in ({@code FakeEpic}), top-level
+     * {@code DatabaseConnectionsFixture}) or a {@code Fake*} stand-in, top-level
      * or nested, with the classes nested in one.
      */
     private static final String TEST_HELPERS = ".*[.$](\\w*Fixtures?|Fake\\w*)(\\$.*)?";

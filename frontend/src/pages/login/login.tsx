@@ -9,9 +9,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-/** Always shown: a clinician signs in by opening the application from Epic, not here. */
-const CLINICIANS_LINE = "Clinicians: open this application from Epic.";
-
 export function Login() {
   const location = useLocation();
   // Signed in, the guest route moves on; anything else is the line it hands back.
@@ -65,7 +62,6 @@ export function Login() {
               {pending ? "Signing in…" : "Sign in"}
             </Button>
           </form>
-          <p className="mt-4 text-sm text-muted-foreground">{CLINICIANS_LINE}</p>
         </CardContent>
       </Card>
     </main>

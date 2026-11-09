@@ -26,7 +26,7 @@ import org.springframework.web.client.RestClientException;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * ADR 0012's table for a failed outbound call, at the classifier both outbound adapters use: each
+ * ADR 0014's table for a failed outbound call, at the classifier every outbound adapter uses: each
  * failure as spring-web 7 and the JDK client raise it — the cause chains below are the ones they
  * were seen to raise against a loopback server, the JSON parser's own failures raised by the
  * parser itself — with the client's timeout type and, for a call that times itself, how long it
@@ -175,7 +175,7 @@ class OutboundCallFailureTests {
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("timedFailures")
-    void aFailedCallIsReportedAsAdr0012sTableHasIt(String name, Throwable failure,
+    void aFailedCallIsReportedAsAdr0014sTableHasIt(String name, Throwable failure,
             Duration waited, Classified expected) {
         assertThat(Classified.of(OutboundCallFailure.failed(failure, HttpTimeoutException.class,
                 waited, READ_TIMEOUT))).isEqualTo(expected);
@@ -200,14 +200,14 @@ class OutboundCallFailureTests {
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("untimedFailures")
-    void aFailedCallThatIsNotTimedIsReportedAsAdr0012sTableHasIt(String name, Throwable failure,
+    void aFailedCallThatIsNotTimedIsReportedAsAdr0014sTableHasIt(String name, Throwable failure,
             Classified expected) {
         assertThat(Classified.of(OutboundCallFailure.failed(failure, HttpTimeoutException.class)))
                 .isEqualTo(expected);
     }
 
     /**
-     * Each error status, under its own code: a {@code 5xx} the other service's failure, Epic's
+     * Each error status, under its own code: a {@code 5xx} the other service's failure, a
      * {@code 401} our credential refused, and any other an answer the service cannot use.
      */
     static Stream<Arguments> statuses() {
@@ -223,7 +223,7 @@ class OutboundCallFailureTests {
 
     @ParameterizedTest(name = "a {0}")
     @MethodSource("statuses")
-    void anErrorStatusIsReportedAsAdr0012sTableHasIt(int status, Classified expected) {
+    void anErrorStatusIsReportedAsAdr0014sTableHasIt(int status, Classified expected) {
         assertThat(Classified.of(OutboundCallFailure.answered(status))).isEqualTo(expected);
     }
 }

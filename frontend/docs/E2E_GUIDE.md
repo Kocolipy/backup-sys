@@ -31,12 +31,11 @@ previous one in `dependencies`:
 
 - `routes` holds `console-errors.spec.ts`, which asserts that every signed-in
   route, Accounts among them, loads with no alert. It follows every project
-  whose specs create and delete connectors (`admin`, and `epic` when
-  declared): Accounts reads each listed connector's tokens, and a
+  whose specs create and delete connectors (`admin`): Accounts reads each listed connector's tokens, and a
   connector another worker deleted between the listing and that read showed
   an alert there.
-- `guest` follows `routes` (and the `epic` and `packaged` projects below, when
-  declared) because `login.spec.ts` signs in as the seeded Admin, and beside the
+- `guest` follows `routes` (and the `packaged` project below, when declared)
+  because `login.spec.ts` signs in as the seeded Admin, and beside the
   `admin` project it turned that project's specs into 401s.
 - `dormancy` runs last and alone: it signs in as the Helpdesk fixture User
   and consumes the `dormant` fixture's locked state, which only a backend
@@ -50,25 +49,14 @@ Running one project alone still runs every project ahead of it in the chain.
 `playwright.config.ts` carries the reason beside each `dependencies` line;
 update both together.
 
-The `epic` and `packaged` projects sit outside that chain, declared only by the
+The `packaged` project sits outside that chain, declared only by the
 environment `make integration-test` sets up, so a bare `npm run test:e2e`
-against a backend started some other way runs without them. Each depends on
-`setup` and replays the Admin session, so `epic` runs beside `admin`, `packaged`
-after it for the same reason `routes` does, and `guest` lists each declared one
-in its `dependencies` as well: `login.spec.ts` signing in as the seeded Admin
-would end the session they replay. The routing arch test reads their `testMatch`
-either way:
+against a backend started some other way runs without it. It depends on `setup`
+and replays the Admin session, runs after `admin` for the same reason `routes`
+does, and `guest` lists it in its `dependencies` as well: `login.spec.ts`
+signing in as the seeded Admin would end the session it replays. The routing
+arch test reads its `testMatch` either way:
 
-- **`epic`** holds `epic-launch.spec.ts`, and is declared when
-  `E2E_FHIRCAST_FHIR_BASE` names Medplum's FHIR base: the backend's Epic Login
-  points at the local Epic stand-in (Medplum and the FHIRcast shim), and the
-  project runs against it (`/backend/docs/configuration/epic-login.md`, "Local
-  Epic stand-in"). It replays the Admin session only to issue a SCIM token;
-  every sign-in it makes, an EHR launch through Medplum, is of a User it
-  provisions itself. `epic-stand-in.helpers.ts` holds what the spec takes from
-  the stand-in: Medplum's sign-in page, a `SmartAppLaunch`, the clinicians the
-  Medplum seed makes, and the backend fixture patients it makes available under
-  their Epic ids (Tan Wei Ming, whom the default launch names).
 - **`packaged`** holds `packaged-csp.spec.ts` and `packaged-type.spec.ts` and
   is declared when
   `E2E_PACKAGED_BASE_URL` names the packaged JAR. Its `baseURL` is the JAR's
@@ -163,17 +151,6 @@ spec must never sweep by prefix during a run: specs run in parallel, so a prefix
 sweep deletes a fixture another spec is still using. Leftovers from a run that
 died before its `finally` are swept once, by `sweepLeftovers()` in
 `auth.setup.ts`, before any other project starts.
-
-The one exception is a `userName` another server holds, which the spec cannot
-give an `e2e-` name: an EHR launch through Medplum signs in the Practitioner id
-Medplum holds, so its User is named with that id — that of the clinician the
-seed makes for each `epic` case. The seed makes each at a fixed UUID in
-`compose.yaml`, the only id Medplum takes from a client, so the name is the same
-on every run. Such a User is provisioned only through
-`provisionServerNamedUser`, which deletes any User already holding the exact
-name — the leftover `sweepLeftovers()` cannot see — before provisioning its own.
-That is safe only because one spec alone provisions that name; a second spec
-must not share it, so the seed makes each case a clinician of its own.
 
 A spec that needs a known **backend defect** to be visible marks the test
 `test.fail(true, "#<issue>: …")`: the suite stays green while the issue is open

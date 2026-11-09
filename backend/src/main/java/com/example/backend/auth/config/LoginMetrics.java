@@ -1,18 +1,17 @@
 package com.example.backend.auth.config;
 
-import com.example.backend.audit.domain.AuditLoginMethod;
 import com.example.backend.audit.domain.AuditRefusalReason;
 import com.example.backend.auth.application.LoginCounts;
+import com.example.backend.auth.application.LoginOutcome;
 import com.example.backend.auth.application.PasswordRefusalReason;
-import com.example.backend.auth.domain.EpicLoginFailureReason;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 
 /**
- * The {@code login} counter (ADR 0012, "Metrics"), the adapter of {@link LoginCounts}: one count
- * per Login that ended, by either login method, tagged by its {@code method} — {@code password} or
- * {@code sso} — its {@code outcome} — {@code success}, {@code refused} or, for an Epic Login only,
- * {@code unavailable} — and its {@code reason}.
+ * The {@code login} counter (ADR 0001, "One {@code login} counter"), the adapter of
+ * {@link LoginCounts}: one count per Login that ended, tagged by its {@code method} —
+ * {@code password} — its {@code outcome} — {@code success} or {@code refused} — and its
+ * {@code reason}.
  *
  * <p>A success carries {@code reason=none}, so every series of the meter has the same tag keys,
  * which Prometheus requires of one metric name; a refusal carries its reason by the
@@ -21,13 +20,11 @@ import io.micrometer.core.instrument.MeterRegistry;
  * count names no account, so it may carry it.
  *
  * <p>Every series exists from the start, at zero: an alert on a count's increase then sees the
- * first event too, which a series appearing at 1 would hide from it. Those are each method's own
- * outcomes and reasons — a password Login's {@link PasswordRefusalReason} list, and an Epic
- * Login's {@link EpicLoginFailureReason} list — and nothing else.
+ * first event too, which a series appearing at 1 would hide from it. Those are a success and
+ * each of {@link PasswordRefusalReason}'s reasons, and nothing else.
  *
- * <p>Registered whether or not Epic Login is on ({@link LoginMetricsConfig}), because password
- * Login always is; in this configuration package because that is the adapter layer the onion
- * layering lets implement an application port.
+ * <p>In this configuration package because that is the adapter layer the onion layering lets
+ * implement an application port ({@link LoginMetricsConfig}).
  */
 public final class LoginMetrics implements LoginCounts {
 
@@ -40,8 +37,7 @@ public final class LoginMetrics implements LoginCounts {
     /** How a Login ended, as the {@code outcome} tag spells it. */
     private enum Outcome {
         SUCCESS("success"),
-        REFUSED("refused"),
-        UNAVAILABLE("unavailable");
+        REFUSED("refused");
 
         private final String tag;
 
@@ -54,42 +50,27 @@ public final class LoginMetrics implements LoginCounts {
 
     public LoginMetrics(MeterRegistry registry) {
         this.registry = registry;
-        for (AuditLoginMethod method : AuditLoginMethod.values()) {
-            ending(method, Outcome.SUCCESS, NO_REASON);
-        }
+        ending(Outcome.SUCCESS, NO_REASON);
         for (PasswordRefusalReason reason : PasswordRefusalReason.values()) {
-            ending(AuditLoginMethod.PASSWORD, Outcome.REFUSED, reason.audited().name());
+            ending(Outcome.REFUSED, reason.audited().name());
         }
-        for (EpicLoginFailureReason reason : EpicLoginFailureReason.values()) {
-            if (reason != EpicLoginFailureReason.EPIC_UNAVAILABLE) {
-                ending(AuditLoginMethod.SSO, Outcome.REFUSED, reason.audited().name());
-            }
-        }
-        ending(AuditLoginMethod.SSO, Outcome.UNAVAILABLE,
-                EpicLoginFailureReason.EPIC_UNAVAILABLE.audited().name());
     }
 
     @Override
-    public void signedIn(AuditLoginMethod method) {
-        // The registry hands back the one meter per method, outcome and reason, registering it once.
-        ending(method, Outcome.SUCCESS, NO_REASON).increment();
+    public void signedIn() {
+        // The registry hands back the one meter per outcome and reason, registering it once.
+        ending(Outcome.SUCCESS, NO_REASON).increment();
     }
 
     @Override
-    public void refused(AuditLoginMethod method, AuditRefusalReason reason) {
-        ending(method, Outcome.REFUSED, reason.name()).increment();
+    public void refused(AuditRefusalReason reason) {
+        ending(Outcome.REFUSED, reason.name()).increment();
     }
 
-    @Override
-    public void unavailable() {
-        ending(AuditLoginMethod.SSO, Outcome.UNAVAILABLE,
-                EpicLoginFailureReason.EPIC_UNAVAILABLE.audited().name()).increment();
-    }
-
-    private Counter ending(AuditLoginMethod method, Outcome outcome, String reason) {
+    private Counter ending(Outcome outcome, String reason) {
         return Counter.builder(LOGIN)
                 .description("Logins that ended, by login method, outcome and refusal reason")
-                .tag("method", method.value())
+                .tag("method", LoginOutcome.loginMethod())
                 .tag("outcome", outcome.tag)
                 .tag("reason", reason)
                 .register(registry);

@@ -134,9 +134,8 @@ CREATE TABLE scim_users (
     -- that points at one, so there is no second identifier to keep in step.
     resource_id                    UNIQUEIDENTIFIER  NOT NULL,
 
-    -- As the connector sent it, case and all. What is rendered back. Also the
-    -- Epic Practitioner ID an Epic Login links to, so an SSO
-    -- identity is stored here and nowhere else. 256 code points.
+    -- As the connector sent it, case and all. What is rendered back. 256 code
+    -- points.
     user_name                      VARCHAR(1024)     NOT NULL,
 
     -- The normalized form uniqueness is decided on, stored rather than computed
@@ -503,7 +502,7 @@ CREATE TABLE scim_connectors (
 -- name at the same moment both pass a prior read, and the second INSERT then violates
 -- this, which the persistence adapter reports as the name being taken. Compared under
 -- the database collation, Latin1_General_100_BIN2_UTF8, so equality is exact and
--- case-sensitive: "Epic" and "epic" are two names. The application trims the name
+-- case-sensitive: "Acme" and "acme" are two names. The application trims the name
 -- before it is stored, so the comparison never turns on edge whitespace.
 --
 -- Filtered to live rows, as uq_scim_resources_reserved_name is filtered to reserved
@@ -732,18 +731,17 @@ CREATE TABLE audit_events (
     -- anything is recorded. NULL for every other event.
     permissions          VARCHAR(MAX),
 
-    -- How a Login was attempted (Epic Login, D15): `password` for password
-    -- Login, `sso` for an EHR launch from Epic. Carried by LOGIN_SUCCESS and
-    -- LOGIN_FAILURE only, and NULL for every other event. A value from the
-    -- closed vocabulary in code (AuditLoginMethod), never one a caller submitted.
+    -- How a Login was attempted: `password` for password Login, `sso` for an
+    -- SSO Login. Carried by LOGIN_SUCCESS and LOGIN_FAILURE only, and NULL for
+    -- every other event. A value from the closed vocabulary in code
+    -- (AuditLoginMethod), never one a caller submitted.
     login_method         VARCHAR(16),
 
-    -- The MFA factor an Epic Login was made with (Epic Login, D17):
-    -- `idp-attested` while the Epic organisation's MFA is an attestation, or the
-    -- RFC 8176 factor the id_token's `amr` named once the evidence is required.
-    -- Carried by an Epic LOGIN_SUCCESS only, and NULL for every other event — a
-    -- password Login's included. A value from the closed vocabulary in code
-    -- (AuditMfaFactor), never one Epic sent.
+    -- The MFA factor an SSO Login was made with: `idp-attested` when the
+    -- identity provider attests that its sign-in enforces MFA, or the RFC 8176
+    -- factor it named. Carried by an SSO Login's LOGIN_SUCCESS only, and NULL for
+    -- every other event — a password Login's included. A value from the closed
+    -- vocabulary in code (AuditMfaFactor), never one an identity provider sent.
     mfa_factor           VARCHAR(16),
 
     -- A connector token event names the token it concerns. The connector stays

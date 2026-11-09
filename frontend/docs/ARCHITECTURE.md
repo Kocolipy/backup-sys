@@ -13,7 +13,7 @@ What is here, and where a new concern belongs.
 
 ```
 src/
-  main.tsx            composition root — seeds the EHR context from an Epic landing's Launch context, mounts React, imports index.css
+  main.tsx            composition root — mounts React, imports index.css
   App.tsx             app root — BrowserRouter, AuthProvider, the route table
   index.css           Tailwind entry + the design tokens
   vite-env.d.ts       /// <reference types="vite/client" />
@@ -85,18 +85,14 @@ straight into `lib/http`) but may never point back up.
   starts the next. `generation()` reads it, and `expire(generation)` ends the
   session as `expired` only while that generation is still current, so a
   `401` that lands after a sign-out or a fresh sign-in changes nothing.
-- `ehr-context.ts` — the tab's **EHR context**, what the EHR had open for the
-  tab (a patient and an encounter), as a subscribable store under one
-  `sessionStorage` key: `adoptLaunchLanding()` (called by `main.tsx` before
-  the router reads the URL) reads an Epic landing's fragment, its Launch
-  context, holds each value to FHIR's id grammar, seeds the EHR context with it
-  and strips the fragment; `ehrContext()` reads it back, decoded rather than
-  trusted, the same value until it changes, and `null` when the tab holds none
-  — which is how the SPA knows an EHR launch began the session;
-  `subscribeEhrContext()` / `useEhrContext()` re-render a reader when it
+- `ehr-context.ts` — the tab's **EHR context**, the patient and encounter the
+  tab has in context, as a subscribable store under one `sessionStorage` key:
+  `setEhrContext()` replaces it, holding each value to FHIR's id grammar, and
+  nothing in the SPA calls it yet; `ehrContext()` reads it back, decoded rather
+  than trusted, the same value until it changes, and `null` when the tab holds
+  none; `subscribeEhrContext()` / `useEhrContext()` re-render a reader when it
   changes; and `clearEhrContext()` forgets it, on every session end and a
-  password Login. Only a landing seeds it: nothing moves it while the session
-  lasts.
+  password Login.
 - `auth-context.tsx` — the `AuthProvider`: checks the session on mount and on
   `retrySessionCheck` (`ok` signs in, `401` ends, anything else is
   `checkFailed`) and maps each session event onto a transition with its sign-in
@@ -105,9 +101,8 @@ straight into `lib/http`) but may never point back up.
   does not pull in the provider. `useAuth` exposes no way to _end_ a session and
   no sign-in reason; that is `useAuthState`'s, internal to `src/auth`.
 - `sign-in-reason.ts` — the closed set of **sign-in reasons**, how each
-  reaches the login page (router state, or the backend's
-  `?signin=refused|unavailable` marker for the Epic two), which wins (an Epic
-  marker), and the copy. Router state is decoded against the set, never cast.
+  reaches the login page (router state), and the copy. Router state is decoded
+  against the set, never cast.
   `signInNoticeFor` is all the login page calls.
 - `session-route.ts` — `resolveSessionRoute`, the whole routing contract as one
   pure transition table (see "Routing").
@@ -474,8 +469,7 @@ Guest to login with a return destination and the provider's sign-in reason;
 **confines a flagged session** (`passwordChangeRequired: true` on `/me`) to
 `/change-password`, ahead of the Permission check and any return destination;
 renders a Permission-guarded route for a session holding any of its
-Permissions; and redirects every other session to Home. An Epic Login is never
-confined, since `/me` reports it unflagged. The guards decide what is
+Permissions; and redirects every other session to Home. The guards decide what is
 _rendered_; Spring Security decides what is _permitted_.
 
 `BrowserRouter` means real paths, so the backend serves `index.html` for any

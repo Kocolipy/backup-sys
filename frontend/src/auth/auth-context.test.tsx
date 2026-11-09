@@ -17,7 +17,7 @@ import type { LoginOutcome, LogoutOutcome, PasswordChangeOutcome } from "./api";
 import { AuthProvider } from "./auth-context";
 import { AUTH_REQUESTS, testUser } from "./auth-context.testHelpers";
 import { useAuthState } from "./auth-context-value";
-import { adoptLaunchLanding, ehrContext } from "./ehr-context";
+import { ehrContext, setEhrContext } from "./ehr-context";
 
 // The provider is the subject, so it runs for real over the backend layer: the
 // session check, the session actions and the token all go over the wire, and
@@ -514,14 +514,11 @@ describe("AuthProvider", () => {
 describe("AuthProvider and the EHR context", () => {
   const PATIENT = "eq081-VQEgP8drUUqCWzHfw3";
 
-  /** The tab landed from an Epic launch with `PATIENT` in context, as the page loads. */
-  const landedFromEpic = () => {
-    window.history.replaceState(null, "", `/#patient=${PATIENT}`);
-    adoptLaunchLanding();
-  };
+  /** The tab holds `PATIENT` in context, as the page loads. */
+  const withPatientInContext = () => setEhrContext({ patient: PATIENT });
 
   it("keeps it when the start-up check finds the session signed in, as on a reload", async () => {
-    landedFromEpic();
+    withPatientInContext();
 
     await mounted(SIGNED_IN);
 
@@ -529,7 +526,7 @@ describe("AuthProvider and the EHR context", () => {
   });
 
   it("clears it on sign-out", async () => {
-    landedFromEpic();
+    withPatientInContext();
     const session = await mounted({ ...SIGNED_IN, [LOGOUT]: bare(204) });
 
     await settle(session, (auth) => auth.logout());
@@ -538,7 +535,7 @@ describe("AuthProvider and the EHR context", () => {
   });
 
   it("clears it when the session expires", async () => {
-    landedFromEpic();
+    withPatientInContext();
     const { result } = await mounted(SIGNED_IN);
 
     act(() => result.current.expireSession(result.current.sessionGeneration()));
@@ -547,7 +544,7 @@ describe("AuthProvider and the EHR context", () => {
   });
 
   it("clears it on an Idle sign-out", async () => {
-    landedFromEpic();
+    withPatientInContext();
     const session = await mounted({ ...SIGNED_IN, [LOGOUT]: bare(204) });
 
     await settle(session, (auth) => auth.signOutForInactivity());
@@ -556,7 +553,7 @@ describe("AuthProvider and the EHR context", () => {
   });
 
   it("clears it on a password change", async () => {
-    landedFromEpic();
+    withPatientInContext();
     const session = await mounted({ ...SIGNED_IN, [CHANGE]: bare(204) });
 
     await settle(session, (auth) => auth.changePassword(OLD_VALUE, NEW_VALUE));
@@ -565,7 +562,7 @@ describe("AuthProvider and the EHR context", () => {
   });
 
   it("clears it on a password Login", async () => {
-    landedFromEpic();
+    withPatientInContext();
     const session = await mounted({ ...SIGNED_IN, [LOGIN]: json(USER) });
 
     await settle(session, (auth) => auth.login(...CREDENTIALS));
@@ -574,7 +571,7 @@ describe("AuthProvider and the EHR context", () => {
   });
 
   it("keeps it through a login that reached no verdict", async () => {
-    landedFromEpic();
+    withPatientInContext();
     const session = await mounted({ ...SIGNED_IN, [LOGIN]: bare(500) });
 
     await settle(session, (auth) => auth.login(...CREDENTIALS));

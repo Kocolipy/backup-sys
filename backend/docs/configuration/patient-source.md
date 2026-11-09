@@ -24,8 +24,8 @@ source"). The SPA never reaches it.
   kept: `https://patients.internal/fhir/r4/` reads
   `https://patients.internal/fhir/r4/Patient/{id}`. The test JVMs drop it
   (`pom.xml`); the tests point every context at their own mock.
-- **Timeouts:** 2 seconds to connect, fixed, and 5 to answer by default, as
-  Epic's defaults are (ADR 0012, D25). `APP_PATIENT_SOURCE_READ_TIMEOUT` sets
+- **Timeouts:** 2 seconds to connect, fixed, and 5 to answer by default
+  (ADR 0014). `APP_PATIENT_SOURCE_READ_TIMEOUT` sets
   the second in either of Boot's duration styles (`1500ms`, `PT1.5S`); blank is
   the default, and anything but a positive duration fails startup. A source
   slower than that is the Patient card's failed state, a `502`. No redirect is

@@ -195,9 +195,9 @@ final class AuditRows {
 
     /**
      * A login event: one about the User the attempt named, carrying how the Login was attempted
-     * (D15) and, on an Epic success, the MFA factor (D17), each rendered from its closed set.
+     * and, on an SSO Login's success, the MFA factor, each rendered from its closed set.
      *
-     * @param factor the MFA factor, or {@code null} for every event but an Epic success
+     * @param factor the MFA factor, or {@code null} for every event but an SSO Login's success
      */
     static AuditEvent login(
             Audited.Stamp stamp, Change change, AuditLoginMethod method, AuditMfaFactor factor) {

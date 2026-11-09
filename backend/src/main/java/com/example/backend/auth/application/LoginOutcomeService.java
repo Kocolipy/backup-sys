@@ -1,18 +1,10 @@
 package com.example.backend.auth.application;
 
-import com.example.backend.audit.domain.AuditLoginMethod;
-import com.example.backend.audit.domain.AuditTrail;
-import com.example.backend.audit.domain.Audited;
-import com.example.backend.auth.application.LoginOutcome.EpicRefused;
-import com.example.backend.auth.application.LoginOutcome.FailedCall;
 import com.example.backend.auth.application.LoginOutcome.PasswordRefused;
 import com.example.backend.auth.application.LoginOutcome.SignedIn;
-import com.example.backend.auth.application.LoginOutcome.Unavailable;
-import com.example.backend.auth.domain.EpicLoginFailureReason;
 import com.example.backend.observability.LogContext;
 import com.example.backend.observability.LogEvent;
 import com.example.backend.observability.LogEvent.Category;
-import com.example.backend.observability.LogEvent.ErrorCategory;
 import com.example.backend.observability.LogEvent.Operation;
 import com.example.backend.observability.LogEvent.Type;
 import com.example.backend.observability.SessionHash;
@@ -22,65 +14,41 @@ import org.slf4j.spi.LoggingEventBuilder;
 import org.springframework.stereotype.Service;
 
 /**
- * Records how a Login ended, by either login method (ADR 0012, flow steps 6–8, and ADR 0001 for
- * password Login): the one place each ending's log line and counts are written, and an Epic
- * Login's failure record, so no two endings — and no two login methods — can disagree about what
- * an ending emits. When each ending is recorded is the web adapter's Login completion's
- * ({@code LoginCompletion}), which runs one order for both methods: a success only once its
- * session is signed in (ADR 0001) — save for a password Login's refusal, which the login decision
- * ({@link LoginService}) records once its transaction has committed. Where the browser goes next
- * is each method's web adapter's, and a function of the outcome alone: a password Login's bare
- * {@code 401}, an Epic Login's redirect.
+ * Records how a Login ended (ADR 0001): the one place each ending's log line and counts are
+ * written, so no two endings can disagree about what an ending emits. When each ending is
+ * recorded is the web adapter's Login completion's ({@code LoginCompletion}): a success only once
+ * its session is signed in (ADR 0001) — save for a refusal, which the login decision
+ * ({@link LoginService}) records once its transaction has committed. The browser is answered by
+ * the web adapter, as a function of the outcome alone.
  *
  * <p>What a Login did to the login state, and the audit records written with it, are not here:
- * they are the login decision's, in its own transaction. The fail-closed {@code LOGIN_SUCCESS}
- * of either method, and a password Login's {@code LOGIN_FAILURE} with the failure it counted, are
- * written there ({@link LoginService}), so a refusal is decided, counted and audited together.
+ * they are the login decision's, in its own transaction. The fail-closed {@code LOGIN_SUCCESS},
+ * and a refusal's {@code LOGIN_FAILURE} with the failure it counted, are written there
+ * ({@link LoginService}), so a refusal is decided, counted and audited together.
  *
  * <ul>
  *   <li><b>Signed in.</b> The {@code user-authentication} record at {@code INFO}, naming the
- *       User and the login method (D15) — and an Epic Login's MFA factor (D17) — and
- *       {@code login} {@code outcome=success}.
- *   <li><b>Refused.</b> One {@code WARN} saying only that the Login was refused — "Login
- *       refused", or "Epic sign-in refused" with the field and rule of a refused input — but never
- *       the reason, which is the audit trail's alone (Logging §2.2; ADR 0012, "the account reasons
- *       are audit-only"); and {@code login} {@code outcome=refused} with the reason. A password
- *       Login's reason is the one its {@code LOGIN_FAILURE} was recorded under
- *       ({@link PasswordRefused#recorded}): {@code UNKNOWN_ACCOUNT} when it was recorded against
- *       nobody. An Epic Login's refusal is also its {@code LOGIN_FAILURE}, written here under the
- *       login method with its reason, naming the refused User if the login decision found one,
- *       and counting toward no failure run (D12). A refusal that was an Epic call answering with
- *       something unusable is also that call's {@code ERROR}, followed up: a key or a
- *       registration is likely wrong.
- *   <li><b>Unavailable</b>, an Epic Login only. A {@code LOGIN_FAILURE} with
- *       {@code EPIC_UNAVAILABLE} and no subject, and {@code login} {@code outcome=unavailable}.
- *       The call's {@code ERROR}, with no follow-up, is written here for a {@code 5xx} only: a
- *       call that got no answer was already logged at {@code ERROR}, with its stack, by the
- *       outbound interceptor that saw it fail, and one event is logged once.
+ *       User and the login method, and {@code login} {@code outcome=success}.
+ *   <li><b>Refused.</b> One {@code WARN} saying only "Login refused", never the reason, which
+ *       is the audit trail's alone (Logging §2.2); and {@code login} {@code outcome=refused} with
+ *       the reason its {@code LOGIN_FAILURE} was recorded under ({@link PasswordRefused#recorded}):
+ *       {@code UNKNOWN_ACCOUNT} when it was recorded against nobody.
  * </ul>
  *
  * <p>Every ending's records carry {@code session.hash} when a session is named — for a refusal the
  * session the Login ran in, for a success the session it signed in — and no user field but
- * a success's: the session the browser held is not whom the attempt was for. No record carries a
- * password Login's submitted username, nor anything Epic sent, nor the Practitioner ID. Every
- * failed Epic call is also counted by its call and category, so a refused credential
- * ({@code cert/auth}) can be alerted on.
+ * a success's: the session the browser held is not whom the attempt was for. No record carries
+ * the submitted username.
  */
 @Service
 public class LoginOutcomeService {
 
     private static final Logger log = LoggerFactory.getLogger(LoginOutcomeService.class);
 
-    private final AuditTrail audit;
-
     private final LoginCounts counts;
 
-    private final EpicCallCounts epicCalls;
-
-    public LoginOutcomeService(AuditTrail audit, LoginCounts counts, EpicCallCounts epicCalls) {
-        this.audit = audit;
+    public LoginOutcomeService(LoginCounts counts) {
         this.counts = counts;
-        this.epicCalls = epicCalls;
     }
 
     /**
@@ -94,98 +62,34 @@ public class LoginOutcomeService {
         String sessionHash = SessionHash.of(sessionId);
         switch (outcome) {
             case SignedIn signedIn -> signedIn(signedIn, sessionHash);
-            case PasswordRefused refused -> passwordRefused(refused, sessionHash);
-            case EpicRefused refused -> epicRefused(refused, sessionHash);
-            case Unavailable unavailable -> unavailable(unavailable, sessionHash);
+            case PasswordRefused refused -> refused(refused, sessionHash);
         }
     }
 
     private void signedIn(SignedIn signedIn, String sessionHash) {
         try (LogContext.Scope resolved = LogContext.userId(signedIn.userId())) {
-            LoggingEventBuilder record = inSession(LogEvent.success(
+            inSession(LogEvent.success(
                             log, Operation.LOGIN, Category.PROCESS, Type.USER, Type.ALLOWED)
-                    .addKeyValue(LogEvent.LOGIN_METHOD, signedIn.method().value()), sessionHash);
-            if (signedIn.mfaFactor() != null) {
-                record.addKeyValue(EpicLoginLogFields.MFA_FACTOR, signedIn.mfaFactor().value());
-            }
-            record.log();
+                    .addKeyValue(LogEvent.LOGIN_METHOD, LoginOutcome.loginMethod()),
+                    sessionHash).log();
         }
-        counts.signedIn(signedIn.method());
+        counts.signedIn();
     }
 
     /**
-     * A password Login's refusal, already counted and audited by the login decision that refused
-     * it ({@link LoginService}): its {@code WARN}, and its count under the reason it was recorded
-     * under.
+     * A refusal, already counted and audited by the login decision that refused it
+     * ({@link LoginService}): its {@code WARN}, and its count under the reason it was recorded
+     * under. The {@code WARN} says that the Login was refused, in which session — and never why
+     * (Logging §2.2).
      */
-    private void passwordRefused(PasswordRefused refused, String sessionHash) {
+    private void refused(PasswordRefused refused, String sessionHash) {
         try (LogContext.Scope unresolved = LogContext.userId(null)) {
-            refusedWarning(Operation.LOGIN, refused, sessionHash).log();
+            inSession(LogEvent.refused(
+                            log, Operation.LOGIN, Category.PROCESS, Type.USER, Type.DENIED)
+                    .addKeyValue(LogEvent.LOGIN_METHOD, LoginOutcome.loginMethod()),
+                    sessionHash).log();
         }
-        counts.refused(refused.method(), refused.recorded().audited());
-    }
-
-    private void epicRefused(EpicRefused refused, String sessionHash) {
-        if (refused.failedCall() != null) {
-            logFailedCall(refused.failedCall(), sessionHash);
-            epicCalls.failedCall(refused.failedCall().call(), refused.failedCall().category());
-        }
-        // Counted toward no failure run (D12): Epic checked the credential, not us, so the User's
-        // login state is neither read nor written. Fail-open, as every refusal's append is.
-        audit.append(new Audited.LoginRefusal(
-                refused.subjectId(), refused.reason().audited(), refused.method()));
-        try (LogContext.Scope unresolved = LogContext.userId(null)) {
-            LoggingEventBuilder warning =
-                    refusedWarning(Operation.EPIC_LOGIN, refused, sessionHash);
-            if (refused.field() != null) {
-                warning.addKeyValue(EpicLoginLogFields.EPIC_INPUT_FIELD, refused.field().value());
-            }
-            if (refused.rule() != null) {
-                warning.addKeyValue(EpicLoginLogFields.EPIC_INPUT_RULE, refused.rule().value());
-            }
-            warning.log();
-        }
-        counts.refused(refused.method(), refused.reason().audited());
-    }
-
-    private void unavailable(Unavailable unavailable, String sessionHash) {
-        FailedCall call = unavailable.failedCall();
-        if (call.category() != ErrorCategory.NETWORK) {
-            logFailedCall(call, sessionHash);
-        }
-        epicCalls.failedCall(call.call(), call.category());
-        audit.append(new Audited.LoginRefusal(
-                null, EpicLoginFailureReason.EPIC_UNAVAILABLE.audited(), AuditLoginMethod.SSO));
-        counts.unavailable();
-    }
-
-    /**
-     * The one {@code ERROR} of a failed Epic call: which call, and its {@code error.category}
-     * (ADR 0012, "Log") and code, followed up unless Epic was merely unavailable.
-     */
-    private static void logFailedCall(FailedCall failed, String sessionHash) {
-        try (LogContext.Scope unresolved = LogContext.userId(null)) {
-            // be-log-sensitive-value matches any value named "code", for Epic's authorization
-            // code (ADR 0012, D22). This one is the failed call's error.code -- the HTTP status
-            // the failure maps to, never a value Epic sent -- so it is suppressed on this one
-            // record and nowhere else.
-            inSession(LogEvent.error(log, Operation.EPIC_LOGIN, failed.code(), failed.category(), // nosemgrep: be-log-sensitive-value
-                            !failed.unavailable(), Category.NETWORK, Type.ERROR)
-                    .addKeyValue(LogEvent.EPIC_CALL, failed.call())
-                    .addKeyValue(LogEvent.LOGIN_METHOD, AuditLoginMethod.SSO.value()), sessionHash)
-                    .log();
-        }
-    }
-
-    /**
-     * The one {@code WARN} of a refused Login, under {@code operation}: that it was refused, by
-     * which login method, in which session — and never why (Logging §2.2).
-     */
-    private static LoggingEventBuilder refusedWarning(
-            Operation operation, LoginOutcome.Refused refused, String sessionHash) {
-        return inSession(LogEvent.refused(
-                        log, operation, Category.PROCESS, Type.USER, Type.DENIED)
-                .addKeyValue(LogEvent.LOGIN_METHOD, refused.method().value()), sessionHash);
+        counts.refused(refused.recorded().audited());
     }
 
     /**

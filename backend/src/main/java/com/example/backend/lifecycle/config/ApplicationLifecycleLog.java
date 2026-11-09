@@ -1,7 +1,6 @@
 package com.example.backend.lifecycle.config;
 
 import com.example.backend.audit.domain.AuditRetentionPolicy;
-import com.example.backend.auth.epic.EpicLogin;
 import com.example.backend.observability.LogEvent;
 import com.example.backend.observability.LogEvent.Category;
 import com.example.backend.observability.LogEvent.Operation;
@@ -30,9 +29,7 @@ import org.springframework.stereotype.Component;
  * says which instance this is and how it is configured, so an operator can confirm a
  * deployment from its log without reading its artefacts: {@code host.name} and
  * {@code host.ip}, the active profiles, and the effective value of each non-secret setting
- * that changes what the service does — the Epic Login switch included, with the signing keys'
- * {@code kid}s while it is on, which Epic Login adds itself ({@link EpicLogin#addStartupFields}).
- * Effective, not configured: the windows and periods
+ * that changes what the service does. Effective, not configured: the windows and periods
  * whose defaults belong to a domain policy are read from that policy, so an unset setting is
  * logged as the default it resolved to rather than as absent. {@code service.*} is not added
  * here; the ECS formatter writes it on every record.
@@ -74,7 +71,6 @@ public class ApplicationLifecycleLog {
     private final ApplicationContext context;
     private final Environment environment;
     private final ScimReleaseGate scimGate;
-    private final EpicLogin epicLogin;
     private final DormancyPolicy dormancy;
     private final AuditRetentionPolicy retention;
 
@@ -82,13 +78,11 @@ public class ApplicationLifecycleLog {
             ApplicationContext context,
             Environment environment,
             ScimReleaseGate scimGate,
-            EpicLogin epicLogin,
             DormancyPolicy dormancy,
             AuditRetentionPolicy retention) {
         this.context = context;
         this.environment = environment;
         this.scimGate = scimGate;
-        this.epicLogin = epicLogin;
         this.dormancy = dormancy;
         this.retention = retention;
     }
@@ -101,15 +95,15 @@ public class ApplicationLifecycleLog {
         LoggingEventBuilder record = LogEvent.success(log,
                         Operation.APPLICATION_STARTUP, Category.PROCESS, Type.START)
                 .addKeyValue(LogEvent.SEVERITY, Severity.LOW.value());
-        record = withHost(record)
+        withHost(record)
                 .addKeyValue(PROFILES, List.of(environment.getActiveProfiles()))
                 .addKeyValue(SCIM_ENABLED, scimGate.open())
                 .addKeyValue(DORMANCY_LOCKOUT_WINDOW,
                         dormancy.lockoutWindow().toString())
                 .addKeyValue(DORMANCY_MEMBERSHIP_REVOCATION_WINDOW,
                         dormancy.membershipRevocationWindow().toString())
-                .addKeyValue(AUDIT_RETENTION_PERIOD, retention.period().toString());
-        epicLogin.addStartupFields(record).log();
+                .addKeyValue(AUDIT_RETENTION_PERIOD, retention.period().toString())
+                .log();
     }
 
     @EventListener

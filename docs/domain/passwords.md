@@ -32,12 +32,7 @@ change was last required. There is no deadline for the change; see
 change-required flag is set. It holds no Permission and not even baseline access,
 a Superuser's included, so it may call only `GET /api/auth/me`, the self-service
 change and logout; every other endpoint, `/api/admin/**` and `/api/self`
-included, answers `403`. An [Epic Login](./epic-login.md) is never confined: it
-presents no password of this service's, so the imposed credential the flag marks
-is not what it used, and it receives the authorities the User would hold with the
-flag clear (ADR 0007, "The change-required flag"). A User who only ever signs in
-through Epic therefore never has to replace the imposed password; that password
-still buys only a confined session. Whether a Login is confined is read from the
+included, answers `403`. Whether a Login is confined is read from the
 flag as stored when the Login is decided under the User's lock — the same reading
 that decides whether the Login moves the dormancy basis — so a change required
 while the password was being compared confines the session it issues, and the

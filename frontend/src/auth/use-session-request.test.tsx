@@ -7,7 +7,7 @@ import { bare, deferred, fakeBackend, json, type Answers } from "@/lib/fake-back
 import { AuthProvider } from "./auth-context";
 import { AuthContext, useAuthState, type AuthContextState } from "./auth-context-value";
 import { AUTH_REQUESTS, authState, signedIn, testUser } from "./auth-context.testHelpers";
-import { adoptLaunchLanding, ehrContext } from "./ehr-context";
+import { ehrContext, setEhrContext } from "./ehr-context";
 import { useSessionRequest } from "./use-session-request";
 
 // The hook reads one thing from the session — `expireSession` — so it runs
@@ -156,8 +156,7 @@ describe("useSessionRequest, as the session changes under a request", () => {
     await act(async () => {
       await result.current.auth.login("ada", "chosen-1");
     });
-    window.history.replaceState(null, "", `/#patient=${PATIENT}`);
-    adoptLaunchLanding();
+    setEhrContext({ patient: PATIENT });
 
     await read.settle(bare(401));
 

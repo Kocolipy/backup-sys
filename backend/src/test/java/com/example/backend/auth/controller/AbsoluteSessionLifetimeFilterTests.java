@@ -7,7 +7,6 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import com.example.backend.audit.CapturedLog;
 import com.example.backend.auth.MutableClock;
 import com.example.backend.auth.domain.AbsoluteSessionLifetimePolicy;
-import com.example.backend.auth.domain.EpicTokenSet;
 import com.example.backend.auth.domain.SignedInSession;
 import com.example.backend.observability.EndedSession;
 import com.example.backend.observability.LogContext;
@@ -171,36 +170,4 @@ class AbsoluteSessionLifetimeFilterTests {
         }
         assertThat(EndedSession.markedOn(request)).isFalse();
     }
-
-    // ---- a session holding Epic tokens is stored no longer than its lifetime -----------
-
-    /** The deployed idle bound, 15 minutes. */
-    private static final int IDLE_SECONDS = 900;
-
-    private static final EpicTokenSet TOKENS = EpicTokenSet.issued("access-token-value",
-            Duration.ofHours(1), Instant.parse("2026-10-09T09:00:00Z"), Set.of("openid"),
-            Optional.empty(), "id-token-value");
-
-    /** A session's request at {@code age}, through the filter; the session, after it. */
-    private static MockHttpSession requestedAt(Duration age, boolean holdingEpicTokens)
-            throws Exception {
-        MockHttpServletRequest request = new MockHttpServletRequest();
-        MockHttpSession session = (MockHttpSession) request.getSession();
-        session.setMaxInactiveInterval(IDLE_SECONDS);
-        if (holdingEpicTokens) {
-            session.setAttribute(SignedInSession.EPIC_TOKENS_ATTRIBUTE, TOKENS);
-        }
-        AbsoluteSessionLifetimeFilter filter = new AbsoluteSessionLifetimeFilter(POLICY,
-                new MutableClock(Instant.ofEpochMilli(session.getCreationTime()).plus(age)));
-        filter.doFilter(request, new MockHttpServletResponse(), new MockFilterChain());
-        return session;
-    }
-
-    /** Five minutes from the lifetime's end, a request may renew the session for five only. */
-    @Test
-    void aSessionHoldingEpicTokensNearItsLifetimesEndIsRenewedOnlyUntilThatEnd() throws Exception {
-        assertThat(requestedAt(Duration.ofHours(7).plusMinutes(55), true).getMaxInactiveInterval())
-                .isEqualTo(300);
-    }
-
 }

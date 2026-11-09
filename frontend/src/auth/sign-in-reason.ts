@@ -2,7 +2,7 @@
  * The **sign-in reason**: why a Guest is at the login page, and what it says.
  *
  * The one owner of the closed set of reasons, how each one reaches the login
- * page, which wins when two arrive at once, and the copy for each. Nothing else
+ * page, and the copy for each. Nothing else
  * in the SPA decides any of those: the provider records a reason, the routing
  * contract carries it, and the login page renders the notice this module gives.
  */
@@ -54,31 +54,13 @@ const SESSION_END_REASONS: ReadonlySet<unknown> = new Set<SessionEndReason>([
   "password-changed",
 ]);
 
-/**
- * The reasons an Epic launch lands with. Epic Login reaches the SPA by
- * full-page navigation, so these arrive as the backend's `?signin=` query
- * marker on the login page, `/login?signin=…`, rather than router state.
- */
-type EpicLandingReason = "epic-refused" | "epic-unavailable";
-
-type SignInReason = SessionEndReason | EpicLandingReason;
-
 /** The router-state field a session-ending redirect carries its reason in. */
 export interface SignInReasonState {
   reason?: SessionEndReason;
 }
 
-/**
- * The backend-owned `?signin=` wire values (`EpicLanding.java`) and the reason
- * each names. Any other value names none.
- */
-const EPIC_MARKERS: ReadonlyMap<string | null, EpicLandingReason> = new Map([
-  ["refused", "epic-refused"],
-  ["unavailable", "epic-unavailable"],
-]);
-
 /** The copy for each reason; exhaustive, so a new reason cannot ship without its own. */
-function noticeFor(reason: SignInReason): string {
+function noticeFor(reason: SessionEndReason): string {
   switch (reason) {
     case "expired":
       return "Your session ended. Please sign in again.";
@@ -90,19 +72,11 @@ function noticeFor(reason: SignInReason): string {
       return "Too many incorrect passwords: the account is now locked and your session has ended. An Admin must Unlock the account before you can sign in again.";
     case "password-changed":
       return "Your password was changed. Sign in with your new password.";
-    case "epic-refused":
-      // Neutral on purpose: the backend gives the browser no reason, and the
-      // SPA invents none.
-      return "Sign-in from Epic was refused";
-    case "epic-unavailable":
-      // Distinct from a refusal, because relaunching shortly may well succeed.
-      return "Sign-in from Epic is temporarily unavailable. Try again shortly.";
   }
 }
 
-/** Where the login page is, as far as the notice is concerned. */
+/** Where the login page is, as far as the notice is concerned: its router state. */
 interface LoginLocation {
-  search: string;
   state: unknown;
 }
 
@@ -116,17 +90,8 @@ function carriedReason(state: unknown): SessionEndReason | undefined {
   return SESSION_END_REASONS.has(reason) ? (reason as SessionEndReason) : undefined;
 }
 
-/**
- * The reason the login page was reached with. An Epic marker wins over any
- * router state: the landing is a fresh navigation, so state the history entry
- * happens to carry is stale.
- */
-function signInReasonAt({ search, state }: LoginLocation): SignInReason | undefined {
-  return EPIC_MARKERS.get(new URLSearchParams(search).get("signin")) ?? carriedReason(state);
-}
-
 /** The notice the login page shows for how it was reached, or `null` for none. */
-export function signInNoticeFor(location: LoginLocation): string | null {
-  const reason = signInReasonAt(location);
+export function signInNoticeFor({ state }: LoginLocation): string | null {
+  const reason = carriedReason(state);
   return reason ? noticeFor(reason) : null;
 }

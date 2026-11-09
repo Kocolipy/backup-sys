@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.backend.ContainerTestConfiguration;
 import com.example.backend.SessionCookie;
-import com.example.backend.auth.epic.EpicLoginOnContext;
 import java.net.CookieManager;
 import java.net.CookiePolicy;
 import java.net.HttpCookie;
@@ -40,7 +39,7 @@ import tools.jackson.databind.JsonNode;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Import(ContainerTestConfiguration.class)
 @AutoConfigureMetrics
-class SessionStartLogIntegrationTests extends EpicLoginOnContext {
+class SessionStartLogIntegrationTests {
 
     private static final String SESSION_STARTED = "Session started";
 
@@ -110,7 +109,7 @@ class SessionStartLogIntegrationTests extends EpicLoginOnContext {
         assertThat(record.at("/app/event/action").isMissingNode())
                 .as("an exact action keeps no local name").isTrue();
         assertThat(record.at("/app/login/method").asText())
-                .as("D15: a password Login's session-start names its method")
+                .as("a password Login's session-start names its method")
                 .isEqualTo("password");
 
         assertThat(signedInCookie).as("the login rotated the id").isNotEqualTo(anonymousCookie);

@@ -52,9 +52,8 @@ the lists.
   package and need no edit.
 - The Surefire forks drop every `.env.example` key (`excludedEnvironmentVariables`
   in `pom.xml`): add a new runtime variable there when you add it to
-  `.env.example`. Epic is faked on loopback (`FakeEpic`), and the in-house
-  patient source by WireMock in process, serving the local mock's own stub
-  files (`PatientSourceStubs`); a test that reaches a real host is a defect.
+  `.env.example`. The in-house patient source is faked by WireMock in
+  process, serving the local mock's own stub files (`PatientSourceStubs`); a test that reaches a real host is a defect.
 - A broken test is corrected from source authority or removed with `git rm`;
   `@Disabled` and skip markers stay out of the tree.
 - A suite-shaping change (a deletion, a gate edit, a measured runtime) records
@@ -107,17 +106,6 @@ is a change to the tests' fixtures: `/docs/domain/patient.md` ("The patient
 source's fixtures") has the rules they hold, and
 `docs/configuration/patient-source.md` the setting and the port.
 
-### The FHIRcast shim
-
-`fhircast-shim/` is the local Epic stand-in's FHIRcast shim, Medplum seed and
-the writer of the managed `.env` block `make fhircast-up` keeps — plain Node, no
-dependencies, run by compose on the pinned Node image and never built by Maven.
-The shim fronts Medplum, passing its token endpoint and everything else that
-is not the shim's own through; `docs/configuration/epic-login.md` ("Local Epic
-stand-in") has what it serves. Semgrep scans it; `make
-integration-test` runs its unit tests. Iterate with
-`node --test fhircast-shim/test/*.test.mjs`.
-
 ## Architecture constraints
 
 **Read `docs/ARCHITECTURE.md` before changing any of these** — adding a
@@ -127,8 +115,7 @@ rule's mechanics, the ArchUnit rule that holds it, and the reason.
 
 - Spring Security owns authentication; its state lives in the HTTP session,
   which Spring Session persists in Redis.
-- Public: login, CSRF, health, the SPA's files, the Epic JWKS and Epic Login's
-  browser routes (`404` while Epic Login is off). Everything else on the
+- Public: login, CSRF, health and the SPA's files. Everything else on the
   application chain is deny-by-default (ADR 0015).
 - Every protected handler declares its Permission — or `hasRole('SUPERUSER')`
   for connector administration and setting a Group's Permissions — with

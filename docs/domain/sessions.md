@@ -44,8 +44,7 @@ status turns `authenticated`. Owned by the route guards, so no page navigates on
 its own behalf after signing in.
 
 **Home** — the signed-in landing page, at `/`, and the default destination: a
-sign-in with no return destination lands there, as does a successful Epic Login,
-and an authenticated visitor on the login page (`/login`) or on a page it may not
+sign-in with no return destination lands there, and an authenticated visitor on the login page (`/login`) or on a page it may not
 see is sent there. `/` is a protected route like any other, so a Guest's cold
 visit records it as the return destination and goes to `/login`. A path with no
 route of its own goes to `/`, which is Home for a User and login for a Guest.
@@ -68,36 +67,30 @@ returns to login with the sign-in reason `inactive` — the code's name for it, 
 the glossary's. `/frontend/docs/BACKEND_CONTRACT.md` is the contract.
 
 **Sign-in reason** — why a Guest is at the login page, from a closed set of
-six: an expired session, an idle sign-out, the User's own successful password
-change, a password change whose wrong current passwords reached the lockout
+four: an expired session, an idle sign-out, the User's own successful password
+change, and a password change whose wrong current passwords reached the lockout
 threshold (`locked`: the account is locked, every session of the User revoked,
-and it must be Unlocked before the User signs in again), an Epic refusal and
-Epic being unavailable. The first four the SPA records itself when it ends the
-session, one at a time, and carries in router state; the Epic two arrive as the
-backend's `?signin=refused` or `?signin=unavailable` landing marker. An Epic
-marker wins over any router state, since the landing is a fresh navigation. A
+and it must be Unlocked before the User signs in again). The SPA records each
+itself when it ends the session, one at a time, and carries it in router state. A
 password change and a lockout carry no return destination, so the next sign-in
 lands on the default; the other two do. A cold arrival and a logout carry none
 and the login page says nothing. A refused Login records none either, and its
 refusal never says "locked", which would tell a guesser the account exists:
 only the User's own session, ended by its own change, is told of the lockout.
 `frontend/src/auth/sign-in-reason.ts` is the one owner of the set, the
-carriage, the precedence and the copy.
+carriage and the copy.
 
-**One session per User** — an accepted Login, by either login method, ends every
+**One session per User** — an accepted Login ends every
 other session the User holds, so signing in from a second browser signs the first
 out; the first sees an expired session.
 
-**A Login starts from a clean session** — an accepted Login, by either login
-method, signs in the session the browser already holds (under a rotated id), and
-signing in removes everything an earlier sign-in left on it: its owner, its Epic
-tokens, and any state a later sign-in keeps. So a password Login from a stale
-`/login` tab, in a browser an EHR launch signed in, holds none of that
-clinician's Epic tokens, as no password Login's session does. The absolute
-session lifetime restarts with it. What the session's frameworks keep — the
-security context the Login saves, the CSRF token it drops — is theirs. An EHR
-launch also ends whatever session the browser held before it begins
-([Epic Login](./epic-login.md)).
+**A Login starts from a clean session** — an accepted Login signs in the session
+the browser already holds (under a rotated id), and signing in removes
+everything an earlier sign-in left on it: its owner, its sign-in instant, and any
+state a later sign-in keeps. So a password Login from a stale `/login` tab, in a
+browser another User signed in, carries none of that User's sign-in over. The
+absolute session lifetime restarts with it. What the session's frameworks keep —
+the security context the Login saves, the CSRF token it drops — is theirs.
 
 ## Session revocation
 

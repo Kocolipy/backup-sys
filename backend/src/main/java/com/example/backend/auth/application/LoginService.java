@@ -2,16 +2,12 @@ package com.example.backend.auth.application;
 
 import com.example.backend.audit.domain.AuditLoginMethod;
 import com.example.backend.audit.domain.AuditLoginStateAttribute;
-import com.example.backend.audit.domain.AuditMfaFactor;
 import com.example.backend.audit.domain.AuditTrail;
 import com.example.backend.audit.domain.Audited;
-import com.example.backend.auth.application.LoginOutcome.EpicRefused;
 import com.example.backend.auth.application.LoginOutcome.PasswordRefused;
 import com.example.backend.auth.application.LoginOutcome.SignedIn;
 import com.example.backend.auth.application.LoginStateService.LoginVerdict;
 import com.example.backend.auth.application.LoginStateService.VerifiedPassword;
-import com.example.backend.auth.domain.EpicLoginFailureReason;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -21,14 +17,13 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Logging in: submitted credentials become either an authentication or a refusal, and the attempt
- * is counted against the account either way. The one module a password Login runs through — it
+ * is counted against the account either way. The one module a Login runs through — it
  * authenticates, decides under the User's lock, counts a failure and writes the Login's audit
- * record — and the one an Epic Login is decided by.
+ * record.
  *
  * <p>The counting is here rather than at the call site because it is part of what logging in
  * <em>is</em> — an entry point that authenticated credentials without it would silently have no
@@ -71,8 +66,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  * a trail that cannot be written must not change that answer. The {@code LOGIN_SUCCESS} is
  * fail-closed and joins the transaction, so a success the trail cannot record takes the cleared
  * run down with it, and is not a success ({@link AuditTrail}; ADR 0004). The transaction is not
- * retried on a deadlock, and neither is an Epic Login's: a Login is neither a SCIM nor an
- * administrative write, and the person signing in tries again.
+ * retried on a deadlock: a Login is neither a SCIM nor an administrative write, and the person
+ * signing in tries again.
  */
 @Service
 public class LoginService {
@@ -165,7 +160,7 @@ public class LoginService {
      * distinction worth having.
      *
      * <p>A refusal's log line and counts are written through {@link LoginOutcomeService}, the one
-     * module that logs and counts how a Login ended by either method, once its transaction has
+     * module that logs and counts how a Login ended, once its transaction has
      * committed. An acceptance's are not: the Login has not ended until the caller has signed the
      * session in, so the caller records the {@link SignedIn} it is handed once it has, naming the
      * session the User goes on to use ({@code LoginCompletion}; ADR 0001). Neither record carries
@@ -254,14 +249,14 @@ public class LoginService {
                     // compared — the refusal the authentication would have made a moment later —
                     // or a password replaced meanwhile, which makes the submitted one wrong:
                     // counted already, as that refusal is, on the state it was decided from.
-                    case LoginVerdict.Refused<PasswordRefusalReason> refused ->
+                    case LoginVerdict.Refused refused ->
                             refusalRecorded(userId, refused);
-                    case LoginVerdict.Accepted<PasswordRefusalReason> granted -> {
+                    case LoginVerdict.Accepted granted -> {
                         signedInRecorded(new Audited.LoginSuccess(userId, AuditLoginMethod.PASSWORD),
                                 userId, retainedSessionId);
                         yield LoginDecision.signedIn(accepted(
                                 identities.issued(authentication, granted.authorities()),
-                                SignedIn.password(userId)));
+                                new SignedIn(userId)));
                     }
                 })
                 // Deleted since the authentication read it, before or after the comparison: gone
@@ -275,7 +270,7 @@ public class LoginService {
 
     /** The User {@code userId}'s Login, refused under its lock as {@code refused} says. */
     private LoginDecision refusalRecorded(
-            UUID userId, LoginVerdict.Refused<PasswordRefusalReason> refused) {
+            UUID userId, LoginVerdict.Refused refused) {
         return refusalRecorded(
                 new PasswordRefused(userId, refused.reason()), refused.change().moved());
     }
@@ -303,94 +298,7 @@ public class LoginService {
     }
 
     /**
-     * The login decision for an Epic Login (ADR 0012, flow step 6): the clinician Epic proved, named
-     * by the Practitioner ID its {@code fhirUser} carried, becomes an authentication — or a
-     * refusal.
-     *
-     * <p>The User is the one whose stored {@code userName} equals the Practitioner ID exactly
-     * ({@link LoginIdentityService#loadEpicLinkedUser}), and it is refused if there is none, or
-     * it is locked or deactivated — Lockout and deactivation apply to Epic Login exactly as to
-     * password Login (D12), and are checked once, under the User's lock as the success is
-     * recorded ({@link LoginStateService#epicLogin}), in the login-state module's order
-     * (locked first), so one committed after the User was read refuses the Login too. A User the
-     * module finds gone under the lock — deleted since it was read — is refused as
-     * {@code ACCOUNT_DISABLED}, naming the User, with nothing written. Otherwise its
-     * authorities are those password Login gives the same User, read under that same lock rather
-     * than from the linking read before it, and the success is recorded
-     * exactly as password Login's is, under method {@code sso}: failure run cleared, dormancy
-     * basis moved, {@code LOGIN_SUCCESS} fail-closed, and every other session of the User revoked
-     * after the commit. All of it in one transaction, so a success the trail cannot record is not
-     * a success. It differs in the MFA factor its {@code LOGIN_SUCCESS} carries (D17), and in
-     * moving the dormancy basis even while the User's change-required flag is set: an Epic Login
-     * is never confined by the flag, so it is real use of the account. The flag itself is left
-     * set: only a successful password change clears it.
-     *
-     * <p>No password is compared: Epic checked the credential, not us. Nothing Epic sent is kept
-     * here: Epic's tokens are kept by the web adapter, on the session it signs in, only once this
-     * has accepted the User (ADR 0012, D29); the Practitioner ID is not logged.
-     *
-     * <p>A refusal is recorded here, through {@link LoginOutcomeService}, so no caller can refuse
-     * an Epic Login without the record: its {@code LOGIN_FAILURE} names its
-     * {@link EpicLoginFailureReason} and the refused User's stable id — none for
-     * {@code UNKNOWN_ACCOUNT}, whose ID is not recorded at all — and, unlike password Login's,
-     * counts toward no failure run (D12). An acceptance is not: its {@code LOGIN_SUCCESS} is,
-     * fail-closed, but the Login has not ended until the caller has signed the session in, so
-     * the caller records the {@link SignedIn} it is handed once it has — after this transaction
-     * commits, and naming the session the User goes on to use.
-     *
-     * @param practitionerId    the Practitioner ID Epic's {@code id_token} named
-     * @param retainedSessionId the id the caller's session is stored under, which the Login
-     *                          continues in; {@code null} when it holds none
-     * @param mfaFactor         the MFA factor the Login was made with (D17), recorded on its
-     *                          {@code LOGIN_SUCCESS}
-     * @return how the decision ended — a {@link SignedIn} with the accepted Login, or a
-     *     {@link EpicRefused}, already recorded, when no acceptable User is linked to the Practitioner
-     *     ID: none matches it exactly, or the one that does is the Bootstrap Admin, deactivated
-     *     or locked
-     */
-    @Transactional
-    public LoginDecision logInFromEpic(
-            String practitionerId, String retainedSessionId, AuditMfaFactor mfaFactor) {
-        Optional<LoginPrincipal> linked = identities.loadEpicLinkedUser(practitionerId);
-        if (linked.isEmpty()) {
-            // No subject: the ID named nobody acceptable, and is itself never recorded.
-            return refused(EpicRefused.account(null, EpicLoginFailureReason.UNKNOWN_ACCOUNT),
-                    retainedSessionId);
-        }
-        // Read once; from here on the User is its stable id, as a password Login's is.
-        LoginPrincipal user = linked.get();
-        Objects.requireNonNull(mfaFactor, "an Epic Login always carries an MFA factor (D17)");
-        // Locked or deactivated, decided once, under the User's lock and in the module's one
-        // order, and the session's authority read there: the read above is not checked first,
-        // and lends the session none of its own, so the two cannot disagree.
-        UUID userId = user.userId();
-        return loginState.epicLogin(userId)
-                .map(verdict -> switch (verdict) {
-                    case LoginVerdict.Refused<EpicLoginFailureReason> refused ->
-                            refused(EpicRefused.account(userId, refused.reason()),
-                                    retainedSessionId);
-                    case LoginVerdict.Accepted<EpicLoginFailureReason> granted -> {
-                        signedInRecorded(
-                                new Audited.LoginSuccess(userId, AuditLoginMethod.SSO, mfaFactor),
-                                userId, retainedSessionId);
-                        yield LoginDecision.signedIn(accepted(
-                                identities.issued(user, granted.authorities()),
-                                SignedIn.epic(userId, mfaFactor)));
-                    }
-                })
-                // Deleted since it was read: refused as an account no longer usable, naming the
-                // User the Practitioner ID was linked to (docs/domain/epic-login.md).
-                .orElseGet(() -> refused(EpicRefused.account(
-                        userId, EpicLoginFailureReason.ACCOUNT_DISABLED), retainedSessionId));
-    }
-
-    private LoginDecision refused(EpicRefused refusal, String retainedSessionId) {
-        outcomes.record(refusal, retainedSessionId);
-        return new LoginDecision(refusal, Optional.empty());
-    }
-
-    /**
-     * Records an accepted Login of either method, decided under the User's lock, in its
+     * Records an accepted Login, decided under the User's lock, in its
      * transaction: its {@code LOGIN_SUCCESS}, fail-closed, so a success the trail cannot record
      * rolls back with the cleared run; and the end of every other session of {@code userId} but
      * {@code retainedSessionId}, once that commits.
@@ -415,8 +323,8 @@ public class LoginService {
      * the security context and the identity's stable id — the SCIM resource id the
      * web adapter writes into the session index, so application-owned session
      * lookups survive a later {@code userName} change instead of following
-     * {@code authentication.getName()}. Its {@link SignedIn} is the outcome the caller records once the session is signed in, and names
-     * the login method the session is signed in by.
+     * {@code authentication.getName()}. Its {@link SignedIn} is the outcome the caller records
+     * once the session is signed in.
      */
     public record AcceptedLogin(Authentication authentication, SignedIn signedIn) {
 
@@ -427,7 +335,7 @@ public class LoginService {
     }
 
     /**
-     * How a login decision ended, by either login method: its {@link LoginOutcome}, and the
+     * How a login decision ended: its {@link LoginOutcome}, and the
      * accepted Login the caller establishes the session from — present exactly when the outcome
      * is {@link SignedIn}, and then that accepted Login's own. A refusal it carries is already
      * recorded; a {@link SignedIn} is the caller's to record, once the session is signed in.

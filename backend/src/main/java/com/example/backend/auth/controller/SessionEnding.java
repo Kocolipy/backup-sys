@@ -72,10 +72,10 @@ class SessionEnding {
         PASSWORD_CHANGED(false),
 
         /**
-         * A Login ended without signing anyone in — refused by its decision, or failed before one
-         * — so whatever session the browser held, whoever it belonged to, ends (ADR 0001, step 5;
-         * ADR 0012, D24). Its outcome is recorded by {@code LoginOutcomeService} — a refused
-         * password Login's audit record by its decision, {@code LoginService}, already. No
+         * A Login ended without signing anyone in — refused by its decision — so whatever session
+         * the browser held, whoever it belonged to, ends (ADR 0001, step 4). Its outcome is
+         * recorded by {@code LoginOutcomeService}, and its audit record by its decision,
+         * {@code LoginService}, already. No
          * {@code Clear-Site-Data}: the SPA answers a refused Login on the login page it is on.
          */
         LOGIN_SIGNED_NOBODY_IN(false);

@@ -1,20 +1,20 @@
 package com.example.backend.audit.domain;
 
 /**
- * The multi-factor authentication an Epic {@code LOGIN_SUCCESS} was made with (ADR 0012,
- * D17): a closed set, as every classification crossing the {@link AuditTrail} is, so no value
- * Epic sent can reach the trail as text.
+ * The multi-factor authentication an SSO Login's {@code LOGIN_SUCCESS} was made with: a closed
+ * set, as every classification crossing the {@link AuditTrail} is, and the one the
+ * {@code mfa_factor} column's CHECK constraint holds, so no value an identity provider sent can
+ * reach the trail as text.
  *
- * <p>While Epic has not confirmed that an EHR launch's {@code id_token} carries {@code amr}, the
- * Epic organisation's MFA is an attestation, recorded as {@link #IDP_ATTESTED}. Once it has, and
- * the switch requiring the evidence is on, the factor is the one {@code amr} named: an RFC 8176
- * Authentication Method Reference value that is a possession or inherence factor, or
- * {@link #MFA} when {@code amr} said only {@code mfa}. A password ({@code pwd}) or a PIN is never
- * a second factor, and so never the one recorded.
+ * <p>An identity provider's attestation that its sign-in enforces MFA is {@link #IDP_ATTESTED};
+ * otherwise the factor is an RFC 8176 Authentication Method Reference value that is a possession
+ * or inherence factor, or {@link #MFA} when the provider said only {@code mfa}. A password
+ * ({@code pwd}) or a PIN is never a second factor, and so never the one recorded. A password
+ * Login carries none.
  */
 public enum AuditMfaFactor {
 
-    /** The Epic organisation attests that its sign-in enforces MFA (ADR 0012). */
+    /** The identity provider attests that its sign-in enforces MFA. */
     IDP_ATTESTED("idp-attested"),
 
     /** {@code amr} said MFA was used, naming no factor. */

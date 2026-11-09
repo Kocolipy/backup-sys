@@ -1,7 +1,7 @@
 ---
 type: Decision Record
 title: "ADR 0007: Lockout, Unlock and the change-required flag"
-description: A Lockout has two causes, consecutive failures and dormancy, never lifts on a timer, and only an administrator's Unlock of a locked User ends it; dormancy also revokes every Group membership; an imposed password has no grace deadline, and its flag confines a password Login only.
+description: A Lockout has two causes, consecutive failures and dormancy, never lifts on a timer, and only an administrator's Unlock of a locked User ends it; dormancy also revokes every Group membership; an imposed password has no grace deadline, and its flag confines the Login.
 tags: [authentication, lockout, dormancy, unlock, passwords, change-required]
 ---
 
@@ -71,18 +71,17 @@ on a successful change. No control asks for a deadline on that change.
   unknown name is, against Spring Security's own dummy hash, which no submitted
   string matches; audited as `BAD_CREDENTIALS` naming it; and counted toward no
   failure run, by a Login or by the password change, having no password to
-  guess. So attempts never lock out a User who signs in only through Epic.
+  guess. So attempts never lock out a User that has none.
 - **A Login racing a Lockout does not lift it.** Spring Security's account check
   reads the User without the login-state lock, before the Argon2id comparison, so
   a Lockout committed during the comparison would get past it.
-  The login-state module's Login entry points (`LoginStateService.passwordLogin`,
-  `LoginStateService.epicLogin`) re-check the standing they read under the
+  The login-state module's Login entry point (`LoginStateService.passwordLogin`)
+  re-checks the standing it reads under the
   User's lock: a User found locked or deactivated is refused, fail closed, and
   nothing is written. The Login is answered and recorded as the refusal the
   account check would have made — `ACCOUNT_LOCKED` (counting nothing, on its
   reason, an Unlock committed in between included) or `ACCOUNT_DISABLED`
-  (counted, as that refusal always is) — and an Epic Login is refused the same
-  way. ADR 0002's accepted window, a Login whose decision committed before a
+  (counted, as that refusal always is). ADR 0002's accepted window, a Login whose decision committed before a
   revocation, is unchanged.
 
 ### The dormancy lockout and Membership revocation
@@ -152,28 +151,18 @@ on a successful change. No control asks for a deadline on that change.
   by the dormancy lockout, measured from the last real use, so one job owns
   "this User is not using the account".
 - **What sets the flag.** A connector setting a password — at creation, by `PUT`
-  or by `PATCH` — which also ends the User's sessions, an Epic one included; an
+  or by `PATCH` — which also ends the User's sessions; an
   Unlock of a locked User, which revokes nothing itself, a locked User holding
   none; a Reactivation of a User with a password; and seeding the Bootstrap
   Admin. No administrative action sets it on a User that is not locked. Only a
   successful self-service change clears it.
   `password_change_required_since` holds it: its presence is the flag, and its
   value says when the change was last required.
-- **Only a password Login is confined by the flag.** A password Login made while
-  the flag is set gets a confined session, limited to the change and logout. It
+- **A Login is confined by the flag.** A Login made while the flag is set gets a
+  confined session, limited to the change and logout. It
   does not move the dormancy basis, since a confined session is no real use of
   the account; its failure run still clears, and `LOGIN_SUCCESS` is still
   audited.
-- **An Epic Login is not confined.** It presents no password of ours, so confining
-  it protects nothing. An Epic Login of a flagged User receives the authorities a
-  password Login gives the same User with the flag clear — `ROLE_USER`, the
-  baseline Permission and its Groups' Permissions — and `GET /api/auth/me`
-  reports `passwordChangeRequired: false` for it, since the field reports the
-  session's confinement. The login-state module decides it, under the User's
-  lock: `LoginStateService.passwordLogin` confines a Login by a flagged User, and
-  `epicLogin` never does, each reading the session's authorities there. An Epic
-  Login neither reads the flag into the session nor clears it, and it moves the
-  dormancy basis, being real use of the account.
 - A successful self-service change records the authentication, since it is the
   account's first real use.
 - One session per User holds across both Login paths.
@@ -200,23 +189,11 @@ on a successful change. No control asks for a deadline on that change.
 - An imposed credential that is never replaced is locked out with the account
   at 90 days without real use. The Bootstrap Admin is seeded flagged and is exempt
   from the dormancy job, so an unchanged recovery credential never removes the
-  recovery path; it never signs in through Epic (ADR 0012, D6), so it stays
-  confined until it is changed.
+  recovery path; it stays confined until it is changed.
 - A User suspected compromised is handled in the directory: a new password, or a
   deactivation (ADR 0015, "Accepted cost").
 - Security-event notifications are not delivered anywhere but the audit stream
   (App-Standards USR-8).
-
-### Accepted risk
-
-A flagged User who only ever signs in through Epic never has to replace the
-imposed password, and keeps it live: its dormancy clock moves with each Epic
-Login, so the dormancy lockout does not bound the imposed credential's life. The
-imposed password still buys only a confined session, so the exposure is limited to
-someone who knows it being able to set a new password for this User. That is
-accepted: the credential is imposed by an administrator or a connector, never
-chosen by the User, and an Epic-linked User suspected compromised is deactivated
-rather than flagged (ADR 0012, D20).
 
 ## Alternatives considered
 
@@ -235,7 +212,3 @@ with the standard's soft-delete and tombstone requirements.
 a configured window. Rejected: it overlapped the dormancy lockout, and while every
 confined Login moved the dormancy basis a flagged User who kept logging in
 without changing the password never went dormant.
-
-**Confining every Login.** Rejected: a clinician launching from Epic after an
-Unlock or a connector password write could then do nothing but change a password
-Epic never used (ADR 0012, D20).

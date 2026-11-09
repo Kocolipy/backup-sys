@@ -1,7 +1,6 @@
 package com.example.backend.auth.controller;
 
 import com.example.backend.auth.domain.AbsoluteSessionLifetimePolicy;
-import com.example.backend.auth.domain.EpicTokens;
 import com.example.backend.auth.domain.SignedInSession;
 import com.example.backend.observability.EndedSession;
 import com.example.backend.observability.LogContext;
@@ -16,7 +15,6 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import java.io.IOException;
 import java.time.Clock;
-import java.time.Instant;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,13 +36,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
  *
  * <p>Does nothing when there is no existing session ({@code getSession(false)})
  * or the session has not outlived the policy: no session is created here, and
- * an unexpired one is left alone, idle-timeout renewal included — with one
- * exception. A session holding Epic tokens ({@link EpicTokens}) has its idle
- * bound cut to what remains of its lifetime once that is the shorter
- * ({@link SignedInSession#boundByLifetime}, the same cut the Epic sign-in made),
- * so the renewal this request makes cannot keep the session, and the tokens on
- * it, in the store past the lifetime's end (ADR 0012, D29). Far from the end the
- * idle bound is untouched, and a session without Epic tokens is never touched.
+ * an unexpired one is left alone, idle-timeout renewal included.
  *
  * <p>Both questions — has the session outlived the policy, and whose was it — are
  * asked of {@link SignedInSession}, so the age and the owner are read here exactly
@@ -80,8 +72,7 @@ public class AbsoluteSessionLifetimeFilter extends OncePerRequestFilter {
         HttpSession session = request.getSession(false);
         if (session != null) {
             SignedInSession signedIn = HttpSessionAttributes.signedIn(session);
-            Instant now = clock.instant();
-            if (signedIn.hasOutlived(policy, now)) {
+            if (signedIn.hasOutlived(policy, clock.instant())) {
                 // Read before the session is gone: the principal index is the only place the
                 // account's stable id is, and the logging context does not have it yet — this
                 // filter runs ahead of the one that puts it there.
@@ -90,11 +81,6 @@ public class AbsoluteSessionLifetimeFilter extends OncePerRequestFilter {
                 SecurityContextHolder.clearContext();
                 EndedSession.mark(request);
                 recordEnded(owner);
-            } else {
-                // This request renews the session for its idle bound again, so near the
-                // lifetime's end that bound would keep a session holding Epic's tokens, and the
-                // tokens with it, stored past the end. Cut it back to what remains (ADR 0012, D29).
-                signedIn.boundByLifetime(policy, now);
             }
         }
         chain.doFilter(request, response);

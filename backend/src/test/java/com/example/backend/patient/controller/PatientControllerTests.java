@@ -52,7 +52,7 @@ class PatientControllerTests {
     @RegisterExtension
     static final WireMockExtension SOURCE = PatientSourceStubs.extension();
 
-    /** Tan Wei Ming's id, the Epic sandbox id the fixture borrows: letters, digits, a hyphen. */
+    /** Tan Wei Ming's id, the sandbox id the fixture borrows: letters, digits, a hyphen. */
     private static final String TAN_ID = "eq081-VQEgP8drUUqCWzHfw3";
 
     private static final String FHIR_JSON_R5 = "application/fhir+json;fhirVersion=5.0";
