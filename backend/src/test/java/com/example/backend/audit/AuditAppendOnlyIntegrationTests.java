@@ -399,7 +399,7 @@ class AuditAppendOnlyIntegrationTests {
         assertThat(jdbc.queryForObject(COUNT_EVENT, Integer.class, recorded)).isZero();
     }
 
-    /** Retention removes what has aged out and changes nothing: its UPDATE grant is gone. */
+    /** Retention removes what has aged out and changes nothing: it holds no UPDATE grant. */
     @Test
     void theRetentionLoginMayNotUpdateARecordedEvent() {
         UUID recorded = UUID.randomUUID();

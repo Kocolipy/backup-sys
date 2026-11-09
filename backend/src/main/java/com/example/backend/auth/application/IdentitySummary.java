@@ -23,7 +23,7 @@ import java.util.UUID;
  * {@code active} and {@code groups} are SCIM attributes a connector writes, and nothing in the
  * administration adapter can change them: the only operation that takes this identity's id is
  * Unlock, and it writes application-owned state. That is why
- * there is no Deactivate or Activate any more — {@code active} is the directory's to decide, and
+ * there is no Deactivate or Activate — {@code active} is the directory's to decide, and
  * an administrator overriding it here would be overwritten by the next synchronization anyway.
  *
  * <p>{@code id} is what every operation addresses: it is the SCIM resource id, stable and never

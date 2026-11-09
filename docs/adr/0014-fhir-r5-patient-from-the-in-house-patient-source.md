@@ -62,8 +62,8 @@ SPA types it with `@types/fhir`'s `fhir5`.
 own: no table, no grant on one, no seeded fixtures.
 
 - **Source contract**: the source speaks **FHIR R4** and needs **no request
-authorisation**, so the call presents no credential. The id is the EHR's FHIR
-id, sent unchanged: there is no mapping between ids.
+  authorisation**, so the call presents no credential. The id is the EHR's FHIR
+  id, sent unchanged: there is no mapping between ids.
 - **A straight copy.** The adapter binds the R4 JSON to plain records with
   Jackson and copies the identifier under the NRIC NamingSystem, the name whose
   `use` is `official`, `gender` and `birthDate` into the domain's Patient; every
@@ -87,12 +87,12 @@ id, sent unchanged: there is no mapping between ids.
   classifier, `observability.OutboundCallFailure`, decides it for every outbound
   call:
 
-  | Failure                                                                    | `error.category` | Follow-up                              |
-  | -------------------------------------------------------------------------- | ---------------- | -------------------------------------- |
-  | Connect or read timeout, or a dropped call, the answer's body included     | `network`        | no: the source is unavailable          |
-  | The source answers `5xx`                                                   | `server`         | no: the source is unavailable          |
-  | The source answers `401`: it refused this service's own credential         | `cert/auth`      | **yes**: likely a configuration problem |
-  | Another error status, or an answer that is not JSON or not the shape asked for | `data`       | yes                                    |
+  | Failure                                                                        | `error.category` | Follow-up                               |
+  | ------------------------------------------------------------------------------ | ---------------- | --------------------------------------- |
+  | Connect or read timeout, or a dropped call, the answer's body included         | `network`        | no: the source is unavailable           |
+  | The source answers `5xx`                                                       | `server`         | no: the source is unavailable           |
+  | The source answers `401`: it refused this service's own credential             | `cert/auth`      | **yes**: likely a configuration problem |
+  | Another error status, or an answer that is not JSON or not the shape asked for | `data`           | yes                                     |
 
   Headers that arrived in time do not make an answer of a body that then stalled
   past the read timeout or whose connection reset, which the client reports as a
@@ -102,6 +102,7 @@ id, sent unchanged: there is no mapping between ids.
   adapter hands it the status its client reported, or the failure and the type
   of its client's own timeout failure, with how long it waited against its read
   timeout.
+
 - **One call per read, nothing cached.** No Patient is kept in Redis or in
   memory: every read calls the source, so what the card shows is what the source
   holds now, and Restricted data rests nowhere in this service.
@@ -141,8 +142,8 @@ The `patient` module is a leaf, and its one ArchUnit edge
   `502` under the fault's own category and reason. Those are the edge's only uses:
   the module writes no log record.
 - No edge to `auth`. The call presents no credential of the signed-in User's;
-  its handler checks `patient:read` by the authority's name. An authorised call (below)
-  declares the edge it needs when it is written.
+  its handler checks `patient:read` by the authority's name. A call that presents
+  a credential declares the edge it needs when it is written.
 - Outbound HTTP is allowed in `patient.infrastructure.http` alone
   (`one_outbound_http_client`), and `http` is an infrastructure adapter the
   onion rule knows.

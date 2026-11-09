@@ -373,51 +373,26 @@ it).
 
 ### What the engine shows through the API
 
-The engine shows through the API in these behaviours, which are documented in the
-API contract and `docs/domain/`:
+SQL Server's comparison and ordering rules reach the client, and they are
+**accepted and documented rather than worked around**:
+`/docs/domain/scim-protocol.md` ("SQL Server deviations") has the rules and
+`backend/docs/openapi.yaml` the contract. They are:
 
-- **Edge whitespace is refused** on the keys listed above, a validation rule in
-  the API contract.
-- **SCIM free-text `eq` ignores trailing spaces**. Filters `eq`, `ne`, `gt`, `ge`, `lt` and `le` on
-  attributes that keep their whitespace — `name.*`, `locale`, `timezone`,
-  `preferredLanguage` and the like — ignore trailing spaces in the stored and the
-  compared values, because SQL Server pads the comparison. `co`, `sw` and `ew`
-  keep trailing spaces significant: they are `LIKE` against a bound Unicode
-  pattern, which SQL Server does not pad. The padding is accepted, not worked
-  around, and
+- **Edge whitespace is refused** on the keys listed above.
+- **Free-text `eq`, `ne`, `gt`, `ge`, `lt` and `le` ignore trailing spaces**,
+  because SQL Server pads the comparison; `co`, `sw` and `ew` are `LIKE` against
+  a bound pattern, which it does not pad.
   `ScimQueryProtocolIntegrationTests.free_text_equality_ignores_trailing_spaces_and_substrings_do_not`
   pins every operator.
-- **SCIM whitespace-only free text counts as absent.** `pr` and sorting treat an
-  empty string as no value (`<> ''`, `NULLIF(…, '')`), and under SQL Server's
-  padding a value of only spaces compares equal to `''`. A whitespace-only value
-  of an attribute that keeps its whitespace therefore fails `pr` and sorts as a
-  missing value.
-- **Ties break in `uniqueidentifier` order.** Paging that ties on the sort key breaks
-  the tie by resource `id` in SQL Server's `uniqueidentifier` order, not
-  lexicographic order. Paging is a total order.
-- **Case-insensitive SQL comparisons** use SQL Server's `LOWER` under the
-  `BIN2_UTF8` collation, and spike V4 found that it does not always match Java's
-  `toLowerCase(Locale.ROOT)`. The SCIM filters, sorts and sort keys that lower-case
-  both sides (`userName`, `name.*`, `displayName`, `preferredLanguage`, `locale`,
-  `timezone`, `emails.value`, `emails.type`, `groups.display`, `members.display`,
-  `meta.*`) therefore treat these characters as case-sensitive:
-  - ASCII, Latin-1, Latin Extended-A and -B, the modern Greek and Cyrillic
-    alphabets, full-width Latin and the circled letters lower-case as Java does.
-  - 582 upper-case code points stay unchanged under `LOWER` although Java
-    lower-cases them. Among them are the Kelvin, Ohm and Angstrom signs
-    (U+212A, U+2126, U+212B), capital sharp s (U+1E9E), Georgian Mtavruli, Cherokee,
-    Latin Extended-C and -D, Cyrillic Extended-B, and the supplementary-plane
-    scripts such as Deseret, Osage and Adlam. A filter `eq "𐐨"` therefore does not
-    match a stored `𐐀`.
-  - Three Greek upsilon-with-hook symbols (U+03D2–U+03D4) are lower-cased by
-    `LOWER`, but not by Java.
-  - `LOWER` maps U+0130 (İ) to `i`, while Java maps it to `i` followed by U+0307.
-  - `LOWER` has no final-sigma rule: `ΟΔΟΣ` lower-cases to `οδοσ`, where Java gives
-    `οδος`.
-
-  The full list, by code point, is under "Verified behaviour". Case-insensitive
-  uniqueness is unaffected, because it compares the application-normalized
-  columns.
+- **Whitespace-only free text counts as absent**: `pr` and sorting treat `''` as
+  no value (`<> ''`, `NULLIF(…, '')`), and under the padding a value of only
+  spaces equals `''`.
+- **Ties break in `uniqueidentifier` order**, not the ids' text order; paging is
+  still a total order.
+- **Case-insensitive comparison uses SQL Server's `LOWER`**, which spike V4 found
+  differs from Java's `toLowerCase(Locale.ROOT)` for 586 code points ("Verified
+  behaviour" lists them). Case-insensitive uniqueness is unaffected, because it
+  compares the application-normalized columns.
 
 SCIM `userName` keeps following RFC 7643 and the identity provider's format, not
 the Standalone standard's alphanumeric-only rule. That deviation is recorded in
@@ -460,7 +435,7 @@ and RDS keeps it managed and AWS-native.
 
 Spikes V1–V6 ran on a throwaway harness outside the repository. Each verdict
 settled a decision above. V4's differences are listed in full below, because
-"What the engine shows through the API" and the API document cite them.
+the API document and `/docs/domain/scim-protocol.md` cite them.
 
 | #   | Question                                                                                                              | Verdict, and what it settled                                                                                                                  |
 | --- | --------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -469,7 +444,7 @@ settled a decision above. V4's differences are listed in full below, because
 | V3  | Does `READPAST` skip a held job lock row under read-committed snapshot?                                               | Yes, without waiting, so the job lock is a row lock (ADR 0005).                                                                               |
 | V4  | Does `LOWER` under the collation match `toLowerCase(Locale.ROOT)` for the normalized columns' characters?             | No; the differences are documented under "What the engine shows through the API", and uniqueness compares the normalized columns.             |
 | V5  | Does Hibernate report the constraint or index name for 2627/2601?                                                     | Yes, so `IntegrityViolations` reads it.                                                                                                       |
-| V6  | Are the test container's start time and memory acceptable with the suite's fork count?                                | Yes, at `forkCount` 2; the gates share one server so that two forks fit a small VM's memory ("The test server").                            |
+| V6  | Are the test container's start time and memory acceptable with the suite's fork count?                                | Yes, at `forkCount` 2; the gates share one server so that two forks fit a small VM's memory ("The test server").                              |
 
 They ran on SQL Server 2022 CU27 Developer Edition, mssql-jdbc 13.4 and Hibernate ORM 7.4 under Spring Boot 4.1, and Java
 25 with the JVM zone left at `Asia/Singapore`, so a zone-dependent result could not

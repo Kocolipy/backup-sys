@@ -165,7 +165,6 @@ on a successful change. No control asks for a deadline on that change.
   audited.
 - A successful self-service change records the authentication, since it is the
   account's first real use.
-- One session per User holds across both Login paths.
 
 ## Consequences
 

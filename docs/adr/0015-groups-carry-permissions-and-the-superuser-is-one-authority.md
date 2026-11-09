@@ -200,17 +200,21 @@ App-Standard requires.
 - **Roles defined in configuration and conferred by mapped Groups**, with a
   `connector:token` Permission: delegation was not real, for the reason in
   Context, and the Roles were a second vocabulary beside the Permissions they
-  were made of.
-- **Coarse `READ_ONLY` / `READ_WRITE` connector tokens.**
-- **A limited-reach "dominance" write rule**, under which a writer could change only
-  Users or Groups holding no more than it does.
-- **Runtime-editable Roles.**
-- **In-app password reset.** If it is ever wanted, it needs its own ADR: only Users
-  holding nothing beyond baseline, an app-generated password shown once, the flag
-  set, sessions ended.
-- **Group Permissions over SCIM.**
+  were made of. Editing such Roles at runtime would keep that second vocabulary.
+- **Coarse `READ_ONLY` / `READ_WRITE` connector tokens**: a token could not be
+  held to one resource type, and the access levels would be a second vocabulary
+  beside the Permissions.
+- **A limited-reach "dominance" write rule**, under which a writer could change
+  only Users or Groups holding no more than it does: the write Permissions are
+  token-only, so it would bound no session, and a token is already bounded by
+  who mints it.
+- **Group Permissions over SCIM**: `group:write` would mean "grant anything to
+  anyone".
 - **A `role:assign` Permission** separating membership of permission-bearing Groups
   from other Group writes: a directory sync has to manage every Group.
+- **In-app password reset**: not built (ADR 0011). If it is ever wanted, it needs
+  its own ADR: only Users holding nothing beyond baseline, an app-generated
+  password shown once, the flag set, sessions ended.
 
 ## App-Standards conscious deviations
 

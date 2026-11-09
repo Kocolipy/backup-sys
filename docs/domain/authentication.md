@@ -67,8 +67,8 @@ keeps the read from finishing at all — a query timeout, a pool-acquire
 timeout — is a server fault, never a refusal: nothing is counted or audited as
 a `LOGIN_FAILURE`.
 
-**An accepted Login is a success only once its session is signed in** — by
-either login method, the operational log's "Login accepted" and the `login`
+**An accepted Login is a success only once its session is signed in**:
+the operational log's "Login accepted" and the `login`
 success count are written after the session is established, and name it by its
 `session.hash`; a Login whose session could not be established is neither logged
 nor counted a success. The audit trail's `LOGIN_SUCCESS` is the exception, and
@@ -76,8 +76,8 @@ deliberately earlier: it is written with the cleared failure run, in the login
 decision's own transaction, so a success the trail cannot record is not a success
 (ADR 0004).
 
-**An accepted Login's session holds the authority read under the User's lock** —
-by either login method, whether the session is confined, and otherwise its
+**An accepted Login's session holds the authority read under the User's lock**:
+whether the session is confined, and otherwise its
 `ROLE_SUPERUSER`, baseline access and its Groups' Permissions, are read in the
 login decision, under the User's lock, from the same moment that checks its
 Lockout and deactivation — never from the read that found the User, which

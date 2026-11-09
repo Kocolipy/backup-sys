@@ -284,7 +284,7 @@ two pages share moves up to `src/pages/` itself, and imports no page folder
 - `paged-listing.tsx` — the one paged listing, which every paged read renders
   through, handed the `usePagedRead` result: the listing body, the pager and
   "Try again", around the rows the page renders as its own table or list. It
-  decides, once, what each page used to: rows a failed re-read could not
+  decides, once, for every page: rows a failed re-read could not
   confirm are hidden; the empty line comes from `page-empty-copy.ts`; the
   pager shows for the page the latest read stated for the current path —
   `ready`, or `stale` — and never while a first read is in flight or after one

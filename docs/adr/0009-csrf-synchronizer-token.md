@@ -38,7 +38,7 @@ requires:
   Rotation keeps the session's attributes, so login also deletes the pre-login
   token explicitly. A token fetched before login is refused after it.
 - **A refused Login** ends whatever session the browser held before answering
-  its bare `401` (ADR 0001, step 5), so the token bound to it ends too. A refused
+  its bare `401` (ADR 0001, step 4), so the token bound to it ends too. A refused
   Login that arrived with no session creates none.
 - **Logout and the password change** invalidate the session, and the token goes
   with it. Logout is CSRF-protected, as the standard forbids exempting it.

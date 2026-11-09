@@ -300,7 +300,7 @@ _Avoid_: single sign-on (spelled out), federated login
 **EHR context**:
 The patient and encounter this browser tab has in context, each a FHIR id,
 either possibly absent. Kept by the tab alone, never server-side, and ended with
-the session. Nothing sets it yet, so a tab holds none.
+the session. Nothing sets it, so a tab holds none.
 _Avoid_: patient context (for the pair), session context
 
 **MFA factor**:
