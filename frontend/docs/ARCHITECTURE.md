@@ -7,7 +7,7 @@ tags: [architecture, react, spa]
 
 # Architecture
 
-What is here today, and where a new concern belongs.
+What is here, and where a new concern belongs.
 
 ## The layers
 
@@ -39,9 +39,8 @@ straight into `lib/http`) but may never point back up.
   `permissions` and `superuser`, and `PERMISSIONS`, the closed set the backend's
   `Permission` enum defines (a session reporting another name fails decoding).
   `superuser` is the Superuser's standing, a boolean beside the Permissions and
-  never one of them. The three
-  **session actions** — `login`, `logout`, `changePassword` — and the start-up
-  check, `getCurrentUser`, each resolve to a closed outcome (`LoginOutcome`,
+  never one of them. The **session actions** — `login`, `logout`,
+  `changePassword` — and the start-up check, `getCurrentUser`, each resolve to a closed outcome (`LoginOutcome`,
   `LogoutOutcome`, `PasswordChangeOutcome`, `SessionCheckOutcome`) and never
   throw.
 - `session-action-copy.ts` — the copy for every session-action outcome, and the
@@ -68,7 +67,7 @@ straight into `lib/http`) but may never point back up.
   no page concatenates one. A page reads
   `declaration.permission` to offer a control and hands the same declaration to
   the hook that sends it, so the two cannot drift — each control asks about the
-  declaration it sends, never a neighbour's that shares its Permission today.
+  declaration it sends, never a neighbour's that happens to share its Permission.
 - `page-status.ts` — the signed-in page's single error line: `PageStatusScope`
   holds it, `useStatusReporter` is a source's handle on it. Every gated read and
   write reports there, and **the latest event wins**: a failure becomes the
@@ -88,7 +87,7 @@ straight into `lib/http`) but may never point back up.
   session as `expired` only while that generation is still current, so a
   `401` that lands after a sign-out or a fresh sign-in changes nothing.
 - `ehr-context.ts` — the tab's **EHR context**, what the EHR has open for the
-  tab (today a patient and an encounter), as a subscribable store under one
+  tab (a patient and an encounter), as a subscribable store under one
   `sessionStorage` key: `adoptLaunchLanding()` (called by `main.tsx` before
   the router reads the URL) reads an Epic landing's fragment, its Launch
   context, holds each value to FHIR's id grammar, seeds the EHR context with it
@@ -109,7 +108,7 @@ straight into `lib/http`) but may never point back up.
 - `auth-context-value.ts` — the context and `useAuth`, split out so the hook
   does not pull in the provider. `useAuth` exposes no way to _end_ a session and
   no sign-in reason; that is `useAuthState`'s, internal to `src/auth`.
-- `sign-in-reason.ts` — the closed set of six **sign-in reasons**, how each
+- `sign-in-reason.ts` — the closed set of **sign-in reasons**, how each
   reaches the login page (router state, or the backend's
   `?signin=refused|unavailable` marker for the Epic two), which wins (an Epic
   marker), and the copy. Router state is decoded against the set, never cast.
@@ -231,7 +230,7 @@ two pages share moves up to `src/pages/` itself, and imports no page folder
   Permission, Users before Groups and read before write, while the request keeps
   the backend's order; a rotation refused `409` has its own copy.
 - `accounts-api.ts` — the wire types both share and every endpoint they call;
-  derives `ADMINISTRATION_PERMISSIONS` from its three listings.
+  derives `ADMINISTRATION_PERMISSIONS` from the listing declarations.
 - `audit.tsx` / `audit-filter-toolbar.tsx` / `audit-api.ts` — the audit listing,
   50 a page, filtered on the server by one or more operations, outcome, actor id,
   resource id and a time range. The API module checks each filter before the
@@ -259,7 +258,7 @@ two pages share moves up to `src/pages/` itself, and imports no page folder
 - `fhircast-card.tsx` — the FHIRcast card: a pure view of the session's
   FHIRcast connection, the singleton `lib/fhircast/session.ts` holds behind
   the facade (`fhircastSnapshot`, `watchFhircast`, imported from
-  `@/lib/fhircast`), which the signed-in layout starts; it shows one of seven
+  `@/lib/fhircast`), which the signed-in layout starts; it shows a closed set of
   generic states and starts and closes nothing, so leaving Home keeps the
   connection and its last event. The module renews the subscription unseen,
   and reconnects a dropped socket while the card shows `Reconnecting`;
@@ -471,7 +470,7 @@ added to those rules and to this document in the same change.
 
 ## The `@/` alias
 
-`@/x` resolves to `src/x`, declared in four places that must agree:
+`@/x` resolves to `src/x`, declared in the places below, which must agree:
 
 | File                           | Mechanism                              |
 | ------------------------------ | -------------------------------------- |

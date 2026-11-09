@@ -1,8 +1,7 @@
 -- The complete schema, in T-SQL for SQL Server 2022. The application is
 -- pre-production and a fresh database is the only supported starting state, so the
--- schema is one migration rather than a history of them; the earlier migrations
--- of the engine-neutral preparation (#62–#66), and every one after them, are folded
--- into it. A change from here on is a new migration.
+-- schema is one migration rather than a history of them. A change from here on is
+-- a new migration.
 --
 -- What this migration does NOT set: the database's collation
 -- (Latin1_General_100_BIN2_UTF8), its compatibility level (160), and
@@ -36,11 +35,10 @@
 --                      is four times its limit (a code point is at most four bytes
 --                      in UTF-8), and a column that holds only ASCII — a closed set
 --                      of names from the code, a generated value — keeps its limit.
---                      An unbounded one is VARCHAR(MAX). The column inventory in the
---                      switchover's pull request classifies every one of them.
+--                      An unbounded one is VARCHAR(MAX).
 --
--- Every constraint keeps the name it had before the switchover: the persistence adapters
--- translate a unique violation by the constraint or index name the driver reports
+-- A constraint's name is part of its contract: the persistence adapters translate a
+-- unique violation by the constraint or index name the driver reports
 -- (IntegrityViolations), so a renamed one would silently stop being translated.
 
 -- =============================================================================
@@ -415,7 +413,7 @@ CREATE INDEX ix_scim_group_members_user ON scim_group_members (user_id);
 -- plus the union of the Permissions of the Groups it is a DIRECT member of; a
 -- Group with no row here confers nothing. Permissions are data, so a Group
 -- created over SCIM can be given access without a config change and a redeploy. Nothing here is set over SCIM: only the Superuser sets a Group's
--- Permissions (#159), by replacing its set, and the `local` profile's development
+-- Permissions, by replacing its set, and the `local` profile's development
 -- fixtures (authorization.yaml) seed them.
 --
 -- The Admin group carries no row. Its direct members are the Superuser, an
@@ -499,7 +497,7 @@ CREATE TABLE scim_connectors (
     CONSTRAINT pk_scim_connectors PRIMARY KEY (id)
 );
 
--- A connector's display name is held by at most one live connector (#264).
+-- A connector's display name is held by at most one live connector.
 --
 -- The index, not a read before the INSERT, is what decides: two creates claiming one
 -- name at the same moment both pass a prior read, and the second INSERT then violates
@@ -582,20 +580,19 @@ CREATE INDEX ix_scim_connector_tokens_connector_id
 -- The pair is the key, so a token cannot carry a Permission twice. An empty set is
 -- no rows: it authenticates and may read discovery but nothing else.
 --
--- The CHECK: a token can carry only the four directory Permissions, because the
+-- The CHECK admits only the token-grantable directory Permissions, because the
 -- rest of the vocabulary guards the application chain, which no bearer token
 -- reaches. The application refuses the others first; this is the last line, so a
 -- write path that forgot the rule cannot store a token that would mean more the
 -- day a route began to honour it.
 --
 -- ON DELETE CASCADE from the token: a Permission is meaningless without its token,
--- and this is the table's only cascade path. No code path deletes a token today
--- (revocation and connector deletion are updates), but whichever one does later
--- takes the rows with it.
+-- and this is the table's only cascade path. Revocation and connector deletion
+-- are updates; a delete of a token row takes its Permissions with it.
 CREATE TABLE scim_connector_token_permissions (
     token_id   UNIQUEIDENTIFIER NOT NULL,
 
-    -- ASCII-only: one of the four names the CHECK allows.
+    -- ASCII-only: one of the names the CHECK allows.
     permission VARCHAR(32)      NOT NULL,
 
     CONSTRAINT pk_scim_connector_token_permissions PRIMARY KEY (token_id, permission),
@@ -712,7 +709,7 @@ CREATE TABLE audit_events (
     -- A membership change of power — a PERMISSION_GRANT, a PERMISSION_REVOKE, or
     -- the dormancy job's DORMANCY_MEMBERSHIP_REVOCATION, which removes every
     -- direct Group membership — records what it did to the subject User's
-    -- authority. All four are NULL for every other event.
+    -- authority. The authority-detail columns are NULL for every other event.
     --
     --   permissions_before  the subject User's effective Permissions before the
     --                       change: names from the closed vocabulary in code,
@@ -841,8 +838,9 @@ INSERT INTO scim_seed_locks (lock_name) VALUES ('ScimSeed');
 -- 5. Database principals and the append-only guard
 -- =============================================================================
 
--- Three logins connect, each a member of exactly the role its work needs, so the
--- server enforces each one's privileges and nothing on a connection can widen them:
+-- The app, retention and owner logins connect, each a member of exactly the
+-- role its work needs, so the server enforces each one's privileges and nothing
+-- on a connection can widen them:
 --
 --   the app login        member of `backend_app`; the request and audit append pools
 --   the retention login  member of `backend_audit_retention`; the retention pool
@@ -854,7 +852,7 @@ INSERT INTO scim_seed_locks (lock_name) VALUES ('ScimSeed');
 -- bootstrap); this migration creates only the database's own principals: the two
 -- roles, and a database user for each of the two runtime logins.
 --
--- Three mechanisms make the audit table append-only, because each covers a hole
+-- The mechanisms below make the audit table append-only, each covering a hole
 -- the others leave:
 --
 --   1. GRANTs. `backend_app` holds INSERT and SELECT on `audit_events` and nothing
@@ -907,7 +905,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON scim_external_ids                TO back
 GRANT SELECT, INSERT, DELETE         ON scim_user_password_history       TO backend_app;
 -- A Group's Permissions are read at sign-in, in the Groups projection and at
 -- startup, and written by the development fixtures and by the Superuser's
--- replacement of a Group's set (#159), a DELETE of its rows and an INSERT of the
+-- replacement of a Group's set, a DELETE of its rows and an INSERT of the
 -- new ones in one transaction. No UPDATE: a row is the pair, so nothing changes
 -- in place. A deleted Group's rows go by the cascade, which needs no grant.
 GRANT SELECT, INSERT, DELETE         ON group_permission                 TO backend_app;

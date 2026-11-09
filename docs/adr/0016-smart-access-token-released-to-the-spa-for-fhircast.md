@@ -36,7 +36,7 @@ subscription request to `hub.url`, answered with the `hub.channel.endpoint` the
 subscriber opens its socket at, and cancelled by an unsubscription request.
 Epic's hub authorizes the subscription by the SMART access token of the launch,
 presented as `Bearer`: the Epic team has confirmed that it accepts that token on
-the Hub Subscription (ADR 0012, "Open items").
+the Hub Subscription (ADR 0012, "External confirmations").
 
 The backend cannot do this for the browser. The hub listens on the clinician's
 loopback interface, which only a process on that workstation reaches; the
@@ -169,7 +169,7 @@ hub call:
   the expiry it kept. A denial at an endpoint being reopened, which a
   reconnect meets once a lease has run out, is not this end: the retry
   subscribes anew.
-- **The card says little.** It shows one of seven generic states —
+- **The card says little.** It shows a closed set of generic states —
   `connecting`, `connected`, `reconnecting`, `disconnected`,
   `FHIRcast unavailable`, `local hub blocked by browser`, and the final
   `FHIRcast ended`, which says to reopen the application from Epic — the one
@@ -300,7 +300,7 @@ still imports nothing of the auth layer.
   the connection lasts. A script running in the SPA's origin can read it; the
   CSP (`script-src 'self'`, no inline script) is what keeps that origin the
   application's own.
-- The access token is now a key to patient-context events, which ADR 0012's D28
+- The access token is a key to patient-context events, which ADR 0012's D28
   classifies Restricted, Sensitive High; it stays unencrypted at rest in Redis
   and unrevoked at Epic, as D29 and D13 accept.
 - The application's audit trail records each release, not what the browser does

@@ -1,11 +1,11 @@
 ---
 type: Decision Record
-title: "ADR 0015: Groups carry Permissions; a Superuser replaces Roles"
+title: "ADR 0015: Groups carry Permissions; the Superuser is one authority"
 description: A User's Permissions are the baseline plus its direct Groups' stored Permissions, the Superuser is one authority no Group can carry, connector tokens have their own grantable set, and Unlock cannot escalate.
 tags: [authorization, permissions, superuser, groups]
 ---
 
-# 15. Groups carry Permissions; a Superuser authority replaces Roles
+# 15. Groups carry Permissions; the Superuser is one authority
 
 Date: 2026-10-20
 
@@ -86,9 +86,9 @@ Group again.
 ### Superuser-only operations
 
 **Rule (MUST).** Any endpoint that changes Group Permissions, Admin-group state, or
-connector existence or credentials is Superuser-only. Today that is connector create
-and delete, token issue, rotate and revoke, and `PUT
-/api/admin/groups/{id}/permissions`. `connector:read` stays delegatable.
+connector existence or credentials is Superuser-only: connector create and delete,
+token issue, rotate and revoke, and setting a Group's Permissions; `backend/docs/openapi.yaml`
+marks each. `connector:read` stays delegatable.
 
 Each is declared like a Permission so the authorization contract covers it:
 `@PreAuthorize("hasRole('SUPERUSER')")` on the handler, a backstop rule in the
@@ -153,7 +153,7 @@ force a change on a Superuser, or end its sessions, by any route.
 **Accepted cost.** No one can require a password change of an unlocked User whose
 password is suspected compromised. Recovery goes through the connector: the
 directory sets a new password, which sets the change-required flag and ends the
-User's sessions, or deactivates the User. An Epic-linked User was already handled
+User's sessions, or deactivates the User. An Epic-linked User is handled
 that way (ADR 0012, D20).
 
 ### Admin group protections
@@ -194,7 +194,7 @@ A refusal is `403`. Its audit row and log line record the caller, the operation 
 "insufficient permissions", never a Permission or the policy, as the logging
 App-Standard requires.
 
-## Explicitly rejected
+## Alternatives considered
 
 - **One binary administrator role**, a direct Admin-group member holding every
   administrative power and everyone else `ROLE_USER`: nothing could be delegated.

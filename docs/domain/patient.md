@@ -1,7 +1,7 @@
 ---
 type: Domain Rules
 title: Patients
-description: The FHIR R5 Patient the service serves — its element rules, the NRIC system, the authoritative name text, derived age, the in-house patient source it is read from and the elements copied, no caching, the data classification, the error contract, the logging rules, the deliberate absence of read auditing and the follow-ups before real data, the Patient card's patient in context, the four development fixtures and the fault stubs in the source's mock, and how R5 conformance is proven.
+description: The FHIR R5 Patient the service serves — its element rules, the NRIC system, the authoritative name text, derived age, the in-house patient source it is read from and the elements copied, no caching, the data classification, the error contract, the logging rules, the deliberate absence of read auditing and the follow-ups before real data, the Patient card's patient in context, the development fixtures and the fault stubs in the source's mock, and how R5 conformance is proven.
 tags: [patient, fhir]
 ---
 
@@ -69,13 +69,12 @@ The path follows the repo's convention: an unversioned `/api` base, held in code
 
 ## The in-house patient source
 
-The backend reads every Patient from the in-house patient source, through the
+The backend reads every Patient from the in-house patient source through the
 HTTP adapter behind the domain's `PatientStore` (`PatientSourceAdapter`, ADR
-0014). Its contract is not known yet, so until it is the source is **assumed**
-to answer **FHIR R4** at `GET {base}/Patient/{id}` and to need **no
-authorisation**: the call presents no credential of any kind.
-`APP_PATIENT_SOURCE_BASE_URL` is the base, required, with no default
-(`backend/docs/configuration/patient-source.md`).
+0014). The source contract implemented here is **FHIR R4** at
+`GET {base}/Patient/{id}`, with **no request authorisation**: the call presents
+no credential. `APP_PATIENT_SOURCE_BASE_URL` is the base, required, with no
+default (`backend/docs/configuration/patient-source.md`).
 
 - **The elements copied.** From the R4 `Patient`, the adapter copies exactly the
   `identifier` under the NRIC NamingSystem, the `name` whose `use` is `official`,
@@ -223,22 +222,17 @@ answers on, which no stub can serve.
 
 ## Patient reads are not audited
 
-A read of a patient writes **no audit row**. This is deliberate for now: every
-Patient is a development fixture of the patient source's mock, with a dummy
-NRIC, and the audit trail records
-security-relevant changes and refusals, not reads. A refused read is still audited,
-as `ACCESS_DENIED`.
+A read of a patient writes **no audit row**. The audit trail records
+security-relevant changes and refusals, not reads; a refused read is audited as
+`ACCESS_DENIED`. The deployed stack supplies no real patient source, and a
+deployment that adds one must account for this audit boundary.
 
-## Follow-ups before any real patient data arrives
+## Source authentication limit
 
-- **Audit patient reads.** Decide whether — and how — patient reads are audited
-  (who read which patient, when), since access to real Restricted data must be
-  accountable.
-- **Authorise the in-house call.** The call to the in-house patient source
-  presents no credential today — an assumption that holds only while the source
-  is a mock serving dummy fixtures. It must be authorised before any real
-  patient data arrives, with its credential external configuration with no
-  fallback, as every credential here is.
+The source call has no request credential. The adapter supports a source that
+accepts this contract. A source requiring authentication needs an adapter and
+external-configuration change before it can be used; credentials have no
+fallback in this repository.
 
 ## Age is derived
 
@@ -269,7 +263,7 @@ holds no patient id beyond the EHR context, and the read is not bound to it:
 
 Patients are **development fixtures** only, and they live in the in-house
 patient source's **mock**: WireMock, under `backend/patient-source-mock`, whose
-stub files (`mappings/`) answer FHIR R4 `Patient/{id}` for the four fixtures
+stub files (`mappings/`) answer FHIR R4 `Patient/{id}` for the development fixtures
 below, the **fault stubs** beside them, and `404` for any other well-formed
 id. Compose runs it beside SQL Server
 and Redis (`patient-source`), so `make infra-up` and `make integration-test`

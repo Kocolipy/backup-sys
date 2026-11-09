@@ -40,8 +40,8 @@ change, when the backend side moves. What the SPA has to honour:
   checked, with a retry under the same rules. A refused login is one of them because the
   backend ends whatever session the browser held before answering its bare
   `401`, so a retry after a wrong password needs the next session's token
-  rather than meeting a `403`. `/docs/adr/0009-csrf-synchronizer-token.md` records why the cookie
-  design was retired.
+  rather than meeting a `403`. `/docs/adr/0009-csrf-synchronizer-token.md` records why the token
+  never travels in a cookie.
 - **`403` is not `401`, and not always CSRF.** A `403` is either a missing or
   stale CSRF token or an authorization refusal (a session lacking the
   operation's Permission, a session confined by a required password change, an
@@ -288,12 +288,9 @@ change, when the backend side moves. What the SPA has to honour:
   its lease runs out. Under `fhircast-token-expiry`, the instant the SMART
   access token the tab was last released expires, in milliseconds since the
   epoch. Never the SMART access token itself, which the connection holds in
-  memory for its life. The SPA clears both, and the keys an earlier version
-  kept apiece
-  (`fhircast-smart-access-token`, `fhircast-hub-token`, `fhircast-client-id`,
-  `fhircast-private-jwk`), wherever it clears the EHR context — every end of
-  the session and a password Login — and logout's `Clear-Site-Data` drops them
-  too. An accepted deviation (ADR 0011, "FHIRcast in the browser").
+  memory for its life. The SPA clears both wherever it clears the EHR
+  context — every end of the session and a password Login — and logout's
+  `Clear-Site-Data` drops them too. An accepted deviation (ADR 0011, "FHIRcast in the browser").
 - **A reload resumes the FHIRcast connection** (ADR 0016, "A reload, and one
   live subscription"). On load the signed-in layout still fetches the release,
   and its SMART access token with it. The module then decodes what the tab

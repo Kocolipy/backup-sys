@@ -32,21 +32,20 @@ source"). The SPA never reaches it.
   followed and no call is retried. The tests set it to 1 second
   (`ContainerTestConfiguration`), so a case reading a slow fault stub does not
   wait out the five.
-- **No deployed value yet.** The stack (`/infra/`) does not set it: the
-  in-house system's contract is not known, and the mock below is for local runs
-  and E2E only. A deployed service fails at startup until the stack sets it.
-- **Authorisation is a follow-up.** Today's call presents nothing to the source;
-  it must be authorised before any real patient data arrives
-  (`/docs/domain/patient.md`, "Follow-ups before any real patient data
-  arrives"). A credential it needs will be external configuration with no
-  fallback, like every credential here.
+- **The deployed stack supplies no source.** The stack (`/infra/`) does not set
+  `APP_PATIENT_SOURCE_BASE_URL`; the mock below is for local runs and E2E only.
+  A deployment must supply the variable for the service to start.
+- **The adapter sends no credential.** This integration is compatible only with
+  a source whose access control does not require request credentials. Supporting
+  a credential requires an adapter and external configuration change; credentials
+  have no fallback in this repository.
 
 ## Local mock
 
 `compose.yaml`'s `patient-source` service is WireMock (`wiremock/wiremock`,
 pinned by tag and digest, the same release as the backend's test dependency)
 serving `patient-source-mock/mappings` on **`127.0.0.1:8104`**: FHIR R4
-`Patient/{id}` for the four development fixtures, and a `404` for any other
+`Patient/{id}` for the development fixtures, and a `404` for any other
 well-formed id. It has no profile, so `make infra-up` and
 `make integration-test` start it beside SQL Server and Redis, healthy when
 WireMock's `/__admin/health` answers. `.env.example` points the backend at it:

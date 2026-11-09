@@ -53,7 +53,7 @@ a test can check, and where an alert goes stays a deployment decision.
 ### The rule is applied once, from the event's kind
 
 `AuditTrail` has one method, `append(Audited)`. Every kind of event is a value in
-the sealed `audit.domain.Audited`, declaring one of three kinds:
+the sealed `audit.domain.Audited`, declaring one of these kinds:
 
 - `Audited.Accepted` — **fail-closed**: joins the caller's transaction
   (`PROPAGATION_REQUIRED`). A SCIM bulk read is one, though it is a read: an
@@ -93,12 +93,12 @@ it applies this axis to the two failures a revocation can meet.
 
 ### Fail-open appends commit on a pool of their own
 
-A fail-open append once ran `PROPAGATION_REQUIRES_NEW` on the main transaction
-manager, which keeps the caller's connection checked out while it opens a second
+A fail-open append run `PROPAGATION_REQUIRES_NEW` on the main transaction
+manager would keep the caller's connection checked out while it opens a second
 from the same pool — and a refusal is recorded while its caller holds a
 connection and a row lock. Ten overlapping failed Logins, reachable before
-sign-in, held Hikari's default ten connections, each waiting 30 s for one none
-would release.
+sign-in, would hold Hikari's default ten connections, each waiting 30 s for one
+none would release.
 
 `Audited.Refused` and `Audited.Committed` appends therefore commit on a dedicated
 audit append pool and never take a main-pool connection.
@@ -122,8 +122,8 @@ instance, and a fail-open append fails after 2 s rather than 30 s in an outage.
 
 ### A refused write is recorded once, at the edge
 
-Whether a refusal reached the trail, and how often, once depended on which
-module noticed it. So the use cases raise a typed refusal and record nothing,
+Recorded where it is noticed, whether a refusal reaches the trail, and how
+often, would depend on which module noticed it. So the use cases raise a typed refusal and record nothing,
 and the advice at the edge records each, once, from one table:
 
 - **SCIM writes.** `ScimExceptionHandler` records every refused write from
@@ -148,8 +148,8 @@ transaction has rolled back and released its connection.
 
 Every append runs as the **app login** (`backend_app`), the retention job deletes
 as the **retention login** (`backend_audit_retention`), and the owner login is
-never held by the service (ADR 0013). The schema holds the rule in three parts,
-each covering a hole the others leave:
+never held by the service (ADR 0013). The schema holds the rule through the
+mechanisms below, each covering a hole the others leave:
 
 - **Grants.** `backend_app` holds `SELECT, INSERT` on `audit_events`, so its
   `UPDATE` or `DELETE` is refused (error 229); `backend_audit_retention` holds
