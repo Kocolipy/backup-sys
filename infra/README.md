@@ -52,7 +52,7 @@ Internet → ALB (HTTP:80) → EC2 (8080) → RDS for SQL Server (1433) + Redis
   customer-managed KMS key, TLS 1.2+ forced, Enhanced Monitoring and Performance
   Insights, automated backups)
 - Secrets Manager secrets for every database credential, the driver's trust
-  store and the application's own secrets
+  store and the Bootstrap Admin's first password
 - ElastiCache Redis (session storage)
 - An SNS topic as the stack's alarm target, and two database alarms
 - Security groups with proper isolation

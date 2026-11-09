@@ -59,14 +59,12 @@ deletion yourself once that snapshot is no longer needed.
   `SPRING_DATASOURCE_HIKARI_DATASOURCEPROPERTIES_TRUSTSTOREPASSWORD`, which Boot
   binds into the driver properties every pool and the migrate step's connection
   are opened with, never into the URL. **The JVM's default trust store is
-  untouched** — there is no `-Djavax.net.ssl.trustStore` — so the identity
-  provider's discovery document and JWKS, and every other Epic call, keep
-  validating against the JDK's own CAs. The service makes those calls on a
-  launch's first use, never at startup (ADR 0012), so `smoke.sh` proves it
-  directly: the running JVM has no `javax.net.ssl.trustStore` (`jcmd
+  untouched** — there is no `-Djavax.net.ssl.trustStore` — so every other
+  outbound HTTPS call keeps validating against the JDK's own CAs. `smoke.sh`
+  proves it directly: the running JVM has no `javax.net.ssl.trustStore` (`jcmd
 VM.system_properties`), and the same JDK, as the service user and with its
-  default trust store, fetches Epic's discovery document and the JWKS it names
-  when Epic Login is on (a public AWS HTTPS endpoint when it is off).
+  default trust store, fetches a public AWS HTTPS endpoint (the region's RDS CA
+  bundle).
 - **The bootstrap's `sqlcmd`:** `-N` (encryption mandatory), **never `-C`**, so
   the ODBC driver validates RDS's certificate chain and its name against the
   endpoint. The RDS CA bundle is given to `sqlcmd` alone, as `SSL_CERT_FILE` in

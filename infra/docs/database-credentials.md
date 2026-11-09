@@ -11,22 +11,21 @@ tags: [secrets-manager, credentials, security]
 CloudFormation parameter, none is in UserData or in a file on the instance, and
 `deploy.sh` prompts for none.
 
-| Secret (stack output)   | Holds                                        | Created by                                           | Read by                                                    |
-| ----------------------- | -------------------------------------------- | ---------------------------------------------------- | ---------------------------------------------------------- |
-| `DBMasterSecretArn`     | the RDS master user (`DBMasterUsername`)     | RDS (`ManageMasterUserPassword`)                     | the instance's database bootstrap only; `smoke.sh`         |
-| `DBOwnerSecretArn`      | the owner login (`DBOwnerLogin`)             | CloudFormation, generated                            | the bootstrap, the migrate step; `smoke.sh`                |
-| `DBAppSecretArn`        | the app login (`DBAppLogin`)                 | CloudFormation, generated                            | the bootstrap, the service; `smoke.sh`                     |
-| `DBRetentionSecretArn`  | the retention login (`DBRetentionLogin`)     | CloudFormation, generated                            | the bootstrap, the service; `smoke.sh`                     |
-| `DBTrustStoreSecretArn` | the driver-scoped trust store's password     | CloudFormation, generated                            | the boot (builds the store), the service, the migrate step |
-| `AppBootstrapSecretArn` | the Bootstrap Admin (`AppBootstrapUsername`) | CloudFormation, generated                            | the service; `smoke.sh` replaces the first password        |
-| `EpicClientSecretArn`   | the Epic client id and signing keys (JSON)   | CloudFormation, from the `AppEpicClient*` parameters | the service                                                |
+| Secret (stack output)   | Holds                                        | Created by                       | Read by                                                    |
+| ----------------------- | -------------------------------------------- | -------------------------------- | ---------------------------------------------------------- |
+| `DBMasterSecretArn`     | the RDS master user (`DBMasterUsername`)     | RDS (`ManageMasterUserPassword`) | the instance's database bootstrap only; `smoke.sh`         |
+| `DBOwnerSecretArn`      | the owner login (`DBOwnerLogin`)             | CloudFormation, generated        | the bootstrap, the migrate step; `smoke.sh`                |
+| `DBAppSecretArn`        | the app login (`DBAppLogin`)                 | CloudFormation, generated        | the bootstrap, the service; `smoke.sh`                     |
+| `DBRetentionSecretArn`  | the retention login (`DBRetentionLogin`)     | CloudFormation, generated        | the bootstrap, the service; `smoke.sh`                     |
+| `DBTrustStoreSecretArn` | the driver-scoped trust store's password     | CloudFormation, generated        | the boot (builds the store), the service, the migrate step |
+| `AppBootstrapSecretArn` | the Bootstrap Admin (`AppBootstrapUsername`) | CloudFormation, generated        | the service; `smoke.sh` replaces the first password        |
 
 Each generated password is 32 characters and excludes `'`, `"`, `\` and `;`.
 Each secret is encrypted under the stack's [database key](database-encryption.md#database-key). There
 is no rotation yet.
 
-**The instance role reads these seven secrets and nothing else** —
-`GetSecretValue` on the seven ARNs, and `kms:Decrypt` on the database key through
+**The instance role reads these six secrets and nothing else** —
+`GetSecretValue` on the six ARNs, and `kms:Decrypt` on the database key through
 Secrets Manager only. Within the instance the separation is **per process**:
 each secret is read by one root-owned script into the environment of the one
 process that needs it.
@@ -34,8 +33,8 @@ process that needs it.
 - `/opt/backend/db-bootstrap.sh` (root) reads the master secret and the three
   login secrets;
 - `/opt/backend/migrate.sh` reads the owner secret and the trust-store password;
-- `/opt/backend/start.sh` reads the app, retention, trust-store, Bootstrap Admin
-  and Epic secrets — never the owner's or the master's.
+- `/opt/backend/start.sh` reads the app, retention, trust-store and Bootstrap
+  Admin secrets — never the owner's or the master's.
 
 ## File ownership on the instance
 
@@ -89,10 +88,8 @@ secrets' ARNs, never their values. A secret that cannot be read, or lacks its
 password, stops the start before the JVM runs, and systemd retries.
 
 **The service connects as the app and retention logins, never the owner.**
-**The application's own secrets** are held the same way, so UserData carries no
-secret at all: the Bootstrap Admin's first password (generated), and the Epic
-client id and signing keys. The Epic values enter through `NoEcho`
-CloudFormation parameters, which the stack writes into `EpicClientSecretArn`;
-they may contain neither `"` nor `\`. Redis has no password: the stack's
-single-node `CacheCluster` cannot carry an AUTH token (only a replication group
-can), so Redis is reachable only from the instance's security group.
+**The application's own secret** is held the same way, so UserData carries no
+secret at all: the Bootstrap Admin's first password (generated). Redis has no
+password: the stack's single-node `CacheCluster` cannot carry an AUTH token
+(only a replication group can), so Redis is reachable only from the instance's
+security group.

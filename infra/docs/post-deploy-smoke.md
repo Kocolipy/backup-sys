@@ -24,7 +24,7 @@ JAR prompt, so every deploy scans the boot.
    is checked when it is there.
 1. **Health:** `/actuator/health` through the ALB answers `200`. **JVM trust:**
    the service's JVM keeps the JDK's default trust store, and that JDK fetches
-   the identity provider's discovery document and JWKS over it
+   a public AWS HTTPS endpoint over it
    ([TLS to the database](database-encryption.md#tls-to-the-database)).
 2. **TLS:** see [TLS to the database](database-encryption.md#tls-to-the-database).
 3. **SCIM:** as the Bootstrap Admin, it mints a one-day token on a throwaway
@@ -45,8 +45,8 @@ JAR prompt, so every deploy scans the boot.
 5. **Owner and master logins:** the running service's environment holds no part
    of the owner or the master secret.
 6. **Secret leaks:** every database password (the master's included), the
-   trust store's password, the Bootstrap Admin's current and previous passwords
-   and the Epic credentials are searched for in the **rendered UserData** (read
+   trust store's password and the Bootstrap Admin's current and previous
+   passwords are searched for in the **rendered UserData** (read
    back from EC2), the instance's **`cfn-init` metadata**, the instance's
    `/var/log/cloud-init-output.log`, `/var/log/cloud-init.log`,
    `/var/log/cfn-init.log` and `/var/log/cfn-init-cmd.log`, `/opt/backend/.env`,
