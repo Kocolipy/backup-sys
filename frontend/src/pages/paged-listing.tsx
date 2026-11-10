@@ -45,7 +45,9 @@ const rowsOf = <R,>(page: Page<R>) => page.rows;
  *   page emptied on a later one ({@link emptyCopyOf}).
  * - **The pager** shows for the page the latest read answered for the current
  *   path, `ready` or `stale` alike, and for nothing else: never while a first
- *   read is in flight, nor once it failed with nothing read.
+ *   read is in flight, nor once it failed with nothing read. A listing whose
+ *   every row fits on its first page shows none, unless it asks for its range
+ *   named anyway (`onePage="shown"`).
  * - **Try again** ({@link ReadAgain}) reads the current path again — the same
  *   page, search, sort and filters. A page that offers its own read-again
  *   control whatever the read came to, as the audit trail's Refresh, passes
@@ -63,6 +65,7 @@ export function PagedListing<R>({
   children,
   copy,
   disabled = false,
+  onePage = "hidden",
   read: { move, pageSize, reload, view },
   readAgain = true,
 }: {
@@ -71,6 +74,8 @@ export function PagedListing<R>({
   copy: PagedListingCopy;
   /** Holds the pager and the read-again control still, as while an action answering onto the page is in flight. */
   disabled?: boolean;
+  /** Whether a first page holding every row still shows the pager, its range named: {@link Pager}'s `onePage`. */
+  onePage?: "hidden" | "shown";
   read: PagedRead<R>;
   /** Whether the listing offers Try again; `false` for a page offering its own read-again control. */
   readAgain?: boolean;
@@ -102,6 +107,7 @@ export function PagedListing<R>({
             label={copy.pagerLabel}
             noun={copy.noun}
             onMove={move}
+            onePage={onePage}
             page={page}
             pageSize={pageSize}
           />

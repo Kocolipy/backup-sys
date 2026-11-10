@@ -56,9 +56,10 @@ SPA types it with `@types/fhir`'s `fhir5`.
 
 ### The in-house patient source, behind the port
 
-`PatientStore` has one operation, `findById`, and one adapter,
-`PatientSourceAdapter` (`patient.infrastructure.http`), which reads
-`GET {base}/Patient/{id}` from the source. The service holds no Patient of its
+`PatientStore` has one adapter, `PatientSourceAdapter`
+(`patient.infrastructure.http`), and two operations: `findById`, which reads
+`GET {base}/Patient/{id}` from the source, and `search`, a Patient search the
+source answers (ADR 0018). The service holds no Patient of its
 own: no table, no grant on one, no seeded fixtures.
 
 - **Source contract**: the source speaks **FHIR R4** and needs **no request
@@ -132,8 +133,10 @@ reaches the packaged JAR, as `hapi-test-scope-only` does for HAPI.
 
 ### The module's edges
 
-The `patient` module is a leaf, and its one ArchUnit edge
-(`backend/src/test/java/arch/ArchitectureTest.java`) is `observability`:
+The `patient` module is a leaf. Its ArchUnit edges
+(`backend/src/test/java/arch/ArchitectureTest.java`) are `observability`, as
+below, and the two a Patient search takes — `paging` for its parameters' rules
+and `audit` to record it (ADR 0018):
 
 - The adapter redacts a failure's cause with `RedactedFaultException`, the
   logging base's one tool for attaching a fault with no value in it, and raises
@@ -143,7 +146,9 @@ The `patient` module is a leaf, and its one ArchUnit edge
   the module writes no log record.
 - No edge to `auth`. The call presents no credential of the signed-in User's;
   its handler checks `patient:read` by the authority's name. A call that presents
-  a credential declares the edge it needs when it is written.
+  a credential declares the edge it needs when it is written. A search names the
+  signed-in User who made it through `audit`'s own port (`AuditActorContext`),
+  which the session module implements, so it needs none either.
 - Outbound HTTP is allowed in `patient.infrastructure.http` alone
   (`one_outbound_http_client`), and `http` is an infrastructure adapter the
   onion rule knows.

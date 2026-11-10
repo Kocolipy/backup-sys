@@ -15,6 +15,11 @@ import com.example.backend.audit.CapturedLog;
 import com.example.backend.observability.LogEvent;
 import com.example.backend.patient.PatientSourceStubs;
 import com.example.backend.patient.application.PatientReadService;
+import com.example.backend.paging.domain.PageRequest;
+import com.example.backend.patient.domain.Patient;
+import com.example.backend.patient.domain.PatientId;
+import com.example.backend.patient.domain.PatientMatches;
+import com.example.backend.patient.domain.PatientQuery;
 import com.example.backend.patient.domain.PatientStore;
 import com.example.backend.patient.infrastructure.http.PatientSourceAdapters;
 import com.example.backend.web.ApiExceptionHandler;
@@ -22,6 +27,7 @@ import com.example.backend.web.ErrorNamespaces;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
@@ -58,9 +64,17 @@ class PatientControllerTests {
     private static final String FHIR_JSON_R5 = "application/fhir+json;fhirVersion=5.0";
 
     /** A store whose every read fails, with a message quoting what a client's would. */
-    private static final PatientStore FAILING = id -> {
-        throw new IllegalStateException(
-                "I/O error on GET request for \"http://source/Patient/" + id + "\" -- S1234567A");
+    private static final PatientStore FAILING = new PatientStore() {
+        @Override
+        public Optional<Patient> findById(PatientId id) {
+            throw new IllegalStateException(
+                    "I/O error on GET request for \"http://source/Patient/" + id + "\" -- S1234567A");
+        }
+
+        @Override
+        public PatientMatches search(PatientQuery query, PageRequest page) {
+            throw new UnsupportedOperationException("a read by id is all this store is asked");
+        }
     };
 
     private final JsonMapper json = JsonMapper.builder().build();

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   completedYears,
   formatCalendarDate,
+  formatCalendarDateTwoDigitDay,
   formatDate,
   isCalendarDate,
   formatInstant,
@@ -66,6 +67,17 @@ describe("formatCalendarDate", () => {
     ["2009-11-15", "15 Nov 2009"],
   ])("writes %s as %s", (date, written) => {
     expect(formatCalendarDate(date)).toBe(written);
+  });
+});
+
+describe("formatCalendarDateTwoDigitDay", () => {
+  it.each([
+    ["2001-02-05", "05 Feb 2001"],
+    ["1985-03-12", "12 Mar 1985"],
+    ["2000-01-01", "01 Jan 2000"],
+    ["1999-12-31", "31 Dec 1999"],
+  ])("writes %s as %s", (date, written) => {
+    expect(formatCalendarDateTwoDigitDay(date)).toBe(written);
   });
 });
 

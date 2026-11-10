@@ -44,7 +44,9 @@ function pageNumbersOf(current: number, count: number): (number | "gap")[] {
  *
  * Renders nothing while every row the read matched sits on the first page —
  * there is no page to move to, and the body already shows every row, or its
- * own empty copy. An empty page that is *not* the first still renders: a row
+ * own empty copy — unless `onePage` is `"shown"`: then a first page holding
+ * every row still names its range, beside its one page and the disabled moves,
+ * and only a first page with no rows renders nothing. An empty page that is *not* the first still renders: a row
  * removed after the read that showed the page before it can leave the page the
  * operator moved to empty while the listing is not, and « is how they step
  * back.
@@ -54,6 +56,7 @@ export function Pager({
   label,
   noun,
   onMove,
+  onePage = "hidden",
   page: { rows, startIndex, totalResults },
   pageSize,
 }: {
@@ -64,12 +67,15 @@ export function Pager({
   /** What the rows are, lower-case and plural, as the position line names them: "Showing 1 to 20 of 45 users". */
   noun: string;
   onMove: (startIndex: number) => void;
+  /** Whether a first page holding every row, and at least one, shows the pager anyway. */
+  onePage?: "hidden" | "shown";
   /** The page shown, which the position line and the moves are counted from. */
   page: Page<unknown>;
   pageSize: number;
 }) {
   const last = startIndex + rows.length - 1;
-  if (startIndex <= 1 && last >= totalResults) return null;
+  const everyRowShown = startIndex <= 1 && last >= totalResults;
+  if (everyRowShown && (onePage === "hidden" || rows.length === 0)) return null;
   const current = Math.floor((startIndex - 1) / pageSize) + 1;
   const count = Math.max(current, Math.ceil(totalResults / pageSize));
   return (

@@ -14,11 +14,13 @@ import tools.jackson.databind.JsonNode;
 
 /**
  * The patient source's development fixtures, read from the stub files the local mock serves
- * ({@code patient-source-mock/mappings}): four dummy patients under ids borrowed from an EHR
- * vendor's public sandbox test patients, covering every gender code, each with an NRIC that cannot be a
- * real person's (/docs/domain/patient.md, "The patient source's fixtures"). Each fixture's values
- * as the service reads them are {@code PatientStoreContract}'s. Beside them, the fault stubs serve
- * each way the source fails, under ids of their own.
+ * ({@code patient-source-mock/mappings}): twelve dummy patients — four under ids borrowed from an
+ * EHR vendor's public sandbox test patients, eight under development ids of the mock's own —
+ * covering every gender code, each with an NRIC that cannot be a real person's
+ * (/docs/domain/patient.md, "The patient source's fixtures"). Each fixture's values as the service
+ * reads them are {@code PatientStoreContract}'s. Beside them, the fault stubs serve each way the
+ * source fails, under ids of their own, and the search stubs answer the documented searches with
+ * the fixtures themselves.
  */
 class PatientSourceFixturesTests {
 
@@ -49,21 +51,108 @@ class PatientSourceFixturesTests {
                 .findFirst();
     }
 
-    /** The four fixtures, under the sandbox ids /docs/domain/patient.md lists. */
+    /**
+     * The twelve fixtures: four under the sandbox ids /docs/domain/patient.md lists, and eight
+     * under the mock's own development ids.
+     */
     @Test
-    void theFixturesAreFourPatientsUnderSandboxIds() {
+    void theFixturesAreTwelvePatientsUnderTheIdsTheDomainDocLists() {
         assertThat(FIXTURES).extracting(fixture -> fixture.get("id").asString())
                 .containsExactlyInAnyOrder(
                         "eq081-VQEgP8drUUqCWzHfw3",
                         "erXuFYUfucBZaryVksYEcMg3",
                         "e0w0LEDCYtfckT6N.CkJKCw3",
-                        "egqBHVfQlt4Bw3XGXoxVxHg3");
+                        "egqBHVfQlt4Bw3XGXoxVxHg3",
+                        "dev-patient-05",
+                        "dev-patient-06",
+                        "dev-patient-07",
+                        "dev-patient-08",
+                        "dev-patient-09",
+                        "dev-patient-10",
+                        "dev-patient-11",
+                        "dev-patient-12");
     }
 
     @Test
     void theFixturesBetweenThemCarryEveryGenderCode() {
         assertThat(FIXTURES).extracting(fixture -> fixture.get("gender").asString())
-                .containsExactlyInAnyOrder("male", "female", "other", "unknown");
+                .containsOnly("male", "female", "other", "unknown")
+                .contains("male", "female", "other", "unknown");
+    }
+
+    // ---- the Last visit and the search stubs ---------------------------------------------
+
+    private static final String LAST_VISIT =
+            "https://fhir.synapxe.sg/StructureDefinition/last-visit";
+
+    private static Optional<String> lastVisit(JsonNode patient) {
+        return StreamSupport.stream(patient.at("/extension").spliterator(), false)
+                .filter(extension -> LAST_VISIT.equals(extension.get("url").asString()))
+                .map(extension -> extension.get("valueDate").asString())
+                .findFirst();
+    }
+
+    /** Every fixture has a Last visit, a date to the day, but one: Tan Boon Huat has none. */
+    @Test
+    void everyFixtureButOneHasALastVisitToTheDay() {
+        assertThat(FIXTURES).filteredOn(fixture -> lastVisit(fixture).isEmpty())
+                .extracting(fixture -> fixture.get("id").asString())
+                .containsExactly("dev-patient-10");
+        assertThat(FIXTURES).extracting(fixture -> lastVisit(fixture).orElse("2000-01-01"))
+                .allSatisfy(date -> assertThat(date).matches("\\d{4}-\\d{2}-\\d{2}"));
+    }
+
+    /** Each search answers its matches as the fixtures themselves, exactly as read by id. */
+    @Test
+    void everySearchMatchIsTheFixtureUnderItsId() {
+        List<JsonNode> matches = PatientSourceStubs.searches().stream()
+                .flatMap(bundle -> StreamSupport.stream(bundle.at("/entry").spliterator(), false))
+                .map(entry -> entry.get("resource"))
+                .toList();
+
+        assertThat(matches).hasSize(8).allSatisfy(match -> assertThat(FIXTURES)
+                .filteredOn(fixture -> fixture.get("id").equals(match.get("id")))
+                .containsExactly(match));
+    }
+
+    /**
+     * The name search's two pages hold exactly the seven fixtures with any name containing
+     * {@code tan}, ignoring case — Lee Mei Ling by her maiden name — so the search spans two pages
+     * of five, and each page's total is seven.
+     */
+    @Test
+    void theNameSearchPagesHoldEveryFixtureWithANameContainingTan() {
+        List<String> named = FIXTURES.stream()
+                .filter(fixture -> StreamSupport.stream(fixture.at("/name").spliterator(), false)
+                        .anyMatch(name -> name.get("text").asString().toLowerCase().contains("tan")))
+                .map(fixture -> fixture.get("id").asString())
+                .toList();
+        List<JsonNode> pages = PatientSourceStubs.searches().stream()
+                .filter(bundle -> bundle.at("/total").asInt() == 7)
+                .toList();
+
+        assertThat(named).hasSize(7);
+        assertThat(pages).extracting(bundle -> bundle.at("/entry").size())
+                .containsExactlyInAnyOrder(5, 2);
+        assertThat(pages.stream()
+                .flatMap(bundle -> StreamSupport.stream(bundle.at("/entry").spliterator(), false))
+                .map(entry -> entry.at("/resource/id").asString()))
+                .containsExactlyInAnyOrderElementsOf(named);
+    }
+
+    /** Every search stub answers a searchset Bundle carrying its total, the fallback's none. */
+    @Test
+    void everySearchStubIsASearchsetWithATotal() {
+        assertThat(PatientSourceStubs.searches())
+                .extracting(bundle -> bundle.at("/resourceType").asString(),
+                        bundle -> bundle.at("/type").asString(),
+                        bundle -> bundle.at("/total").asInt())
+                .containsExactlyInAnyOrder(
+                        tuple("Bundle", "searchset", 0),
+                        tuple("Bundle", "searchset", 0),
+                        tuple("Bundle", "searchset", 1),
+                        tuple("Bundle", "searchset", 7),
+                        tuple("Bundle", "searchset", 7));
     }
 
     @Test

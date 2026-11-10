@@ -89,7 +89,7 @@ export default defineConfig({
     },
     {
       name: "user",
-      testMatch: /roles-user\.spec\.ts/,
+      testMatch: /(?:roles-user|patient-search)\.spec\.ts/,
       dependencies: ["setup"],
       use: {
         ...devices["Desktop Chrome"],

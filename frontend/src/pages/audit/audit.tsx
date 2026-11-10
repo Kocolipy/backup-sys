@@ -110,8 +110,18 @@ function membershipParts(event: AuditEvent): (string | null)[] {
 }
 
 /**
+ * A bulk read's filter shape, as Details names it: a Patient search's is the
+ * kind of query it ran, `NRIC` or `NAME`, never the query itself.
+ */
+const filterShapeText = (event: AuditEvent): string | null =>
+  event.filterShape !== null && event.operation === "PATIENT_SEARCH"
+    ? `query kind: ${event.filterShape}`
+    : event.filterShape;
+
+/**
  * Everything else a reader may need, as plain text joined by " · ": a login's
- * method, a bulk read's result count and filter shape, the Permissions a token
+ * method, a bulk read's result count and filter shape (a Patient search's
+ * query kind), the Permissions a token
  * event carried, and a membership change's Permissions before and after. Empty
  * when the operation names none of these.
  */
@@ -119,7 +129,7 @@ function detailsText(event: AuditEvent): string {
   const parts = [
     event.loginMethod === null ? null : `login method: ${event.loginMethod}`,
     event.resultCount === null ? null : `${event.resultCount} result(s)`,
-    event.filterShape,
+    filterShapeText(event),
     event.permissions.length === 0 ? null : event.permissions.join(", "),
     ...membershipParts(event),
     ...groupPermissionsParts(event),

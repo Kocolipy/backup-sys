@@ -40,4 +40,5 @@ export const AUDIT_OPERATION_LABELS: Record<AuditOperation, string> = {
   PERMISSION_GRANT: "Permission granted",
   PERMISSION_REVOKE: "Permission revoked",
   GROUP_PERMISSIONS_CHANGE: "Group Permissions changed",
+  PATIENT_SEARCH: "Patients searched",
 };

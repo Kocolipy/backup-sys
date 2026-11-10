@@ -90,8 +90,8 @@ services:
 
   # The in-house patient source's mock (ADR 0014): WireMock serving FHIR R4
   # `Patient/{id}` for the development fixtures from ./patient-source-mock,
-  # a failure of the source for each of its fault stubs, and a 404 for any other
-  # well-formed id. No profile, so `make infra-up` and
+  # a failure of the source for each of its fault stubs, a 404 for any other
+  # well-formed id, and `Patient?…` for its canned Patient searches. No profile, so `make infra-up` and
   # `make integration-test` start it beside SQL Server and Redis; the backend
   # reads it at APP_PATIENT_SOURCE_BASE_URL (.env.example). The backend's
   # patient tests serve the same stub files in process, so the two cannot drift.

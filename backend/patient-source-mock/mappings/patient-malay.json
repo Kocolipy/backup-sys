@@ -16,6 +16,12 @@
         "versionId": "1",
         "lastUpdated": "2026-01-01T00:00:00Z"
       },
+      "extension": [
+        {
+          "url": "https://fhir.synapxe.sg/StructureDefinition/last-visit",
+          "valueDate": "2026-07-11"
+        }
+      ],
       "identifier": [
         {
           "use": "usual",

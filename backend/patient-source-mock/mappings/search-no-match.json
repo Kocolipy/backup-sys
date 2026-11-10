@@ -1,0 +1,43 @@
+{
+  "name": "Search: name contains nobody, which no Patient's does",
+  "request": {
+    "method": "GET",
+    "urlPath": "/Patient",
+    "queryParameters": {
+      "_sort": {
+        "equalTo": "-last-visit,_id"
+      },
+      "_count": {
+        "equalTo": "5"
+      },
+      "_offset": {
+        "equalTo": "0"
+      },
+      "_total": {
+        "equalTo": "accurate"
+      },
+      "name:contains": {
+        "equalTo": "nobody",
+        "caseInsensitive": true
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/fhir+json"
+    },
+    "jsonBody": {
+      "resourceType": "Bundle",
+      "id": "searchset",
+      "type": "searchset",
+      "total": 0,
+      "link": [
+        {
+          "relation": "self",
+          "url": "http://127.0.0.1:8104/Patient?_offset=0&_count=5"
+        }
+      ]
+    }
+  }
+}

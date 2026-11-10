@@ -2,8 +2,11 @@ package com.example.backend.patient.infrastructure.http;
 
 import com.example.backend.observability.OutboundCallFailure;
 import com.example.backend.observability.RedactedFaultException;
+import com.example.backend.paging.domain.PageRequest;
 import com.example.backend.patient.domain.Patient;
 import com.example.backend.patient.domain.PatientId;
+import com.example.backend.patient.domain.PatientMatches;
+import com.example.backend.patient.domain.PatientQuery;
 import com.example.backend.patient.domain.PatientStore;
 import com.example.backend.patient.infrastructure.http.PatientSourceException.Failure;
 import java.net.URI;
@@ -11,8 +14,11 @@ import java.net.URISyntaxException;
 import java.net.http.HttpClient;
 import java.net.http.HttpTimeoutException;
 import java.time.Duration;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Supplier;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.convert.DurationStyle;
@@ -24,8 +30,9 @@ import org.springframework.web.client.RestClient;
 
 /**
  * Adapts the domain's {@link PatientStore} port onto the in-house patient source (ADR 0014):
- * {@code GET {base}/Patient/{id}}, which is assumed to answer FHIR R4 and to need no
- * authorisation, so the call carries no credential of any kind. The patient's id is its EHR's
+ * {@code GET {base}/Patient/{id}} for a read by id, and {@code GET {base}/Patient?…} for a
+ * Patient search ({@link #search}, ADR 0018). The source is assumed to answer FHIR R4 and to need
+ * no authorisation, so the call carries no credential of any kind. The patient's id is its EHR's
  * FHIR id, sent unchanged.
  *
  * <ul>
@@ -61,6 +68,16 @@ class PatientSourceAdapter implements PatientStore {
     private static final MediaType FHIR_JSON = MediaType.parseMediaType("application/fhir+json");
 
     private static final Set<String> SCHEMES = Set.of("http", "https");
+
+    /** The source's sort and paging, which every search asks for alike. */
+    private static final String SEARCH_PAGE =
+            "&_sort=-last-visit,_id&_count={count}&_offset={offset}&_total=accurate";
+
+    /** A name search: FHIR's {@code name:contains}, matched as the source decides. */
+    static final String SEARCH_BY_NAME = "/Patient?name:contains={name}" + SEARCH_PAGE;
+
+    /** An NRIC search: the identifier under the NRIC NamingSystem, exactly. */
+    static final String SEARCH_BY_NRIC = "/Patient?identifier={identifier}" + SEARCH_PAGE;
 
     private final RestClient source;
 
@@ -98,21 +115,63 @@ class PatientSourceAdapter implements PatientStore {
 
     @Override
     public Optional<Patient> findById(PatientId id) {
+        return called(() -> source.get()
+                .uri("/Patient/{id}", id.value())
+                .accept(FHIR_JSON)
+                .exchange((request, response) -> {
+                    if (response.getStatusCode().isSameCodeAs(HttpStatus.NOT_FOUND)) {
+                        return Optional.<Patient>empty();
+                    }
+                    if (!response.getStatusCode().isSameCodeAs(HttpStatus.OK)) {
+                        throw PatientSourceException.answered(response.getStatusCode().value());
+                    }
+                    return Optional.of(response.bodyTo(R4Patient.class).toPatient(id));
+                }));
+    }
+
+    /**
+     * {@code GET {base}/Patient?…}: the source's own search, matched, sorted, paged and counted
+     * by the source — newest Last visit first, ties broken by id, from {@code startIndex - 1},
+     * {@code count} of them, with an accurate total (ADR 0018). Its one answer is a {@code 200}
+     * searchset Bundle; anything else — a {@code 404} included — is a fault, as is a Bundle with
+     * no total or holding a Patient with no id. The query's text is a URI variable, never part
+     * of the template, so the call is observed under the template alone.
+     */
+    @Override
+    public PatientMatches search(PatientQuery query, PageRequest page) {
+        Map<String, Object> variables = new HashMap<>();
+        variables.put("count", page.count());
+        variables.put("offset", page.offset());
+        String template = switch (query) {
+            case PatientQuery.ByName name -> {
+                variables.put("name", name.text());
+                yield SEARCH_BY_NAME;
+            }
+            case PatientQuery.ByNric nric -> {
+                variables.put("identifier", Patient.NRIC_SYSTEM + "|" + nric.nric());
+                yield SEARCH_BY_NRIC;
+            }
+        };
+        return called(() -> source.get()
+                .uri(template, variables)
+                .accept(FHIR_JSON)
+                .exchange((request, response) -> {
+                    if (!response.getStatusCode().isSameCodeAs(HttpStatus.OK)) {
+                        throw PatientSourceException.answered(response.getStatusCode().value());
+                    }
+                    return response.bodyTo(R4SearchBundle.class).toMatches();
+                }));
+    }
+
+    /**
+     * {@code call}'s answer, or its failure as a {@link PatientSourceException}: one the answer
+     * raised itself as it is, and any other, after the time it took, classified as ADR 0014's
+     * table has it, its cause redacted.
+     */
+    private <T> T called(Supplier<T> call) {
         long sent = System.nanoTime();
         try {
-            return source.get()
-                    .uri("/Patient/{id}", id.value())
-                    .accept(FHIR_JSON)
-                    .exchange((request, response) -> {
-                        if (response.getStatusCode().isSameCodeAs(HttpStatus.NOT_FOUND)) {
-                            return Optional.<Patient>empty();
-                        }
-                        if (!response.getStatusCode().isSameCodeAs(HttpStatus.OK)) {
-                            throw PatientSourceException.answered(
-                                    response.getStatusCode().value());
-                        }
-                        return Optional.of(response.bodyTo(R4Patient.class).toPatient(id));
-                    });
+            return call.get();
         } catch (PatientSourceException fault) {
             throw fault;
         } catch (RuntimeException failed) {

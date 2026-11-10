@@ -120,6 +120,13 @@ describe("SignedInShell", () => {
     expect(screen.getByRole("heading", { level: 1, name: title })).toHaveClass("sr-only");
   });
 
+  it("shows Patient Search's title, which heads the page", async () => {
+    await renderShell("/search");
+    expect(screen.getByRole("heading", { level: 1, name: "Patient Search" })).not.toHaveClass(
+      "sr-only",
+    );
+  });
+
   it("shows the password change's title, where a confined session has no sidebar to go by", async () => {
     await renderShell("/change-password");
     expect(screen.getByRole("heading", { level: 1, name: "Change password" })).not.toHaveClass(
@@ -138,6 +145,7 @@ describe("SignedInShell", () => {
   });
 
   it.each([
+    ["Patient Search", "/search"],
     ["Profile", "/"],
     ["Accounts", "/accounts"],
     ["Audit", "/audit"],
@@ -150,6 +158,7 @@ describe("SignedInShell", () => {
   });
 
   it.each([
+    ["Patient Search", "/search"],
     ["Profile", "/"],
     ["Accounts", "/accounts"],
     ["Audit", "/audit"],
@@ -180,6 +189,7 @@ describe("SignedInShell's navigation sidebar", () => {
   // Each page the sidebar links, with the Permissions its route guard opens it
   // for (none: every signed-in session), as the registry declares them today.
   it.each([
+    ["Search", "/search", []],
     ["Profile", "/", []],
     ["Manage accounts", "/accounts", ["user:read", "group:read", "connector:read"]],
     ["View audit log", "/audit", ["audit:read"]],
@@ -203,13 +213,34 @@ describe("SignedInShell's navigation sidebar", () => {
     },
   );
 
+  it("links Search first, for a session holding nothing beyond baseline access", async () => {
+    await renderSignedIn("/", holding([]));
+
+    expect(
+      within(screen.getAllByRole("list")[0])
+        .getAllByRole("link")
+        .map((link) => link.textContent),
+    ).toEqual(["Search", "Profile"]);
+  });
+
+  it("links Search first, ahead of every page a Superuser may open", async () => {
+    await renderSignedIn("/", holding(EVERY_PERMISSION));
+
+    expect(
+      within(screen.getAllByRole("list")[0])
+        .getAllByRole("link")
+        .map((link) => link.textContent),
+    ).toEqual(["Search", "Profile", "Manage accounts", "View audit log"]);
+  });
+
   it.each([
+    ["/search", "Search"],
     ["/", "Profile"],
     ["/audit", "View audit log"],
   ])("on %s highlights %s's link, and no other", async (path, current) => {
     await renderShell(path, {}, holding(EVERY_PERMISSION));
 
-    const links = ["Profile", "Manage accounts", "View audit log"];
+    const links = ["Search", "Profile", "Manage accounts", "View audit log"];
     expect(
       links.map((name) => screen.getByRole("link", { name }).getAttribute("data-active")),
     ).toEqual(links.map((name) => String(name === current)));

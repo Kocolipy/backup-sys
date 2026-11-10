@@ -630,6 +630,39 @@ describe("Audit", () => {
     expect(details!.Details).toBe("3 result(s) · userName eq ?");
   });
 
+  it("names a Patient search's result count and query kind in Details, and no query", async () => {
+    const search = {
+      ...EVENT_2,
+      httpPath: "/api/patient-search",
+      operation: "PATIENT_SEARCH",
+      resourceType: "Patient",
+      resultCount: 5,
+      filterShape: "NAME",
+    };
+    await renderAudit(everyRead(answerPage([search], { totalResults: 1 })));
+    const user = userEvent.setup();
+
+    await findTable();
+    const [details] = await openDetails(user);
+    expect(details!.Details).toBe("5 result(s) · query kind: NAME");
+  });
+
+  it("names a Patient search's count alone in Details when it carries no query kind", async () => {
+    const search = {
+      ...EVENT_2,
+      operation: "PATIENT_SEARCH",
+      resourceType: "Patient",
+      resultCount: 1,
+      filterShape: null,
+    };
+    await renderAudit(everyRead(answerPage([search], { totalResults: 1 })));
+    const user = userEvent.setup();
+
+    await findTable();
+    const [details] = await openDetails(user);
+    expect(details!.Details).toBe("1 result(s)");
+  });
+
   it("shows a membership change's Permissions before and after in Details", async () => {
     await renderAudit(everyRead(answerPage([EVENT_PERMISSION_GRANT], { totalResults: 1 })));
     const user = userEvent.setup();
@@ -1190,6 +1223,7 @@ describe("Audit", () => {
         "Permission granted",
         "Permission revoked",
         "Group Permissions changed",
+        "Patients searched",
       ]);
     });
 

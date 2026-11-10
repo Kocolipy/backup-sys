@@ -12,9 +12,12 @@ import com.example.backend.DatabaseLogins;
 import com.example.backend.ForcedDeadlock;
 import com.example.backend.TokenPermissions;
 import com.example.backend.observability.RequestIdFilter;
+import com.example.backend.patient.PatientSourceStubs;
 import com.example.backend.scim.application.ConnectorAdministrationService;
 import com.example.backend.scim.application.ScimSeedService;
 import com.example.backend.web.ErrorDocumentFilter;
+import com.github.tomakehurst.wiremock.client.WireMock;
+import com.github.tomakehurst.wiremock.stubbing.StubMapping;
 import jakarta.servlet.Filter;
 import jakarta.servlet.http.Cookie;
 import java.util.ArrayList;
@@ -195,6 +198,7 @@ class ApiContractFixtureTests {
         authentication(all);
         self(all);
         patient(all);
+        patientSearch(all);
         administration(all);
         connectors(all);
         deadlockedWrites(all);
@@ -323,6 +327,36 @@ class ApiContractFixtureTests {
             t.expect(t.get("/api/patient/" + id), 401);
             // No operation takes a write: the dispatcher answers it, in the namespace's shape.
             t.expect(t.csrf(t.post("/api/patient/" + id)).cookie(user), 405);
+        });
+    }
+
+    // ---- /api/patient-search ------------------------------------------------------------
+
+    private static void patientSearch(List<Fixture> all) {
+        add(all, "patient search: a page of matches by name and by NRIC, a query too short, a"
+                + " failing source, and the refusals", t -> {
+            // patient:read is baseline: every active User holds it; only a confined session lacks
+            // it. The searches are the patient source's mock's canned ones (PatientSourceStubs).
+            Cookie user = t.settle(t.provision(true));
+            Cookie confined = t.logIn(t.provision(true), CONNECTOR_PASSWORD);
+            t.expect(t.get("/api/patient-search?q=tan&count=5").cookie(user), 200);
+            t.expect(t.get("/api/patient-search?q=s9212345a&count=5").cookie(user), 200);
+            t.expect(t.get("/api/patient-search?q=ta").cookie(user), 400);
+            t.expect(t.get("/api/patient-search?q=tan&count=five").cookie(user), 400);
+            t.expect(t.get("/api/patient-search?q=tan").cookie(confined), 403);
+            t.expect(t.get("/api/patient-search?q=tan"), 401);
+            // The patient source failing: a search of the fixture's own, which the shared mock
+            // answers 503 until the fixture removes it.
+            String failing = "contract-" + UUID.randomUUID();
+            StubMapping fault = PatientSourceStubs.shared().stubFor(
+                    WireMock.get(WireMock.urlPathEqualTo("/Patient")).atPriority(1)
+                            .withQueryParam("name:contains", WireMock.equalTo(failing))
+                            .willReturn(WireMock.aResponse().withStatus(503)));
+            try {
+                t.expect(t.get("/api/patient-search?q=" + failing).cookie(user), 502);
+            } finally {
+                PatientSourceStubs.shared().removeStub(fault);
+            }
         });
     }
 

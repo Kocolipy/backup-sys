@@ -1,7 +1,9 @@
 import type { Patient } from "fhir/r5";
 import { describe, expect, expectTypeOf, it } from "vitest";
 
-import { PATIENT, type PatientGender } from "./home-api";
+import type { PatientGender } from "@/lib/patient-gender";
+
+import { PATIENT } from "./home-api";
 import { TAN_WEI_MING } from "./patient.testHelpers";
 
 describe("PATIENT", () => {

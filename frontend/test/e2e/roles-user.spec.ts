@@ -24,8 +24,11 @@ test.describe("baseline User pages", () => {
     await expectNoPatientInContext(page);
     await expect(page.getByRole("alert")).toHaveCount(0);
     expect(patientRequests()).toEqual([]);
-    // The navigation sidebar links only what a baseline User may open: Profile.
-    await expect(page.locator('[data-slot="sidebar"]').getByRole("link")).toHaveText(["Profile"]);
+    // The navigation sidebar links only what a baseline User may open: Search and Profile.
+    await expect(page.locator('[data-slot="sidebar"]').getByRole("link")).toHaveText([
+      "Search",
+      "Profile",
+    ]);
   });
 
   test("is routed away from the accounts page by a deep link", async ({ page }) => {

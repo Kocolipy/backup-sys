@@ -68,6 +68,18 @@ public final class PatientSourceStubs {
                 .filter(stub -> stub.at(FAULT).isMissingNode())
                 .filter(stub -> stub.at("/response/status").asInt() == 200)
                 .map(stub -> stub.at("/response/jsonBody"))
+                .filter(body -> "Patient".equals(body.at("/resourceType").asString("")))
+                .toList();
+    }
+
+    /**
+     * Every search stub: the R4 searchset {@code Bundle} each stub answering
+     * {@code GET /Patient?…} serves — the canned searches and the fallback for any other.
+     */
+    public static List<JsonNode> searches() {
+        return stubs()
+                .filter(stub -> "/Patient".equals(stub.at("/request/urlPath").asString("")))
+                .map(stub -> stub.at("/response/jsonBody"))
                 .toList();
     }
 

@@ -142,6 +142,12 @@ public record AuditEvent(
      */
     public static final String USER_AND_GROUP_RESOURCE_TYPE = "User,Group";
 
+    /**
+     * A Patient, spelled as FHIR spells the resource type: what a {@code PATIENT_SEARCH} read, with
+     * no one Patient named, since every Patient is the patient source's and none is held here.
+     */
+    public static final String PATIENT_RESOURCE_TYPE = "Patient";
+
     /** The request succeeded. */
     public static final String STATUS_OK = "ok";
 

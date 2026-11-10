@@ -10,6 +10,7 @@ const PAGE_SIZE = 20;
 function renderPager(
   { rows, startIndex, totalResults }: { rows: number; startIndex: number; totalResults: number },
   disabled?: boolean,
+  onePage?: "hidden" | "shown",
 ) {
   const onMove = vi.fn<(startIndex: number) => void>();
   const { container } = render(
@@ -18,6 +19,7 @@ function renderPager(
       label="Widget pages"
       noun="widgets"
       onMove={onMove}
+      onePage={onePage}
       page={{ rows: Array.from({ length: rows }), startIndex, totalResults }}
       pageSize={PAGE_SIZE}
     />,
@@ -97,6 +99,23 @@ describe("Pager", () => {
 
   it("renders nothing while every row sits on the first page", () => {
     const { container } = renderPager({ rows: 20, startIndex: 1, totalResults: 20 });
+
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it("shows the range and its one page while every row sits on the first page, when asked to", () => {
+    renderPager({ rows: 3, startIndex: 1, totalResults: 3 }, false, "shown");
+
+    expect({
+      next: next().hasAttribute("disabled"),
+      pages: pageNumbers(),
+      previous: previous().hasAttribute("disabled"),
+      range: screen.getByText(/^Showing 1 to 3 of 3 widgets$/).tagName,
+    }).toEqual({ next: true, pages: ["Page 1"], previous: true, range: "P" });
+  });
+
+  it("renders nothing for an empty first page, even when asked to show its one page", () => {
+    const { container } = renderPager({ rows: 0, startIndex: 1, totalResults: 0 }, false, "shown");
 
     expect(container).toBeEmptyDOMElement();
   });

@@ -1,0 +1,52 @@
+{
+  "name": "Patient dev-patient-08",
+  "request": {
+    "method": "GET",
+    "urlPath": "/Patient/dev-patient-08"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/fhir+json"
+    },
+    "jsonBody": {
+      "resourceType": "Patient",
+      "id": "dev-patient-08",
+      "meta": {
+        "versionId": "1",
+        "lastUpdated": "2026-01-01T00:00:00Z"
+      },
+      "extension": [
+        {
+          "url": "https://fhir.synapxe.sg/StructureDefinition/last-visit",
+          "valueDate": "2026-08-19"
+        }
+      ],
+      "identifier": [
+        {
+          "use": "usual",
+          "system": "urn:oid:1.2.840.114350.1.13.0.1.7.5.737384.14",
+          "value": "203808"
+        },
+        {
+          "use": "official",
+          "system": "https://fhir.synapxe.sg/NamingSystem/nric",
+          "value": "T0112345A"
+        }
+      ],
+      "active": true,
+      "name": [
+        {
+          "use": "usual",
+          "text": "Intan"
+        },
+        {
+          "use": "official",
+          "text": "Nur Intan binte Yusof"
+        }
+      ],
+      "gender": "female",
+      "birthDate": "2001-04-17"
+    }
+  }
+}

@@ -256,6 +256,20 @@ final class AuditRows {
     }
 
     /**
+     * A Patient search: a bulk read of the patient source, by the signed-in User, with no subject,
+     * carrying how many Patients it answered and its query's kind as its filter shape — the one
+     * thing about the query recorded.
+     */
+    static AuditEvent patientSearch(
+            Audited.Stamp stamp, UUID actorId, AuditPatientQueryKind kind, int resultCount) {
+        return row(stamp, stamp.requests().current(),
+                Change.success(AuditOperation.PATIENT_SEARCH, actorId, null, Audited.NO_PATHS),
+                AuditEvent.PATIENT_RESOURCE_TYPE, null,
+                new Particulars(resultCount, kind.name(), NO_PERMISSIONS, null, null, Tokens.NONE,
+                        PermissionDelta.NONE));
+    }
+
+    /**
      * A change of power through a Group's membership: the subject is the User whose power changed,
      * the resource the Group whose membership moved, and the User's effective Permissions before
      * and after are named — the one event whose subject and resource differ, because it is about

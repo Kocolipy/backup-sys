@@ -1,7 +1,7 @@
 ---
 type: Configuration Reference
 title: Patient source
-description: APP_PATIENT_SOURCE_BASE_URL and APP_PATIENT_SOURCE_READ_TIMEOUT — the in-house patient source the backend reads every Patient from, its required base URL, its timeouts, and the local WireMock mock compose runs on 127.0.0.1:8104.
+description: APP_PATIENT_SOURCE_BASE_URL and APP_PATIENT_SOURCE_READ_TIMEOUT — the in-house patient source the backend reads every Patient from and passes every Patient search to, its required base URL, its timeouts, and the local WireMock mock compose runs on 127.0.0.1:8104, with its fixtures and its search set.
 tags: [patient, configuration]
 ---
 
@@ -13,9 +13,10 @@ tags: [patient, configuration]
 | `APP_PATIENT_SOURCE_READ_TIMEOUT` | `5s`    | How long the source may take to answer once connected            |
 
 The backend reads every Patient from the in-house patient source at
-`GET {base}/Patient/{id}`, as FHIR R4, on every read, with no cache and **no
-credential** (ADR 0014; `/docs/domain/patient.md`, "The in-house patient
-source"). The SPA never reaches it.
+`GET {base}/Patient/{id}`, and passes every Patient search to it at
+`GET {base}/Patient?…`, as FHIR R4, on every read, with no cache and **no
+credential** (ADR 0014, ADR 0018; `/docs/domain/patient.md`, "The in-house
+patient source" and "Patient search"). The SPA never reaches it.
 
 - **Required, with no default.** `application.yaml` names
   `app.patient-source.base-url` as `${APP_PATIENT_SOURCE_BASE_URL}` with no
@@ -45,8 +46,8 @@ source"). The SPA never reaches it.
 `compose.yaml`'s `patient-source` service is WireMock (`wiremock/wiremock`,
 pinned by tag and digest, the same release as the backend's test dependency)
 serving `patient-source-mock/mappings` on **`127.0.0.1:8104`**: FHIR R4
-`Patient/{id}` for the development fixtures, and a `404` for any other
-well-formed id. It has no profile, so `make infra-up` and
+`Patient/{id}` for the twelve development fixtures, a `404` for any other
+well-formed id, and the search set below. It has no profile, so `make infra-up` and
 `make integration-test` start it beside SQL Server and Redis, healthy when
 WireMock's `/__admin/health` answers. `.env.example` points the backend at it:
 
@@ -56,6 +57,28 @@ APP_PATIENT_SOURCE_BASE_URL=http://127.0.0.1:8104
 
 ```bash
 curl -s http://127.0.0.1:8104/Patient/eq081-VQEgP8drUUqCWzHfw3   # Tan Wei Ming
+```
+
+### The search set
+
+Each canned search answers a searchset Bundle of the fixtures themselves,
+matched on the whole query the backend sends — the search, then
+`_sort=-last-visit,_id`, `_count=5`, `_offset` and `_total=accurate` — so it
+answers the SPA's five-a-page reads:
+
+| Stub file                | Search                                                            | Answers                                                       |
+| ------------------------ | ----------------------------------------------------------------- | ------------------------------------------------------------- |
+| `search-name-tan-page-1` | `name:contains=tan`, any case, `_offset=0`                        | 5 of `total: 7`, newest Last visit first                      |
+| `search-name-tan-page-2` | `name:contains=tan`, any case, `_offset=5`                        | the last 2 of `total: 7`, the Patient with no Last visit last |
+| `search-nric`            | `identifier=https://fhir.synapxe.sg/NamingSystem/nric\|S9212345A` | Siti Nurhaliza binte Ahmad, `total: 1`                        |
+| `search-no-match`        | `name:contains=nobody`                                            | no entry, `total: 0`                                          |
+| `search-fallback`        | any other `/Patient` search, at a lower priority                  | no entry, `total: 0`                                          |
+
+Each Patient carries its Last visit as the `last-visit` extension, a
+`valueDate`, as the source does (ADR 0018).
+
+```bash
+curl -s 'http://127.0.0.1:8104/Patient?name:contains=tan&_sort=-last-visit,_id&_count=5&_offset=0&_total=accurate'
 ```
 
 A change to a stub file changes the backend's patient tests' fixtures too: they

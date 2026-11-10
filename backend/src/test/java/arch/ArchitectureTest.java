@@ -851,11 +851,13 @@ public class ArchitectureTest {
                     "audit", "authorization", "observability", "paging", "scheduling", "scim",
                     "web")),
             // patient and lifecycle are leaves, which no entry names: removing one must not break
-            // another module. patient reaches no module that holds state. It reaches
-            // observability for one thing: a failure of the patient source carries its cause
-            // redacted to its type (RedactedFaultException), so a client's or a parser's message
-            // never puts the patient into the fault's record (ADR 0014, "The module's edges").
-            Map.entry("patient", Set.of("observability")),
+            // another module. patient reaches observability for one thing: a failure of the
+            // patient source carries its cause redacted to its type (RedactedFaultException), so a
+            // client's or a parser's message never puts the patient into the fault's record (ADR
+            // 0014, "The module's edges"). It reaches paging for the rules a Patient search's
+            // startIndex and count are read by, and audit to record each search, naming the
+            // signed-in User through audit's own port rather than the session module (ADR 0018).
+            Map.entry("patient", Set.of("audit", "observability", "paging")),
             Map.entry("lifecycle", Set.of("audit", "observability", "scim")));
 
     private static final String ROOT_PACKAGE = "com.example.backend";

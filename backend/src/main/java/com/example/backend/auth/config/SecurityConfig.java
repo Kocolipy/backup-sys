@@ -367,7 +367,7 @@ public class SecurityConfig {
                         // and never over SCIM (ADR 0015).
                         .requestMatchers(HttpMethod.PUT, "/api/admin/groups/*/permissions")
                                 .hasRole(SUPERUSER_ROLE)
-                        .requestMatchers(read("/api/patient/*"))
+                        .requestMatchers(read("/api/patient/*"), read("/api/patient-search"))
                                 .hasAuthority(Permission.PATIENT_READ.value())
                         // Not a backstop: no operation serves any other method on a patient, and
                         // the rule above matches a read only. It lets one through, for a session

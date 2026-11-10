@@ -139,6 +139,8 @@ public final class RecordingAuditTrail implements AuditTrail {
             case Audited.ScimUsersQueried _, Audited.ScimGroupsQueried _,
                     Audited.ScimResourcesQueried _ ->
                     row.resultCount() + (row.filterShape() == null ? "" : " " + row.filterShape());
+            // A Patient search's count and query kind: "5 NAME".
+            case Audited.PatientsSearched _ -> row.resultCount() + " " + row.filterShape();
             // The changed attributes' names, sorted and comma-joined; empty for a no-op write.
             case Audited.ScimUserReplaced e -> joined(e.changed());
             case Audited.ScimGroupReplaced e -> joined(e.changed());

@@ -12,18 +12,10 @@
 import type { ReadDeclaration } from "@/auth/declarations";
 import { DecodeError, jsonDecoder, readObject } from "@/lib/decode";
 import { isCalendarDate } from "@/lib/time";
+import { PATIENT_GENDERS, type PatientGender } from "@/lib/patient-gender";
 
 /** Synapxe's NRIC NamingSystem, the `system` of the identifier that holds a patient's NRIC. */
 const NRIC_SYSTEM = "https://fhir.synapxe.sg/NamingSystem/nric";
-
-/**
- * The FHIR R5 administrative gender codes. Spelled out rather than imported:
- * `@types/fhir` is a devDependency, which production source may not import
- * (`cq-no-devdep-in-prod`), so `home-api.test.ts` holds this to `fhir5`'s own.
- */
-const GENDERS = ["male", "female", "other", "unknown"] as const;
-
-export type PatientGender = (typeof GENDERS)[number];
 
 /**
  * The part of an R5 `Patient` Home shows, read off the wire (its suite reads
@@ -64,7 +56,7 @@ const decodePatient = jsonDecoder((body: unknown): PatientSummary => {
   if (!isCalendarDate(birthDate)) throw new DecodeError("Patient.birthDate is not a date");
   return {
     birthDate,
-    gender: patient.oneOf("gender", GENDERS),
+    gender: patient.oneOf("gender", PATIENT_GENDERS),
     name: nameTextOf(patient.array("name", (name) => name)),
     nric: nricOf(patient.array("identifier", (identifier) => identifier)),
   };

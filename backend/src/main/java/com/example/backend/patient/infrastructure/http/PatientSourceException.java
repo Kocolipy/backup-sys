@@ -8,7 +8,7 @@ import java.util.stream.Stream;
 
 /**
  * The in-house patient source could not be read: it gave no answer, an answer other than a
- * Patient or a {@code 404}, or a Patient the service cannot hold. A fault of the source, answered
+ * Patient or a {@code 404} — or for a search, a searchset — or a Patient the service cannot hold. A fault of the source, answered
  * {@code 502} with the {@code exception} outcome (/docs/domain/patient.md, "Errors"), its one
  * fault record naming the {@link Failure} as its {@code event.reason} ({@link #reason()}) under
  * the {@code error.category} ADR 0014 gives an outbound call's failure ({@link #category()}):
@@ -20,7 +20,8 @@ import java.util.stream.Stream;
  *   <li>{@code server}: the source answered {@code 5xx}, {@code server-error};
  *   <li>{@code data}: the source answered with something the service cannot use — another status
  *       ({@code unexpected-status}), a body that is not JSON or not a Patient
- *       ({@code unreadable}), or a Patient breaking one of the domain's rules.
+ *       ({@code unreadable}), a Patient breaking one of the domain's rules, or a search's answer
+ *       that is no searchset, has no total, or holds a Patient with no id.
  * </ul>
  *
  * <p>Its message is fixed text, naming at most a status or an element, and its cause, when it has
@@ -59,7 +60,20 @@ public final class PatientSourceException extends UpstreamFaultException {
         NO_BIRTH_DATE("no-birth-date", "The patient source's Patient has no birth date",
                 ErrorCategory.DATA),
         BIRTH_DATE_NOT_TO_THE_DAY("birth-date-not-to-the-day",
-                "The patient source's Patient's birth date is not to the day", ErrorCategory.DATA);
+                "The patient source's Patient's birth date is not to the day", ErrorCategory.DATA),
+        /** A search's {@code 200} that is no searchset {@code Bundle}. */
+        NOT_A_SEARCHSET("not-a-searchset",
+                "The patient source's search answered with no searchset", ErrorCategory.DATA),
+        /** A searchset with no {@code total}, or a negative one: there is no telling the pages. */
+        NO_TOTAL("no-total", "The patient source's search has no total", ErrorCategory.DATA),
+        /** A search's Patient with no {@code id}, which no later read could open it by. */
+        NO_ID("no-id", "The patient source's Patient has no id", ErrorCategory.DATA),
+        /** A search's Patient whose {@code id} is outside FHIR's id grammar. */
+        INVALID_ID("invalid-id", "The patient source's Patient's id is not a FHIR id",
+                ErrorCategory.DATA),
+        /** A search's Patient whose Last visit is no date to the day. */
+        LAST_VISIT_NOT_TO_THE_DAY("last-visit-not-to-the-day",
+                "The patient source's Patient's last visit is not to the day", ErrorCategory.DATA);
 
         /** The call's own failure this is, or {@code null} for a broken domain rule. */
         private final Reason outbound;

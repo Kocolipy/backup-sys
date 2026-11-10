@@ -10,6 +10,16 @@ import { expectNoPatientInContext } from "./patient.helpers";
  * routes against the dev server and the packaged JAR.
  */
 export const ROUTE_READY: Record<string, (page: Page) => Promise<void>> = {
+  "/search": async (page) => {
+    // The page reads nothing until a search is submitted, so the walk submits one, to meet any
+    // console or CSP error its results table raised.
+    const box = page.getByRole("searchbox", { name: "Search by name or NRIC" });
+    await box.fill("tan");
+    await box.press("Enter");
+    await expect(
+      page.getByRole("table", { name: "Matching patients" }).getByRole("row").nth(1),
+    ).toBeVisible();
+  },
   "/": expectNoPatientInContext,
   "/accounts": async (page) => {
     await expect(page.getByRole("table", { name: "Users" }).getByRole("row").nth(1)).toBeVisible();

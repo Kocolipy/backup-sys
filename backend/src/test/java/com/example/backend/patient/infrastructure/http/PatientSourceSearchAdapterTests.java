@@ -1,0 +1,276 @@
+package com.example.backend.patient.infrastructure.http;
+
+import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
+import static com.github.tomakehurst.wiremock.client.WireMock.get;
+import static com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor;
+import static com.github.tomakehurst.wiremock.client.WireMock.okJson;
+import static com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
+
+import com.example.backend.observability.LogEvent.ErrorCategory;
+import com.example.backend.paging.domain.PageRequest;
+import com.example.backend.patient.PatientSourceStubs;
+import com.example.backend.patient.domain.PatientQuery;
+import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
+import com.github.tomakehurst.wiremock.verification.LoggedRequest;
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.time.Duration;
+import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.springframework.web.client.RestClient;
+
+/**
+ * A Patient search as the HTTP adapter makes it (ADR 0018), against the patient source's mock in
+ * process: the one call it sends — the source's own search, sorted, paged and counted there — and
+ * what a failure of that call is. What the canned searches answer is {@code PatientStoreContract}'s;
+ * each Patient's own rules are the read by id's ({@code PatientSourceAdapterContractTests}), which
+ * a search's Patient is held to through one wiring case here.
+ */
+class PatientSourceSearchAdapterTests {
+
+    @RegisterExtension
+    static final WireMockExtension SOURCE = PatientSourceStubs.extension();
+
+    private static final PageRequest SECOND_PAGE_OF_FIVE = new PageRequest(6, 5);
+
+    /** A name no stub file names, for a case's own stub, and which no message may quote. */
+    private static final String PROBE_NAME = "Quah Seow Peng";
+
+    private static final String PROBE_SEARCH = "/Patient";
+
+    /** A searchset holding one Patient, its {@code id} and Last visit as the case writes them. */
+    private static final String ONE_MATCH = """
+            {"resourceType": "Bundle", "type": "searchset", %s
+             "entry": [{"resource": {"resourceType": "Patient", %s
+               "extension": [{"url": "https://fhir.synapxe.sg/StructureDefinition/last-visit",
+                              "valueDate": "%s"}],
+               "identifier": [{"system": "https://fhir.synapxe.sg/NamingSystem/nric",
+                               "value": "T7391046Q"}],
+               "name": [{"use": "official", "text": "Quah Seow Peng"}],
+               "gender": "female", "birthDate": "1963-07-29"}}]}""";
+
+    private static String oneMatch(String total, String id, String lastVisit) {
+        return ONE_MATCH.formatted(total, id, lastVisit);
+    }
+
+    private static final String WELL_FORMED =
+            oneMatch("\"total\": 1,", "\"id\": \"probe-Q7xKd2.v9\",", "2026-01-02");
+
+    private static PatientSourceAdapter adapter() {
+        return new PatientSourceAdapter(RestClient.builder(), SOURCE.baseUrl());
+    }
+
+    private static void answering(String body) {
+        SOURCE.stubFor(get(urlPathEqualTo(PROBE_SEARCH)).atPriority(1).willReturn(okJson(body)));
+    }
+
+    /** A fault as its record reports it: its fixed message, its reason and its category. */
+    private record Fault(String message, String reason, ErrorCategory category) {
+    }
+
+    private static Fault faultSearching(PatientSourceAdapter adapter) {
+        PatientSourceException fault = (PatientSourceException) catchThrowable(() ->
+                adapter.search(new PatientQuery.ByName(PROBE_NAME), SECOND_PAGE_OF_FIVE));
+        return new Fault(fault.getMessage(), fault.reason(), fault.category());
+    }
+
+    /** The one search request the source received, its query parameters by name. */
+    private static Map<String, String> sentQuery() {
+        LoggedRequest sent = SOURCE.findAll(getRequestedFor(urlPathEqualTo(PROBE_SEARCH)))
+                .getFirst();
+        Map<String, String> query = new TreeMap<>();
+        sent.getQueryParams().forEach((name, value) -> query.put(name, value.firstValue()));
+        return query;
+    }
+
+    // ---- the call ------------------------------------------------------------------------
+
+    /**
+     * A name search is the source's {@code name:contains}, sorted newest Last visit first with ties
+     * by id, from the page's zero-based offset, for the page's count, with an accurate total.
+     */
+    @Test
+    void aNameSearchAsksTheSourceToMatchSortPageAndCountIt() {
+        adapter().search(new PatientQuery.ByName("Tan Hui"), SECOND_PAGE_OF_FIVE);
+
+        assertThat(sentQuery()).isEqualTo(Map.of(
+                "name:contains", "Tan Hui",
+                "_sort", "-last-visit,_id",
+                "_offset", "5",
+                "_count", "5",
+                "_total", "accurate"));
+    }
+
+    /** An NRIC search is the identifier under the NRIC NamingSystem, exactly. */
+    @Test
+    void anNricSearchAsksTheSourceForTheIdentifierUnderTheNricSystem() {
+        adapter().search(new PatientQuery.ByNric("S9212345A"), new PageRequest(1, 5));
+
+        assertThat(sentQuery()).isEqualTo(Map.of(
+                "identifier", "https://fhir.synapxe.sg/NamingSystem/nric|S9212345A",
+                "_sort", "-last-visit,_id",
+                "_offset", "0",
+                "_count", "5",
+                "_total", "accurate"));
+    }
+
+    /** As a read by id, a search presents nothing to the source, and asks for FHIR JSON. */
+    @Test
+    void aSearchPresentsNoCredentialAndAsksForFhirJson() {
+        adapter().search(new PatientQuery.ByName("tan"), new PageRequest(1, 5));
+
+        LoggedRequest sent = SOURCE.findAll(getRequestedFor(urlPathEqualTo(PROBE_SEARCH)))
+                .getFirst();
+        assertThat(List.of(sent.containsHeader("Authorization"), sent.containsHeader("Cookie"),
+                sent.getHeader("Accept")))
+                .containsExactly(false, false, "application/fhir+json");
+    }
+
+    /** A search needs a query: none is refused before anything is sent. */
+    @Test
+    void aSearchWithNoQueryIsRefusedBeforeTheSourceIsCalled() {
+        Throwable refused = catchThrowable(() -> adapter().search(null, new PageRequest(1, 5)));
+
+        assertThat(refused).isInstanceOf(NullPointerException.class);
+        SOURCE.verify(0, getRequestedFor(urlPathEqualTo(PROBE_SEARCH)));
+    }
+
+    /** Nothing is cached: the same search twice is two calls to the source. */
+    @Test
+    void everySearchIsACallToTheSource() {
+        PatientSourceAdapter adapter = adapter();
+
+        adapter.search(new PatientQuery.ByName("tan"), new PageRequest(1, 5));
+        adapter.search(new PatientQuery.ByName("tan"), new PageRequest(1, 5));
+
+        SOURCE.verify(2, getRequestedFor(urlPathEqualTo(PROBE_SEARCH)));
+    }
+
+    /** A Patient with a Last visit is read with it, and one with none with none. */
+    @Test
+    void aMatchIsReadWithItsLastVisit() {
+        answering(WELL_FORMED);
+
+        assertThat(adapter().search(new PatientQuery.ByName(PROBE_NAME), SECOND_PAGE_OF_FIVE)
+                .patients().getFirst().lastVisit()).hasToString("2026-01-02");
+    }
+
+    /** Only the Last visit extension is read: another ahead of it, or alone, is not. */
+    @Test
+    void anotherExtensionIsNoLastVisit() {
+        String another = """
+                {"url": "https://fhir.synapxe.sg/StructureDefinition/other", "valueDate": "1999-09-09"},""";
+        answering(WELL_FORMED.replace("\"extension\": [", "\"extension\": [" + another));
+        PatientSourceAdapter adapter = adapter();
+        String firstLastVisit = String.valueOf(adapter.search(
+                new PatientQuery.ByName(PROBE_NAME), SECOND_PAGE_OF_FIVE)
+                .patients().getFirst().lastVisit());
+        answering(WELL_FORMED.replace(
+                "https://fhir.synapxe.sg/StructureDefinition/last-visit",
+                "https://fhir.synapxe.sg/StructureDefinition/other"));
+
+        assertThat(List.of(firstLastVisit, String.valueOf(adapter.search(
+                new PatientQuery.ByName(PROBE_NAME), SECOND_PAGE_OF_FIVE)
+                .patients().getFirst().lastVisit())))
+                .containsExactly("2026-01-02", "null");
+    }
+
+    // ---- a failure of the source ---------------------------------------------------------
+
+    /**
+     * A search has one good answer, a searchset: a {@code 404} is no "nothing found" here, but a
+     * fault like any other status.
+     */
+    @ParameterizedTest
+    @CsvSource({
+        "404, unexpected-status, DATA",
+        "400, unexpected-status, DATA",
+        "302, unexpected-status, DATA",
+        "503, server-error, SERVER"})
+    void anAnswerOtherThanASearchsetIsAFault(int status, String reason, ErrorCategory category) {
+        SOURCE.stubFor(get(urlPathEqualTo(PROBE_SEARCH)).atPriority(1)
+                .willReturn(aResponse().withStatus(status)));
+
+        assertThat(faultSearching(adapter()))
+                .isEqualTo(new Fault("The patient source answered " + status, reason, category));
+    }
+
+    @Test
+    void aSearchUnansweredWithinTheReadTimeoutTimesOut() {
+        SOURCE.stubFor(get(urlPathEqualTo(PROBE_SEARCH)).atPriority(1)
+                .willReturn(okJson(WELL_FORMED).withFixedDelay(1000)));
+        PatientSourceAdapter impatient = new PatientSourceAdapter(RestClient.builder(),
+                SOURCE.baseUrl(), Duration.ofSeconds(2), Duration.ofMillis(100));
+
+        assertThat(faultSearching(impatient)).isEqualTo(new Fault(
+                "The patient source did not answer in time", "timed-out", ErrorCategory.NETWORK));
+    }
+
+    /**
+     * A {@code 200} the service cannot take as a page of matches, each naming what it lacks: no
+     * searchset, no total — so no telling how many pages there are — or a match with no id, an id
+     * outside FHIR's grammar, no Patient at all, or a Last visit not to the day.
+     */
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', textBlock = """
+        {"resourceType": "Bundle", "type": "collection", "total": 0} | not-a-searchset | The patient source's search answered with no searchset
+        {"resourceType": "OperationOutcome", "type": "searchset", "total": 0} | not-a-searchset | The patient source's search answered with no searchset
+        {"resourceType": "Bundle", "type": "searchset"} | no-total | The patient source's search has no total
+        {"resourceType": "Bundle", "type": "searchset", "total": -1} | no-total | The patient source's search has no total
+        {"resourceType": "Bundle", "type": "searchset", "total": 1, "entry": [{}]} | another-resource | The patient source answered with another resource
+        {"resourceType": "Bundle", "type": "searchset", "total": 1, "entry": [{"resource": {"resourceType": "OperationOutcome", "id": "x"}}]} | another-resource | The patient source answered with another resource
+        """)
+    void aSearchsetTheServiceCannotHoldIsAFault(String body, String reason, String message) {
+        answering(body);
+
+        assertThat(faultSearching(adapter()))
+                .isEqualTo(new Fault(message, reason, ErrorCategory.DATA));
+    }
+
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', textBlock = """
+        '' | 2026-01-02 | no-id | The patient source's Patient has no id
+        "id": "probe Q7xKd2", | 2026-01-02 | invalid-id | The patient source's Patient's id is not a FHIR id
+        "id": "probe-Q7xKd2.v9", | 2026-01 | last-visit-not-to-the-day | The patient source's Patient's last visit is not to the day
+        """)
+    void aMatchTheServiceCannotHoldIsAFault(String id, String lastVisit, String reason,
+            String message) {
+        answering(oneMatch("\"total\": 1,", id, lastVisit));
+
+        assertThat(faultSearching(adapter()))
+                .isEqualTo(new Fault(message, reason, ErrorCategory.DATA));
+    }
+
+    /** A match is held to every rule a Patient read by id is: one with no NRIC is a fault. */
+    @Test
+    void aMatchBreakingAPatientsRuleIsAFault() {
+        answering(WELL_FORMED.replace("https://fhir.synapxe.sg/NamingSystem/nric", "urn:other"));
+
+        assertThat(faultSearching(adapter())).isEqualTo(new Fault(
+                "The patient source's Patient has no NRIC", "no-nric", ErrorCategory.DATA));
+    }
+
+    /**
+     * A failed search names nothing it searched for or got: not the name asked, nor anything of
+     * the answer, in its message, its cause or anything a record of it would print.
+     */
+    @Test
+    void aFailedSearchSaysNothingOfTheQueryOrTheAnswer() {
+        answering(oneMatch("", "\"id\": \"probe-Q7xKd2.v9\",", "2026-01-02"));
+
+        Throwable fault = catchThrowable(() ->
+                adapter().search(new PatientQuery.ByName(PROBE_NAME), SECOND_PAGE_OF_FIVE));
+
+        StringWriter printed = new StringWriter();
+        fault.printStackTrace(new PrintWriter(printed));
+        assertThat(printed.toString())
+                .doesNotContain(PROBE_NAME, "Quah", "T7391046Q", "1963-07-29", "probe-Q7xKd2");
+    }
+}

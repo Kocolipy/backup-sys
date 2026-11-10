@@ -685,6 +685,29 @@ public sealed interface Audited {
         }
     }
 
+    // ---- Patients ------------------------------------------------------------------------------
+
+    /**
+     * A signed-in User searching the Patients — {@code GET /api/patient-search} — a bulk read of
+     * Restricted data. <strong>Fail-closed</strong>, as a SCIM query is: a search this service
+     * cannot account for is not answered. One event per search the patient source answered; a
+     * search refused before it reached the source, or that the source failed, read nothing and is
+     * not recorded. The count and the kind are numeric and closed-set; the query never reaches an
+     * event.
+     *
+     * @param actorId     the stable id of the User who searched
+     * @param kind        whether the query was a full NRIC or a name
+     * @param resultCount how many Patients the answered page held
+     */
+    record PatientsSearched(UUID actorId, AuditPatientQueryKind kind, int resultCount)
+            implements Accepted {
+
+        @Override
+        public AuditEvent toEvent(Stamp stamp) {
+            return AuditRows.patientSearch(stamp, actorId, kind, resultCount);
+        }
+    }
+
     // ---- Seeding ---------------------------------------------------------------------------------
 
     /**
