@@ -17,6 +17,7 @@ import com.example.backend.audit.domain.AuditMfaFactor;
 import com.example.backend.audit.domain.AuditUserAttribute;
 import com.example.backend.audit.domain.AuditOperation;
 import com.example.backend.audit.domain.AuditPatientQueryKind;
+import com.example.backend.audit.domain.AuditPatientSearchFilter;
 import com.example.backend.audit.domain.AuditOutcome;
 import com.example.backend.audit.domain.AuditPermissionChange;
 import com.example.backend.audit.domain.AuditRefusalReason;
@@ -170,8 +171,8 @@ class AuditTrailServiceTests {
      */
     @Test
     void aPatientSearchRecordsItsSearcherCountAndQueryKindAndNoSubject() {
-        trail.append(new Audited.PatientsSearched(ACTOR, AuditPatientQueryKind.NAME, 5));
-        trail.append(new Audited.PatientsSearched(ACTOR, AuditPatientQueryKind.NRIC, 1));
+        trail.append(new Audited.PatientsSearched(ACTOR, AuditPatientQueryKind.NAME, Set.of(), 5));
+        trail.append(new Audited.PatientsSearched(ACTOR, AuditPatientQueryKind.NRIC, Set.of(), 1));
 
         assertThat(events.appended).extracting(
                         AuditEvent::operation, AuditEvent::outcome, AuditEvent::actorId,
@@ -183,6 +184,33 @@ class AuditTrailServiceTests {
                                 "Patient", null, 5, "NAME", "ok", null, List.of()),
                         tuple(AuditOperation.PATIENT_SEARCH, AuditOutcome.SUCCESS, ACTOR, null,
                                 "Patient", null, 1, "NRIC", "ok", null, List.of()));
+    }
+
+    /**
+     * A filtered Patient search's shape is its query kind and then each filter it used, as
+     * {@code and}-joined comparisons in one fixed order whatever order they were named in — the
+     * field, the operator, {@code ?} for the value — and never a value.
+     */
+    @Test
+    void aFilteredPatientSearchRecordsWhichFiltersItUsedAndNoValue() {
+        trail.append(new Audited.PatientsSearched(ACTOR, AuditPatientQueryKind.NAME,
+                new LinkedHashSet<>(List.of(AuditPatientSearchFilter.LAST_VISIT_TO,
+                        AuditPatientSearchFilter.GENDER,
+                        AuditPatientSearchFilter.BIRTH_DATE_FROM)), 3));
+        trail.append(new Audited.PatientsSearched(ACTOR, AuditPatientQueryKind.NRIC,
+                EnumSet.allOf(AuditPatientSearchFilter.class), 0));
+
+        assertThat(events.appended).extracting(AuditEvent::filterShape).containsExactly(
+                "NAME and gender eq ? and birthDate ge ? and lastVisit le ?",
+                "NRIC and gender eq ? and birthDate ge ? and birthDate le ? and lastVisit ge ?"
+                        + " and lastVisit le ?");
+    }
+
+    @Test
+    void aPatientSearchNeedsItsFiltersNamedNoneIfItUsedNone() {
+        assertThatThrownBy(() -> new Audited.PatientsSearched(
+                ACTOR, AuditPatientQueryKind.NAME, null, 1))
+                .isInstanceOf(NullPointerException.class).hasMessage("filters");
     }
 
     /** Every operator renders as the RFC spells it, and every attribute as its canonical path. */

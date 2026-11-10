@@ -1,7 +1,7 @@
 ---
 type: Decision Record
 title: "ADR 0018: Patient search is the patient source's own, passed through"
-description: A Patient search by name or full NRIC is passed through to the in-house patient source, which matches, sorts by its last-visit search parameter, pages and counts; the service reads startIndex and count by ADR 0017's rules but pages nothing itself, answers plain JSON with each Patient's Last visit from the source's lastVisit extension, and audits every search it answers as PATIENT_SEARCH with the query's kind and count, never the query.
+description: A Patient search by name or full NRIC, sorted by date of birth or Last visit and filtered by gender and date ranges, is passed through to the in-house patient source, which matches, filters, sorts on its birthdate and last-visit search parameters, pages and counts; the service reads startIndex and count by ADR 0017's rules but filters, sorts and pages nothing itself, answers plain JSON with each Patient's Last visit from the source's lastVisit extension, and audits every search it answers as PATIENT_SEARCH with the query's kind, the filters used and the count, never the query or a filter's value.
 tags: [patient, search, paging, audit, integration]
 ---
 
@@ -12,7 +12,7 @@ Date: 2026-11-10
 ## Status
 
 Accepted. `GET /api/patient-search` searches the Patients by name or by full
-NRIC, and the SPA's Search page reads it five at a time.
+NRIC, sorted and filtered, and the SPA's Search page reads it five at a time.
 `/docs/domain/patient.md` ("Patient search") is the behaviour in full; this
 file holds the decisions and their reasons.
 
@@ -63,16 +63,14 @@ the page is the source's to read, sent as `_offset` (`startIndex - 1`) and
 `_count`, and `totalResults` is the source's own count. The service does not
 answer `count=0` or a page past the end from a count of its own, as D1 of ADR
 0017 has every other reader do; the source is asked, and its answer is the
-answer. The order is the source's too: newest Last visit first, ties broken by
-id (`_sort=-last-visit,_id`), a Patient with no Last visit placed as the source
-places it.
+answer. The order is the source's too, and so are the filters (D7).
 
 **D4. Last visit is the source's extension and search parameter.** A Patient's
 Last visit is the date of their latest visit, which FHIR's base `Patient` has
 no element for. The source carries it as an extension on each Patient,
 `https://fhir.synapxe.sg/StructureDefinition/last-visit`, a `valueDate` to the
 day, absent for a Patient with none, and defines `last-visit` as a search
-parameter to sort by. The adapter reads it from a search's entries; a value not
+parameter to sort and filter by. The adapter reads it from a search's entries; a value not
 to the day is a failure of the source. A read by id ignores it, and the R5
 `Patient` served at `GET /api/patient/{id}` does not carry it.
 
@@ -97,23 +95,50 @@ the searcher through `audit`'s own port, `AuditActorContext`, which the session
 module implements, so `patient` gains edges to `audit` and `paging` and none to
 `auth`.
 
+**D7. The sort and the filters are the source's, forwarded.** The search sorts by
+one column at a time, the date of birth or the Last visit, in either direction
+(`sortBy=birthDate|lastVisit`, `sortOrder=ascending|descending`), sent as the
+source's `_sort` on its own search parameters with ties broken by id
+(`_sort=±birthdate|±last-visit,_id`); with no column named it is newest Last
+visit first (`_sort=-last-visit,_id`). A Patient with no Last visit is placed
+last in either direction, as the source places it. The filters — a `gender`,
+`male` or `female`, and a date range for the date of birth and for the Last
+visit, each end a calendar date, optional and inclusive — are sent as the
+source's `gender`, `birthdate=ge…`/`le…` and `last-visit=ge…`/`le…`. The domain's
+`PatientSort` and `PatientFilter` hold them, and each is checked as the request
+is read in: a gender, column or direction spelled any other way, a date that is
+no calendar date, or a from-date after its to-date is a `400` before the source
+is called. The service sorts and filters nothing itself, so a page is always the
+source's page, and its total the source's count of what the filters kept.
+
+**D8. The row records which filters were used, never their values.** A filter's
+value — a gender, a date of birth, a date of a visit — narrows a search toward
+one person as a query does, so the `PATIENT_SEARCH` row's filter shape names the
+query's kind and then each filter used, as a comparison whose value is `?`
+(`NAME and gender eq ? and birthDate ge ?`), in a fixed order, from a closed set
+(`AuditPatientSearchFilter`). The sort is not recorded: it narrows nothing.
+
 ## Consequences
 
 - **A search depends on the source's availability and its search support.** A
   slow or failing source is the search's error, with Retry, never an empty
-  result. A source that cannot sort by `last-visit`, page by `_offset` or count
-  accurately supports no Patient search until its adapter changes.
+  result. A source that cannot sort by `last-visit` or `birthdate`, filter by
+  `gender`, `birthdate` or `last-visit`, page by `_offset` or count accurately
+  supports no Patient search, or none so sorted or filtered, until its adapter
+  changes.
 - **How a name matches is the source's.** `name:contains` may match a usual or
   maiden name as well as the official one; the row always shows the official
   name, so a row may not visibly contain what was typed.
 - **A page is a slice of a changing source**, as ADR 0017's are: a Patient
   visited between two page reads can move between pages.
-- **No query reaches a log or the trail.** The request's record names the route
-  template, never the query string, and the audit row carries only the kind.
+- **No query or filter value reaches a log or the trail.** The request's record
+  names the route template, never the query string, and the audit row carries
+  only the kind and which filters were used.
 - **The local mock answers only the documented searches.** Its canned stubs
-  answer the name search `tan` (two pages), one NRIC and one search that
-  matches nothing; any other search is an empty searchset with `total: 0`
-  (`backend/docs/configuration/patient-source.md`).
+  answer the name search `tan` (two pages), each sort of it, each filter on it —
+  one of them spanning two pages — one NRIC and one search that matches
+  nothing; any other search, a sort and a filter together included, is an empty
+  searchset with `total: 0` (`backend/docs/configuration/patient-source.md`).
 
 ## Alternatives considered
 

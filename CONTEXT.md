@@ -421,9 +421,12 @@ its EHR context names no patient, or the Patient source holds none under its id.
 **Patient search**:
 Finding Patients by a name, of at least three characters, or by a full NRIC,
 typed into the Search page's one box: the Patient source's own search, passed
-through and read five to a page, newest Last visit first. Every search the
-source answers is audited as `PATIENT_SEARCH`, by its kind and count and never
-its query; a read of one Patient by id is not.
+through and read five to a page, newest Last visit first unless sorted by Date
+of Birth or Last visit, and narrowed by gender and by a date range for each.
+The source sorts and filters; the service does neither. Every search the
+source answers is audited as `PATIENT_SEARCH`, by its kind, the filters it used
+and its count, and never its query or a filter's value; a read of one Patient
+by id is not.
 _Avoid_: patient lookup, patient list, patient query (no search lists every
 Patient)
 

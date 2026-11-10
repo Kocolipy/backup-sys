@@ -333,16 +333,25 @@ class ApiContractFixtureTests {
     // ---- /api/patient-search ------------------------------------------------------------
 
     private static void patientSearch(List<Fixture> all) {
-        add(all, "patient search: a page of matches by name and by NRIC, a query too short, a"
-                + " failing source, and the refusals", t -> {
+        add(all, "patient search: a page of matches by name, by NRIC and filtered and sorted, a"
+                + " query too short, a filter or sort it cannot take, a failing source, and the"
+                + " refusals", t -> {
             // patient:read is baseline: every active User holds it; only a confined session lacks
             // it. The searches are the patient source's mock's canned ones (PatientSourceStubs).
             Cookie user = t.settle(t.provision(true));
             Cookie confined = t.logIn(t.provision(true), CONNECTOR_PASSWORD);
             t.expect(t.get("/api/patient-search?q=tan&count=5").cookie(user), 200);
             t.expect(t.get("/api/patient-search?q=s9212345a&count=5").cookie(user), 200);
+            t.expect(t.get("/api/patient-search?q=tan&count=5&gender=male&sortBy=lastVisit"
+                    + "&sortOrder=descending").cookie(user), 200);
             t.expect(t.get("/api/patient-search?q=ta").cookie(user), 400);
             t.expect(t.get("/api/patient-search?q=tan&count=five").cookie(user), 400);
+            t.expect(t.get("/api/patient-search?q=tan&gender=other").cookie(user), 400);
+            t.expect(t.get("/api/patient-search?q=tan&sortBy=name").cookie(user), 400);
+            t.expect(t.get("/api/patient-search?q=tan&birthDateFrom=1990-02-30").cookie(user),
+                    400);
+            t.expect(t.get("/api/patient-search?q=tan&lastVisitFrom=2026-10-31"
+                    + "&lastVisitTo=2026-09-01").cookie(user), 400);
             t.expect(t.get("/api/patient-search?q=tan").cookie(confined), 403);
             t.expect(t.get("/api/patient-search?q=tan"), 401);
             // The patient source failing: a search of the fixture's own, which the shared mock

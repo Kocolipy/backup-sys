@@ -1,0 +1,103 @@
+{
+  "name": "Search: name contains tan, last visited on or before 2026-06-30",
+  "request": {
+    "method": "GET",
+    "urlPath": "/Patient",
+    "queryParameters": {
+      "_sort": {
+        "equalTo": "-last-visit,_id"
+      },
+      "_count": {
+        "equalTo": "5"
+      },
+      "_offset": {
+        "equalTo": "0"
+      },
+      "_total": {
+        "equalTo": "accurate"
+      },
+      "name:contains": {
+        "equalTo": "tan",
+        "caseInsensitive": true
+      },
+      "gender": {
+        "absent": true
+      },
+      "birthdate": {
+        "absent": true
+      },
+      "last-visit": {
+        "hasExactly": [
+          {
+            "equalTo": "le2026-06-30"
+          }
+        ]
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/fhir+json"
+    },
+    "jsonBody": {
+      "resourceType": "Bundle",
+      "id": "searchset",
+      "type": "searchset",
+      "total": 1,
+      "link": [
+        {
+          "relation": "self",
+          "url": "http://127.0.0.1:8104/Patient?_offset=0&_count=5"
+        }
+      ],
+      "entry": [
+        {
+          "fullUrl": "http://127.0.0.1:8104/Patient/dev-patient-09",
+          "resource": {
+            "resourceType": "Patient",
+            "id": "dev-patient-09",
+            "meta": {
+              "versionId": "1",
+              "lastUpdated": "2026-01-01T00:00:00Z"
+            },
+            "extension": [
+              {
+                "url": "https://fhir.synapxe.sg/StructureDefinition/last-visit",
+                "valueDate": "2026-05-07"
+              }
+            ],
+            "identifier": [
+              {
+                "use": "usual",
+                "system": "urn:oid:1.2.840.114350.1.13.0.1.7.5.737384.14",
+                "value": "203809"
+              },
+              {
+                "use": "official",
+                "system": "https://fhir.synapxe.sg/NamingSystem/nric",
+                "value": "S9512345A"
+              }
+            ],
+            "active": true,
+            "name": [
+              {
+                "use": "official",
+                "text": "Kavitha Tanabalan",
+                "family": "Tanabalan",
+                "given": [
+                  "Kavitha"
+                ]
+              }
+            ],
+            "gender": "female",
+            "birthDate": "1995-09-09"
+          },
+          "search": {
+            "mode": "match"
+          }
+        }
+      ]
+    }
+  }
+}

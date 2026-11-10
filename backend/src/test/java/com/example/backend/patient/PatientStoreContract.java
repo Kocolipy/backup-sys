@@ -4,17 +4,22 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.backend.paging.domain.PageRequest;
 import com.example.backend.patient.domain.AdministrativeGender;
+import com.example.backend.patient.domain.DateRange;
 import com.example.backend.patient.domain.Patient;
 import com.example.backend.patient.domain.PatientId;
 import com.example.backend.patient.domain.PatientMatch;
 import com.example.backend.patient.domain.PatientMatches;
 import com.example.backend.patient.domain.PatientName;
+import com.example.backend.patient.domain.PatientFilter;
 import com.example.backend.patient.domain.PatientQuery;
+import com.example.backend.patient.domain.PatientSort;
 import com.example.backend.patient.domain.PatientStore;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 /**
@@ -141,7 +146,7 @@ public abstract class PatientStoreContract {
 
     @Test
     void a_name_search_reads_its_first_page_of_five_newest_last_visit_first_of_seven() {
-        PatientMatches matches = patients().search(new PatientQuery.ByName("tan"), FIRST_FIVE);
+        PatientMatches matches = patients().search(new PatientQuery.ByName("tan"), PatientFilter.NONE, PatientSort.DEFAULT, FIRST_FIVE);
 
         assertThat(List.of(matches.totalResults(), idsAndLastVisits(matches))).containsExactly(
                 7,
@@ -156,7 +161,7 @@ public abstract class PatientStoreContract {
     /** The last page: the one match with no Last visit comes last. */
     @Test
     void a_name_search_reads_its_second_page_with_the_patient_with_no_last_visit_last() {
-        PatientMatches matches = patients().search(new PatientQuery.ByName("tan"), NEXT_FIVE);
+        PatientMatches matches = patients().search(new PatientQuery.ByName("tan"), PatientFilter.NONE, PatientSort.DEFAULT, NEXT_FIVE);
 
         assertThat(List.of(matches.totalResults(), idsAndLastVisits(matches))).containsExactly(
                 7, List.of("dev-patient-09 2026-05-07", "dev-patient-10 null"));
@@ -168,7 +173,7 @@ public abstract class PatientStoreContract {
      */
     @Test
     void a_patient_matched_by_another_name_is_read_by_the_official_name() {
-        PatientMatches matches = patients().search(new PatientQuery.ByName("tan"), FIRST_FIVE);
+        PatientMatches matches = patients().search(new PatientQuery.ByName("tan"), PatientFilter.NONE, PatientSort.DEFAULT, FIRST_FIVE);
 
         assertThat(matches.patients().get(3)).isEqualTo(new PatientMatch(
                 searchFixtures().get(2), LocalDate.of(2026, 9, 30)));
@@ -176,7 +181,7 @@ public abstract class PatientStoreContract {
 
     @Test
     void an_nric_search_reads_the_one_patient_holding_it() {
-        assertThat(patients().search(new PatientQuery.ByNric("S9212345A"), FIRST_FIVE))
+        assertThat(patients().search(new PatientQuery.ByNric("S9212345A"), PatientFilter.NONE, PatientSort.DEFAULT, FIRST_FIVE))
                 .isEqualTo(new PatientMatches(1, List.of(new PatientMatch(
                         new Patient(
                                 new PatientId("erXuFYUfucBZaryVksYEcMg3"),
@@ -187,9 +192,105 @@ public abstract class PatientStoreContract {
                         LocalDate.of(2026, 7, 11)))));
     }
 
+    private static PatientFilter gender(AdministrativeGender gender) {
+        return new PatientFilter(gender, DateRange.ANY, DateRange.ANY);
+    }
+
+    private static PatientFilter born(String from, String to) {
+        return new PatientFilter(null, range(from, to), DateRange.ANY);
+    }
+
+    private static PatientFilter visited(String from, String to) {
+        return new PatientFilter(null, DateRange.ANY, range(from, to));
+    }
+
+    private static DateRange range(String from, String to) {
+        return new DateRange(from == null ? null : LocalDate.parse(from),
+                to == null ? null : LocalDate.parse(to));
+    }
+
+    private static PatientSort sortedBy(PatientSort.Field field, PatientSort.Order order) {
+        return new PatientSort(field, order);
+    }
+
+    /**
+     * Each canned sorted or filtered {@code tan} search, as the source answers it: the case, the
+     * filter, the sort, the page, then the total and the page's ids in the source's order.
+     */
+    static Stream<Arguments> cannedSortedAndFilteredSearches() {
+        PatientFilter none = PatientFilter.NONE;
+        PatientSort newest = PatientSort.DEFAULT;
+        return Stream.of(
+                Arguments.of("male", gender(AdministrativeGender.MALE), newest, FIRST_FIVE, 3,
+                        List.of("dev-patient-06", "eq081-VQEgP8drUUqCWzHfw3", "dev-patient-10")),
+                Arguments.of("female", gender(AdministrativeGender.FEMALE), newest, FIRST_FIVE,
+                        4, List.of("dev-patient-05", "dev-patient-07", "dev-patient-08",
+                                "dev-patient-09")),
+                Arguments.of("born on or after 1960, page 1", born("1960-01-01", null), newest,
+                        FIRST_FIVE, 6, List.of("dev-patient-05", "dev-patient-06",
+                                "eq081-VQEgP8drUUqCWzHfw3", "dev-patient-07", "dev-patient-08")),
+                Arguments.of("born on or after 1960, page 2", born("1960-01-01", null), newest,
+                        NEXT_FIVE, 6, List.of("dev-patient-09")),
+                Arguments.of("born on or before 1979", born(null, "1979-12-31"), newest,
+                        FIRST_FIVE, 3,
+                        List.of("dev-patient-06", "dev-patient-07", "dev-patient-10")),
+                Arguments.of("born 1980 to 1999", born("1980-01-01", "1999-12-31"), newest,
+                        FIRST_FIVE, 3, List.of("dev-patient-05", "eq081-VQEgP8drUUqCWzHfw3",
+                                "dev-patient-09")),
+                Arguments.of("last visited on or after 2026-10-01", visited("2026-10-01", null),
+                        newest, FIRST_FIVE, 3, List.of("dev-patient-05", "dev-patient-06",
+                                "eq081-VQEgP8drUUqCWzHfw3")),
+                Arguments.of("last visited on or before 2026-06-30", visited(null, "2026-06-30"),
+                        newest, FIRST_FIVE, 1, List.of("dev-patient-09")),
+                Arguments.of("last visited 2026-08-01 to 2026-10-20",
+                        visited("2026-08-01", "2026-10-20"), newest, FIRST_FIVE, 3,
+                        List.of("eq081-VQEgP8drUUqCWzHfw3", "dev-patient-07", "dev-patient-08")),
+                Arguments.of("oldest first", none,
+                        sortedBy(PatientSort.Field.BIRTH_DATE, PatientSort.Order.ASCENDING),
+                        FIRST_FIVE, 7, List.of("dev-patient-10", "dev-patient-07",
+                                "dev-patient-06", "eq081-VQEgP8drUUqCWzHfw3", "dev-patient-05")),
+                Arguments.of("youngest first", none,
+                        sortedBy(PatientSort.Field.BIRTH_DATE, PatientSort.Order.DESCENDING),
+                        FIRST_FIVE, 7, List.of("dev-patient-08", "dev-patient-09",
+                                "dev-patient-05", "eq081-VQEgP8drUUqCWzHfw3", "dev-patient-06")),
+                Arguments.of("oldest Last visit first", none,
+                        sortedBy(PatientSort.Field.LAST_VISIT, PatientSort.Order.ASCENDING),
+                        FIRST_FIVE, 7, List.of("dev-patient-09", "dev-patient-08",
+                                "dev-patient-07", "eq081-VQEgP8drUUqCWzHfw3", "dev-patient-06")),
+                // The one Patient with no Last visit is last ascending, as it is descending.
+                Arguments.of("oldest Last visit first, page 2", none,
+                        sortedBy(PatientSort.Field.LAST_VISIT, PatientSort.Order.ASCENDING),
+                        NEXT_FIVE, 7, List.of("dev-patient-05", "dev-patient-10")),
+                Arguments.of("newest Last visit first, asked for", none,
+                        sortedBy(PatientSort.Field.LAST_VISIT, PatientSort.Order.DESCENDING),
+                        FIRST_FIVE, 7, List.of("dev-patient-05", "dev-patient-06",
+                                "eq081-VQEgP8drUUqCWzHfw3", "dev-patient-07", "dev-patient-08")));
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("cannedSortedAndFilteredSearches")
+    void a_canned_sorted_or_filtered_search_reads_the_sources_page(String search,
+            PatientFilter filter, PatientSort sort, PageRequest page, int total, List<String> ids) {
+        PatientMatches matches =
+                patients().search(new PatientQuery.ByName("tan"), filter, sort, page);
+
+        assertThat(List.of(matches.totalResults(), matches.patients().stream()
+                .map(match -> match.patient().id().value()).toList()))
+                .containsExactly(total, ids);
+    }
+
+    /** A search filtered or sorted as no canned search is matches nothing in the mock. */
+    @Test
+    void a_filtered_search_no_stub_names_reads_no_patients() {
+        assertThat(patients().search(new PatientQuery.ByName("tan"),
+                gender(AdministrativeGender.MALE),
+                sortedBy(PatientSort.Field.BIRTH_DATE, PatientSort.Order.ASCENDING), FIRST_FIVE))
+                .isEqualTo(new PatientMatches(0, List.of()));
+    }
+
     @Test
     void a_search_nothing_matches_reads_no_patients_and_a_total_of_none() {
-        assertThat(patients().search(new PatientQuery.ByName("nobody"), FIRST_FIVE))
+        assertThat(patients().search(new PatientQuery.ByName("nobody"), PatientFilter.NONE, PatientSort.DEFAULT, FIRST_FIVE))
                 .isEqualTo(new PatientMatches(0, List.of()));
     }
 }

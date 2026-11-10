@@ -15,6 +15,7 @@ import type { ReadDeclaration, WriteDeclaration } from "@/auth/declarations";
 import { SUPERUSER, type AllOf } from "@/auth/permissions";
 import { decodeArray, DecodeError, jsonDecoder, readObject } from "@/lib/decode";
 import { pageDecoder, pagedPath, type Page, type PageAt } from "@/lib/paging";
+import type { ColumnSort } from "@/lib/sorting";
 
 /** A Group a User belongs to directly, as its row reports it. */
 export interface DirectGroup {
@@ -86,14 +87,17 @@ export interface GroupRow {
 }
 
 /**
+ * The Directory attributes a projection's heading sorts by, as their SCIM
+ * paths: the Users' and Groups' `displayName`, the Users' `active`.
+ */
+export type SortAttribute = "active" | "displayName";
+
+/**
  * The order a projection is read in: one Directory attribute, by its SCIM
  * path (`displayName`, `active`), and a direction. The backend sorts the
  * whole directory with SCIM's own sort (ADR 0017), not just the page shown.
  */
-export interface ListingSort {
-  by: string;
-  order: "ascending" | "descending";
-}
+export type ListingSort = ColumnSort<SortAttribute>;
 
 /**
  * Which rows of a projection to read: those whose name contains `search` —

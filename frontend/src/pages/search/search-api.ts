@@ -14,6 +14,7 @@ import { DecodeError, jsonDecoder, readObject } from "@/lib/decode";
 import { pageDecoder, pagedPath, type Page, type PageAt } from "@/lib/paging";
 import { isCalendarDate } from "@/lib/time";
 import { PATIENT_GENDERS, type PatientGender } from "@/lib/patient-gender";
+import type { ColumnSort } from "@/lib/sorting";
 
 /**
  * One Patient a search matched, as the backend answers it: the Patient's id
@@ -75,13 +76,103 @@ export const decodePatientMatch = (value: unknown): PatientMatch => {
   };
 };
 
+/** A column the results sort by, as the backend's `sortBy` names it. */
+export type PatientSortColumn = "birthDate" | "lastVisit";
+
+/** How the results are sorted: one column, in one direction. */
+export type PatientSort = ColumnSort<PatientSortColumn>;
+
 /**
- * The Patients `query` matches, a page at a time,
- * `GET /api/patient-search?q=…`: the Patient source's matches, in its order —
- * newest Last visit first.
+ * The Filter panel's filters, each as its control holds it: the gender, `all`
+ * for no filter, and the four `<input type="date">` values, `YYYY-MM-DD` or
+ * `""` for an end left open.
  */
-export const PATIENT_SEARCH: ReadDeclaration<Page<PatientMatch>, [query: string, at: PageAt]> = {
+export interface PatientFilters {
+  gender: "all" | "male" | "female";
+  birthDateFrom: string;
+  birthDateTo: string;
+  lastVisitFrom: string;
+  lastVisitTo: string;
+}
+
+/** No filter: every Patient the query matches. */
+export const NO_PATIENT_FILTERS: PatientFilters = {
+  birthDateFrom: "",
+  birthDateTo: "",
+  gender: "all",
+  lastVisitFrom: "",
+  lastVisitTo: "",
+};
+
+/** A date range the panel offers, by the prefix of its two fields, and its label. */
+export const PATIENT_DATE_RANGES = [
+  { label: "Date of Birth", range: "birthDate" },
+  { label: "Last Visit", range: "lastVisit" },
+] as const;
+
+/** Which range a refusal is about. */
+export type PatientDateRange = (typeof PATIENT_DATE_RANGES)[number]["range"];
+
+/** The filters either passed, or refused with the range at fault and why. */
+export type CheckedPatientFilters =
+  { ok: true } | { ok: false; range: PatientDateRange; message: string };
+
+/**
+ * Whether `filters` may be sent: each date set is one the calendar has, and
+ * no from-date is after its to-date — both ends are inclusive, so a range of
+ * one day passes. The backend refuses either with a `400`, so the panel
+ * refuses it first and sends nothing.
+ */
+export function checkPatientFilters(filters: PatientFilters): CheckedPatientFilters {
+  for (const { label, range } of PATIENT_DATE_RANGES) {
+    const from = filters[`${range}From`];
+    const to = filters[`${range}To`];
+    if ([from, to].some((end) => end !== "" && !isCalendarDate(end))) {
+      return { message: `Enter the ${label} dates as real dates.`, ok: false, range };
+    }
+    // Both are `YYYY-MM-DD`, so their text orders as their days do; an open
+    // from-date, "", is before every to-date, and an open to-date bounds nothing.
+    if (to !== "" && from > to) {
+      return { message: `The ${label} from-date must not be after its to-date.`, ok: false, range };
+    }
+  }
+  return { ok: true };
+}
+
+/** How many of `filters` narrow the results: the gender, and each date set. */
+export function countPatientFilters(filters: PatientFilters): number {
+  return [
+    filters.gender !== "all",
+    filters.birthDateFrom !== "",
+    filters.birthDateTo !== "",
+    filters.lastVisitFrom !== "",
+    filters.lastVisitTo !== "",
+  ].filter(Boolean).length;
+}
+
+/** The query string `query`, `filters` and `sort` ask for, each filter only when set. */
+function searchQuery(query: string, filters: PatientFilters, sort: PatientSort | null): string {
+  const parts = [`q=${encodeURIComponent(query)}`];
+  if (filters.gender !== "all") parts.push(`gender=${filters.gender}`);
+  for (const field of ["birthDateFrom", "birthDateTo", "lastVisitFrom", "lastVisitTo"] as const) {
+    if (filters[field] !== "") parts.push(`${field}=${filters[field]}`);
+  }
+  if (sort !== null) parts.push(`sortBy=${sort.by}`, `sortOrder=${sort.order}`);
+  return parts.join("&");
+}
+
+/**
+ * The Patients `query` matches and `filters` narrow, a page at a time, in the
+ * order `sort` names, `GET /api/patient-search?q=…`: the Patient source's
+ * matches, in its order — newest Last visit first when `sort` is `null`. The
+ * source filters and sorts; the backend passes both through.
+ */
+export const PATIENT_SEARCH: ReadDeclaration<
+  Page<PatientMatch>,
+  [query: string, filters: PatientFilters, sort: PatientSort | null, at: PageAt]
+> = {
   decode: jsonDecoder(pageDecoder("PatientSearchPage", "patients", decodePatientMatch)),
-  path: (query, at) => pagedPath(PATIENT_SEARCH_PATH, at, `q=${encodeURIComponent(query)}`),
+  path: (query, filters, sort, at) =>
+    pagedPath(PATIENT_SEARCH_PATH, at, searchQuery(query, filters, sort)),
   permission: "patient:read",
 };
