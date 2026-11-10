@@ -5,8 +5,8 @@ import java.util.Objects;
 
 /**
  * One page of a Patient search, as the patient source answered it: the matches on the page, in
- * the source's order — newest Last visit first — and how many Patients the search matched in all.
- * The service pages, sorts and filters nothing itself (ADR 0018).
+ * the order the search asked for — newest Last visit first by default — and how many Patients the
+ * search matched in all. The service pages, sorts and filters nothing itself (ADR 0018).
  *
  * @param totalResults how many Patients the search matched, every page together
  * @param patients     the page's matches, in the source's order

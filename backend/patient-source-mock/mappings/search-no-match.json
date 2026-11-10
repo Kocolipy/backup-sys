@@ -19,6 +19,15 @@
       "name:contains": {
         "equalTo": "nobody",
         "caseInsensitive": true
+      },
+      "gender": {
+        "absent": true
+      },
+      "birthdate": {
+        "absent": true
+      },
+      "last-visit": {
+        "absent": true
       }
     }
   },

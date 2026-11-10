@@ -537,6 +537,22 @@ describe("Audit", () => {
       ]);
     });
 
+    it("opens on a click on its row where the browser has no selection to report", async () => {
+      await renderAudit(everyRead(answerPage([EVENT_1], { totalResults: 1 })));
+
+      await findTable();
+      const [row] = eventRows();
+      // `getSelection()` answers `null` in a document with no browsing context.
+      const noSelection = vi.spyOn(window, "getSelection").mockReturnValue(null);
+      try {
+        fireEvent.click(cellOf(row!, "Operation"));
+      } finally {
+        noSelection.mockRestore();
+      }
+
+      expect(detailControls()[0]).toHaveAttribute("aria-expanded", "true");
+    });
+
     it("shows its row as clickable, with a pointer over it", async () => {
       await renderAudit(everyRead(answerPage([EVENT_1], { totalResults: 1 })));
 
@@ -645,6 +661,25 @@ describe("Audit", () => {
     await findTable();
     const [details] = await openDetails(user);
     expect(details!.Details).toBe("5 result(s) · query kind: NAME");
+  });
+
+  it("names the filters a Patient search used apart from its query kind, and no value", async () => {
+    const search = {
+      ...EVENT_2,
+      httpPath: "/api/patient-search",
+      operation: "PATIENT_SEARCH",
+      resourceType: "Patient",
+      resultCount: 3,
+      filterShape: "NAME and gender eq ? and birthDate ge ?",
+    };
+    await renderAudit(everyRead(answerPage([search], { totalResults: 1 })));
+    const user = userEvent.setup();
+
+    await findTable();
+    const [details] = await openDetails(user);
+    expect(details!.Details).toBe(
+      "3 result(s) · query kind: NAME · filters: gender eq ? and birthDate ge ?",
+    );
   });
 
   it("names a Patient search's count alone in Details when it carries no query kind", async () => {

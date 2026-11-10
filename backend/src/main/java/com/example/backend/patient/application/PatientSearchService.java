@@ -2,24 +2,31 @@ package com.example.backend.patient.application;
 
 import com.example.backend.audit.domain.AuditActorContext;
 import com.example.backend.audit.domain.AuditPatientQueryKind;
+import com.example.backend.audit.domain.AuditPatientSearchFilter;
 import com.example.backend.audit.domain.AuditTrail;
 import com.example.backend.audit.domain.Audited;
 import com.example.backend.paging.domain.PageRequest;
+import com.example.backend.patient.domain.PatientFilter;
 import com.example.backend.patient.domain.PatientMatches;
 import com.example.backend.patient.domain.PatientQuery;
+import com.example.backend.patient.domain.PatientSort;
 import com.example.backend.patient.domain.PatientStore;
+import java.util.EnumSet;
+import java.util.Set;
 import org.springframework.stereotype.Service;
 
 /**
  * A Patient search (/docs/domain/patient.md, "Patient search"; ADR 0018): the patient source's own
- * search, passed through — the service matches, sorts and pages nothing itself, and holds and
- * caches nothing — and one {@code PATIENT_SEARCH} audit row for every search the source answered.
+ * search, passed through — the service matches, filters, sorts and pages nothing itself, and holds
+ * and caches nothing — and one {@code PATIENT_SEARCH} audit row for every search the source
+ * answered.
  *
- * <p>The row names the signed-in User who searched, how many Patients the answered page held and
- * whether the query was an NRIC or a name, and nothing of the query itself. It is appended after
- * the source answered, fail-closed (ADR 0004): a search that cannot be recorded is not answered,
- * and one the source failed read nothing, so it records nothing. No transaction of the caller's:
- * the read is a call to the source, and the append opens its own.
+ * <p>The row names the signed-in User who searched, how many Patients the answered page held,
+ * whether the query was an NRIC or a name, and which filters narrowed it, and nothing of the query
+ * or the filters' values. It is appended after the source answered, fail-closed (ADR 0004): a
+ * search that cannot be recorded is not answered, and one the source failed read nothing, so it
+ * records nothing. No transaction of the caller's: the read is a call to the source, and the
+ * append opens its own.
  */
 @Service
 public class PatientSearchService {
@@ -36,11 +43,15 @@ public class PatientSearchService {
         this.actors = actors;
     }
 
-    /** The page {@code page} of the Patients {@code query} matches, as the source answered it. */
-    public PatientMatches search(PatientQuery query, PageRequest page) {
-        PatientMatches matches = patients.search(query, page);
-        audit.append(new Audited.PatientsSearched(
-                actors.signedInUser().orElse(null), kindOf(query), matches.patients().size()));
+    /**
+     * The page {@code page} of the Patients {@code query} matches and {@code filter} narrows, in
+     * the order {@code sort} names, as the source answered it.
+     */
+    public PatientMatches search(PatientQuery query, PatientFilter filter, PatientSort sort,
+            PageRequest page) {
+        PatientMatches matches = patients.search(query, filter, sort, page);
+        audit.append(new Audited.PatientsSearched(actors.signedInUser().orElse(null),
+                kindOf(query), used(filter), matches.patients().size()));
         return matches;
     }
 
@@ -49,5 +60,26 @@ public class PatientSearchService {
             case PatientQuery.ByNric _ -> AuditPatientQueryKind.NRIC;
             case PatientQuery.ByName _ -> AuditPatientQueryKind.NAME;
         };
+    }
+
+    /** Which filters {@code filter} narrows by: each set end of a range, and the gender. */
+    private static Set<AuditPatientSearchFilter> used(PatientFilter filter) {
+        Set<AuditPatientSearchFilter> used = EnumSet.noneOf(AuditPatientSearchFilter.class);
+        if (filter.gender() != null) {
+            used.add(AuditPatientSearchFilter.GENDER);
+        }
+        if (filter.birthDate().from() != null) {
+            used.add(AuditPatientSearchFilter.BIRTH_DATE_FROM);
+        }
+        if (filter.birthDate().to() != null) {
+            used.add(AuditPatientSearchFilter.BIRTH_DATE_TO);
+        }
+        if (filter.lastVisit().from() != null) {
+            used.add(AuditPatientSearchFilter.LAST_VISIT_FROM);
+        }
+        if (filter.lastVisit().to() != null) {
+            used.add(AuditPatientSearchFilter.LAST_VISIT_TO);
+        }
+        return used;
     }
 }

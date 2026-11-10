@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * The stored rows the {@link Audited} events are, built the few ways an event is shaped.
@@ -257,15 +258,20 @@ final class AuditRows {
 
     /**
      * A Patient search: a bulk read of the patient source, by the signed-in User, with no subject,
-     * carrying how many Patients it answered and its query's kind as its filter shape — the one
-     * thing about the query recorded.
+     * carrying how many Patients it answered and, as its filter shape, its query's kind followed
+     * by each filter it used in their declared order — {@code NAME and gender eq ? and birthDate
+     * ge ?} — the one thing about the query and its filters recorded.
      */
-    static AuditEvent patientSearch(
-            Audited.Stamp stamp, UUID actorId, AuditPatientQueryKind kind, int resultCount) {
+    static AuditEvent patientSearch(Audited.Stamp stamp, UUID actorId, AuditPatientQueryKind kind,
+            Set<AuditPatientSearchFilter> filters, int resultCount) {
+        String shape = Stream.concat(Stream.of(kind.name()), filters.stream()
+                        .sorted()
+                        .map(AuditPatientSearchFilter::shape))
+                .collect(Collectors.joining(" and "));
         return row(stamp, stamp.requests().current(),
                 Change.success(AuditOperation.PATIENT_SEARCH, actorId, null, Audited.NO_PATHS),
                 AuditEvent.PATIENT_RESOURCE_TYPE, null,
-                new Particulars(resultCount, kind.name(), NO_PERMISSIONS, null, null, Tokens.NONE,
+                new Particulars(resultCount, shape, NO_PERMISSIONS, null, null, Tokens.NONE,
                         PermissionDelta.NONE));
     }
 

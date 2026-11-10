@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
@@ -692,19 +693,24 @@ public sealed interface Audited {
      * Restricted data. <strong>Fail-closed</strong>, as a SCIM query is: a search this service
      * cannot account for is not answered. One event per search the patient source answered; a
      * search refused before it reached the source, or that the source failed, read nothing and is
-     * not recorded. The count and the kind are numeric and closed-set; the query never reaches an
-     * event.
+     * not recorded. The count, the kind and the filters used are numeric and closed-set; the query
+     * and the filters' values never reach an event.
      *
      * @param actorId     the stable id of the User who searched
      * @param kind        whether the query was a full NRIC or a name
+     * @param filters     which filters the search narrowed by, none for an unfiltered search
      * @param resultCount how many Patients the answered page held
      */
-    record PatientsSearched(UUID actorId, AuditPatientQueryKind kind, int resultCount)
-            implements Accepted {
+    record PatientsSearched(UUID actorId, AuditPatientQueryKind kind,
+            Set<AuditPatientSearchFilter> filters, int resultCount) implements Accepted {
+
+        public PatientsSearched {
+            filters = Set.copyOf(Objects.requireNonNull(filters, "filters"));
+        }
 
         @Override
         public AuditEvent toEvent(Stamp stamp) {
-            return AuditRows.patientSearch(stamp, actorId, kind, resultCount);
+            return AuditRows.patientSearch(stamp, actorId, kind, filters, resultCount);
         }
     }
 

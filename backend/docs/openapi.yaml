@@ -621,14 +621,26 @@ paths:
   /api/patient-search:
     get:
       tags: [Patient]
-      summary: Search the Patients by name or by NRIC, a page at a time
+      summary: Search the Patients by name or by NRIC, filtered and sorted, a page at a time
       description: |
-        The Patients `q` matches, one page at a time, as the in-house patient
-        source matches, orders, pages and counts them (ADR 0018): the service
-        passes the search through and filters, sorts and pages nothing of its
-        own, holds nothing and caches nothing (ADR 0014). Newest Last visit
-        first, ties broken by id; a Patient with no Last visit is placed as the
-        source places it.
+        The Patients `q` matches and the filters narrow, one page at a time, in
+        the order `sortBy` and `sortOrder` name, as the in-house patient source
+        matches, filters, orders, pages and counts them (ADR 0018): the service
+        passes the search, its filters and its sort through and filters, sorts
+        and pages nothing of its own, holds nothing and caches nothing (ADR
+        0014). Newest Last visit first when no `sortBy` is given; ties are
+        broken by id, and a Patient with no Last visit comes last in either
+        direction.
+
+        **Filters** narrow the search `q` asks for, combined with AND, each
+        optional: `gender`, and a range for the date of birth
+        (`birthDateFrom`, `birthDateTo`) and for the Last visit
+        (`lastVisitFrom`, `lastVisitTo`), each end a calendar date, inclusive.
+        A Patient whose gender is `other` or `unknown` is found only with no
+        `gender`, and a Patient with no Last visit only with no Last visit
+        range. They reach the source as `gender`, `birthdate=ge…`,
+        `birthdate=le…`, `last-visit=ge…` and `last-visit=le…`, and the sort
+        as `_sort=±birthdate|±last-visit,_id`.
 
         `q`, trimmed, is one of two searches. A full NRIC — a prefix letter
         `S`, `T`, `F`, `G` or `M`, seven digits and a letter, in either case —
@@ -650,11 +662,13 @@ paths:
 
         **Audit.** Each search the source answers appends one `PATIENT_SEARCH`:
         the signed-in User as actor, resource type `Patient` and no resource,
-        how many Patients the page held as `resultCount`, and the query's kind
-        — `NRIC` or `NAME` — as `filterShape`. Never the query, a name or an
-        NRIC. A search refused with `400`, or that the source failed, records
-        nothing. The request's own log record names the route template, never
-        the query string.
+        how many Patients the page held as `resultCount`, and as `filterShape`
+        the query's kind — `NRIC` or `NAME` — then each filter it used, its
+        value `?` (`NAME and gender eq ? and birthDate ge ?`). Never the query,
+        a name, an NRIC or a filter's value; the sort is not recorded. A search
+        refused with `400`, or that the source failed, records nothing. The
+        request's own log record names the route template, never the query
+        string.
       operationId: searchPatients
       security:
         - sessionCookie: [patient:read]
@@ -667,6 +681,73 @@ paths:
           schema:
             type: string
             example: tan
+        - name: gender
+          in: query
+          required: false
+          description: |
+            Only Patients of this gender, as FHIR codes it. Sent to the source as
+            `gender`.
+          schema:
+            type: string
+            enum: [male, female]
+        - name: birthDateFrom
+          in: query
+          required: false
+          description: |
+            Only Patients born on or after this day. Sent as `birthdate=ge…`.
+          schema:
+            type: string
+            format: date
+            example: "1980-01-01"
+        - name: birthDateTo
+          in: query
+          required: false
+          description: |
+            Only Patients born on or before this day; not before
+            `birthDateFrom`. Sent as `birthdate=le…`.
+          schema:
+            type: string
+            format: date
+            example: "1999-12-31"
+        - name: lastVisitFrom
+          in: query
+          required: false
+          description: |
+            Only Patients whose Last visit is on or after this day. Sent as
+            `last-visit=ge…`.
+          schema:
+            type: string
+            format: date
+            example: "2026-08-01"
+        - name: lastVisitTo
+          in: query
+          required: false
+          description: |
+            Only Patients whose Last visit is on or before this day; not before
+            `lastVisitFrom`. Sent as `last-visit=le…`.
+          schema:
+            type: string
+            format: date
+            example: "2026-10-31"
+        - name: sortBy
+          in: query
+          required: false
+          description: |
+            The one column to sort by: `birthDate` (the source's `birthdate`) or
+            `lastVisit` (its `last-visit`). With none, newest Last visit first,
+            whatever `sortOrder` says.
+          schema:
+            type: string
+            enum: [birthDate, lastVisit]
+        - name: sortOrder
+          in: query
+          required: false
+          description: |
+            The direction `sortBy` sorts in; `ascending` when `sortBy` is given
+            alone. Descending is sent with a leading `-`.
+          schema:
+            type: string
+            enum: [ascending, descending]
         - name: startIndex
           in: query
           required: false
@@ -695,10 +776,14 @@ paths:
                 $ref: "#/components/schemas/PatientSearchPage"
         "400":
           description: |
-            `q` is missing, or is a name search under 3 characters once trimmed,
-            or `startIndex` or `count` is not an integer. Refused before the
-            patient source is called, recording nothing, with the generic
-            `invalid-request` `ApiError`, which quotes nothing of the query.
+            `q` is missing, or is a name search under 3 characters once trimmed;
+            `gender` is neither `male` nor `female`; `sortBy` is neither
+            `birthDate` nor `lastVisit`, or `sortOrder` neither `ascending` nor
+            `descending`; a date is no calendar date `YYYY-MM-DD`; a from-date
+            is after its to-date; or `startIndex` or `count` is not an integer.
+            Refused before the patient source is called, recording nothing, with
+            the generic `invalid-request` `ApiError`, which quotes nothing of the
+            request.
           content:
             application/json:
               schema:
@@ -1446,8 +1531,8 @@ paths:
         into: actors and resources are stable ids, classifications come from
         closed sets, `httpPath` is the matched route template and never the
         resolved path, and a bulk read carries its filter's shape (`userName eq ?`)
-        and never its values — a Patient search its query's kind (`NAME`) and
-        never its query.
+        and never its values — a Patient search its query's kind and the
+        filters it used (`NAME and gender eq ?`) and never its query.
 
         Reading the trail is not itself recorded. The listing is served only to a
         caller holding `audit:read`, which a Group may carry without any other
@@ -3951,7 +4036,7 @@ components:
           description: One-based index of this page's first match, as coerced.
         patients:
           type: array
-          description: This page's matches, in the source's order — newest Last visit first.
+          description: This page's matches, in the source's order — the order asked for, newest Last visit first by default.
           items:
             $ref: "#/components/schemas/PatientMatch"
     PatientMatch:
@@ -4106,7 +4191,9 @@ components:
           description: |
             A bulk read's filter with every literal replaced by `?`
             (`userName eq ?`); for a `PATIENT_SEARCH`, the query's kind, `NRIC` or
-            `NAME`; `null` when it had none or is not a bulk read.
+            `NAME`, then each filter it used in a fixed order — `gender eq ?`,
+            `birthDate ge ?`, `birthDate le ?`, `lastVisit ge ?`, `lastVisit le ?`
+            — joined by `and`; `null` when it had none or is not a bulk read.
         permissions:
           type: array
           items:
@@ -4275,8 +4362,9 @@ components:
         `PATIENT_SEARCH` is a signed-in User's Patient search the patient source
         answered: the User as actor, resource type `Patient` with no subject or
         resource, how many Patients the page held as `resultCount`, and the
-        query's kind — `NRIC` or `NAME` — as `filterShape`; never the query, a
-        name or an NRIC. Reading one Patient by its id is not audited.
+        query's kind — `NRIC` or `NAME` — and the filters it used as
+        `filterShape`; never the query, a name, an NRIC or a filter's value.
+        Reading one Patient by its id is not audited.
     ConnectorTokenPermissions:
       type: array
       minItems: 1

@@ -77,10 +77,33 @@ public final class PatientSourceStubs {
      * {@code GET /Patient?…} serves — the canned searches and the fallback for any other.
      */
     public static List<JsonNode> searches() {
+        return searchStubs().stream().map(SearchStub::bundle).toList();
+    }
+
+    /**
+     * Every search stub, as the search it matches beside the Bundle it answers: the canned
+     * searches and the fallback for any other, whose matcher names no query parameter.
+     */
+    public static List<SearchStub> searchStubs() {
         return stubs()
                 .filter(stub -> "/Patient".equals(stub.at("/request/urlPath").asString("")))
-                .map(stub -> stub.at("/response/jsonBody"))
+                .map(stub -> new SearchStub(stub.at("/request/queryParameters"),
+                        stub.at("/response/jsonBody")))
                 .toList();
+    }
+
+    /**
+     * One search stub.
+     *
+     * @param query  its query parameters' matchers, by parameter name — missing for the fallback
+     * @param bundle the searchset it answers
+     */
+    public record SearchStub(JsonNode query, JsonNode bundle) {
+
+        /** Whether it is the fallback, matching any search. */
+        public boolean fallback() {
+            return query.isMissingNode();
+        }
     }
 
     /**

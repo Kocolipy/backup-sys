@@ -18,6 +18,15 @@
       },
       "identifier": {
         "equalTo": "https://fhir.synapxe.sg/NamingSystem/nric|S9212345A"
+      },
+      "gender": {
+        "absent": true
+      },
+      "birthdate": {
+        "absent": true
+      },
+      "last-visit": {
+        "absent": true
       }
     }
   },

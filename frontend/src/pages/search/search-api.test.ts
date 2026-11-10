@@ -4,7 +4,10 @@ import { DecodeError } from "@/lib/decode";
 import { describeDecoder, STRING } from "@/lib/decode.testHelpers";
 
 import {
+  checkPatientFilters,
+  countPatientFilters,
   decodePatientMatch,
+  NO_PATIENT_FILTERS,
   parsePatientQuery,
   PATIENT_SEARCH,
   PATIENT_SEARCH_PAGE_SIZE,
@@ -69,17 +72,150 @@ describe("parsePatientQuery", () => {
   });
 });
 
+describe("checkPatientFilters", () => {
+  it("passes no filter at all", () => {
+    expect(checkPatientFilters(NO_PATIENT_FILTERS)).toEqual({ ok: true });
+  });
+
+  it.each([
+    ["both ends", "1980-01-01", "1989-12-31"],
+    ["one day", "1980-01-01", "1980-01-01"],
+    ["a from-date alone", "1980-01-01", ""],
+    ["a to-date alone", "", "1989-12-31"],
+  ])("passes a range with %s", (_, from, to) => {
+    expect({
+      birthDate: checkPatientFilters({
+        ...NO_PATIENT_FILTERS,
+        birthDateFrom: from,
+        birthDateTo: to,
+      }),
+      lastVisit: checkPatientFilters({
+        ...NO_PATIENT_FILTERS,
+        lastVisitFrom: from,
+        lastVisitTo: to,
+      }),
+    }).toEqual({ birthDate: { ok: true }, lastVisit: { ok: true } });
+  });
+
+  it.each([
+    ["birthDate", "Date of Birth"],
+    ["lastVisit", "Last Visit"],
+  ] as const)("refuses a %s from-date after its to-date, naming the range", (range, label) => {
+    expect(
+      checkPatientFilters({
+        ...NO_PATIENT_FILTERS,
+        [`${range}From`]: "2026-10-02",
+        [`${range}To`]: "2026-10-01",
+      }),
+    ).toEqual({
+      message: `The ${label} from-date must not be after its to-date.`,
+      ok: false,
+      range,
+    });
+  });
+
+  it.each([
+    ["birthDateFrom", "birthDate", "Date of Birth"],
+    ["birthDateTo", "birthDate", "Date of Birth"],
+    ["lastVisitFrom", "lastVisit", "Last Visit"],
+    ["lastVisitTo", "lastVisit", "Last Visit"],
+  ] as const)(
+    "refuses a %s the calendar does not have, naming the range",
+    (field, range, label) => {
+      expect(checkPatientFilters({ ...NO_PATIENT_FILTERS, [field]: "275760-02-30" })).toEqual({
+        message: `Enter the ${label} dates as real dates.`,
+        ok: false,
+        range,
+      });
+    },
+  );
+});
+
+describe("countPatientFilters", () => {
+  it("counts none for no filter", () => {
+    expect(countPatientFilters(NO_PATIENT_FILTERS)).toBe(0);
+  });
+
+  it.each([
+    ["the gender", { gender: "male" }],
+    ["a Date of Birth from-date", { birthDateFrom: "1980-01-01" }],
+    ["a Date of Birth to-date", { birthDateTo: "1989-12-31" }],
+    ["a Last Visit from-date", { lastVisitFrom: "2026-09-01" }],
+    ["a Last Visit to-date", { lastVisitTo: "2026-10-31" }],
+  ] as const)("counts %s as one", (_, set) => {
+    expect(countPatientFilters({ ...NO_PATIENT_FILTERS, ...set })).toBe(1);
+  });
+
+  it("counts every filter set", () => {
+    expect(
+      countPatientFilters({
+        birthDateFrom: "1980-01-01",
+        birthDateTo: "1989-12-31",
+        gender: "female",
+        lastVisitFrom: "2026-09-01",
+        lastVisitTo: "2026-10-31",
+      }),
+    ).toBe(5);
+  });
+});
+
 describe("PATIENT_SEARCH", () => {
   it("reads a page of five for its query, encoded, under patient:read", () => {
     expect({
       pageSize: PATIENT_SEARCH_PAGE_SIZE,
-      path: PATIENT_SEARCH.path("Tan & Co", { count: 5, startIndex: 6 }),
+      path: PATIENT_SEARCH.path("Tan & Co", NO_PATIENT_FILTERS, null, { count: 5, startIndex: 6 }),
       permission: PATIENT_SEARCH.permission,
     }).toEqual({
       pageSize: 5,
       path: "/api/patient-search?q=Tan%20%26%20Co&startIndex=6&count=5",
       permission: "patient:read",
     });
+  });
+
+  it("asks for every filter set, and the sort, before the page", () => {
+    expect(
+      PATIENT_SEARCH.path(
+        "tan",
+        {
+          birthDateFrom: "1980-01-01",
+          birthDateTo: "1999-12-31",
+          gender: "female",
+          lastVisitFrom: "2026-08-01",
+          lastVisitTo: "2026-10-20",
+        },
+        { by: "birthDate", order: "descending" },
+        { count: 5, startIndex: 1 },
+      ),
+    ).toBe(
+      "/api/patient-search?q=tan&gender=female&birthDateFrom=1980-01-01&birthDateTo=1999-12-31" +
+        "&lastVisitFrom=2026-08-01&lastVisitTo=2026-10-20&sortBy=birthDate&sortOrder=descending" +
+        "&startIndex=1&count=5",
+    );
+  });
+
+  it.each([
+    ["the gender", { gender: "male" }, "gender=male"],
+    ["a Date of Birth from-date", { birthDateFrom: "1980-01-01" }, "birthDateFrom=1980-01-01"],
+    ["a Date of Birth to-date", { birthDateTo: "1989-12-31" }, "birthDateTo=1989-12-31"],
+    ["a Last Visit from-date", { lastVisitFrom: "2026-09-01" }, "lastVisitFrom=2026-09-01"],
+    ["a Last Visit to-date", { lastVisitTo: "2026-10-31" }, "lastVisitTo=2026-10-31"],
+  ] as const)("asks for %s alone when it is the one filter set", (_, set, asked) => {
+    expect(
+      PATIENT_SEARCH.path("tan", { ...NO_PATIENT_FILTERS, ...set }, null, {
+        count: 5,
+        startIndex: 1,
+      }),
+    ).toBe(`/api/patient-search?q=tan&${asked}&startIndex=1&count=5`);
+  });
+
+  it.each([
+    ["lastVisit", "ascending"],
+    ["lastVisit", "descending"],
+    ["birthDate", "ascending"],
+  ] as const)("asks for the sort by %s, %s", (by, order) => {
+    expect(
+      PATIENT_SEARCH.path("tan", NO_PATIENT_FILTERS, { by, order }, { count: 5, startIndex: 1 }),
+    ).toBe(`/api/patient-search?q=tan&sortBy=${by}&sortOrder=${order}&startIndex=1&count=5`);
   });
 
   it("reads its answer as one page of matching Patients", async () => {

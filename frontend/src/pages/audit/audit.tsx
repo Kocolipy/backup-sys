@@ -109,14 +109,22 @@ function membershipParts(event: AuditEvent): (string | null)[] {
   ];
 }
 
+/** Where a Patient search's filter shape moves from its query kind to the filters it used. */
+const PATIENT_SEARCH_FILTERS = " and ";
+
 /**
  * A bulk read's filter shape, as Details names it: a Patient search's is the
- * kind of query it ran, `NRIC` or `NAME`, never the query itself.
+ * kind of query it ran, `NRIC` or `NAME`, then the filters it used, each with
+ * `?` for its value — never the query itself, nor a filter's value.
  */
-const filterShapeText = (event: AuditEvent): string | null =>
-  event.filterShape !== null && event.operation === "PATIENT_SEARCH"
-    ? `query kind: ${event.filterShape}`
-    : event.filterShape;
+function filterShapeText(event: AuditEvent): string | null {
+  if (event.filterShape === null || event.operation !== "PATIENT_SEARCH") return event.filterShape;
+  const split = event.filterShape.indexOf(PATIENT_SEARCH_FILTERS);
+  if (split === -1) return `query kind: ${event.filterShape}`;
+  return `query kind: ${event.filterShape.slice(0, split)} · filters: ${event.filterShape.slice(
+    split + PATIENT_SEARCH_FILTERS.length,
+  )}`;
+}
 
 /**
  * Everything else a reader may need, as plain text joined by " · ": a login's

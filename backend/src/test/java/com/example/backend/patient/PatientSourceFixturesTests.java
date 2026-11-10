@@ -3,8 +3,10 @@ package com.example.backend.patient;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Function;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 import org.junit.jupiter.api.Test;
@@ -110,9 +112,31 @@ class PatientSourceFixturesTests {
                 .map(entry -> entry.get("resource"))
                 .toList();
 
-        assertThat(matches).hasSize(8).allSatisfy(match -> assertThat(FIXTURES)
+        assertThat(matches).hasSize(51).allSatisfy(match -> assertThat(FIXTURES)
                 .filteredOn(fixture -> fixture.get("id").equals(match.get("id")))
                 .containsExactly(match));
+    }
+
+    /** The fixtures with any name containing {@code tan}, ignoring case. */
+    private static List<JsonNode> namedTan() {
+        return FIXTURES.stream()
+                .filter(fixture -> StreamSupport.stream(fixture.at("/name").spliterator(), false)
+                        .anyMatch(name -> name.get("text").asString().toLowerCase().contains("tan")))
+                .toList();
+    }
+
+    /** What a stub's matcher asks of {@code parameter}: its one value, or none for absent. */
+    private static Optional<String> asked(PatientSourceStubs.SearchStub stub, String parameter) {
+        return stub.query().optional(parameter).flatMap(matcher -> matcher.optional("equalTo"))
+                .map(JsonNode::asString);
+    }
+
+    /** The {@code tan} searches with no filter, newest Last visit first: its two pages. */
+    private static boolean unfilteredTan(PatientSourceStubs.SearchStub stub) {
+        return asked(stub, "name:contains").equals(Optional.of("tan"))
+                && asked(stub, "_sort").equals(Optional.of("-last-visit,_id"))
+                && FILTER_PARAMETERS.stream().allMatch(
+                        parameter -> stub.query().at("/" + parameter + "/absent").asBoolean());
     }
 
     /**
@@ -122,18 +146,17 @@ class PatientSourceFixturesTests {
      */
     @Test
     void theNameSearchPagesHoldEveryFixtureWithANameContainingTan() {
-        List<String> named = FIXTURES.stream()
-                .filter(fixture -> StreamSupport.stream(fixture.at("/name").spliterator(), false)
-                        .anyMatch(name -> name.get("text").asString().toLowerCase().contains("tan")))
-                .map(fixture -> fixture.get("id").asString())
+        List<String> named = namedTan().stream().map(fixture -> fixture.get("id").asString())
                 .toList();
-        List<JsonNode> pages = PatientSourceStubs.searches().stream()
-                .filter(bundle -> bundle.at("/total").asInt() == 7)
+        List<JsonNode> pages = PatientSourceStubs.searchStubs().stream()
+                .filter(PatientSourceFixturesTests::unfilteredTan)
+                .map(PatientSourceStubs.SearchStub::bundle)
                 .toList();
 
         assertThat(named).hasSize(7);
-        assertThat(pages).extracting(bundle -> bundle.at("/entry").size())
-                .containsExactlyInAnyOrder(5, 2);
+        assertThat(pages).extracting(bundle -> bundle.at("/entry").size(),
+                        bundle -> bundle.at("/total").asInt())
+                .containsExactlyInAnyOrder(tuple(5, 7), tuple(2, 7));
         assertThat(pages.stream()
                 .flatMap(bundle -> StreamSupport.stream(bundle.at("/entry").spliterator(), false))
                 .map(entry -> entry.at("/resource/id").asString()))
@@ -152,7 +175,111 @@ class PatientSourceFixturesTests {
                         tuple("Bundle", "searchset", 0),
                         tuple("Bundle", "searchset", 1),
                         tuple("Bundle", "searchset", 7),
+                        tuple("Bundle", "searchset", 7),
+                        tuple("Bundle", "searchset", 3),
+                        tuple("Bundle", "searchset", 4),
+                        tuple("Bundle", "searchset", 6),
+                        tuple("Bundle", "searchset", 6),
+                        tuple("Bundle", "searchset", 3),
+                        tuple("Bundle", "searchset", 3),
+                        tuple("Bundle", "searchset", 3),
+                        tuple("Bundle", "searchset", 1),
+                        tuple("Bundle", "searchset", 3),
+                        tuple("Bundle", "searchset", 7),
+                        tuple("Bundle", "searchset", 7),
+                        tuple("Bundle", "searchset", 7),
                         tuple("Bundle", "searchset", 7));
+    }
+
+    // ---- the sort and filter stubs -------------------------------------------------------
+
+    /** The filters a search sends the source, each as its own search parameter. */
+    private static final List<String> FILTER_PARAMETERS =
+            List.of("gender", "birthdate", "last-visit");
+
+    /**
+     * Every canned search pins each filter it does not use as absent, and each it uses to its
+     * exact values, so a search with a filter no stub names falls to the fallback rather than to
+     * an unfiltered stub.
+     */
+    @Test
+    void everyCannedSearchPinsEveryFilterItUsesOrNot() {
+        assertThat(PatientSourceStubs.searchStubs()).filteredOn(stub -> !stub.fallback())
+                .hasSize(17)
+                .allSatisfy(stub -> assertThat(FILTER_PARAMETERS)
+                        .as("each filter's matcher, absent or pinned")
+                        .allMatch(parameter -> pinsOrAbsent(stub.query().path(parameter))));
+    }
+
+    private static boolean pinsOrAbsent(JsonNode matcher) {
+        return matcher.path("absent").asBoolean(false) || matcher.has("equalTo")
+                || matcher.has("hasExactly");
+    }
+
+    /** The values a stub's matcher pins {@code parameter} to: none when it is absent. */
+    private static List<String> pinned(PatientSourceStubs.SearchStub stub, String parameter) {
+        JsonNode matcher = stub.query().path(parameter);
+        if (matcher.has("equalTo")) {
+            return List.of(matcher.get("equalTo").asString());
+        }
+        return StreamSupport.stream(matcher.path("hasExactly").spliterator(), false)
+                .map(value -> value.get("equalTo").asString())
+                .toList();
+    }
+
+    /** Whether {@code date} — {@code null} for none — lies in the range {@code ends} pins. */
+    private static boolean inRange(String date, List<String> ends) {
+        if (ends.isEmpty()) {
+            return true;
+        }
+        return date != null && ends.stream().allMatch(end -> end.startsWith("ge")
+                ? date.compareTo(end.substring(2)) >= 0
+                : end.startsWith("le") && date.compareTo(end.substring(2)) <= 0);
+    }
+
+    /**
+     * Every canned {@code tan} search answers exactly the fixtures its filters select from the
+     * seven with a name containing {@code tan}, in the order its sort names — ties by id, a
+     * fixture with no value for the sort last in either direction — paged by its offset, five to
+     * a page, with the total it selects: the source's behaviour, as /docs/domain/patient.md
+     * documents it. A date range keeps both ends, and leaves out a fixture with no date.
+     */
+    @Test
+    void everyCannedTanSearchAnswersTheFixturesItsFiltersAndSortSelect() {
+        List<PatientSourceStubs.SearchStub> canned = PatientSourceStubs.searchStubs().stream()
+                .filter(stub -> asked(stub, "name:contains").equals(Optional.of("tan")))
+                .toList();
+
+        assertThat(canned).hasSize(15).allSatisfy(stub -> {
+            List<String> gender = pinned(stub, "gender");
+            String sort = asked(stub, "_sort").orElseThrow();
+            String field = sort.replaceFirst("^-", "").replace(",_id", "");
+            Function<JsonNode, String> key = field.equals("birthdate")
+                    ? fixture -> fixture.get("birthDate").asString()
+                    : fixture -> lastVisit(fixture).orElse(null);
+            Comparator<String> direction = sort.startsWith("-")
+                    ? Comparator.<String>reverseOrder()
+                    : Comparator.<String>naturalOrder();
+            List<String> selected = namedTan().stream()
+                    .filter(fixture -> gender.isEmpty()
+                            || gender.contains(fixture.get("gender").asString()))
+                    .filter(fixture -> inRange(fixture.get("birthDate").asString(),
+                            pinned(stub, "birthdate")))
+                    .filter(fixture -> inRange(lastVisit(fixture).orElse(null),
+                            pinned(stub, "last-visit")))
+                    .sorted(Comparator.comparing(key,
+                                    Comparator.nullsLast(direction))
+                            .thenComparing(fixture -> fixture.get("id").asString()))
+                    .map(fixture -> fixture.get("id").asString())
+                    .toList();
+            int offset = Integer.parseInt(asked(stub, "_offset").orElseThrow());
+
+            assertThat(List.of(stub.bundle().at("/total").asInt(),
+                    StreamSupport.stream(stub.bundle().at("/entry").spliterator(), false)
+                            .map(entry -> entry.at("/resource/id").asString()).toList()))
+                    .containsExactly(selected.size(),
+                            selected.subList(offset, Math.min(offset + 5, selected.size())));
+        });
     }
 
     @Test
