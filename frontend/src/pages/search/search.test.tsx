@@ -150,6 +150,41 @@ describe("Search", () => {
     expect((await screen.findByText(/^Female$/)).dataset.slot).toBe("badge");
   });
 
+  it("tints the Male badge blue, the Female badge pink, and leaves any other gender plain", async () => {
+    await renderSearch({
+      [TAN_PAGE_1]: page(
+        [
+          TAN_HUI_MIN,
+          TAN_BOON_HUAT,
+          { ...TAN_HUI_MIN, id: "dev-patient-11", gender: "other" },
+          { ...TAN_HUI_MIN, id: "dev-patient-12", gender: "unknown" },
+        ],
+        1,
+        4,
+      ),
+    });
+
+    await search("tan");
+
+    const tint = (label: string) =>
+      screen
+        .getByText(new RegExp(`^${label}$`))
+        .className.split(" ")
+        .filter((name) => /^(?:bg|text)-(?!xs$)/.test(name));
+    await screen.findByRole("table");
+    expect({
+      female: tint("Female"),
+      male: tint("Male"),
+      other: tint("Other"),
+      unknown: tint("Unknown"),
+    }).toEqual({
+      female: ["bg-female-soft", "text-female-soft-foreground"],
+      male: ["bg-male-soft", "text-male-soft-foreground"],
+      other: ["bg-secondary", "text-secondary-foreground"],
+      unknown: ["bg-secondary", "text-secondary-foreground"],
+    });
+  });
+
   it("keeps each Patient's id without showing it", async () => {
     await renderSearch({ [TAN_PAGE_1]: page([TAN_HUI_MIN], 1, 1) });
 

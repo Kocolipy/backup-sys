@@ -13,7 +13,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatCalendarDateTwoDigitDay } from "@/lib/time";
-import { PATIENT_GENDER_LABELS } from "@/lib/patient-gender";
+import { PATIENT_GENDER_LABELS, type PatientGender } from "@/lib/patient-gender";
 import { PagedListing } from "@/pages/paged-listing";
 import { usePagedRead } from "@/pages/paged-read";
 import { type ColumnSorting, PlainHeading, SortHeading } from "@/pages/sort-heading";
@@ -33,9 +33,17 @@ import {
 /** How the results are sorted, by the page that holds the sort. */
 type ResultsSorting = ColumnSorting<PatientSortColumn>;
 
+/** Each gender badge's tint: Male blue, Female pink, any other the plain badge. */
+const GENDER_BADGE_TINTS: Readonly<Record<PatientGender, string | undefined>> = {
+  female: "bg-female-soft text-female-soft-foreground",
+  male: "bg-male-soft text-male-soft-foreground",
+  other: undefined,
+  unknown: undefined,
+};
+
 /**
  * The matching Patients, one row each: the official name, the full NRIC, the
- * gender as a badge and both dates as `dd MMM yyyy`, a missing Last visit
+ * gender as a badge (Male blue, Female pink) and both dates as `dd MMM yyyy`, a missing Last visit
  * shown as `—`. Date of Birth and Last Visit sort, one at a time; the name,
  * NRIC and gender do not. A row is not a control: nothing happens on clicking
  * it. Each row is keyed by the Patient's id, which is kept and never shown.
@@ -65,7 +73,9 @@ function ResultsTable({
             <TableCell className="font-medium">{patient.name}</TableCell>
             <TableCell className="font-mono">{patient.nric}</TableCell>
             <TableCell>
-              <Badge variant="secondary">{PATIENT_GENDER_LABELS[patient.gender]}</Badge>
+              <Badge className={GENDER_BADGE_TINTS[patient.gender]} variant="secondary">
+                {PATIENT_GENDER_LABELS[patient.gender]}
+              </Badge>
             </TableCell>
             <TableCell className="tabular-nums">
               {formatCalendarDateTwoDigitDay(patient.birthDate)}

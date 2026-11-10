@@ -94,6 +94,10 @@
      (#fde68a) / condition-flag-text-observed (#78350f), the amber pair (7.3:1)
    - danger-soft/danger-soft-foreground <- error-container (#ffdad6) /
      on-error-container (#93000a), the error-tint pair (7.2:1)
+   - male-soft/male-soft-foreground <- #dbeafe / #1e40af, the blue gender
+     badge pair (7.1:1); outside DESIGN.md's palette
+   - female-soft/female-soft-foreground <- #fce7f3 / #9d174d, the pink gender
+     badge pair (6.7:1); outside DESIGN.md's palette
    - border/input            <- outline-variant (#c3c6d5) — DESIGN.md reserves
      outline/outline-variant for hairline borders
    - ring                    <- primary-container (#0047ab) — same value as
@@ -134,6 +138,10 @@
   --warning-soft-foreground: oklch(0.414 0.105 45.904);
   --danger-soft: oklch(0.918 0.042 25.226);
   --danger-soft-foreground: oklch(0.417 0.17 27.379);
+  --male-soft: oklch(0.932 0.032 255.585);
+  --male-soft-foreground: oklch(0.424 0.181 265.638);
+  --female-soft: oklch(0.948 0.028 342.258);
+  --female-soft-foreground: oklch(0.459 0.187 3.815);
   --border: oklch(0.829 0.021 276.896);
   --input: oklch(0.829 0.021 276.896);
   --ring: oklch(0.428 0.172 259.702);
@@ -168,6 +176,10 @@
   --warning-soft-foreground: oklch(0.414 0.105 45.904);
   --danger-soft: oklch(0.918 0.042 25.226);
   --danger-soft-foreground: oklch(0.417 0.17 27.379);
+  --male-soft: oklch(0.932 0.032 255.585);
+  --male-soft-foreground: oklch(0.424 0.181 265.638);
+  --female-soft: oklch(0.948 0.028 342.258);
+  --female-soft-foreground: oklch(0.459 0.187 3.815);
   --border: oklch(0.829 0.021 276.896);
   --input: oklch(0.829 0.021 276.896);
   --ring: oklch(0.428 0.172 259.702);
@@ -248,6 +260,10 @@
   --color-warning-soft-foreground: var(--warning-soft-foreground);
   --color-danger-soft: var(--danger-soft);
   --color-danger-soft-foreground: var(--danger-soft-foreground);
+  --color-male-soft: var(--male-soft);
+  --color-male-soft-foreground: var(--male-soft-foreground);
+  --color-female-soft: var(--female-soft);
+  --color-female-soft-foreground: var(--female-soft-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);

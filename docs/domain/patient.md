@@ -183,7 +183,7 @@ NRIC", searched only on submit (Enter or the Search button).
   "Enter at least 3 characters to search by name." beside the box and sends
   nothing; the results last read stay.
 - **Results**, under the heading "Search Results": a table of Patient Name (the
-  official name only), NRIC (in full), Gender (a badge), Date of Birth and Last
+  official name only), NRIC (in full), Gender (a badge, Male blue and Female pink), Date of Birth and Last
   Visit (`dd MMM yyyy`, a missing Last visit `—`), five to a page with the
   numbered pager and "Showing x to y of N patients" — shown whenever there is a
   match, on a single page too. Rows are not clickable. Each row keeps the
