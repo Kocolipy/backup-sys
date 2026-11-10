@@ -178,13 +178,22 @@ function enterYear275760(label: "From" | "To") {
 
 type User = ReturnType<typeof userEvent.setup>;
 
+/** The button that opens the filters, whatever it says is set. */
+const filterTrigger = () => screen.getByRole("button", { name: /^Filter/ });
+
+/** Opens the filters, unless they are open already. */
+async function openFilters(user: User) {
+  if (filterTrigger().getAttribute("aria-expanded") !== "true") await user.click(filterTrigger());
+}
+
 /** The Operation picker's trigger, whatever it says is selected. */
 const pickerTrigger = () => screen.getByRole("button", { name: /^Operation: / });
 
 const openPicker = (user: User) => user.click(pickerTrigger());
 
-/** Opens the picker and toggles each of `operations` in the one visit. */
+/** Opens the filters and the picker, and toggles each of `operations` in the one visit. */
 async function pick(user: User, ...operations: string[]) {
+  await openFilters(user);
   await openPicker(user);
   for (const name of operations) await user.click(screen.getByRole("option", { name }));
 }
@@ -227,6 +236,18 @@ async function openDetails(user: User): Promise<Record<string, string>[]> {
 
 const unfiltered = `${AUDIT_EVENTS_PATH}?startIndex=1&count=50`;
 const applyButton = () => screen.getByRole("button", { name: "Apply" });
+
+/** Presses Apply, opening the filters first if an earlier Apply closed them. */
+async function apply(user: User) {
+  await openFilters(user);
+  await user.click(applyButton());
+}
+
+/** Presses Reset, opening the filters first if they are closed. */
+async function reset(user: User) {
+  await openFilters(user);
+  await user.click(screen.getByRole("button", { name: "Reset" }));
+}
 const ACTOR_A = "00000000-0000-4000-8000-00000000000a";
 const ACTOR_B = "00000000-0000-4000-8000-00000000000b";
 const RESOURCE_A = "00000000-0000-4000-8000-00000000000c";
@@ -800,6 +821,7 @@ describe("Audit", () => {
       const user = userEvent.setup();
 
       await findTable();
+      await openFilters(user);
       await pick(user, "Logged out", "Lockout set");
       await user.keyboard("{Escape}");
       await user.click(outcome("Failure"));
@@ -912,8 +934,9 @@ describe("Audit", () => {
       const user = userEvent.setup();
 
       await findTable();
+      await openFilters(user);
       await user.type(screen.getByLabelText("Actor id"), "not-a-uuid");
-      await user.click(applyButton());
+      await apply(user);
 
       expect(await screen.findByText("Actor id must be a valid UUID.")).toBeInTheDocument();
       expect(requests()).toHaveLength(1);
@@ -924,10 +947,11 @@ describe("Audit", () => {
       const user = userEvent.setup();
 
       await findTable();
+      await openFilters(user);
       await user.type(screen.getByLabelText("Resource id"), "00000000-0000-4000-8000-000000000002");
       fireEvent.change(screen.getByLabelText("From"), { target: { value: "2026-01-01T00:00" } });
       fireEvent.change(screen.getByLabelText("To"), { target: { value: "2026-01-02T00:00" } });
-      await user.click(applyButton());
+      await apply(user);
 
       // Each bound is read as Singapore time, eight hours ahead of UTC.
       expect(readPaths(requests).slice(-1)[0]).toBe(
@@ -942,12 +966,13 @@ describe("Audit", () => {
       const user = userEvent.setup();
 
       await findTable();
+      await openFilters(user);
       const [first, second] = within(table())
         .getAllByRole("rowheader")
         .map((header) => header.textContent.replace(" ", "T"));
       fireEvent.change(screen.getByLabelText("From"), { target: { value: first } });
       fireEvent.change(screen.getByLabelText("To"), { target: { value: second } });
-      await user.click(applyButton());
+      await apply(user);
 
       // From is the first event's minute, so it is included; To is the second's.
       expect(readPaths(requests).slice(-1)[0]).toBe(
@@ -960,8 +985,9 @@ describe("Audit", () => {
       const user = userEvent.setup();
 
       await findTable();
+      await openFilters(user);
       enterYear275760("To");
-      await user.click(applyButton());
+      await apply(user);
 
       expect(await screen.findByRole("alert")).toHaveTextContent(
         /^To date must be a valid date\.$/,
@@ -974,8 +1000,9 @@ describe("Audit", () => {
       const user = userEvent.setup();
 
       await findTable();
+      await openFilters(user);
       enterYear275760("From");
-      await user.click(applyButton());
+      await apply(user);
 
       await screen.findByRole("alert");
       expect(requests()).toHaveLength(1);
@@ -986,9 +1013,10 @@ describe("Audit", () => {
       const user = userEvent.setup();
 
       await findTable();
+      await openFilters(user);
       await user.click(outcome("Failure"));
-      await user.click(applyButton());
-      await user.click(applyButton());
+      await apply(user);
+      await apply(user);
 
       await vi.waitFor(() =>
         expect(readPaths(requests)).toEqual([
@@ -1005,12 +1033,13 @@ describe("Audit", () => {
       const user = userEvent.setup();
 
       await findTable();
+      await openFilters(user);
       const actorId = screen.getByLabelText("Actor id");
       await user.type(actorId, "not-a-uuid");
-      await user.click(applyButton());
+      await apply(user);
       await screen.findByRole("alert");
       await user.clear(actorId);
-      await user.click(applyButton());
+      await apply(user);
 
       expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     });
@@ -1020,8 +1049,9 @@ describe("Audit", () => {
       const user = userEvent.setup();
 
       await findTable();
+      await openFilters(user);
       await user.type(screen.getByLabelText("Actor id"), "not-a-uuid");
-      await user.click(applyButton());
+      await apply(user);
       await screen.findByText("Actor id must be a valid UUID.");
       answer(everyRead(bare(503)));
       await user.click(screen.getByRole("button", { name: "Refresh" }));
@@ -1036,8 +1066,9 @@ describe("Audit", () => {
       const user = userEvent.setup();
 
       await findTable();
+      await openFilters(user);
       await user.type(screen.getByLabelText("Actor id"), "not-a-uuid");
-      await user.click(applyButton());
+      await apply(user);
       await screen.findByRole("alert");
       await user.click(screen.getByRole("button", { name: "Refresh" }));
       await vi.waitFor(() => expect(requests()).toHaveLength(2));
@@ -1057,7 +1088,7 @@ describe("Audit", () => {
       await findTable();
       await user.click(screen.getByRole("button", { name: "Next" }));
       await screen.findByText("Showing 2 to 2 of 51 events");
-      await user.click(applyButton());
+      await apply(user);
 
       expect(await screen.findByText("Showing 1 to 1 of 51 events")).toBeInTheDocument();
     });
@@ -1072,7 +1103,7 @@ describe("Audit", () => {
       await findTable();
       await user.click(screen.getByRole("button", { name: "Next" }));
       await screen.findByText("Showing 2 to 2 of 51 events");
-      await user.click(applyButton());
+      await apply(user);
       await screen.findByText("Showing 1 to 1 of 51 events");
 
       expect(readPaths(requests)).toEqual([
@@ -1088,9 +1119,10 @@ describe("Audit", () => {
       const id = "00000000-0000-4000-8000-000000000002";
 
       await findTable();
+      await openFilters(user);
       await user.type(screen.getByLabelText("Actor id"), id);
       expect(readPaths(requests)).toEqual([unfiltered]);
-      await user.click(applyButton());
+      await apply(user);
 
       await vi.waitFor(() =>
         expect(readPaths(requests)).toEqual([
@@ -1106,6 +1138,7 @@ describe("Audit", () => {
       const id = "00000000-0000-4000-8000-000000000002";
 
       await findTable();
+      await openFilters(user);
       await user.type(screen.getByLabelText("Resource id"), `${id}{Enter}`);
 
       await vi.waitFor(() =>
@@ -1124,6 +1157,7 @@ describe("Audit", () => {
       const user = userEvent.setup();
 
       await findTable();
+      await openFilters(user);
       await openPicker(user);
 
       expect(shownOptions()).toEqual([
@@ -1164,6 +1198,7 @@ describe("Audit", () => {
       const user = userEvent.setup();
 
       await findTable();
+      await openFilters(user);
       await openPicker(user);
       for (const option of screen.getAllByRole("option")) await user.click(option);
 
@@ -1181,6 +1216,7 @@ describe("Audit", () => {
       const user = userEvent.setup();
 
       await findTable();
+      await openFilters(user);
       await openPicker(user);
       await user.type(screen.getByRole("combobox"), "lock");
 
@@ -1192,6 +1228,7 @@ describe("Audit", () => {
       const user = userEvent.setup();
 
       await findTable();
+      await openFilters(user);
       await openPicker(user);
       await user.type(screen.getByRole("combobox"), "zzz");
 
@@ -1203,6 +1240,7 @@ describe("Audit", () => {
       const user = userEvent.setup();
 
       await findTable();
+      await openFilters(user);
       expect(pickerTrigger()).toHaveAccessibleName("Operation: Any");
       await pick(user, "Logged out", "Lockout set");
 
@@ -1214,6 +1252,7 @@ describe("Audit", () => {
       const user = userEvent.setup();
 
       await findTable();
+      await openFilters(user);
       await pick(user, "Logged out");
 
       const checkedOf = (name: string) => {
@@ -1235,6 +1274,7 @@ describe("Audit", () => {
       const user = userEvent.setup();
 
       await findTable();
+      await openFilters(user);
       await openPicker(user);
 
       const stops = screen
@@ -1248,6 +1288,7 @@ describe("Audit", () => {
       const user = userEvent.setup();
 
       await findTable();
+      await openFilters(user);
       await pick(user, "Logged out", "Lockout set", "Logged out");
 
       await vi.waitFor(() =>
@@ -1267,6 +1308,7 @@ describe("Audit", () => {
       const user = userEvent.setup();
 
       await findTable();
+      await openFilters(user);
       await pick(user, "Logged out");
       const shown = shownOptions();
 
@@ -1295,6 +1337,7 @@ describe("Audit", () => {
         const user = userEvent.setup();
 
         await findTable();
+        await openFilters(user);
         await pick(user, "Logged out", "Lockout set");
         await vi.waitFor(() => expect(requests()).toHaveLength(3));
         await user.click(clearings()[index]!);
@@ -1310,6 +1353,7 @@ describe("Audit", () => {
       const user = userEvent.setup();
 
       await findTable();
+      await openFilters(user);
       await openPicker(user);
 
       expect(clearings()).toEqual([]);
@@ -1320,6 +1364,7 @@ describe("Audit", () => {
       const user = userEvent.setup();
 
       await findTable();
+      await openFilters(user);
       await pick(user, "Logged out");
       await user.type(screen.getByRole("combobox"), "zzz");
 
@@ -1331,6 +1376,7 @@ describe("Audit", () => {
       const user = userEvent.setup();
 
       await findTable();
+      await openFilters(user);
       await user.type(screen.getByLabelText("Actor id"), "not-a-uuid");
       await pick(user, "Logged out");
 
@@ -1344,11 +1390,12 @@ describe("Audit", () => {
       const user = userEvent.setup();
 
       await findTable();
+      await openFilters(user);
       await user.type(screen.getByLabelText("Actor id"), ACTOR_A);
       await pick(user, "Logged out");
       await vi.waitFor(() => expect(requests()).toHaveLength(2));
       await user.keyboard("{Escape}");
-      await user.click(applyButton());
+      await apply(user);
 
       await vi.waitFor(() =>
         expect(readPaths(requests)).toEqual([
@@ -1366,12 +1413,14 @@ describe("Audit", () => {
       const to = "2026-01-02T00:00";
 
       await findTable();
+      await openFilters(user);
       await user.type(screen.getByLabelText("Actor id"), ACTOR_A);
       await user.type(screen.getByLabelText("Resource id"), RESOURCE_A);
       fireEvent.change(screen.getByLabelText("From"), { target: { value: from } });
       fireEvent.change(screen.getByLabelText("To"), { target: { value: to } });
-      await user.click(applyButton());
+      await apply(user);
       await vi.waitFor(() => expect(requests()).toHaveLength(2));
+      await openFilters(user);
 
       await user.clear(screen.getByLabelText("Actor id"));
       await user.clear(screen.getByLabelText("Resource id"));
@@ -1391,6 +1440,7 @@ describe("Audit", () => {
       const user = userEvent.setup();
 
       await findTable();
+      await openFilters(user);
       await user.type(screen.getByLabelText("Actor id"), ACTOR_A);
       await pick(user, "Logged out");
 
@@ -1402,12 +1452,14 @@ describe("Audit", () => {
       const user = userEvent.setup();
 
       await findTable();
+      await openFilters(user);
       await user.type(screen.getByLabelText("Actor id"), ACTOR_A);
-      await user.click(applyButton());
+      await apply(user);
       await vi.waitFor(() => expect(requests()).toHaveLength(2));
+      await openFilters(user);
       await user.clear(screen.getByLabelText("Actor id"));
       await user.type(screen.getByLabelText("Actor id"), "not-a-uuid");
-      await user.click(applyButton());
+      await apply(user);
       await screen.findByRole("alert");
       await user.clear(screen.getByLabelText("Actor id"));
       await user.type(screen.getByLabelText("Actor id"), ACTOR_B);
@@ -1425,10 +1477,11 @@ describe("Audit", () => {
       const user = userEvent.setup();
 
       await findTable();
+      await openFilters(user);
       await user.type(screen.getByLabelText("Actor id"), ACTOR_A);
-      await user.click(applyButton());
+      await apply(user);
       await vi.waitFor(() => expect(requests()).toHaveLength(2));
-      await user.click(screen.getByRole("button", { name: "Reset" }));
+      await reset(user);
       await vi.waitFor(() => expect(requests()).toHaveLength(3));
       await pick(user, "Logged out");
 
@@ -1444,6 +1497,7 @@ describe("Audit", () => {
       const user = userEvent.setup();
 
       await findTable();
+      await openFilters(user);
       await user.type(screen.getByLabelText("Actor id"), "not-a-uuid");
       await pick(user, "Logged out");
       await screen.findByRole("alert");
@@ -1463,9 +1517,11 @@ describe("Audit", () => {
       const user = userEvent.setup();
 
       await findTable();
+      await openFilters(user);
       await user.type(screen.getByLabelText("Actor id"), ACTOR_A);
-      await user.click(applyButton());
+      await apply(user);
       await vi.waitFor(() => expect(requests()).toHaveLength(2));
+      await openFilters(user);
       await user.clear(screen.getByLabelText("Actor id"));
       await user.type(screen.getByLabelText("Actor id"), ACTOR_B);
       await user.click(outcome("Success"));
@@ -1500,6 +1556,7 @@ describe("Audit", () => {
       const user = userEvent.setup();
 
       await findTable();
+      await openFilters(user);
       pickerTrigger().focus();
       await user.keyboard("{Enter}");
       await vi.waitFor(() => expect(screen.getByRole("combobox")).toHaveFocus());
@@ -1520,6 +1577,7 @@ describe("Audit", () => {
       const user = userEvent.setup();
 
       await findTable();
+      await openFilters(user);
       expect(pickerTrigger()).toHaveAttribute("aria-haspopup", "dialog");
       await openPicker(user);
 
@@ -1531,8 +1589,10 @@ describe("Audit", () => {
   describe("the Outcome toggle", () => {
     it("offers Any, Success and Failure under its label, Any chosen first", async () => {
       await renderAudit(everyRead(answerPage([EVENT_1], { totalResults: 1 })));
+      const user = userEvent.setup();
 
       await findTable();
+      await openFilters(user);
       const toggle = within(screen.getByRole("radiogroup", { name: "Outcome" }));
       expect(
         toggle
@@ -1553,6 +1613,7 @@ describe("Audit", () => {
       const user = userEvent.setup();
 
       await findTable();
+      await openFilters(user);
       await user.click(outcome(name));
 
       await vi.waitFor(() =>
@@ -1568,6 +1629,7 @@ describe("Audit", () => {
       const user = userEvent.setup();
 
       await findTable();
+      await openFilters(user);
       await user.click(outcome("Failure"));
       await user.click(outcome("Any"));
 
@@ -1580,6 +1642,7 @@ describe("Audit", () => {
       const user = userEvent.setup();
 
       await findTable();
+      await openFilters(user);
       await user.click(outcome("Any"));
 
       expect(outcome("Any")).toHaveAttribute("aria-checked", "true");
@@ -1591,6 +1654,7 @@ describe("Audit", () => {
       const user = userEvent.setup();
 
       await findTable();
+      await openFilters(user);
       await user.type(screen.getByLabelText("Resource id"), "not-a-uuid");
       await user.click(outcome("Failure"));
 
@@ -1603,6 +1667,7 @@ describe("Audit", () => {
       const user = userEvent.setup();
 
       await findTable();
+      await openFilters(user);
       outcome("Any").focus();
       await user.keyboard("{ArrowRight}");
       await vi.waitFor(() => expect(outcome("Success")).toHaveFocus());
@@ -1622,6 +1687,7 @@ describe("Audit", () => {
       const user = userEvent.setup();
 
       await findTable();
+      await openFilters(user);
       await user.type(screen.getByLabelText("Actor id"), "00000000-0000-4000-8000-000000000001");
       await user.type(screen.getByLabelText("Resource id"), "00000000-0000-4000-8000-000000000002");
       fireEvent.change(screen.getByLabelText("From"), { target: { value: "2026-01-01T00:00" } });
@@ -1630,10 +1696,11 @@ describe("Audit", () => {
       await pick(user, "Logged out");
       await user.keyboard("{Escape}");
       const applied = requests().length;
-      await user.click(screen.getByRole("button", { name: "Reset" }));
+      await reset(user);
 
       await vi.waitFor(() => expect(requests()).toHaveLength(applied + 1));
       expect(lastRead(requests)).toBe(unfiltered);
+      await openFilters(user);
       expect({
         typed: ["Actor id", "Resource id", "From", "To"].map(
           (label) => screen.getByLabelText<HTMLInputElement>(label).value,
@@ -1648,10 +1715,11 @@ describe("Audit", () => {
       const user = userEvent.setup();
 
       await findTable();
+      await openFilters(user);
       await user.type(screen.getByLabelText("Actor id"), "not-a-uuid");
-      await user.click(applyButton());
+      await apply(user);
       await screen.findByRole("alert");
-      await user.click(screen.getByRole("button", { name: "Reset" }));
+      await reset(user);
 
       expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     });
@@ -1666,40 +1734,70 @@ describe("Audit", () => {
       await findTable();
       await user.click(screen.getByRole("button", { name: "Next" }));
       await screen.findByText("Showing 2 to 2 of 51 events");
-      await user.click(screen.getByRole("button", { name: "Reset" }));
+      await reset(user);
 
       expect(await screen.findByText("Showing 1 to 1 of 51 events")).toBeInTheDocument();
     });
   });
 
-  describe("the toolbar", () => {
-    it("is one named form, every typed field labelled", async () => {
+  describe("the filter panel", () => {
+    const panel = () => screen.queryByRole("form", { name: "Audit filters" });
+
+    it("is closed until Filter is pressed, beside Refresh in the card header", async () => {
       await renderAudit(everyRead(answerPage([EVENT_1], { totalResults: 1 })));
+      const user = userEvent.setup();
 
       await findTable();
-      const toolbar = within(screen.getByRole("form", { name: "Audit filters" }));
+      expect(panel()).toBeNull();
+      expect(filterTrigger().closest('[data-slot="card-action"]')).toBe(
+        screen.getByRole("button", { name: "Refresh" }).closest('[data-slot="card-action"]'),
+      );
+      await user.click(filterTrigger());
+
+      expect(panel()).toBeInTheDocument();
+    });
+
+    it("is one named form, every typed field labelled", async () => {
+      await renderAudit(everyRead(answerPage([EVENT_1], { totalResults: 1 })));
+      const user = userEvent.setup();
+
+      await findTable();
+      await openFilters(user);
+      const form = within(screen.getByRole("form", { name: "Audit filters" }));
       expect(
-        ["Actor id", "Resource id", "From", "To"].map(
-          (label) => toolbar.getByLabelText(label).tagName,
+        ["Actor id", "Resource id", "From", "To"].map((label) => {
+          const field = form.getByLabelText(label);
+          return [field.tagName, field.getAttribute("type")];
+        }),
+      ).toEqual([
+        ["INPUT", "text"],
+        ["INPUT", "text"],
+        ["INPUT", "datetime-local"],
+        ["INPUT", "datetime-local"],
+      ]);
+      expect(
+        [...form.getByRole("group", { name: "Occurred" }).querySelectorAll("input")].map((input) =>
+          input.getAttribute("aria-label"),
         ),
-      ).toEqual(["INPUT", "INPUT", "INPUT", "INPUT"]);
+      ).toEqual(["From", "To"]);
     });
 
     it("reaches every control by Tab, in order", async () => {
       await renderAudit(everyRead(answerPage([EVENT_1], { totalResults: 1 })));
       const user = userEvent.setup();
-      const toolbar = within(screen.getByRole("form", { name: "Audit filters" }));
 
       await findTable();
+      await openFilters(user);
+      const form = within(screen.getByRole("form", { name: "Audit filters" }));
       pickerTrigger().focus();
       const expected = [
         outcome("Any"),
-        toolbar.getByLabelText("Actor id"),
-        toolbar.getByLabelText("Resource id"),
-        toolbar.getByLabelText("From"),
-        toolbar.getByLabelText("To"),
+        form.getByLabelText("Actor id"),
+        form.getByLabelText("Resource id"),
+        form.getByLabelText("From"),
+        form.getByLabelText("To"),
+        form.getByRole("button", { name: "Reset" }),
         applyButton(),
-        toolbar.getByRole("button", { name: "Reset" }),
       ];
       const reached: (Element | null)[] = [];
       while (reached.length < expected.length) {
@@ -1708,6 +1806,80 @@ describe("Audit", () => {
       }
 
       expect(reached).toEqual(expected);
+    });
+
+    it("closes on an Apply that reads", async () => {
+      await renderAudit(everyRead(answerPage([EVENT_1], { totalResults: 1 })));
+      const user = userEvent.setup();
+
+      await findTable();
+      await openFilters(user);
+      await user.type(screen.getByLabelText("Actor id"), ACTOR_A);
+      await user.click(applyButton());
+
+      expect(panel()).toBeNull();
+    });
+
+    it("stays open on a refused Apply", async () => {
+      await renderAudit(everyRead(answerPage([EVENT_1], { totalResults: 1 })));
+      const user = userEvent.setup();
+
+      await findTable();
+      await openFilters(user);
+      await user.type(screen.getByLabelText("Actor id"), "not-a-uuid");
+      await user.click(applyButton());
+      await screen.findByRole("alert");
+
+      expect(screen.getByLabelText<HTMLInputElement>("Actor id").value).toBe("not-a-uuid");
+    });
+
+    it("closes on Reset", async () => {
+      await renderAudit(everyRead(answerPage([EVENT_1], { totalResults: 1 })));
+      const user = userEvent.setup();
+
+      await findTable();
+      await reset(user);
+
+      expect(panel()).toBeNull();
+    });
+
+    it("stays open through an Operation or Outcome change", async () => {
+      await renderAudit(everyRead(answerPage([EVENT_1], { totalResults: 1 })));
+      const user = userEvent.setup();
+
+      await findTable();
+      await pick(user, "Logged out");
+      await user.keyboard("{Escape}");
+      await user.click(outcome("Failure"));
+
+      expect(panel()).toBeInTheDocument();
+    });
+
+    it("names and shows on its button how many filters the listing was last read with", async () => {
+      await renderAudit(everyRead(answerPage([EVENT_1], { totalResults: 1 })));
+      const user = userEvent.setup();
+      const shown = () => [filterTrigger().getAttribute("aria-label"), filterTrigger().textContent];
+
+      await findTable();
+      const before = shown();
+      await pick(user, "Logged out", "Lockout set");
+      await user.keyboard("{Escape}");
+      await user.click(outcome("Failure"));
+      await user.type(screen.getByLabelText("Actor id"), ACTOR_A);
+      const typedUnapplied = shown();
+      await user.type(screen.getByLabelText("Resource id"), RESOURCE_A);
+      fireEvent.change(screen.getByLabelText("From"), { target: { value: "2026-01-01T00:00" } });
+      fireEvent.change(screen.getByLabelText("To"), { target: { value: "2026-01-02T00:00" } });
+      await apply(user);
+      const applied = shown();
+      await reset(user);
+
+      expect([before, typedUnapplied, applied, shown()]).toEqual([
+        ["Filter", "Filter"],
+        ["Filter, 2 set", "Filter2"],
+        ["Filter, 6 set", "Filter6"],
+        ["Filter", "Filter"],
+      ]);
     });
   });
 });
