@@ -153,13 +153,13 @@ interface Submitted {
  * The results sort by Date of Birth or Last Visit, newest Last visit first by
  * default, and the Filter panel narrows them by gender and by a date range for
  * each date. Both narrow or order the search submitted, and keep across a new
- * one; a filter applied before any search reads nothing until one is
- * submitted. A change of either reads the results from their first page.
+ * one. A change of either reads the results from their first page.
  *
  * The search, its filters and its sort live on the page alone: none of them,
  * no name or NRIC, reaches the URL or the browser history, so leaving the page
  * forgets them. Before the first search the page reads nothing and shows only
- * a prompt.
+ * the box: the Search Results card, its Filter button with it, appears with the
+ * first search submitted.
  */
 export function Search() {
   const [typed, setTyped] = useState("");
@@ -212,26 +212,22 @@ export function Search() {
           </form>
         </CardContent>
       </Card>
-      <Card>
-        <CardHeader className="flex items-center justify-between gap-4">
-          <h2 className="font-headline text-headline-sm">Search Results</h2>
-          <PatientFilterPopover applied={filters} onApply={setFilters} />
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          {submitted === null ? (
-            <p className="text-sm text-muted-foreground">
-              Search for a patient by name or full NRIC.
-            </p>
-          ) : (
+      {submitted === null ? null : (
+        <Card>
+          <CardHeader className="flex items-center justify-between gap-4">
+            <h2 className="font-headline text-headline-sm">Search Results</h2>
+            <PatientFilterPopover applied={filters} onApply={setFilters} />
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
             <SearchResults
               filters={filters}
               key={submitted.generation}
               query={submitted.query}
               sorting={{ onSort: setSort, sort }}
             />
-          )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

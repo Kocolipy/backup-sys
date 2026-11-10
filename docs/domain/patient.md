@@ -176,7 +176,9 @@ it, and the R5 `Patient` does not carry it.
 "Patient Search" with no subtitle. One box, placeholder "Search by name or
 NRIC", searched only on submit (Enter or the Search button).
 
-- **Before the first search** it reads nothing and shows a prompt, with no table.
+- **Before the first search** it reads nothing and shows only the box: the
+  "Search Results" card, its Filter button with it, appears with the first
+  search submitted.
 - **A query too short** — trimmed, under 3 characters and no full NRIC — shows
   "Enter at least 3 characters to search by name." beside the box and sends
   nothing; the results last read stay.
@@ -200,8 +202,7 @@ NRIC", searched only on submit (Enter or the Search button).
   range — "The Date of Birth from-date must not be after its to-date." — the
   panel stays open and nothing is read.
 - **Filters and sort narrow the search submitted.** They keep across a new
-  search; a filter applied before any search reads nothing until one is
-  submitted. Any change of sort or filter reads the results from their first
+  search. Any change of sort or filter reads the results from their first
   page.
 - **No matches** shows "No patients match your search", with no table and no
   range. **The source failing** shows "Unable to search for patients. Please try

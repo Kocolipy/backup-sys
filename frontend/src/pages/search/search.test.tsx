@@ -61,14 +61,13 @@ describe("Search", () => {
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(/^Patient Search$/);
   });
 
-  it("prompts for a search and reads nothing before the first one", async () => {
+  it("reads nothing before the first search", async () => {
     const { requests } = await renderSearch();
 
-    expect({
-      prompt: screen.getByText(/^Search for a patient by name or full NRIC\.$/).tagName,
-      requests: requests(),
-      table: screen.queryByRole("table"),
-    }).toEqual({ prompt: "P", requests: [], table: null });
+    expect({ requests: requests(), table: screen.queryByRole("table") }).toEqual({
+      requests: [],
+      table: null,
+    });
   });
 
   it("offers one box, placeheld for a name or an NRIC, and nothing beside it", async () => {
@@ -440,9 +439,16 @@ async function apply(user: User) {
   await user.click(within(filterPanel()).getByRole("button", { name: "Apply" }));
 }
 
+/** The page with the `tan` search shown, its Filter button with it. */
+async function renderSearched() {
+  await renderSearch({ [TAN_PAGE_1]: page([TAN_HUI_MIN], 1, 1) });
+  await search("tan");
+  await screen.findByRole("table");
+}
+
 describe("Search, filtered", () => {
   it("offers a Filter button, closed, that counts no filter at first", async () => {
-    await renderSearch();
+    await renderSearched();
 
     expect({
       badge: filterTrigger().querySelector('[data-slot="badge"]'),
@@ -453,7 +459,7 @@ describe("Search, filtered", () => {
 
   it("offers the gender, All by default, and a from–to date range for each date", async () => {
     const user = userEvent.setup();
-    await renderSearch();
+    await renderSearched();
 
     await openFilters(user);
 
@@ -483,7 +489,7 @@ describe("Search, filtered", () => {
 
   it("keeps the gender chosen when it is pressed again", async () => {
     const user = userEvent.setup();
-    await renderSearch();
+    await renderSearched();
     await openFilters(user);
 
     await user.click(within(filterPanel()).getByRole("radio", { name: "All" }));
@@ -495,7 +501,7 @@ describe("Search, filtered", () => {
 
   it("forgets a change never applied once the panel closes", async () => {
     const user = userEvent.setup();
-    await renderSearch();
+    await renderSearched();
     await openFilters(user);
     await user.click(within(filterPanel()).getByRole("radio", { name: "Male" }));
     setDate("Last Visit", "From", "2026-09-01");
@@ -667,25 +673,6 @@ describe("Search, filtered", () => {
       gender: "true",
       lastVisitTo: "",
       sent: "/api/patient-search?q=tan&startIndex=1&count=5",
-    });
-  });
-
-  it("reads nothing for a filter applied before any search, and narrows the next", async () => {
-    const user = userEvent.setup();
-    const { requests } = await renderSearch({
-      [tanPage(1, "gender=female")]: page([TAN_HUI_MIN], 1, 1),
-    });
-
-    await openFilters(user);
-    await user.click(within(filterPanel()).getByRole("radio", { name: "Female" }));
-    await apply(user);
-    const beforeSearch = searchesSent(requests).length;
-    await search("tan");
-    await screen.findByRole("table");
-
-    expect({ beforeSearch, sent: searchesSent(requests) }).toEqual({
-      beforeSearch: 0,
-      sent: ["/api/patient-search?q=tan&gender=female&startIndex=1&count=5"],
     });
   });
 
