@@ -1,0 +1,471 @@
+openapi: 3.1.0
+info:
+  title: External data sources (as the backend requires them)
+  version: 1.0.0
+  description: |
+    Every external service the backend reads data from, written as the
+    **behaviour** the backend requires of it — what a real source must do, and
+    what a mock standing in for it must do — rather than as the canned answers a
+    mock's stub files hold. A mock built from this file answers any request the
+    backend can send as the real source would.
+
+    **One tag per source.** Each source is a tag whose description holds the
+    rules its every operation shares (format, credential, timeouts, what counts
+    as the source failing, where its data's authority lives). Every source has
+    its own base URL, so the root `servers` lists every source's local mock and
+    each path names its own source's under a path-level `servers`. A path two sources share — WireMock's own
+    `/__admin/health` — is one operation listing every mock that serves it.
+
+    **Security.** The root `security: []` says no source takes a credential. A
+    source that needs one declares a security scheme and puts it on its own
+    operations.
+
+    `backend/AGENTS.md`, "External sources' mocks", has the rule that keeps this
+    file and every mock in step.
+security: []
+servers:
+  - url: http://127.0.0.1:8104
+    description: The patient source's local mock (`APP_PATIENT_SOURCE_BASE_URL`)
+tags:
+  - name: patient-source
+    description: |
+      The in-house patient source (ADR 0014, ADR 0018), called by
+      `PatientSourceAdapter`. A mock of it matches, filters, sorts, pages and
+      counts over its own Patients.
+
+      - **Two reads.** `GET /Patient/{id}` for one Patient (Home's Patient card)
+        and `GET /Patient?…` for a Patient search (the Search page). The backend
+        calls nothing else on it.
+      - **FHIR R4 JSON, no credential.** Every call is a `GET` with
+        `Accept: application/fhir+json` and no `Authorization` header; the
+        source answers `application/fhir+json` (`application/json` is read too).
+      - **Timeouts.** 2 seconds to connect, 5 to answer by default
+        (`APP_PATIENT_SOURCE_READ_TIMEOUT`), the whole body included. No
+        redirect is followed and no call is retried.
+      - **Every other answer is the source failing.** Any status or body this
+        file does not list — a redirect, a `5xx`, a `200` breaking a rule under
+        its schemas — is the backend's `502`, never an empty result.
+      - **The data.** The Patients a mock serves are the twelve development
+        fixtures in `/docs/domain/patient.md`, "The fixtures", with their Last
+        visits; that table is their authority, not this file.
+
+      `backend/docs/configuration/patient-source.md` configures the base URL
+      and describes the WireMock mock (`backend/patient-source-mock/`) that
+      answers today.
+  - name: mock
+    description: What only a local mock serves, for compose and the tests; the backend never calls it.
+
+paths:
+  /Patient/{id}:
+    servers:
+      - url: http://127.0.0.1:8104
+        description: The patient source's local mock (`APP_PATIENT_SOURCE_BASE_URL`)
+    get:
+      tags: [patient-source]
+      operationId: readPatient
+      summary: Read one Patient by its EHR's FHIR id
+      description: |
+        The id is sent unchanged: the backend refuses an id outside FHIR's id
+        grammar itself, so every id that reaches the source is well-formed.
+
+        **Fault ids (mock only).** Beside the fixtures, the mock serves one
+        failure per id, so the backend's tests and a local run can reach each
+        `502`. Each is no fixture and matches no search:
+
+        | Id                       | Answers                                                    |
+        | ------------------------ | ---------------------------------------------------------- |
+        | `fault-slow`             | `200` Patient after 7 seconds, past the read timeout       |
+        | `fault-slow-body`        | headers at once, the body dribbled out over 7 seconds      |
+        | `fault-server-error`     | `503`                                                      |
+        | `fault-no-nric`          | `200` Patient with no identifier under the NRIC system     |
+        | `fault-no-official-name` | `200` Patient with no `name` of `use: official`            |
+        | `fault-no-name-text`     | `200` Patient whose official name has no `text`            |
+        | `fault-no-gender`        | `200` Patient with no `gender`                             |
+        | `fault-no-birth-date`    | `200` Patient with no `birthDate`                          |
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[A-Za-z0-9\-.]{1,64}$'
+          example: eq081-VQEgP8drUUqCWzHfw3
+      responses:
+        "200":
+          description: |
+            The Patient under exactly this `id`. A Patient under another id is a
+            failure. The `last-visit` extension may be present; a read by id
+            ignores it.
+          content:
+            application/fhir+json:
+              schema:
+                $ref: "#/components/schemas/Patient"
+        "404":
+          description: |
+            No Patient under the id: the one answer the backend reads as "no
+            patient", shown as "No patient in context". The body is never read.
+          content:
+            application/fhir+json:
+              schema:
+                $ref: "#/components/schemas/OperationOutcome"
+
+  /Patient:
+    servers:
+      - url: http://127.0.0.1:8104
+        description: The patient source's local mock (`APP_PATIENT_SOURCE_BASE_URL`)
+    get:
+      tags: [patient-source]
+      operationId: searchPatients
+      summary: Search the Patients — matched, filtered, sorted, paged and counted by the source
+      description: |
+        The backend does none of this work itself: it forwards the search and
+        shows the page and the total the source answers. A mock must therefore
+        compute every step below over all its Patients, for any combination of
+        parameters.
+
+        1. **Match** by exactly one of `name:contains` or `identifier`. The
+           backend always sends one and never both; there is no search that
+           lists every Patient.
+        2. **Filter** by every `gender`, `birthdate` and `last-visit` sent,
+           combined with AND.
+        3. **Count** what is left: that number is the Bundle's `total`, whatever
+           the page.
+        4. **Sort** by `_sort`.
+        5. **Page**: skip `_offset` matches, then return up to `_count` of them
+           as the Bundle's entries, in sort order.
+
+        **Worked example** over the fixtures: `name:contains=tan` matches seven
+        Patients, so `total` is 7; with `_sort=-last-visit,_id&_count=5&_offset=5`
+        the entries are Kavitha Tanabalan then Tan Boon Huat, who has no Last
+        visit and comes last. Adding `gender=male` leaves Tan Wei Ming, Stanley
+        Goh Kok Wee and Tan Boon Huat, `total: 3`.
+
+        The backend sends parameters in no guaranteed order; read them by name.
+      parameters:
+        - name: name:contains
+          in: query
+          description: |
+            A name search: the Patient matches when the value appears,
+            **ignoring case**, anywhere inside any part (`text`, `family` or any
+            `given`) of **any** of the Patient's names: `official`, `usual` or
+            `maiden`. So `tan` matches `Stanley Goh Kok Wee` by a given name and
+            `Lee Mei Ling` by her maiden name, `Tan Mei Ling`. At least 3
+            characters, already trimmed.
+          schema:
+            type: string
+            minLength: 3
+          example: tan
+        - name: identifier
+          in: query
+          description: |
+            An NRIC search: `<NRIC NamingSystem>|<NRIC>`, the NRIC upper-cased.
+            The Patient matches when one of its identifiers has exactly this
+            system and value. Sent instead of `name:contains`, never with it.
+          schema:
+            type: string
+            pattern: '^https://fhir\.synapxe\.sg/NamingSystem/nric\|[STFGM]\d{7}[A-Z]$'
+          example: https://fhir.synapxe.sg/NamingSystem/nric|S9212345A
+        - name: gender
+          in: query
+          description: |
+            Keeps only Patients with this gender code. The backend sends `male`
+            or `female`; a Patient whose gender is `other` or `unknown` is found
+            only when no `gender` is sent.
+          schema:
+            type: string
+            enum: [male, female]
+        - name: birthdate
+          in: query
+          description: |
+            A date-of-birth range, inclusive: `ge<date>` keeps a `birthDate` on
+            or after the date, `le<date>` one on or before it. Sent once for each
+            end the range has, so zero, one or two times; both apply together.
+            The backend guarantees the from-date is not after the to-date.
+          style: form
+          explode: true
+          schema:
+            type: array
+            maxItems: 2
+            items:
+              type: string
+              pattern: '^(ge|le)\d{4}-\d{2}-\d{2}$'
+          example: [ge1980-01-01, le1999-12-31]
+        - name: last-visit
+          in: query
+          description: |
+            A Last visit range, read as `birthdate` is but against the
+            `last-visit` extension. A Patient with no Last visit is outside
+            every range, so any `last-visit` value leaves it out.
+          style: form
+          explode: true
+          schema:
+            type: array
+            maxItems: 2
+            items:
+              type: string
+              pattern: '^(ge|le)\d{4}-\d{2}-\d{2}$'
+          example: [ge2026-08-01, le2026-10-20]
+        - name: _sort
+          in: query
+          required: true
+          description: |
+            One date column, then the id. `-` first is descending; `_id` is
+            always ascending and breaks every tie, so the order is total and a
+            page never repeats or skips a Patient.
+
+            - `birthdate`: by `birthDate`, which every Patient has.
+            - `last-visit`: by the `last-visit` extension. A Patient with **no
+              Last visit is last in both directions**, ordered among the others
+              like it by id.
+
+            With no sort chosen on the Search page, the backend sends
+            `-last-visit,_id`: newest Last visit first.
+          schema:
+            type: string
+            enum:
+              - "-last-visit,_id"
+              - "last-visit,_id"
+              - "birthdate,_id"
+              - "-birthdate,_id"
+        - name: _count
+          in: query
+          required: true
+          description: |
+            The most entries to return. The Search page asks for 5; the backend
+            passes through anything from 0 to 200. `0` returns no entries and
+            still the full `total`.
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 200
+          example: 5
+        - name: _offset
+          in: query
+          required: true
+          description: |
+            How many sorted matches to skip: the page's `startIndex - 1`. An
+            offset at or past `total` returns no entries and still the full
+            `total`, never an error.
+          schema:
+            type: integer
+            minimum: 0
+          example: 0
+        - name: _total
+          in: query
+          required: true
+          description: Always `accurate`. The `total` must be the exact count, never an estimate.
+          schema:
+            type: string
+            const: accurate
+      responses:
+        "200":
+          description: |
+            A searchset Bundle: the page's matches as entries, in sort order, and
+            the `total` of every match. A search matching nothing is this answer
+            with `total: 0`, not a `404`, which the backend reads as the source
+            failing.
+          content:
+            application/fhir+json:
+              schema:
+                $ref: "#/components/schemas/SearchsetBundle"
+
+  /__admin/health:
+    servers:
+      - url: http://127.0.0.1:8104
+        description: The patient source's mock
+    get:
+      tags: [mock]
+      operationId: mockHealth
+      summary: The mock is up
+      description: |
+        WireMock's own health endpoint, which `backend/compose.yaml`'s
+        healthcheck polls before the backend starts. A mock built on anything
+        else needs a health URL of its own and that healthcheck changed with it.
+        The backend never calls it.
+      responses:
+        "200":
+          description: Ready to answer.
+
+components:
+  schemas:
+    Patient:
+      description: |
+        An R4 `Patient`. The backend reads only `resourceType`, `id`,
+        `extension`, `identifier`, `name`, `gender` and `birthDate`, and ignores
+        every other element; a realistic resource carries more (`meta`,
+        `active`, `telecom`, `address`, an MRN identifier, `usual` and `maiden`
+        names), and the fixtures do, so the backend's selection is exercised.
+
+        Each rule below is one the backend holds: a Patient breaking any is the
+        source failing, the backend's `502`. A part the Patient does not hold is
+        left out of the JSON, never sent as `null` or empty.
+      type: object
+      required: [resourceType, id, identifier, name, gender, birthDate]
+      properties:
+        resourceType:
+          const: Patient
+        id:
+          description: The EHR's FHIR id, in FHIR's id grammar.
+          type: string
+          pattern: '^[A-Za-z0-9\-.]{1,64}$'
+        extension:
+          type: array
+          items:
+            $ref: "#/components/schemas/LastVisitExtension"
+        identifier:
+          description: |
+            Must include one identifier under the NRIC NamingSystem with a
+            `value`; others may sit beside it and are ignored.
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/Identifier"
+        name:
+          description: |
+            Must include one name of `use: official` with a non-blank `text`.
+            `usual` and `maiden` names may sit beside it: a name search matches
+            them, and the backend still shows the official one.
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/HumanName"
+        gender:
+          type: string
+          enum: [male, female, other, unknown]
+        birthDate:
+          description: To the day.
+          type: string
+          format: date
+
+    Identifier:
+      type: object
+      properties:
+        use:
+          type: string
+        system:
+          description: The NRIC's is `https://fhir.synapxe.sg/NamingSystem/nric`.
+          type: string
+        value:
+          description: |
+            An NRIC. Every fixture's carries a deliberately wrong check letter,
+            so none can be a real person's (`/docs/domain/patient.md`, "Dummy
+            NRICs"); a mock's Patients keep that rule.
+          type: string
+
+    HumanName:
+      type: object
+      properties:
+        use:
+          type: string
+          enum: [official, usual, maiden]
+        text:
+          description: |
+            The name as the person writes it, what the backend shows. Required
+            on the official name, and never rebuilt from `family` and `given`.
+          type: string
+        family:
+          description: Left out when the name does not split, as many Singapore names do not.
+          type: string
+        given:
+          type: array
+          items:
+            type: string
+
+    LastVisitExtension:
+      description: |
+        A Patient's Last visit, the date of their latest visit, which base FHIR
+        has no element for. At most one; absent for a Patient with none. The
+        `last-visit` search parameter sorts and filters on it.
+      type: object
+      required: [url, valueDate]
+      properties:
+        url:
+          const: https://fhir.synapxe.sg/StructureDefinition/last-visit
+        valueDate:
+          description: To the day; any other precision is the source failing.
+          type: string
+          format: date
+
+    SearchsetBundle:
+      description: |
+        The backend reads `resourceType`, `type`, `total` and each entry's
+        `resource`; `id`, `link` and `fullUrl` may be sent and are ignored.
+      type: object
+      required: [resourceType, type, total]
+      properties:
+        resourceType:
+          const: Bundle
+        type:
+          const: searchset
+        total:
+          description: Every match after the filters, not the page's size. Required.
+          type: integer
+          minimum: 0
+        entry:
+          description: |
+            The page, at most `_count` long. Left out, or empty, for a page with
+            no match.
+          type: array
+          items:
+            type: object
+            required: [resource]
+            properties:
+              fullUrl:
+                type: string
+              resource:
+                description: |
+                  The Patient as `GET /Patient/{id}` serves it, with its
+                  `last-visit` extension when it has a Last visit.
+                $ref: "#/components/schemas/Patient"
+      example:
+        resourceType: Bundle
+        type: searchset
+        total: 7
+        entry:
+          - resource:
+              resourceType: Patient
+              id: dev-patient-09
+              extension:
+                - url: https://fhir.synapxe.sg/StructureDefinition/last-visit
+                  valueDate: "2026-05-07"
+              identifier:
+                - system: https://fhir.synapxe.sg/NamingSystem/nric
+                  value: S9512345A
+              name:
+                - use: official
+                  text: Kavitha Tanabalan
+                  family: Tanabalan
+                  given: [Kavitha]
+              gender: female
+              birthDate: "1995-09-09"
+          - resource:
+              resourceType: Patient
+              id: dev-patient-10
+              identifier:
+                - system: https://fhir.synapxe.sg/NamingSystem/nric
+                  value: S5512345A
+              name:
+                - use: official
+                  text: Tan Boon Huat
+                  family: Tan
+                  given: [Boon, Huat]
+              gender: male
+              birthDate: "1955-01-23"
+
+    OperationOutcome:
+      description: The `404`'s body, which the backend never reads.
+      type: object
+      properties:
+        resourceType:
+          const: OperationOutcome
+        issue:
+          type: array
+          items:
+            type: object
+            properties:
+              severity:
+                type: string
+              code:
+                type: string
+              diagnostics:
+                type: string

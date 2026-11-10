@@ -93,6 +93,19 @@ unasserted line, not an equivalent mutant: a removed call to a void audit or log
 method looks equivalent only because nothing asserts the record. Survivors and
 the tests that pin them go in the change summary.
 
+### External sources' mocks
+
+`docs/data-source.openapi.yaml` is the contract of every external service the
+backend reads data from, as the backend requires it: the behaviour each mock's
+stubs answer a canned slice of, one tag per source. **A mock that is added, or
+whose stubs add or change an endpoint, a parameter, a status or a body shape,
+updates that document in the same change**, as does a change to what an
+outbound adapter sends or accepts. A new source takes a tag of its own, and
+its paths name its mock under a path-level `servers` (the file's header has
+the conventions). Done when every stub's request and answer is one the document
+describes, and `npx @redocly/cli lint docs/data-source.openapi.yaml` reports no
+errors.
+
 ### The patient source's mock
 
 `patient-source-mock/` holds the stub files of the in-house patient source's

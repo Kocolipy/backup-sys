@@ -43,6 +43,11 @@ patient source" and "Patient search"). The SPA never reaches it.
 
 ## Local mock
 
+The behaviour any source or mock must have — how a search matches, filters,
+sorts, pages and counts, and which answers the backend holds to be failures — is
+`../data-source.openapi.yaml`. The WireMock mock below answers a canned
+subset of it.
+
 `compose.yaml`'s `patient-source` service is WireMock (`wiremock/wiremock`,
 pinned by tag and digest, the same release as the backend's test dependency)
 serving `patient-source-mock/mappings` on **`127.0.0.1:8104`**: FHIR R4

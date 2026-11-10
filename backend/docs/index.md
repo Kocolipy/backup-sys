@@ -14,6 +14,7 @@ The backend's reference docs. The rules an agent must hold are in `../AGENTS.md`
 # Contracts
 
 - [API document](openapi.yaml) - The API's authority on routes, statuses, bodies and each operation's security.
+- [Data source contract](data-source.openapi.yaml) - The behaviour the backend requires of every external data source, one tag per source; the patient source's reads and searches today. Read before building or changing a mock of one.
 - [API contract check](api-contract-check.md) - How the test suite holds openapi.yaml to the running service in both directions.
 
 # Testing and configuration
