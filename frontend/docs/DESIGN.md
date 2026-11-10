@@ -151,6 +151,11 @@ mapped in its `@theme inline` block:
 The amber pair adopts the observed condition-flag values as the declared
 warning role.
 
+A Patient's gender badge in Patient Search's results is no status: Male draws
+on `male-soft` / `male-soft-foreground` (blue, 7.1:1) and Female on
+`female-soft` / `female-soft-foreground` (pink, 6.7:1), applied by the page; any
+other gender keeps the `secondary` badge.
+
 ## Typography
 
 The library uses one named type scale rather than generic Tailwind

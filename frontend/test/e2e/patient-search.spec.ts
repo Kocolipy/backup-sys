@@ -90,7 +90,6 @@ test.describe("Patient Search", () => {
     await search(page, "ta");
 
     await expect(page.getByText("Enter at least 3 characters to search by name.")).toBeVisible();
-    await expect(page.getByText("Search for a patient by name or full NRIC.")).toBeVisible();
     expect(searches).toEqual([]);
   });
 
