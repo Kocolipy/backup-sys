@@ -50,6 +50,7 @@ export const AUDIT_OPERATIONS = [
   "PERMISSION_GRANT",
   "PERMISSION_REVOKE",
   "GROUP_PERMISSIONS_CHANGE",
+  "PATIENT_SEARCH",
 ] as const;
 
 export type AuditOperation = (typeof AUDIT_OPERATIONS)[number];

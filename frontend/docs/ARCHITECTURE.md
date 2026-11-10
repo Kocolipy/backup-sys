@@ -192,7 +192,8 @@ two pages share moves up to `src/pages/` itself, and imports no page folder
   the first page afresh. Every pager, the audit page's included, is the
   shadcn `Pagination` holding `Button` moves — «, a number per page, » —
   « and » each disabled at its end, and none of it while every row sits on
-  the first page.
+  the first page — except where a listing asks for its range named anyway
+  (`onePage="shown"`), as Patient Search does.
 - `group-permissions-dialog.tsx` — the Accounts page's Group Permissions editor,
   not a page: a modal checkbox dialog fed by `GET /api/admin/permissions` and
   pre-ticked with the Group's current set. It hands the complete set to the
@@ -234,6 +235,16 @@ two pages share moves up to `src/pages/` itself, and imports no page folder
 - `status-badge.tsx` — the one status-to-Badge-variant mapping, for an audit
   outcome and a User's active state (a Deactivated User reads "Deactivated"),
   on Accounts and Audit.
+- `search.tsx` / `search-api.ts` — Patient Search, `/search`, first in the
+  sidebar for every signed-in session. One box; `parsePatientQuery` sends a
+  full NRIC, or a name of at least three characters, trimmed, and refuses
+  anything shorter beside the box with nothing sent. The search is held in
+  component state alone, never the URL, and read only on submit: each submit
+  remounts the results, which read `GET /api/patient-search` five at a time
+  through `PATIENT_SEARCH` and the shared paged listing, naming the range
+  whenever there is a match. A failure is reported on the page's line, with a
+  Retry that reads the same page again. Each row keeps the Patient's id, which it
+  never shows.
 - `home.tsx` — the Patient card.
 - `patient-in-context.ts` / `home-api.ts` — the **one reader of the patient in
   context**. `PatientInContextScope`, which the signed-in layout renders once

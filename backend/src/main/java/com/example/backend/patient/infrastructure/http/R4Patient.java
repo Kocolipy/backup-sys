@@ -3,6 +3,7 @@ package com.example.backend.patient.infrastructure.http;
 import com.example.backend.patient.domain.AdministrativeGender;
 import com.example.backend.patient.domain.Patient;
 import com.example.backend.patient.domain.PatientId;
+import com.example.backend.patient.domain.PatientMatch;
 import com.example.backend.patient.domain.PatientName;
 import com.example.backend.patient.infrastructure.http.PatientSourceException.Failure;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
@@ -13,14 +14,17 @@ import java.util.Objects;
 
 /**
  * The in-house patient source's FHIR R4 {@code Patient}, as far as the service reads it: the
- * {@code id} and the four elements a Patient is copied from. Every other element the source sends
- * is never bound.
+ * {@code id}, the four elements a Patient is copied from and, in a search's answer, the Last visit
+ * extension. Every other element the source sends is never bound.
  *
  * <p>R4 and R5 agree on these elements (ADR 0014, "R5 on the wire"), so the mapping is a straight
  * copy: the {@code identifier} under the NRIC NamingSystem, the {@code name} whose {@code use} is
- * {@code official}, the {@code gender} and the {@code birthDate}.
+ * {@code official}, the {@code gender} and the {@code birthDate}. The Last visit is the source's
+ * own extension ({@link #LAST_VISIT}, ADR 0018), a {@code valueDate} to the day.
  *
- * @param id         the resource's id, which must be the id it was read by
+ * @param resourceType the resource's type: a search's entry must be a {@code Patient}
+ * @param id         the resource's id: the id it was read by, or in a search, a FHIR id of its own
+ * @param extension  every extension the source sends; only the Last visit is read
  * @param identifier every identifier the source holds; only the NRIC is copied
  * @param name       every name the source holds; only the official one is copied
  * @param gender     the administrative gender code
@@ -28,11 +32,54 @@ import java.util.Objects;
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 record R4Patient(
-        String id, List<Identifier> identifier, List<HumanName> name, String gender,
-        String birthDate) {
+        String resourceType, String id, List<Extension> extension, List<Identifier> identifier,
+        List<HumanName> name, String gender, String birthDate) {
 
     /** The official name's {@code use}. */
     private static final String OFFICIAL = "official";
+
+    /** The patient source's Last visit extension: the date of the Patient's latest visit. */
+    static final String LAST_VISIT = "https://fhir.synapxe.sg/StructureDefinition/last-visit";
+
+    /**
+     * The match this resource is, in a search's answer: a Patient under its own id, which must be
+     * there and a FHIR id, with its Last visit.
+     *
+     * @throws PatientSourceException when the resource is no Patient, has no id or one outside
+     *                                FHIR's grammar, breaks a rule a Patient must keep, or has a
+     *                                Last visit not to the day, naming which and quoting no value
+     */
+    PatientMatch toMatch() {
+        if (!"Patient".equals(resourceType)) {
+            throw PatientSourceException.failed(Failure.ANOTHER_RESOURCE);
+        }
+        if (id == null) {
+            throw PatientSourceException.failed(Failure.NO_ID);
+        }
+        PatientId own;
+        try {
+            own = new PatientId(id);
+        } catch (IllegalArgumentException outsideTheGrammar) {
+            throw PatientSourceException.failed(Failure.INVALID_ID);
+        }
+        return new PatientMatch(toPatient(own), lastVisit());
+    }
+
+    /** The Last visit's date, or {@code null} when the source records none. */
+    private LocalDate lastVisit() {
+        Extension lastVisit = listed(extension).stream()
+                .filter(candidate -> LAST_VISIT.equals(candidate.url()))
+                .findFirst()
+                .orElse(null);
+        if (lastVisit == null) {
+            return null;
+        }
+        try {
+            return LocalDate.parse(Objects.requireNonNull(lastVisit.valueDate()));
+        } catch (DateTimeParseException | NullPointerException notToTheDay) {
+            throw PatientSourceException.failed(Failure.LAST_VISIT_NOT_TO_THE_DAY);
+        }
+    }
 
     /**
      * The domain's Patient this resource is, read under {@code asked}.
@@ -91,6 +138,11 @@ record R4Patient(
 
     private static <T> List<T> listed(List<T> elements) {
         return elements == null ? List.of() : elements;
+    }
+
+    /** An R4 {@code Extension}: only its url and a {@code valueDate} are read. */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    record Extension(String url, String valueDate) {
     }
 
     /** An R4 {@code Identifier}: only its system and value are read. */

@@ -18,6 +18,7 @@ test.describe("Home", () => {
     await page.goto("/");
 
     await expect(sidebar(page).getByRole("link")).toHaveText([
+      "Search",
       "Profile",
       "Manage accounts",
       "View audit log",
@@ -27,6 +28,7 @@ test.describe("Home", () => {
   // Each page the sidebar links opens under its own title, and the sidebar's
   // Profile link lands on Home again.
   for (const [link, title] of [
+    ["Search", "Patient Search"],
     ["Manage accounts", "Accounts"],
     ["View audit log", "Audit"],
   ] as const) {

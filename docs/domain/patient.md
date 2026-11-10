@@ -1,7 +1,7 @@
 ---
 type: Domain Rules
 title: Patients
-description: The FHIR R5 Patient the service serves — its element rules, the NRIC system, the authoritative name text, derived age, the in-house patient source it is read from and the elements copied, no caching, the data classification, the error contract, the logging rules, the deliberate absence of read auditing and the follow-ups before real data, the Patient card's patient in context, the development fixtures and the fault stubs in the source's mock, and how R5 conformance is proven.
+description: The FHIR R5 Patient the service serves — its element rules, the NRIC system, the authoritative name text, derived age, the in-house patient source it is read from and the elements copied, no caching, Patient search and the Last visit, the data classification, the error contract, the logging rules, the absence of auditing for reads by id and the audit of every search, the follow-ups before real data, the Patient card's patient in context, the Search page, the development fixtures, search stubs and fault stubs in the source's mock, and how R5 conformance is proven.
 tags: [patient, fhir]
 ---
 
@@ -15,6 +15,8 @@ resource is rendered from the domain's Patient, copied from the source's R4 one;
 nothing stores it. Why R5, and why the in-house source, read through, is ADR
 0014; the wire contract is `backend/docs/openapi.yaml`. The SPA never reaches
 the source: SPA → `GET /api/patient/{id}` → backend → `GET {base}/Patient/{id}`.
+Patients are also found by a **Patient search**, by name or full NRIC, which is
+the source's own search passed through (ADR 0018, ["Patient search"](#patient-search)).
 
 ## The resource
 
@@ -96,6 +98,79 @@ default (`backend/docs/configuration/patient-source.md`).
   same patient too, is a call to the source.
 - **No grants.** No table holds a Patient, so no database login holds a grant
   on patient data.
+
+## Patient search
+
+A signed-in User finds Patients by typing a name or a full NRIC into the Search
+page's one box. `GET /api/patient-search?q=…&startIndex=…&count=…` passes the
+search to the patient source, which matches, orders, pages and counts it (ADR
+0018); the service filters, sorts and pages nothing of its own, and holds and
+caches nothing.
+
+- **One box, two searches.** The query is trimmed. A full NRIC — `S`, `T`, `F`,
+  `G` or `M`, seven digits and a letter, in either case — is an exact NRIC
+  search, sent upper-cased as `identifier=<NRIC NamingSystem>|<NRIC>`. Anything
+  else is a name search, `name:contains=<query>`, matched as the source decides:
+  it may match a usual or maiden name, and the match is still shown by its
+  official name. A name search needs **at least 3 characters**. There is no
+  partial NRIC search — `S851` is a name search — and nothing lists every
+  Patient. The domain's `PatientQuery` decides the kind; `q` binds through it, so
+  a query too short, or none, is `400` before the source is called.
+- **The source's page.** `startIndex` and `count` are read by ADR 0017's rules
+  (`PageParameter`, `PageRequest`: coerced, never refused; a non-integer is
+  `400`), and sent as `_offset` (`startIndex - 1`) and `_count`, with
+  `_sort=-last-visit,_id` and `_total=accurate`. The order is the source's:
+  newest Last visit first, ties broken by id. `totalResults` is the source's
+  `total`. The SPA asks for 5.
+- **The answer** is plain JSON, `{totalResults, startIndex, patients: [{id,
+name, nric, gender, birthDate, lastVisit}]}`: the Patient's id (the EHR's FHIR
+  id, which `GET /api/patient/{id}` reads it by), the official name's text, the
+  NRIC, the gender code, and both dates as `YYYY-MM-DD`, `lastVisit` `null` for a
+  Patient with none. Each match is copied as a read by id copies a Patient,
+  under the same rules.
+- **Errors are the application API's `ApiError`**, not an `OperationOutcome`:
+  the search is outside `/api/patient`. `400` for a query too short or a paging
+  value that is no integer, `401` and `403` as everywhere (`patient:read`), and
+  `502` for the source failing as a read by id's `502` — no connection, no answer
+  within 2 seconds to connect and 5 to answer, any status but a `200` (a `404`
+  included) — or answering a `200` that is no searchset Bundle, has no `total`,
+  or holds an entry that is no Patient the service can hold: no `id` or one
+  outside FHIR's grammar, a Patient rule broken, or a Last visit not to the day.
+- **Audited, unlike a read by id.** Each search the source answers appends one
+  `PATIENT_SEARCH` (["Patient reads are not audited"](#patient-reads-are-not-audited)).
+
+### Last visit
+
+**Last visit** is the date of a Patient's latest visit. FHIR's base `Patient`
+has no element for it, so the source carries it as an extension on each Patient
+in a search's answer, `https://fhir.synapxe.sg/StructureDefinition/last-visit`,
+a `valueDate` to the day, absent for a Patient with none, and defines
+`last-visit` as a search parameter to sort by. A read by id ignores it, and the
+R5 `Patient` does not carry it.
+
+### The Search page
+
+`/search`, the first link in the sidebar for every signed-in User, titled
+"Patient Search" with no subtitle. One box, placeholder "Search by name or
+NRIC", searched only on submit (Enter or the Search button).
+
+- **Before the first search** it reads nothing and shows a prompt, with no table.
+- **A query too short** — trimmed, under 3 characters and no full NRIC — shows
+  "Enter at least 3 characters to search by name." beside the box and sends
+  nothing; the results last read stay.
+- **Results**, under the heading "Search Results": a table of Patient Name (the
+  official name only), NRIC (in full), Gender (a badge), Date of Birth and Last
+  Visit (`dd MMM yyyy`, a missing Last visit `—`), five to a page with the
+  numbered pager and "Showing x to y of N patients" — shown whenever there is a
+  match, on a single page too. Rows are not clickable. Each row keeps the
+  Patient's id, never shown, for a page that opens the Patient from a row.
+- **No matches** shows "No patients match your search", with no table and no
+  range. **The source failing** shows "Unable to search for patients. Please try
+  again." on the page's error line, and a Retry button that reads the same page
+  of the same search again.
+- **The search lives on the page alone.** No query, name or NRIC reaches the URL
+  or the browser history; leaving the page forgets it. Submitting the same query
+  again reads its first page afresh.
 
 ## Data classification
 
@@ -199,9 +274,11 @@ adapter every namespace shares. A new FHIR resource served beneath
   `unreadable` (a body that arrived whole and is not JSON or not a Patient) —
   or the rule the Patient broke — `another-resource`,
   `no-nric`, `no-official-name`, `no-name-text`, `no-gender`,
-  `no-birth-date`, `birth-date-not-to-the-day` — and whose error message is
-  the fault's fixed sentence. It never names the patient id, the NRIC, the
-  name, the birth date or anything of the source's body.
+  `no-birth-date`, `birth-date-not-to-the-day` — or, for a search, what its
+  answer lacked — `not-a-searchset`, `no-total`, `no-id`, `invalid-id`,
+  `last-visit-not-to-the-day` — and whose error message is the fault's fixed
+  sentence. It never names the patient id, the NRIC, the name, the birth date,
+  the query searched for or anything of the source's body.
 - **A failure of the patient source names nothing of the patient.** Its
   exception's message is fixed text, naming at most a status or an element, and
   its cause is redacted to its type (`RedactedFaultException`): an HTTP client's
@@ -221,10 +298,20 @@ answers on, which no stub can serve.
 
 ## Patient reads are not audited
 
-A read of a patient writes **no audit row**. The audit trail records
+A read of one patient by id writes **no audit row**. The audit trail records
 security-relevant changes and refusals, not reads; a refused read is audited as
 `ACCESS_DENIED`. The deployed stack supplies no real patient source, and a
 deployment that adds one must account for this audit boundary.
+
+**A Patient search is the exception** (ADR 0018): it is a bulk read of
+Restricted data, the shape enumeration takes. Each search the source answers
+appends one `PATIENT_SEARCH`, fail-closed as a SCIM bulk read is (ADR 0004):
+the signed-in User as actor, resource type `Patient` with no subject or
+resource, how many Patients the answered page held as `resultCount`, and the
+query's kind — `NRIC` or `NAME` — as `filterShape`. It never holds the query, a
+name or an NRIC. A search refused with `400`, or that the source failed, read
+nothing and records nothing. `PatientSearchIntegrationTests` holds the row, and
+that neither the query nor a match reaches the log stream.
 
 ## Source authentication limit
 
@@ -262,7 +349,7 @@ Patients are **development fixtures** only, and they live in the in-house
 patient source's **mock**: WireMock, under `backend/patient-source-mock`, whose
 stub files (`mappings/`) answer FHIR R4 `Patient/{id}` for the development fixtures
 below, the **fault stubs** beside them, and `404` for any other well-formed
-id. Compose runs it beside SQL Server
+id; and FHIR R4 `Patient?…` for the **search stubs**. Compose runs it beside SQL Server
 and Redis (`patient-source`), so `make infra-up` and `make integration-test`
 start it; nothing under `infra/` builds or deploys it, so no dummy Patient
 reaches a deployed environment. The backend holds no fixture of its own.
@@ -282,6 +369,20 @@ reaches a deployed environment. The backend holds no fixture of its own.
   `fault-no-birth-date` each answer a Patient breaking that one rule. A fault
   stub is no fixture: every reader of the fixtures leaves it out. Its NRIC, where it has one, is as
   dummy as a fixture's, and the tests hold it to the same check.
+- **Search stubs.** Each documented search has a canned stub answering a
+  searchset Bundle whose entries are the fixtures themselves, exactly as their
+  own stubs serve them, matched on the whole query the backend sends — the
+  search, `_sort=-last-visit,_id`, `_count=5`, `_offset` and `_total=accurate`:
+  `search-name-tan-page-1` and `-page-2`, the name search `tan` (any case) over
+  its two pages of the seven fixtures with a name containing it, newest Last
+  visit first, `total: 7`; `search-nric`, the NRIC `S9212345A`, `total: 1`; and
+  `search-no-match`, the name search `nobody`, `total: 0`. A low-priority
+  fallback, `search-fallback`, answers any other `/Patient` search with an
+  empty searchset, `total: 0`. `PatientSourceFixturesTests` holds each
+  search's entries to the fixtures and the `tan` pages to every fixture whose
+  name contains it.
+- **A Last visit on every fixture but one.** Each fixture carries the `lastVisit`
+  extension (["Last visit"](#last-visit)) but Tan Boon Huat, who has none.
 - **More than the five elements.** Each stub is an R4 Patient as a real source
   would answer it — an MRN identifier ahead of the NRIC, `usual` and `maiden`
   names beside the official one, `meta`, `active`, `telecom`, `address` — so
@@ -299,20 +400,40 @@ reaches a deployed environment. The backend holds no fixture of its own.
 
 ### The fixtures
 
-Four dummy Patients. Between them they cover Singapore's name styles, every way
-a name splits — family and given, given only, neither — and all four gender
-codes, so each rendering path the resource has is exercised by real data.
+Twelve dummy Patients. Between them they cover Singapore's name styles, every way
+a name splits — family and given, given only, neither — all four gender
+codes and a range of dates of birth, so each rendering path the resource has is
+exercised by real data; and seven of them have a name containing `tan`, so the
+name search `tan` spans two pages of five.
 
-A Patient's id is its EHR's FHIR id, so each fixture borrows the id of one of
-an EHR vendor's public sandbox test patients, named in the table. Only the id is borrowed: the name, NRIC, gender and birth date are
-the fixture's own.
+A Patient's id is its EHR's FHIR id, so each of the first four fixtures borrows
+the id of one of an EHR vendor's public sandbox test patients, named in the
+table. Only the id is borrowed: the name, NRIC, gender and birth date are the
+fixture's own. The other eight carry development ids of the mock's own,
+`dev-patient-05` to `dev-patient-12`.
 
-| Id (sandbox patient it borrows from)         | `name.text`                  | `family`   | `given`             | Gender    | NRIC (valid letter) | Purpose                                                                                         |
-| -------------------------------------------- | ---------------------------- | ---------- | ------------------- | --------- | ------------------- | ----------------------------------------------------------------------------------------------- |
-| `eq081-VQEgP8drUUqCWzHfw3` (Derrick Lin)     | `Tan Wei Ming`               | `Tan`      | `Wei`, `Ming`       | `male`    | `S1234567A` (`D`)   | A Chinese name, family name first                                                               |
-| `erXuFYUfucBZaryVksYEcMg3` (Camila Lopez)    | `Siti Nurhaliza binte Ahmad` | —          | —                   | `female`  | `S9212345A` (`F`)   | A Malay name: `binte Ahmad` is a patronymic, not a family name, so the name is not split at all |
-| `e0w0LEDCYtfckT6N.CkJKCw3` (Warren McGinnis) | `Kumaravel`                  | —          | `Kumaravel`         | `unknown` | `T0312345C` (`B`)   | An Indian single name: one given name and no family name                                        |
-| `egqBHVfQlt4Bw3XGXoxVxHg3` (Elijah Davis)    | `Marcus Anthony de Souza`    | `de Souza` | `Marcus`, `Anthony` | `other`   | `S7812345B` (`A`)   | A Eurasian name: given names first, a family name of two words                                  |
+| Id (sandbox patient it borrows from)         | `name.text`                  | `family`    | `given`              | Gender    | NRIC (valid letter) | Purpose                                                                                         |
+| -------------------------------------------- | ---------------------------- | ----------- | -------------------- | --------- | ------------------- | ----------------------------------------------------------------------------------------------- |
+| `eq081-VQEgP8drUUqCWzHfw3` (Derrick Lin)     | `Tan Wei Ming`               | `Tan`       | `Wei`, `Ming`        | `male`    | `S1234567A` (`D`)   | A Chinese name, family name first                                                               |
+| `erXuFYUfucBZaryVksYEcMg3` (Camila Lopez)    | `Siti Nurhaliza binte Ahmad` | —           | —                    | `female`  | `S9212345A` (`F`)   | A Malay name: `binte Ahmad` is a patronymic, not a family name, so the name is not split at all |
+| `e0w0LEDCYtfckT6N.CkJKCw3` (Warren McGinnis) | `Kumaravel`                  | —           | `Kumaravel`          | `unknown` | `T0312345C` (`B`)   | An Indian single name: one given name and no family name                                        |
+| `egqBHVfQlt4Bw3XGXoxVxHg3` (Elijah Davis)    | `Marcus Anthony de Souza`    | `de Souza`  | `Marcus`, `Anthony`  | `other`   | `S7812345B` (`A`)   | A Eurasian name: given names first, a family name of two words                                  |
+| `dev-patient-05`                             | `Tan Hui Min`                | `Tan`       | `Hui`, `Min`         | `female`  | `S9012345A` (`I`)   | The name search `tan`'s newest Last visit                                                       |
+| `dev-patient-06`                             | `Stanley Goh Kok Wee`        | `Goh`       | `Stanley`, `Kok Wee` | `male`    | `S7212345A` (`Z`)   | Matches `tan` inside a given name                                                               |
+| `dev-patient-07`                             | `Lee Mei Ling`               | `Lee`       | `Mei`, `Ling`        | `female`  | `S6812345A` (`C`)   | Matches `tan` by her maiden name, `Tan Mei Ling`, and is shown by her official one              |
+| `dev-patient-08`                             | `Nur Intan binte Yusof`      | —           | —                    | `female`  | `T0112345A` (`E`)   | A Malay name matching `tan` inside it                                                           |
+| `dev-patient-09`                             | `Kavitha Tanabalan`          | `Tanabalan` | `Kavitha`            | `female`  | `S9512345A` (`G`)   | Matches `tan` at the start of a family name; first on the search's second page                  |
+| `dev-patient-10`                             | `Tan Boon Huat`              | `Tan`       | `Boon`, `Huat`       | `male`    | `S5512345A` (`D`)   | The one Patient with no Last visit, last of the search                                          |
+| `dev-patient-11`                             | `Ahmad bin Ismail`           | —           | —                    | `male`    | `S8312345B` (`A`)   | Matches no canned search                                                                        |
+| `dev-patient-12`                             | `Rajesh Kumar`               | `Kumar`     | `Rajesh`             | `male`    | `S9912345B` (`A`)   | Matches no canned search                                                                        |
+
+Their Last visits, as the search orders them: Tan Hui Min `2026-11-02`, Stanley
+Goh Kok Wee `2026-10-28`, Tan Wei Ming `2026-10-15`, Lee Mei Ling `2026-09-30`,
+Nur Intan binte Yusof `2026-08-19` (the name search's first page), Kavitha
+Tanabalan `2026-05-07` and Tan Boon Huat, none (its second); and beside them
+Rajesh Kumar `2026-10-05`, Siti Nurhaliza binte Ahmad `2026-07-11`, Ahmad bin
+Ismail `2026-06-14`, Marcus Anthony de Souza `2026-03-22` and Kumaravel
+`2025-12-01`.
 
 A part a fixture does not hold is left out of the JSON entirely, never sent as
 `null` or empty. `PatientStoreContract` holds each fixture, as the service

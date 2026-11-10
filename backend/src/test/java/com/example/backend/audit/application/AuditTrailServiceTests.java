@@ -3,6 +3,7 @@ package com.example.backend.audit.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.assertj.core.api.Assertions.tuple;
 
 import com.example.backend.audit.domain.AuditAdministrativeRefusal;
 import com.example.backend.audit.domain.AuditEvent;
@@ -15,6 +16,7 @@ import com.example.backend.audit.domain.AuditLoginStateAttribute;
 import com.example.backend.audit.domain.AuditMfaFactor;
 import com.example.backend.audit.domain.AuditUserAttribute;
 import com.example.backend.audit.domain.AuditOperation;
+import com.example.backend.audit.domain.AuditPatientQueryKind;
 import com.example.backend.audit.domain.AuditOutcome;
 import com.example.backend.audit.domain.AuditPermissionChange;
 import com.example.backend.audit.domain.AuditRefusalReason;
@@ -158,6 +160,29 @@ class AuditTrailServiceTests {
             assertThat(event.requestId()).isEqualTo("req-1");
             assertThat(event.id()).isNotNull();
         });
+    }
+
+    /**
+     * A Patient search names the signed-in User who searched as its actor, the {@code Patient}
+     * resource type, how many Patients the page it answered held, and its query kind — never the
+     * query, a name or an NRIC, which no component of the event could hold. A success with no
+     * subject: no one Patient is what the search was about.
+     */
+    @Test
+    void aPatientSearchRecordsItsSearcherCountAndQueryKindAndNoSubject() {
+        trail.append(new Audited.PatientsSearched(ACTOR, AuditPatientQueryKind.NAME, 5));
+        trail.append(new Audited.PatientsSearched(ACTOR, AuditPatientQueryKind.NRIC, 1));
+
+        assertThat(events.appended).extracting(
+                        AuditEvent::operation, AuditEvent::outcome, AuditEvent::actorId,
+                        AuditEvent::subjectId, AuditEvent::resourceType, AuditEvent::resourceId,
+                        AuditEvent::resultCount, AuditEvent::filterShape, AuditEvent::statusClass,
+                        AuditEvent::errorCode, AuditEvent::changedPaths)
+                .containsExactly(
+                        tuple(AuditOperation.PATIENT_SEARCH, AuditOutcome.SUCCESS, ACTOR, null,
+                                "Patient", null, 5, "NAME", "ok", null, List.of()),
+                        tuple(AuditOperation.PATIENT_SEARCH, AuditOutcome.SUCCESS, ACTOR, null,
+                                "Patient", null, 1, "NRIC", "ok", null, List.of()));
     }
 
     /** Every operator renders as the RFC spells it, and every attribute as its canonical path. */
@@ -1267,6 +1292,8 @@ class AuditTrailServiceTests {
             Map.entry(Audited.ScimGroupDeleted.class, Semantics.FAIL_CLOSED),
             Map.entry(Audited.ScimGroupsQueried.class, Semantics.FAIL_CLOSED),
             Map.entry(Audited.ScimResourcesQueried.class, Semantics.FAIL_CLOSED),
+            // A read of Restricted data, and a bulk one: fail-closed, as a SCIM query is.
+            Map.entry(Audited.PatientsSearched.class, Semantics.FAIL_CLOSED),
             Map.entry(Audited.ReservedResourceSeeded.class, Semantics.FAIL_CLOSED),
             Map.entry(Audited.ReservedMembershipRestored.class, Semantics.FAIL_CLOSED),
             // After the commit, even on success: fail-open (ADR 0004).

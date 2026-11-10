@@ -127,11 +127,21 @@ export function parseTypedTime(typed: string): Date | null {
   return Number.isNaN(instant.getTime()) ? null : instant;
 }
 
-/** A `YYYY-MM-DD` date as `d MMM yyyy`: `1985-03-12` is `12 Mar 1985`. */
-export function formatCalendarDate(date: string): string {
+/** A `YYYY-MM-DD` date as `<day> MMM yyyy`, its day written by `writeDay`. */
+function formatCalendarDateWith(date: string, writeDay: (day: number) => string): string {
   const [year, month, day] = partsOf(date);
-  return `${day} ${MONTHS[month - 1]} ${year}`;
+  return `${writeDay(day)} ${MONTHS[month - 1]} ${year}`;
 }
+
+/** A `YYYY-MM-DD` date as `d MMM yyyy`: `1985-03-12` is `12 Mar 1985`. */
+export const formatCalendarDate = (date: string): string => formatCalendarDateWith(date, String);
+
+/**
+ * A `YYYY-MM-DD` date as `dd MMM yyyy`, its day always two digits, so dates
+ * stacked in a table column line up: `2001-02-05` is `05 Feb 2001`.
+ */
+export const formatCalendarDateTwoDigitDay = (date: string): string =>
+  formatCalendarDateWith(date, twoDigits);
 
 /** Today's date in Singapore, as `YYYY-MM-DD`, by `clock`. */
 export const today = (clock: Clock): string => singaporeWallClock(clock()).date;

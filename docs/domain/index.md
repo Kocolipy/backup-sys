@@ -30,4 +30,4 @@ bodies, and the ADRs in `/docs/adr/` record the decisions.
 
 # Clinical data
 
-- [Patients](patient.md) - The FHIR R5 Patient's elements, NRIC and name rules, derived age, its Restricted classification, the error contract, logging and the absence of read auditing, the Patient card's patient in context, the dev fixtures, and R5 conformance.
+- [Patients](patient.md) - The FHIR R5 Patient's elements, NRIC and name rules, derived age, Patient search and the Last visit, its Restricted classification, the error contract, logging, the absence of auditing for reads by id and the audit of every search, the Patient card's patient in context, the Search page, the dev fixtures and search stubs, and R5 conformance.

@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { IdCard, KeyRound, ScrollText, Settings, Users } from "lucide-react";
+import { IdCard, KeyRound, ScrollText, Search as SearchIcon, Settings, Users } from "lucide-react";
 import type { ReactNode } from "react";
 
 import type { Permission } from "@/auth/api";
@@ -10,6 +10,7 @@ import { Audit } from "@/pages/audit/audit";
 import { AUDIT_EVENTS } from "@/pages/audit/audit-api";
 import { ChangePassword } from "@/pages/change-password/change-password";
 import { Home } from "@/pages/home/home";
+import { Search } from "@/pages/search/search";
 
 /** A signed-in page, and what the navigation sidebar reads to link it. */
 export interface SignedInPage {
@@ -31,9 +32,10 @@ export interface SignedInPage {
   permissions?: readonly Permission[];
   title: string;
   /**
-   * Keeps the title for screen readers only. Every page the sidebar reaches
-   * hides it, the sidebar marking where the user is; the password change a
-   * confined session is held to shows it.
+   * Keeps the title for screen readers only. A page the sidebar reaches hides
+   * it, the sidebar marking where the user is, unless the page is headed by
+   * the title alone, as Patient Search is; the password change a confined
+   * session is held to shows it.
    */
   titleHidden?: boolean;
 }
@@ -96,13 +98,27 @@ export const SETTINGS_PAGE: SignedInPage = {
 };
 
 /**
+ * Patient Search, first in the sidebar for every signed-in session: the
+ * search reads with `patient:read`, a baseline Permission, so no guard keeps
+ * any signed-in User from it. Its title heads the page, with no subtitle.
+ */
+const SEARCH_PAGE: SignedInPage = {
+  element: <Search />,
+  homeLink: "Search",
+  icon: SearchIcon,
+  path: "/search",
+  title: "Patient Search",
+};
+
+/**
  * Every signed-in page, declared once: `App` turns each entry into a route
  * (behind its Permission guard, if any), `SignedInShell` reads the matching
  * entry for the title, back link and vertical alignment, and links each entry
  * that carries a `homeLink` in the navigation sidebar. A new signed-in page
- * is one entry here.
+ * is one entry here, and the sidebar links them in this order.
  */
 export const SIGNED_IN_PAGES: readonly SignedInPage[] = [
+  SEARCH_PAGE,
   HOME_PAGE,
   ...PAGES_BEYOND_HOME,
   SETTINGS_PAGE,

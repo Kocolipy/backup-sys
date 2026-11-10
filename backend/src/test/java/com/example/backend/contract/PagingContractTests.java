@@ -130,8 +130,9 @@ class PagingContractTests {
     void every_paged_operation_coerces_its_paging(
             Operation operation, String query, long expectedStart, boolean noRows) throws Exception {
         MockHttpServletResponse response =
-                mvc.perform(asItsCaller(operation, get(path(operation) + query))).andReturn()
-                        .getResponse();
+                mvc.perform(asItsCaller(operation,
+                                get(path(operation) + withRequired(operation, query))))
+                        .andReturn().getResponse();
 
         assertThat(response.getStatus()).as("%s %s", operation, query).isEqualTo(200);
         JsonNode page = TestJson.JSON.readTree(response.getContentAsString());
@@ -155,6 +156,33 @@ class PagingContractTests {
                 .filter(operation -> operation.method().equals("GET"))
                 .filter(operation -> queryParameters(operation).containsAll(
                         List.of("startIndex", "count")));
+    }
+
+    /**
+     * {@code paging} after every query parameter the operation requires, each with the
+     * {@code example} its schema documents: a required parameter is what the operation reads
+     * at all, so the sweep sends a value the document says is good. A paged operation requiring
+     * one with no example fails here, naming it.
+     */
+    private static String withRequired(Operation operation, String paging) {
+        List<String> required = new ArrayList<>();
+        for (JsonNode declared : operation.definition().path("parameters")) {
+            JsonNode parameter = CONTRACT.resolve(declared);
+            if (parameter.path("in").asText("").equals("query")
+                    && parameter.path("required").asBoolean(false)) {
+                JsonNode example = parameter.path("schema").path("example");
+                assertThat(example.isMissingNode())
+                        .as("an example for %s's required %s", operation,
+                                parameter.path("name").asText(""))
+                        .isFalse();
+                required.add(parameter.path("name").asText("") + "=" + example.asText(""));
+            }
+        }
+        if (required.isEmpty()) {
+            return paging;
+        }
+        String own = String.join("&", required);
+        return paging.isEmpty() ? "?" + own : "?" + own + "&" + paging.substring(1);
     }
 
     private static List<String> queryParameters(Operation operation) {

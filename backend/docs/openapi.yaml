@@ -618,6 +618,112 @@ paths:
             application/fhir+json:
               schema:
                 $ref: "#/components/schemas/FhirOperationOutcome"
+  /api/patient-search:
+    get:
+      tags: [Patient]
+      summary: Search the Patients by name or by NRIC, a page at a time
+      description: |
+        The Patients `q` matches, one page at a time, as the in-house patient
+        source matches, orders, pages and counts them (ADR 0018): the service
+        passes the search through and filters, sorts and pages nothing of its
+        own, holds nothing and caches nothing (ADR 0014). Newest Last visit
+        first, ties broken by id; a Patient with no Last visit is placed as the
+        source places it.
+
+        `q`, trimmed, is one of two searches. A full NRIC — a prefix letter
+        `S`, `T`, `F`, `G` or `M`, seven digits and a letter, in either case —
+        is an exact NRIC search, sent upper-cased. Anything else is a name
+        search, the source's `name:contains`, which may match a usual or maiden
+        name: each match is still answered with its official name. There is no
+        partial NRIC search, and no search that lists every Patient.
+
+        Paging follows ADR 0017's parameter rules: `startIndex` one-based,
+        `count` defaulting to 100 and capped at 200, an out-of-range value
+        coerced rather than refused. The page they resolve to is the source's
+        to read; `totalResults` is the source's count of every match.
+
+        Requires `patient:read`, a baseline Permission every active User holds,
+        so only a session confined by a required password change is refused.
+        Outside `/api/patient`, so the answer is plain JSON and every refusal
+        and fault the application API's `ApiError`, not a FHIR
+        `OperationOutcome`.
+
+        **Audit.** Each search the source answers appends one `PATIENT_SEARCH`:
+        the signed-in User as actor, resource type `Patient` and no resource,
+        how many Patients the page held as `resultCount`, and the query's kind
+        — `NRIC` or `NAME` — as `filterShape`. Never the query, a name or an
+        NRIC. A search refused with `400`, or that the source failed, records
+        nothing. The request's own log record names the route template, never
+        the query string.
+      operationId: searchPatients
+      security:
+        - sessionCookie: [patient:read]
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: |
+            A full NRIC, or a name of at least 3 characters, trimmed either way.
+          schema:
+            type: string
+            example: tan
+        - name: startIndex
+          in: query
+          required: false
+          description: |
+            One-based index of the first match to return. Defaults to 1; anything
+            below 1 is coerced to 1 rather than refused, and an integer of any size
+            is coerced (one beyond 2147483647 is read as 2147483647). Sent to the
+            source as the zero-based `_offset`.
+          schema:
+            type: integer
+        - name: count
+          in: query
+          required: false
+          description: |
+            Matches per page. Defaults to 100; a negative value is coerced to 0
+            and anything above 200 to 200, rather than refused, however large.
+            The SPA asks for 5.
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: One page of the matching Patients.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PatientSearchPage"
+        "400":
+          description: |
+            `q` is missing, or is a name search under 3 characters once trimmed,
+            or `startIndex` or `count` is not an integer. Refused before the
+            patient source is called, recording nothing, with the generic
+            `invalid-request` `ApiError`, which quotes nothing of the query.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/PermissionRequired"
+        "502":
+          description: |
+            The patient source failed, as a read by id's `502` is: it could not
+            be reached, gave no answer within 2 seconds to connect and 5 to
+            answer, answered any status but a `200` — a `404` included — or
+            answered a `200` that is no searchset `Bundle`, has no `total`, or
+            holds an entry that is no Patient the service can hold: one with no
+            `id` or one outside FHIR's id grammar, one breaking a Patient's rules
+            (`GET /api/patient/{id}`'s `502`), or one whose Last visit is not a
+            date to the day. The generic `server-error` `ApiError`, saying
+            nothing about the failure; the fault's one record names its reason.
+            Nothing is recorded in the audit trail. The SPA shows it as the
+            search's error, with Retry.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /api/admin/accounts:
     get:
       tags: [Administration]
@@ -1325,8 +1431,8 @@ paths:
       description: |
         The administrative read of the append-only audit trail: authentication,
         lockout, administrative, connector and token lifecycle, SCIM provisioning,
-        bulk-read and scheduled-job events, newest first (ties broken by event id,
-        so paging never repeats or skips an event).
+        bulk-read, Patient search and scheduled-job events, newest first (ties
+        broken by event id, so paging never repeats or skips an event).
 
         Every filter is optional and they combine with AND. `totalResults`
         describes the whole filtered set, counted in the same snapshot as the
@@ -1340,7 +1446,8 @@ paths:
         into: actors and resources are stable ids, classifications come from
         closed sets, `httpPath` is the matched route template and never the
         resolved path, and a bulk read carries its filter's shape (`userName eq ?`)
-        and never its values.
+        and never its values — a Patient search its query's kind (`NAME`) and
+        never its query.
 
         Reading the trail is not itself recorded. The listing is served only to a
         caller holding `audit:read`, which a Group may carry without any other
@@ -3831,6 +3938,56 @@ components:
               diagnostics:
                 type: string
                 description: A fixed sentence per `code`; never anything the request carried.
+    PatientSearchPage:
+      type: object
+      required: [totalResults, startIndex, patients]
+      additionalProperties: false
+      properties:
+        totalResults:
+          type: integer
+          description: Matching Patients across every page, as the patient source counted them.
+        startIndex:
+          type: integer
+          description: One-based index of this page's first match, as coerced.
+        patients:
+          type: array
+          description: This page's matches, in the source's order — newest Last visit first.
+          items:
+            $ref: "#/components/schemas/PatientMatch"
+    PatientMatch:
+      type: object
+      required: [id, name, nric, gender, birthDate, lastVisit]
+      additionalProperties: false
+      description: |
+        One Patient a search matched. Restricted, Sensitive Normal, as every
+        Patient is.
+      properties:
+        id:
+          type: string
+          pattern: "^[A-Za-z0-9\\-.]{1,64}$"
+          description: |
+            The Patient's id: its EHR's FHIR id, the id `GET /api/patient/{id}`
+            reads it by.
+        name:
+          type: string
+          description: The official name's text, whichever name the search matched.
+        nric:
+          type: string
+          description: The full NRIC, under the NRIC NamingSystem.
+        gender:
+          type: string
+          enum: [male, female, other, unknown]
+        birthDate:
+          type: string
+          format: date
+          pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        lastVisit:
+          type: [string, "null"]
+          format: date
+          pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+          description: |
+            The date of the Patient's Last visit, from the patient source's
+            `last-visit` extension; `null` when the source records none.
     HealthResponse:
       type: object
       required: [status]
@@ -3906,11 +4063,12 @@ components:
             membership moved.
         resourceType:
           type: string
-          enum: [User, Group, ScimConnector, "User,Group"]
+          enum: [User, Group, ScimConnector, "User,Group", Patient]
           description: |
             `ScimConnector` for connector and token lifecycle events, named by the
             connector's id — a token event names its token beside it, in
-            `tokenId`; `User,Group` for a base `/.search`.
+            `tokenId`; `User,Group` for a base `/.search`; `Patient` for a
+            `PATIENT_SEARCH`, which names no one Patient.
         resourceId:
           type: [string, "null"]
           format: uuid
@@ -3947,7 +4105,8 @@ components:
           type: [string, "null"]
           description: |
             A bulk read's filter with every literal replaced by `?`
-            (`userName eq ?`); `null` when it had none or is not a bulk read.
+            (`userName eq ?`); for a `PATIENT_SEARCH`, the query's kind, `NRIC` or
+            `NAME`; `null` when it had none or is not a bulk read.
         permissions:
           type: array
           items:
@@ -4076,6 +4235,7 @@ components:
         - PERMISSION_GRANT
         - PERMISSION_REVOKE
         - GROUP_PERMISSIONS_CHANGE
+        - PATIENT_SEARCH
       description: |
         What happened, as a closed set. `LOCKOUT_LIFT` is always an Admin's Unlock:
         a lockout has no duration, so there is no expiry lift; its `errorCode` is
@@ -4112,6 +4272,11 @@ components:
         `superuserChanged` `null`. A refused one is a `FAILURE` naming the Group
         addressed and one generic `errorCode` — `INVALID_PERMISSIONS`,
         `UNKNOWN_RESOURCE` or `PROTECTED_RESOURCE` — and no Permission.
+        `PATIENT_SEARCH` is a signed-in User's Patient search the patient source
+        answered: the User as actor, resource type `Patient` with no subject or
+        resource, how many Patients the page held as `resultCount`, and the
+        query's kind — `NRIC` or `NAME` — as `filterShape`; never the query, a
+        name or an NRIC. Reading one Patient by its id is not audited.
     ConnectorTokenPermissions:
       type: array
       minItems: 1

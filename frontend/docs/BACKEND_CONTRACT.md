@@ -103,6 +103,13 @@ change, when the backend side moves. What the SPA has to honour:
   slash such as `a%2F%2Fb`), is the `400`;
   a well-formed id no patient is held under is the `404`. The SPA sends the
   in-context patient's id through `encodeURIComponent`.
+- **A Patient search answers plain JSON, not FHIR.** `GET /api/patient-search`
+  sits outside `/api/patient`, so it answers `application/json` and every
+  refusal or fault the application API's `ApiError`, as any other read: `400`
+  for a query the SPA would not send (under 3 characters, and no full NRIC),
+  and `502` for the patient source failing, which the Search page reports with
+  a Retry. Its query travels only in that request's query string, through
+  `encodeURIComponent`, never in the page's URL.
 - **A request body is JSON, and says so.** The backend reads a request body
   through its JSON converter only, so a body sent without
   `Content-Type: application/json` is refused `415` before any handler runs.

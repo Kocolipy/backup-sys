@@ -23,6 +23,7 @@ now; git holds its history. `/docs/agents/domain.md` has how an ADR changes, and
 # FHIR
 
 - [ADR 0014: FHIR R5 Patient, read from the in-house patient source](0014-fhir-r5-patient-from-the-in-house-patient-source.md) - Patients are served as base FHIR R5, rendered by hand with no FHIR library on the runtime classpath, and read on every request, uncached, from the in-house patient source's FHIR R4 Patient/{id} behind PatientStore; the adapter sends no credential, a WireMock mock stands in for it locally and in E2E, and the tests read its stub files.
+- [ADR 0018: Patient search is the patient source's own, passed through](0018-patient-search-is-the-patient-sources-own.md) - A Patient search by name or full NRIC is passed through to the patient source, which matches, sorts by last visit, pages and counts; the service reads startIndex and count by ADR 0017's rules but pages nothing itself, reads each Patient's Last visit from the source's lastVisit extension, and audits every answered search as PATIENT_SEARCH with its kind and count, never the query.
 
 # Observability and data
 

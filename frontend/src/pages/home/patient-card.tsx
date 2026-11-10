@@ -3,19 +3,14 @@ import type { ReactNode } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { type Clock, completedYears, formatCalendarDate, today, systemClock } from "@/lib/time";
 
-import type { PatientGender, PatientSummary } from "./home-api";
+import { PATIENT_GENDER_LABELS } from "@/lib/patient-gender";
+
+import type { PatientSummary } from "./home-api";
 import { usePatientInContext } from "./patient-in-context";
 
 const NOTE_CLASS = "text-sm text-muted-foreground";
 
 const NO_PATIENT = <p className={NOTE_CLASS}>No patient in context</p>;
-
-const GENDER_LABELS: Readonly<Record<PatientGender, string>> = {
-  female: "Female",
-  male: "Male",
-  other: "Other",
-  unknown: "Unknown",
-};
 
 /** The card headed Patient, holding `children` — a note, or nothing. */
 function PlainCard({ children }: { children: ReactNode }) {
@@ -37,7 +32,7 @@ function PlainCard({ children }: { children: ReactNode }) {
 function PatientBanner({ clock, patient }: { clock: Clock; patient: PatientSummary }) {
   const rows: [label: string, value: string][] = [
     ["NRIC", patient.nric],
-    ["Gender", GENDER_LABELS[patient.gender]],
+    ["Gender", PATIENT_GENDER_LABELS[patient.gender]],
     ["Age", String(completedYears(patient.birthDate, today(clock)))],
     ["Date of birth", formatCalendarDate(patient.birthDate)],
   ];

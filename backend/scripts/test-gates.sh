@@ -93,6 +93,7 @@ FAST_GATE=(
   com/example/backend/auth/controller/LoginCompletionTests
   com/example/backend/auth/controller/SelfControllerTests
   com/example/backend/auth/controller/SessionEndingTests
+  com/example/backend/auth/controller/SessionAuditActorContextTests
   com/example/backend/auth/controller/SessionEstablishmentTests
   com/example/backend/auth/controller/SessionUserLogContextFilterTests
   com/example/backend/auth/domain/AbsoluteSessionLifetimePolicyTests
@@ -136,11 +137,16 @@ FAST_GATE=(
   com/example/backend/observability/infrastructure/transaction/DeadlockRetryAdapterTests
   com/example/backend/paging/domain/PageRequestTests
   com/example/backend/patient/PatientSourceFixturesTests
+  com/example/backend/patient/application/PatientSearchServiceTests
   com/example/backend/patient/controller/PatientControllerTests
+  com/example/backend/patient/controller/PatientSearchControllerTests
   com/example/backend/patient/controller/PatientR5ConformanceTests
   com/example/backend/patient/domain/PatientIdTests
+  com/example/backend/patient/domain/PatientMatchTests
+  com/example/backend/patient/domain/PatientQueryTests
   com/example/backend/patient/domain/PatientTests
   com/example/backend/patient/infrastructure/http/PatientSourceAdapterContractTests
+  com/example/backend/patient/infrastructure/http/PatientSourceSearchAdapterTests
   com/example/backend/scheduling/InMemoryScheduledJobLockContractTests
   com/example/backend/scheduling/application/ScheduledJobRunServiceTests
   com/example/backend/scheduling/infrastructure/persistence/ScheduledJobLockAdapterTests

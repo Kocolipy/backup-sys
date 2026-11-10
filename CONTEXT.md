@@ -396,7 +396,7 @@ across instances.
 
 ### Patients
 
-Rules: [patient](docs/domain/patient.md). Decided in ADR 0014.
+Rules: [patient](docs/domain/patient.md). Decided in ADR 0014 and ADR 0018.
 
 **Patient**:
 The person care is about, as this service reads them from the Patient source: one
@@ -406,9 +406,10 @@ from the date of birth, never held.
 _Avoid_: patient record, demographics, subject (a Patient is no User)
 
 **Patient source**:
-The in-house system the backend reads every Patient from, by its EHR's FHIR id,
-on every read: assumed FHIR R4 and unauthorised until its contract is known, and
-mocked by WireMock for local runs and E2E. The SPA never reaches it.
+The in-house system the backend reads every Patient from, by its EHR's FHIR id
+or by a Patient search, on every read: assumed FHIR R4 and unauthorised until
+its contract is known, and mocked by WireMock for local runs and E2E. The SPA
+never reaches it.
 _Avoid_: patient service, patient API, FHIR server (the EHR's FHIR API is
 another system)
 
@@ -416,6 +417,21 @@ another system)
 Home's card showing the EHR context's patient — name, NRIC, gender, date of
 birth and age — or "No patient in context" when the tab holds no EHR context,
 its EHR context names no patient, or the Patient source holds none under its id. With no patient in context it reads nothing. The Patient source failing is the card's failed state, never "No patient in context".
+
+**Patient search**:
+Finding Patients by a name, of at least three characters, or by a full NRIC,
+typed into the Search page's one box: the Patient source's own search, passed
+through and read five to a page, newest Last visit first. Every search the
+source answers is audited as `PATIENT_SEARCH`, by its kind and count and never
+its query; a read of one Patient by id is not.
+_Avoid_: patient lookup, patient list, patient query (no search lists every
+Patient)
+
+**Last visit**:
+The date of a Patient's latest visit, as the Patient source records it on the
+Patient (its `last-visit` extension); a Patient may have none. Patient search
+orders by it, newest first.
+_Avoid_: last seen, last encounter, last admission
 
 ### Database
 

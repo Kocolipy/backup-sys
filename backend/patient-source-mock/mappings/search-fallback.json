@@ -1,0 +1,20 @@
+{
+  "name": "Search: any other search matches nothing",
+  "priority": 10,
+  "request": {
+    "method": "GET",
+    "urlPath": "/Patient"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/fhir+json"
+    },
+    "jsonBody": {
+      "resourceType": "Bundle",
+      "id": "searchset",
+      "type": "searchset",
+      "total": 0
+    }
+  }
+}
