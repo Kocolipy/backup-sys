@@ -7,5 +7,8 @@
 /** The `guest` development fixture's session, which the `user` project replays. */
 export const USER_SESSION = "test/e2e/.auth/user.json";
 
+/** The `mo1` Medical Officer fixture's session, which the `medical-officer` project replays. */
+export const MEDICAL_OFFICER_SESSION = "test/e2e/.auth/medical-officer.json";
+
 /** The seeded Admin's session, which the `admin` project replays. */
 export const ADMIN_SESSION = "test/e2e/.auth/admin.json";

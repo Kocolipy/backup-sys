@@ -44,10 +44,11 @@ test.describe("Home", () => {
     });
   }
 
-  test("sends a signed-in visit to login on to Home", async ({ page }) => {
+  // The Superuser holds patient:read, so its landing page is Patient Search.
+  test("sends a signed-in Superuser's visit to login on to Patient Search", async ({ page }) => {
     await page.goto("/login");
 
-    await expect(page.getByRole("heading", { name: "Profile" })).toBeVisible();
-    await expect(page).toHaveURL("/");
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Patient Search");
+    await expect(page).toHaveURL("/search");
   });
 });

@@ -1,7 +1,7 @@
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Route, Routes } from "react-router-dom";
 
 import { AuthProvider } from "@/auth/auth-context";
-import { GuestRoute, ProtectedRoute } from "@/auth/route-guards";
+import { GuestRoute, LandingRoute, ProtectedRoute } from "@/auth/route-guards";
 import { LOGIN_PATH } from "@/auth/session-route";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -61,7 +61,7 @@ export function App() {
                   />
                 ))}
               </Route>
-              <Route path="*" element={<Navigate replace to="/" />} />
+              <Route path="*" element={<LandingRoute />} />
             </Routes>
           </AuthProvider>
         </BrowserRouter>

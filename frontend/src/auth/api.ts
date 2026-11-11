@@ -31,8 +31,8 @@ export interface AuthUser {
   id: string;
   /**
    * What the session may do, as the backend issued it at sign-in: the union of
-   * the baseline and the Permissions its direct Groups carry — for a Superuser,
-   * every delegatable one. Empty while
+   * the Permissions its direct Groups carry — for a Superuser, every
+   * delegatable one, `patient:read` among them. Empty for a User in no Group, and while
    * `passwordChangeRequired` is set. The SPA decides what to SHOW from this;
    * the backend alone decides what is allowed.
    */

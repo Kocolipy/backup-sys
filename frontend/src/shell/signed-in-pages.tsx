@@ -3,7 +3,7 @@ import { IdCard, KeyRound, ScrollText, Search as SearchIcon, Settings, Users } f
 import type { ReactNode } from "react";
 
 import type { Permission } from "@/auth/api";
-import { CREDENTIAL_CHANGE_PATH, DEFAULT_DESTINATION } from "@/auth/session-route";
+import { CREDENTIAL_CHANGE_PATH, HOME_PATH, PATIENT_SEARCH_PAGE_PATH } from "@/auth/session-route";
 import { Accounts } from "@/pages/accounts/accounts";
 import { ADMINISTRATION_PERMISSIONS } from "@/pages/accounts/accounts-api";
 import { Audit } from "@/pages/audit/audit";
@@ -11,6 +11,7 @@ import { AUDIT_EVENTS } from "@/pages/audit/audit-api";
 import { ChangePassword } from "@/pages/change-password/change-password";
 import { Home } from "@/pages/home/home";
 import { Search } from "@/pages/search/search";
+import { PATIENT_SEARCH } from "@/pages/search/search-api";
 
 /** A collapsible group of links in the navigation sidebar. */
 export type SidebarGroupName = "Admin";
@@ -18,11 +19,12 @@ export type SidebarGroupName = "Admin";
 /** A signed-in page, and what the navigation sidebar reads to link it. */
 export interface SignedInPage {
   /**
-   * The back link, offered unless the session is confined to the password
+   * The back link's label: a link to the session's landing page
+   * (`landingPath`), offered unless the session is confined to the password
    * change. Only the password change has one: every other page is a sidebar
    * link away from the rest.
    */
-  back?: { label: string; to: string };
+  backLabel?: string;
   /** Centers the page vertically, for a page with little content. */
   centered?: boolean;
   element: ReactNode;
@@ -71,7 +73,7 @@ const PAGES_BEYOND_HOME: readonly SignedInPage[] = [
     titleHidden: true,
   },
   {
-    back: { label: "Back", to: DEFAULT_DESTINATION },
+    backLabel: "Back",
     centered: true,
     element: <ChangePassword />,
     icon: KeyRound,
@@ -81,14 +83,16 @@ const PAGES_BEYOND_HOME: readonly SignedInPage[] = [
 ];
 
 /**
- * The landing page, and what the shell falls back to for a path it does not
- * know. Its title is hidden: the patient banner heads the page.
+ * Home: the landing page of a session without `patient:read`, and what the
+ * shell falls back to for a path it does not know. Unguarded, so every
+ * signed-in session may open it. Its title is hidden: the patient banner
+ * heads the page.
  */
 export const HOME_PAGE: SignedInPage = {
   element: <Home />,
   homeLink: "Profile",
   icon: IdCard,
-  path: DEFAULT_DESTINATION,
+  path: HOME_PATH,
   title: "Profile",
   titleHidden: true,
 };
@@ -108,15 +112,18 @@ export const SETTINGS_PAGE: SignedInPage = {
 };
 
 /**
- * Patient Search, first in the sidebar for every signed-in session: the
- * search reads with `patient:read`, a baseline Permission, so no guard keeps
- * any signed-in User from it. Its title heads the page, with no subtitle.
+ * Patient Search: the landing page of a session holding `patient:read`, the
+ * Permission its search reads with, and first in the sidebar for such a
+ * session. Guarded by that Permission, so a session without it is routed to
+ * its landing page and offered no link. Its title heads the page, with no
+ * subtitle.
  */
 const SEARCH_PAGE: SignedInPage = {
   element: <Search />,
   homeLink: "Search",
   icon: SearchIcon,
-  path: "/search",
+  path: PATIENT_SEARCH_PAGE_PATH,
+  permissions: [PATIENT_SEARCH.permission],
   title: "Patient Search",
 };
 

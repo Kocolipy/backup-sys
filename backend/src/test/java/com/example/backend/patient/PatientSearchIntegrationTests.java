@@ -5,9 +5,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.backend.ContainerTestConfiguration;
 import com.example.backend.ServerSession;
+import com.example.backend.TestMedicalOfficer;
 import com.example.backend.observability.EcsLogCapture;
-import com.example.backend.scim.domain.NormalizedUserName;
-import com.example.backend.scim.domain.ScimUserRepository;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
@@ -25,6 +24,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.micrometer.metrics.test.autoconfigure.AutoConfigureMetrics;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Import;
 import org.springframework.core.env.Environment;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -37,7 +37,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * id; and a log stream that never names the query or a match.
  *
  * <p>The rows are read from the trail's table, as the other audit recording tests read them; the
- * searcher is the seeded {@code test-user}, whose Patient searches no other suite makes.
+ * searcher is a Medical Officer of this suite's own, whose Patient searches no other suite makes.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Import(ContainerTestConfiguration.class)
@@ -61,22 +61,26 @@ class PatientSearchIntegrationTests {
     private JdbcTemplate jdbc;
 
     @Autowired
-    private ScimUserRepository users;
+    private ApplicationContext context;
 
     private EcsLogCapture logs;
+
+    /** The searcher: a Medical Officer of this suite's own, holding {@code patient:read}. */
+    private TestMedicalOfficer medicalOfficer;
 
     private UUID searcher;
 
     @BeforeEach
     void setUp() {
+        medicalOfficer = TestMedicalOfficer.create(context, "patient-searcher");
+        searcher = medicalOfficer.userId();
         logs = EcsLogCapture.attach(environment);
-        searcher = users.findByNormalizedUserName(NormalizedUserName.of("test-user"))
-                .orElseThrow().id();
     }
 
     @AfterEach
     void tearDown() {
         logs.close();
+        medicalOfficer.delete(jdbc);
     }
 
     private List<Map<String, Object>> searchesRecorded() {
@@ -184,7 +188,7 @@ class PatientSearchIntegrationTests {
     // ---- harness -------------------------------------------------------------------------
 
     private HttpClient signedIn() throws Exception {
-        return ServerSession.logIn(port, "test-user", "test-password");
+        return ServerSession.logIn(port, medicalOfficer.userName(), TestMedicalOfficer.PASSWORD);
     }
 
     private HttpRequest.Builder search(String q, int count) {

@@ -7,14 +7,28 @@
  */
 
 import type { Permission, SessionCheckFailure } from "./api";
-import { mayOpen, type PageRequirement } from "./permissions";
+import { holds, mayOpen, type PageRequirement } from "./permissions";
 import type { SessionEndReason, SignInReasonState } from "./sign-in-reason";
 
 /** The login route, which is also where an unauthenticated visitor is sent. */
 export const LOGIN_PATH = "/login";
 
-/** Home: where an authenticated visitor lands with no return destination recorded. */
-export const DEFAULT_DESTINATION = "/";
+/** Home: the landing page of a session that does not hold `patient:read`. */
+export const HOME_PATH = "/";
+
+/** Patient Search: the landing page of a session holding `patient:read`. */
+export const PATIENT_SEARCH_PAGE_PATH = "/search";
+
+/**
+ * The landing page: where the SPA sends an authenticated session with no
+ * return destination recorded — after login, off the login route, from a path
+ * with no route of its own, off a page its guard refuses, and back from the
+ * password change. Patient Search for a session holding `patient:read`, the
+ * Permission that page is guarded by; Home for every other session.
+ */
+export function landingPath(permissions: readonly Permission[] | undefined): string {
+  return holds({ permissions }, "patient:read") ? PATIENT_SEARCH_PAGE_PATH : HOME_PATH;
+}
 
 /**
  * The self-service password change: open to every authenticated visitor, and
@@ -23,11 +37,12 @@ export const DEFAULT_DESTINATION = "/";
 export const CREDENTIAL_CHANGE_PATH = "/change-password";
 
 /**
- * What a route requires of the current visitor: a guest, or what a signed-in
+ * What a route requires of the current visitor: a guest, what a signed-in
  * page requires — any authenticated session, or one holding at least one of
- * the named Permissions.
+ * the named Permissions — or, for a path with no route of its own, an
+ * authenticated session, which is sent on to its landing page.
  */
-export type SessionRequirement = "guest" | PageRequirement;
+export type SessionRequirement = "guest" | "landing" | PageRequirement;
 
 /**
  * State a redirect carries forward.
@@ -91,7 +106,7 @@ export function resolveSessionRoute({
     if (requires === "guest") return { kind: "render" };
     // A change, or the lockout a change ran into, ends the session for good,
     // so the page it was made from is no destination to replay: the next
-    // sign-in is no continuation of this one and lands on the default instead.
+    // sign-in is no continuation of this one and lands on its landing page instead.
     if (signInReason === "password-changed" || signInReason === "locked") {
       return { kind: "redirect", state: { reason: signInReason }, to: LOGIN_PATH };
     }
@@ -113,20 +128,23 @@ export function resolveSessionRoute({
       : { kind: "redirect", to: CREDENTIAL_CHANGE_PATH };
   }
 
-  if (requires === "guest") return { kind: "redirect", to: returnTo ?? DEFAULT_DESTINATION };
-  return authenticatedRoute(requires, permissions);
+  return authenticatedRoute(requires, permissions, returnTo);
 }
 
 /**
- * An unflagged, authenticated session on a protected route: any session renders
- * an authenticated one, and a Permission-guarded one renders for a session
- * holding any one of its Permissions. A page the session holds none of them for
- * is routed away to the default destination, never rendered empty.
+ * An unflagged, authenticated session: off a guest route to its return
+ * destination, or its landing page when none was recorded; from a path with no
+ * route of its own to its landing page. On a protected route, any session
+ * renders an authenticated one, and a Permission-guarded one renders for a
+ * session holding any one of its Permissions. A page the session holds none of
+ * them for is routed away to the session's landing page, never rendered empty.
  */
 function authenticatedRoute(
-  requires: PageRequirement,
+  requires: SessionRequirement,
   permissions: readonly Permission[] | undefined,
+  returnTo: string | undefined,
 ): SessionRoute {
-  if (mayOpen({ permissions }, requires)) return { kind: "render" };
-  return { kind: "redirect", to: DEFAULT_DESTINATION };
+  if (requires === "guest") return { kind: "redirect", to: returnTo ?? landingPath(permissions) };
+  if (requires !== "landing" && mayOpen({ permissions }, requires)) return { kind: "render" };
+  return { kind: "redirect", to: landingPath(permissions) };
 }

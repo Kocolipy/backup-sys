@@ -24,6 +24,12 @@ const GUEST: Answers = { [ME]: bare(401) };
 /** An unflagged signed-in session holding no Permission. */
 const SIGNED_IN: Answers = { [ME]: json(testUser()) };
 
+/** A Medical Officer's session: unflagged, holding `patient:read` alone. */
+const MEDICAL_OFFICER = testUser({ permissions: ["patient:read"], username: "mo1" });
+
+/** Patient Search, the landing page of a session holding `patient:read`. */
+const patientSearch = () => screen.findByRole("heading", { name: "Patient Search" });
+
 /** Renders the whole app at `path` over a backend answering `answers`. */
 function renderApp(answers: Answers, path = "/") {
   window.history.replaceState(null, "", path);
@@ -132,6 +138,54 @@ describe("App", () => {
 
     expect(await screen.findByRole("heading", { name: "Profile" })).toBeInTheDocument();
     expect(window.location.pathname).toBe("/");
+  });
+
+  it("redirects a User holding no patient:read away from Patient Search to Home", async () => {
+    renderApp(SIGNED_IN, "/search");
+
+    expect(await screen.findByRole("heading", { name: "Profile" })).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/");
+  });
+
+  it("renders Patient Search for a session holding patient:read", async () => {
+    renderApp({ [ME]: json(MEDICAL_OFFICER) }, "/search");
+
+    expect(await patientSearch()).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/search");
+  });
+
+  it.each(["/no-such-page", "/login", "/accounts"])(
+    "lands a session holding patient:read on Patient Search from %s",
+    async (path) => {
+      renderApp({ [ME]: json(MEDICAL_OFFICER) }, path);
+
+      expect(await patientSearch()).toBeInTheDocument();
+      expect(window.location.pathname).toBe("/search");
+    },
+  );
+
+  it("signs a session holding patient:read in to Patient Search", async () => {
+    renderApp({ ...GUEST, [LOGIN]: json(MEDICAL_OFFICER) }, "/login");
+    const user = userEvent.setup();
+
+    await user.type(await screen.findByLabelText("Username"), "mo1");
+    await user.type(screen.getByLabelText("Password"), "correct-password");
+    await user.click(screen.getByRole("button", { name: "Sign in" }));
+
+    expect(await patientSearch()).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/search");
+  });
+
+  it("signs a session holding patient:read in to the return destination it recorded", async () => {
+    renderApp({ ...GUEST, [LOGIN]: json(MEDICAL_OFFICER) }, "/change-password");
+    const user = userEvent.setup();
+
+    await user.type(await screen.findByLabelText("Username"), "mo1");
+    await user.type(screen.getByLabelText("Password"), "correct-password");
+    await user.click(screen.getByRole("button", { name: "Sign in" }));
+
+    expect(await screen.findByRole("heading", { name: "Change password" })).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/change-password");
   });
 
   it("renders the audit trail for a session holding audit:read", async () => {
@@ -244,7 +298,7 @@ describe("App with the change-required flag", () => {
     expect(window.location.pathname).toBe("/login");
   });
 
-  it("returns to login on a successful change, then signs in to the default destination", async () => {
+  it("returns to login on a successful change, then signs in to its landing page, Home", async () => {
     const [current, next] = ["provisioned-1", "self-chosen-passphrase"];
     const { requests } = renderApp(
       { ...CONFINED, [CHANGE]: bare(204), [LOGIN]: json(testUser()) },

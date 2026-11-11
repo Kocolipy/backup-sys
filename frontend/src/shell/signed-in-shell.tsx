@@ -2,6 +2,7 @@ import { Link, matchPath, Outlet, useLocation } from "react-router-dom";
 
 import { useAuth } from "@/auth/auth-context-value";
 import { PageStatusScope, useStatusReporter } from "@/auth/page-status";
+import { landingPath } from "@/auth/session-route";
 import { useSessionAction } from "@/auth/use-session-action";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
@@ -82,13 +83,22 @@ function SignedInLayout({ error, pathname }: { error: string | null; pathname: s
 
           <Outlet />
 
-          {page.back && !confined ? (
-            <Link className="text-sm font-medium underline underline-offset-4" to={page.back.to}>
-              {page.back.label}
-            </Link>
-          ) : null}
+          {page.backLabel && !confined ? <BackLink label={page.backLabel} /> : null}
         </SidebarInset>
       </div>
     </SidebarProvider>
+  );
+}
+
+/** A page's back link: to the session's landing page (`landingPath`). */
+function BackLink({ label }: { label: string }) {
+  const { user } = useAuth();
+  return (
+    <Link
+      className="text-sm font-medium underline underline-offset-4"
+      to={landingPath(user?.permissions)}
+    >
+      {label}
+    </Link>
   );
 }

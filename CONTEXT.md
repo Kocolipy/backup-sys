@@ -52,9 +52,17 @@ whatever reason; the SPA returns its holder to login saying so.
 The protected path a Guest asked for before being sent to sign in, replayed once
 they have.
 
+**Landing page**:
+Where the SPA sends a signed-in User with no Return destination — after signing
+in, off the login page, from a path with no page, off a page its guard refuses,
+and back from the password change: Patient Search (`/search`) for a session
+holding `patient:read`, Home for every other. A Return destination still wins,
+and a confined session is still held to the password change.
+_Avoid_: default destination, start page
+
 **Home**:
-The signed-in landing page at `/`: where a User arrives after signing in with no
-Return destination. The login page is `/login`.
+The signed-in page at `/`, open to every signed-in session: the Landing page of
+a session without `patient:read`. The login page is `/login`.
 
 **Shell**:
 The layout every signed-in page renders inside — who is signed in, the page
@@ -237,8 +245,10 @@ _Avoid_: authority (the Superuser is the session authority, and Spring's
 
 **Delegatable Permission**:
 A Permission a Group may carry: `user:read`, `account:unlock`, `group:read`,
-`audit:read`, `ops:read` and `connector:read`. `account:unlock` is the helpdesk
-Permission: Unlock, which has no effect on a User that is not locked.
+`audit:read`, `ops:read`, `connector:read` and `patient:read`. `account:unlock`
+is the helpdesk Permission: Unlock, which has no effect on a User that is not
+locked. `patient:read` reads a Patient and runs a Patient search; a User holds
+it only through a Group that carries it, or as the Superuser.
 
 **Token-grantable Permission**:
 A Permission a connector token may carry: `user:read`, `user:write`, `group:read`
@@ -258,8 +268,9 @@ _Avoid_: scope, `scim.read`, `scim.write`
 
 **Baseline access**:
 What every active User holds whatever its Groups carry, without a required
-password change: self-service, spelled `ROLE_USER` in the session, and the
-baseline Permission `patient:read`, which no Group carries.
+password change: self-service, spelled `ROLE_USER` in the session, and no
+Permission. A User in no Group holds baseline access alone, so it reads no
+Patient.
 
 **Development fixtures**:
 The development Groups and their Users and — under the `local` profile alone —
@@ -402,8 +413,8 @@ Rules: [patient](docs/domain/patient.md). Decided in ADR 0014 and ADR 0018.
 **Patient**:
 The person care is about, as this service reads them from the Patient source: one
 NRIC, an official name whose text is authoritative, a gender and a date of birth,
-served as a FHIR R5 `Patient` resource at `GET /api/patient/{id}`. Age is derived
-from the date of birth, never held.
+served as a FHIR R5 `Patient` resource at `GET /api/patient/{id}` to a session
+holding `patient:read`. Age is derived from the date of birth, never held.
 _Avoid_: patient record, demographics, subject (a Patient is no User)
 
 **Patient source**:
@@ -417,11 +428,12 @@ another system)
 **Patient card**:
 Home's card showing the EHR context's patient — name, NRIC, gender, date of
 birth and age — or "No patient in context" when the tab holds no EHR context,
-its EHR context names no patient, or the Patient source holds none under its id. With no patient in context it reads nothing. The Patient source failing is the card's failed state, never "No patient in context".
+its EHR context names no patient, or the Patient source holds none under its id. With no patient in context it reads nothing, and for a session without `patient:read` it reads nothing and says the account has no access to patients. The Patient source failing is the card's failed state, never "No patient in context".
 
 **Patient search**:
 Finding Patients by a name, of at least three characters, or by a full NRIC,
-typed into the Search page's one box: the Patient source's own search, passed
+typed into the Search page's one box — a page only a session holding
+`patient:read` opens or is linked to: the Patient source's own search, passed
 through and read five to a page, newest Last visit first unless sorted by Date
 of Birth or Last visit, and narrowed by gender and by a date range for each.
 The source sorts and filters; the service does neither. Every search the

@@ -155,20 +155,21 @@ public class ScimSeedService {
     }
 
     /**
-     * The development fixtures: one Group per fixture, under the fixture's fixed id, with one
-     * User in it, so local runs and the e2e suite have a User per Group to sign in as. What each
-     * Group confers is {@link #seedGroupPermissionFixtures}'.
+     * The development fixtures: one Group per fixture, under the fixture's fixed id, with each of
+     * the fixture's members in it, so local runs and the e2e suite have a User per Group to sign in
+     * as — or several, where parallel e2e projects each sign in as their own. What each Group
+     * confers is {@link #seedGroupPermissionFixtures}'.
      *
      * <p>Called only when {@code app.dev-fixtures.enabled} is set. Idempotent like the rest of
      * seeding, and like the ordinary identity it never overwrites: a fixture User that exists keeps
      * its password, and a fixture Group that exists keeps whatever membership it has been given
      * since. Nothing is audited — these are development conveniences, not the recovery path.
      *
-     * <p>The baseline member is a User in no Group, so it holds the baseline Permissions and
-     * nothing else: the identity the non-administrative paths are exercised as. Like the others it
-     * is created when absent and otherwise left alone.
+     * <p>The baseline member is a User in no Group, so it holds baseline access and no Permission:
+     * the identity a session without patient access is exercised as. Like the others it is
+     * created when absent and otherwise left alone.
      *
-     * @param fixtures       the Groups to create and the User each contains
+     * @param fixtures       the Groups to create and the Users each contains
      * @param baselineMember the userName of a User in no Group; {@code null} for none
      * @param password       every fixture User's password; refused when blank, because this
      *                       setting has no published fallback and an empty one would be no
@@ -183,13 +184,13 @@ public class ScimSeedService {
             findOrCreate(baselineMember, password, now);
         }
         for (DevFixture fixture : fixtures) {
-            ScimUser member = findOrCreate(fixture.member(), password, now);
+            List<ScimGroupMember> members = fixture.members().stream()
+                    .map(member -> ScimGroupMember.reference(
+                            findOrCreate(member, password, now).id()))
+                    .toList();
             if (groups.findById(fixture.groupId()).isEmpty()) {
                 groups.create(ScimGroup.created(
-                        fixture.groupId(),
-                        fixture.displayName(),
-                        List.of(ScimGroupMember.reference(member.id())),
-                        now));
+                        fixture.groupId(), fixture.displayName(), members, now));
             }
         }
     }
@@ -461,9 +462,13 @@ public class ScimSeedService {
 
     /**
      * One development fixture: a Group under a fixed stable id — the id the development Group
-     * Permissions name — and the userName of the one User seeded into it.
+     * Permissions name — and the userNames of the Users seeded into it, in order.
      */
-    public record DevFixture(UUID groupId, String displayName, String member) {
+    public record DevFixture(UUID groupId, String displayName, List<String> members) {
+
+        public DevFixture {
+            members = List.copyOf(members);
+        }
     }
 
     /**

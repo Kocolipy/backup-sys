@@ -165,7 +165,7 @@ class AuthControllerTests {
 
     /**
      * A member of the Superuser Group signs in holding baseline access and every Permission:
-     * authority beyond the baseline is Permissions alone (ADR 0015).
+     * authority beyond baseline access is Permissions alone (ADR 0015).
      */
     @Test
     void secondaryUserCanLogIn() {

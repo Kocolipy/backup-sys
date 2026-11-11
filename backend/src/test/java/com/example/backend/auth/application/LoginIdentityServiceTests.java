@@ -201,7 +201,7 @@ class LoginIdentityServiceTests {
                 ReservedResourceName.ADMIN_GROUP);
         groups.create(ScimIdentities.group("Admins", ada));
 
-        assertThat(authoritiesOf("ada")).containsExactly(BASELINE);
+        assertThat(authoritiesOf("ada")).containsExactly(BASELINE_ACCESS);
     }
 
     /**
@@ -221,11 +221,11 @@ class LoginIdentityServiceTests {
                 ScimGroup.created(HELPDESK, "Helpdesk", List.of(), ScimIdentities.NOW));
 
         UserDetails issuedBeforeTheGrant = issuedTo("ada");
-        assertThat(authoritiesOf(issuedBeforeTheGrant)).containsExactly(BASELINE);
+        assertThat(authoritiesOf(issuedBeforeTheGrant)).containsExactly(BASELINE_ACCESS);
 
         addMember(helpdesk, ada);
 
-        assertThat(authoritiesOf(issuedBeforeTheGrant)).containsExactly(BASELINE);
+        assertThat(authoritiesOf(issuedBeforeTheGrant)).containsExactly(BASELINE_ACCESS);
         assertThat(authoritiesOf(issuedTo("ada"))).containsExactly(HELPDESK_AUTHORITIES);
     }
 
@@ -245,7 +245,7 @@ class LoginIdentityServiceTests {
 
         assertThat(authoritiesOf(issuedWhileHelpdesk))
                 .containsExactly(HELPDESK_AUTHORITIES);
-        assertThat(authoritiesOf(issuedTo("ada"))).containsExactly(BASELINE);
+        assertThat(authoritiesOf(issuedTo("ada"))).containsExactly(BASELINE_ACCESS);
     }
 
     /** An inactive member of a Group is still answered with its Permissions; the Login refuses it on its standing. */
@@ -262,8 +262,8 @@ class LoginIdentityServiceTests {
 
     /**
      * Baseline access is what being an active identity means: a User whose Groups confer nothing
-     * holds {@code ROLE_USER} and the baseline Permissions, and nothing else — however it came to
-     * hold no more.
+     * holds {@code ROLE_USER} and no Permission — {@code patient:read} included — however it came
+     * to hold no more.
      */
     @ParameterizedTest(name = "{0}")
     @ValueSource(strings = {
@@ -271,7 +271,7 @@ class LoginIdentityServiceTests {
             "with no Admin group seeded",
             "in a Group carrying nothing",
             "outside the only Group carrying Permissions"})
-    void aUserWhoseGroupsConferNothingHoldsOnlyTheBaseline(String arrangement) {
+    void aUserWhoseGroupsConferNothingHoldsBaselineAccessAlone(String arrangement) {
         ScimUser ada = users.given(ScimIdentities.user("ada"));
         switch (arrangement) {
             case "in no Group beside an Admin group" -> givenAdminGroup();
@@ -283,7 +283,7 @@ class LoginIdentityServiceTests {
             default -> throw new IllegalArgumentException(arrangement);
         }
 
-        assertThat(heldBy(mapped, "ada")).containsExactly(BASELINE);
+        assertThat(heldBy(mapped, "ada")).containsExactly(BASELINE_ACCESS);
     }
 
     /**
@@ -413,15 +413,18 @@ class LoginIdentityServiceTests {
             "00000000-0000-4000-8000-0000000000b1");
     private static final UUID AUDITORS = UUID.fromString(
             "00000000-0000-4000-8000-0000000000b2");
+    private static final UUID MEDICAL_OFFICERS = UUID.fromString(
+            "00000000-0000-4000-8000-0000000000b4");
 
     /**
-     * Two Groups carrying Permissions, as their stored rows say, over the in-memory directory: the
-     * Admin group is the one holding the reservation marker, and carries none.
+     * Three Groups carrying Permissions, as their stored rows say, over the in-memory directory:
+     * the Admin group is the one holding the reservation marker, and carries none.
      */
     private final LoginIdentityService mapped = new LoginIdentityService(
             users, groups, InMemoryGroupPermissions.over(groups)
                     .carrying(HELPDESK, Permission.ACCOUNT_UNLOCK, Permission.USER_READ)
-                    .carrying(AUDITORS, Permission.AUDIT_READ, Permission.USER_READ));
+                    .carrying(AUDITORS, Permission.AUDIT_READ, Permission.USER_READ)
+                    .carrying(MEDICAL_OFFICERS, Permission.PATIENT_READ));
 
     /**
      * The union of what every Group the User is directly in carries — each Permission once,
@@ -437,8 +440,7 @@ class LoginIdentityServiceTests {
         groups.given(ScimIdentities.group("Carries nothing", ada));
 
         assertThat(heldBy(mapped, "ada"))
-                .containsExactly("ROLE_USER", "account:unlock", "audit:read", "patient:read",
-                        "user:read");
+                .containsExactly("ROLE_USER", "account:unlock", "audit:read", "user:read");
     }
 
     /** One Group: exactly what it carries, and another Group's Permissions are not leaked in. */
@@ -449,7 +451,17 @@ class LoginIdentityServiceTests {
                 List.of(ScimGroupMember.reference(ada.id())), ScimIdentities.NOW));
 
         assertThat(heldBy(mapped, "ada"))
-                .containsExactly("ROLE_USER", "audit:read", "patient:read", "user:read");
+                .containsExactly("ROLE_USER", "audit:read", "user:read");
+    }
+
+    /** Reading a Patient is a Group's to confer: a member of a Group carrying it holds it. */
+    @Test
+    void aMemberOfAGroupCarryingPatientReadHoldsIt() {
+        ScimUser ada = users.given(ScimIdentities.user("ada"));
+        groups.given(ScimGroup.created(MEDICAL_OFFICERS, "Medical Officer",
+                List.of(ScimGroupMember.reference(ada.id())), ScimIdentities.NOW));
+
+        assertThat(heldBy(mapped, "ada")).containsExactly("ROLE_USER", "patient:read");
     }
 
     /**
@@ -494,7 +506,7 @@ class LoginIdentityServiceTests {
         groups.given(ScimGroup.created(TestGroupPermissions.SUPERUSER_GROUP_ID, "Impostors",
                 List.of(ScimGroupMember.reference(ada.id())), ScimIdentities.NOW));
 
-        assertThat(heldBy(mapped, "ada")).containsExactly(BASELINE);
+        assertThat(heldBy(mapped, "ada")).containsExactly(BASELINE_ACCESS);
     }
 
     /**
@@ -525,7 +537,7 @@ class LoginIdentityServiceTests {
         givenSuperuserGroup();
         groups.given(ScimIdentities.group("Engineering", ada));
 
-        assertThat(heldBy(mapped, "ada")).containsExactly(BASELINE);
+        assertThat(heldBy(mapped, "ada")).containsExactly(BASELINE_ACCESS);
     }
 
     /**
@@ -558,15 +570,14 @@ class LoginIdentityServiceTests {
     }
 
     /**
-     * What every active User holds whose Groups carry nothing: {@code ROLE_USER} and the baseline
-     * Permissions, sorted by name as Spring Security's {@code User} keeps them.
+     * What every active User holds whose Groups carry nothing: baseline access, {@code ROLE_USER},
+     * and no Permission.
      */
-    private static final String[] BASELINE =
-            {"ROLE_USER", "patient:read"};
+    private static final String[] BASELINE_ACCESS = {"ROLE_USER"};
 
-    /** The baseline beside the Helpdesk Group's {@code user:read} and {@code account:unlock}, sorted. */
+    /** Baseline access beside the Helpdesk Group's {@code user:read} and {@code account:unlock}, sorted. */
     private static final String[] HELPDESK_AUTHORITIES =
-            {"ROLE_USER", "account:unlock", "patient:read", "user:read"};
+            {"ROLE_USER", "account:unlock", "user:read"};
 
     private List<String> authoritiesOf(String userName) {
         return heldBy(service, userName);

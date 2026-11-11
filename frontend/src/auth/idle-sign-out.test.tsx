@@ -21,7 +21,7 @@ import { AuthProvider } from "./auth-context";
 import { AUTH_REQUESTS, testUser } from "./auth-context.testHelpers";
 import { useAuth } from "./auth-context-value";
 import { GuestRoute, ProtectedRoute } from "./route-guards";
-import { DEFAULT_DESTINATION, LOGIN_PATH } from "./session-route";
+import { HOME_PATH, LOGIN_PATH } from "./session-route";
 import { useSessionRequest } from "./use-session-request";
 
 // The real provider, guards and Login page over the backend layer, under fake
@@ -209,7 +209,7 @@ describe("IdleSignOut", () => {
                 }
               />
               <Route
-                path={DEFAULT_DESTINATION}
+                path={HOME_PATH}
                 element={
                   <ProtectedRoute>
                     <p>Home page</p>
