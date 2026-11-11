@@ -250,12 +250,6 @@ class PatientSourceAdapter implements PatientStore {
     }
 
     /**
-     * The JDK client every call is made on: {@code connectTimeout} to connect, and no redirect
-     * followed, since a redirect away from the configured source is not its answer. Following
-     * none is the JDK builder's own default, {@link HttpClient.Redirect#NEVER}, so the builder is
-     * left at it: a redirect reaches {@link #findById} as the {@code 3xx} it is, a fault.
-     */
-    /**
      * The read timeout {@code setting} names, in either of Boot's duration styles ({@code 1500ms},
      * {@code PT1.5S}), or {@link #DEFAULT_READ_TIMEOUT} when it is unset or blank. Anything else
      * but a positive duration fails startup, naming the variable, as a bad base URL does.
@@ -277,6 +271,12 @@ class PatientSourceAdapter implements PatientStore {
         return timeout;
     }
 
+    /**
+     * The JDK client every call is made on: {@code connectTimeout} to connect, and no redirect
+     * followed, since a redirect away from the configured source is not its answer. Following
+     * none is the JDK builder's own default, {@link HttpClient.Redirect#NEVER}, so the builder is
+     * left at it: a redirect reaches {@link #findById} as the {@code 3xx} it is, a fault.
+     */
     static HttpClient httpClient(Duration connectTimeout) {
         return HttpClient.newBuilder()
                 .connectTimeout(connectTimeout)
