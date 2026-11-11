@@ -2,7 +2,14 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
+import { ehrContext } from "@/auth/ehr-context";
 import { bare, deferred, holding, json, type Answers } from "@/auth/session-adapter.testHelpers";
+import {
+  patientReads,
+  TAN_WEI_MING,
+  TAN_WEI_MING_READ,
+  withPatientInContext,
+} from "@/pages/home/patient.testHelpers";
 import { renderSignedIn } from "@/shell/signed-in-shell.testHelpers";
 
 /** Any signed-in User: `patient:read` is a baseline Permission. */
@@ -733,5 +740,134 @@ describe("Search, filtered", () => {
     expect(lastSearchSent(requests)).toBe(
       "/api/patient-search?q=tan&gender=male&sortBy=birthDate&sortOrder=ascending&startIndex=1&count=5",
     );
+  });
+});
+
+/** Tan Wei Ming as a search finds him: the row keeps the id his read is sent for. */
+const TAN_WEI_MING_MATCH = {
+  id: TAN_WEI_MING.id,
+  name: "Tan Wei Ming",
+  nric: "S1234567A",
+  gender: "male",
+  birthDate: "1985-03-12",
+  lastVisit: "2026-10-15",
+};
+
+/** Tan Hui Min's read, and the R5 `Patient` the backend serves for it. */
+const TAN_HUI_MIN_READ = "GET /api/patient/dev-patient-05";
+
+const TAN_HUI_MIN_PATIENT = {
+  birthDate: "1985-02-04",
+  gender: "female",
+  id: "dev-patient-05",
+  identifier: [{ system: "https://fhir.synapxe.sg/NamingSystem/nric", value: "S8512345A" }],
+  name: [{ family: "Tan", given: ["Hui", "Min"], text: "Tan Hui Min", use: "official" }],
+  resourceType: "Patient",
+};
+
+/** The search for `tan` finding Tan Wei Ming and Tan Hui Min, and each one's read. */
+const SELECTABLE: Answers = {
+  [TAN_PAGE_1]: page([TAN_WEI_MING_MATCH, TAN_HUI_MIN], 1, 2),
+  [TAN_WEI_MING_READ]: json(TAN_WEI_MING),
+  [TAN_HUI_MIN_READ]: json(TAN_HUI_MIN_PATIENT),
+};
+
+/** The result row naming `name`, once the results are in. */
+async function resultRow(name: string) {
+  const table = await screen.findByRole("table");
+  return within(table)
+    .getAllByRole("row")
+    .find((row) => row.textContent?.startsWith(name))!;
+}
+
+describe("Search, selecting a result", () => {
+  it("puts the Patient of a clicked row into the EHR context", async () => {
+    await renderSearch(SELECTABLE);
+    await search("tan");
+
+    await userEvent.click(within(await resultRow("Tan Hui Min")).getByText("S8512345A"));
+
+    expect(ehrContext()).toEqual({ patient: "dev-patient-05" });
+  });
+
+  it("goes to Home, whose Patient card and top bar name the Patient selected", async () => {
+    await renderSearch(SELECTABLE);
+    await search("tan");
+
+    await userEvent.click(within(await resultRow("Tan Hui Min")).getByText("S8512345A"));
+
+    const card = await screen.findByRole("region", { name: "Patient" });
+    expect({
+      card: [
+        within(card).getByRole("heading").textContent,
+        within(card).getByText("S8512345A").tagName,
+      ],
+      title: screen.getByRole("heading", { level: 1 }).textContent,
+      topBar: screen.getByRole("region", { name: "Patient in context" }).textContent,
+    }).toEqual({
+      card: ["Tan Hui Min", "DD"],
+      title: "Profile",
+      topBar: "Tan Hui MinS8512345A",
+    });
+  });
+
+  it.each(["{Enter}", " "])(
+    "selects from the keyboard, pressing %s on the Patient Name button",
+    async (key) => {
+      await renderSearch(SELECTABLE);
+      await search("tan");
+      within(await resultRow("Tan Hui Min"))
+        .getByRole("button", { name: "Tan Hui Min" })
+        .focus();
+
+      await userEvent.keyboard(key);
+
+      await screen.findByRole("region", { name: "Patient" });
+      expect({
+        context: ehrContext(),
+        title: screen.getByRole("heading", { level: 1 }).textContent,
+      }).toEqual({ context: { patient: "dev-patient-05" }, title: "Profile" });
+    },
+  );
+
+  it("replaces the patient already in context, with no confirmation", async () => {
+    withPatientInContext(TAN_WEI_MING.id);
+    await renderSearch(SELECTABLE);
+    await search("tan");
+
+    await userEvent.click(within(await resultRow("Tan Hui Min")).getByText("S8512345A"));
+
+    await screen.findByRole("region", { name: "Patient" });
+    expect({
+      context: ehrContext(),
+      topBar: screen.getByRole("region", { name: "Patient in context" }).textContent,
+    }).toEqual({ context: { patient: "dev-patient-05" }, topBar: "Tan Hui MinS8512345A" });
+  });
+
+  it("reads the patient already in context once, when that Patient is selected again", async () => {
+    withPatientInContext(TAN_WEI_MING.id);
+    const { requests } = await renderSearch(SELECTABLE);
+    await screen.findByRole("region", { name: "Patient in context" });
+    await search("tan");
+
+    await userEvent.click(within(await resultRow("Tan Wei Ming")).getByText("S1234567A"));
+    await screen.findByRole("region", { name: "Patient" });
+
+    expect(patientReads(requests())).toEqual([TAN_WEI_MING_READ]);
+  });
+
+  it("shows only the search box on coming back to Search after a selection", async () => {
+    await renderSearch(SELECTABLE);
+    await search("tan");
+    await userEvent.click(within(await resultRow("Tan Hui Min")).getByText("S8512345A"));
+    await screen.findByRole("region", { name: "Patient" });
+
+    await userEvent.click(screen.getByRole("link", { name: "Search" }));
+
+    await screen.findByRole("heading", { level: 1, name: "Patient Search" });
+    expect({
+      box: (box() as HTMLInputElement).value,
+      results: screen.queryByRole("heading", { level: 2, name: "Search Results" }),
+    }).toEqual({ box: "", results: null });
   });
 });

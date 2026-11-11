@@ -88,7 +88,7 @@ straight into `lib/http`) but may never point back up.
 - `ehr-context.ts` — the tab's **EHR context**, the patient the tab has
   in context, as a subscribable store under one `sessionStorage` key:
   `setEhrContext()` replaces it, holding the patient to FHIR's id grammar, and
-  nothing in the SPA calls it yet; `ehrContext()` reads it back, decoded rather
+  the Search page calls it when a result is selected; `ehrContext()` reads it back, decoded rather
   than trusted, the same value until it changes, and `null` when the tab holds
   none; `subscribeEhrContext()` / `useEhrContext()` re-render a reader when it
   changes; and `clearEhrContext()` forgets it, on every session end and a

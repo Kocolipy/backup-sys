@@ -1,5 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
+import { ADMIN_SESSION, USER_SESSION } from "./test/e2e/sessions";
+
 /**
  * The projects only `make integration-test` declares (frontend/AGENTS.md), each
  * when that run's environment names what it needs, so a bare `npm run
@@ -23,7 +25,7 @@ const adminSessionExtras = [
           use: {
             ...devices["Desktop Chrome"],
             baseURL: process.env.E2E_PACKAGED_BASE_URL,
-            storageState: "test/e2e/.auth/admin.json",
+            storageState: ADMIN_SESSION,
           },
         },
       ]
@@ -31,15 +33,16 @@ const adminSessionExtras = [
 ];
 
 /**
- * The projects whose specs create and delete connectors of their own: `admin`.
- * A spec asserting that Accounts loads with no alert runs after them, not
+ * The projects whose specs create and delete connectors of their own: `user`,
+ * whose Patient search spec provisions a User to sign out and back in, and
+ * `admin`. A spec asserting that Accounts loads with no alert runs after them, not
  * beside them — Accounts reads each listed connector's tokens, and a connector
  * another worker deletes between the listing and that read fails it with an
  * alert. A function declaration, so `packaged`, declared above it, can name
  * them too.
  */
 function connectorWriters(): string[] {
-  return ["admin"];
+  return ["user", "admin"];
 }
 
 export default defineConfig({
@@ -93,7 +96,7 @@ export default defineConfig({
       dependencies: ["setup"],
       use: {
         ...devices["Desktop Chrome"],
-        storageState: "test/e2e/.auth/user.json",
+        storageState: USER_SESSION,
       },
     },
     {
@@ -108,7 +111,7 @@ export default defineConfig({
       dependencies: ["setup", "user"],
       use: {
         ...devices["Desktop Chrome"],
-        storageState: "test/e2e/.auth/admin.json",
+        storageState: ADMIN_SESSION,
       },
     },
     // Every signed-in route loading with an empty console and no alert. After
@@ -120,7 +123,7 @@ export default defineConfig({
       dependencies: ["setup", ...connectorWriters()],
       use: {
         ...devices["Desktop Chrome"],
-        storageState: "test/e2e/.auth/admin.json",
+        storageState: ADMIN_SESSION,
       },
     },
     {

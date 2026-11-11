@@ -11,11 +11,12 @@ import {
   submitLoginViaApi,
 } from "./auth.helpers";
 import { sweepLeftovers } from "./scim.helpers";
+import { ADMIN_SESSION, USER_SESSION } from "./sessions";
 
 // `guest` is the development fixture in no Group, on the fixture password.
 setup("authenticate USER", async ({ page }) => {
   await loginAs(page, "guest", FIXTURE_PASSWORD);
-  await page.context().storageState({ path: "test/e2e/.auth/user.json" });
+  await page.context().storageState({ path: USER_SESSION });
 });
 
 setup("authenticate ADMIN", async ({ page }) => {
@@ -26,7 +27,7 @@ setup("authenticate ADMIN", async ({ page }) => {
   // first fetches race, each generating a token of its own, and every worker
   // but the last to save holds a token the session no longer has.
   await csrfHeaderFor(page.request);
-  await page.context().storageState({ path: "test/e2e/.auth/admin.json" });
+  await page.context().storageState({ path: ADMIN_SESSION });
   // Here because this is the one point where an Admin session exists and no
   // spec is running yet: every other project depends on `setup`. A sweep run
   // mid-suite would delete a fixture a parallel spec is still using.

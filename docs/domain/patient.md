@@ -186,8 +186,16 @@ NRIC", searched only on submit (Enter or the Search button).
   official name only), NRIC (in full), Gender (a badge, Male blue and Female pink), Date of Birth and Last
   Visit (`dd MMM yyyy`, a missing Last visit `—`), five to a page with the
   numbered pager and "Showing x to y of N patients" — shown whenever there is a
-  match, on a single page too. Rows are not clickable. Each row keeps the
-  Patient's id, never shown, for a page that opens the Patient from a row.
+  match, on a single page too. Each row keeps the Patient's id, never shown.
+- **Selecting a result** puts the row's Patient, by that id, into the tab's
+  **EHR context** and goes to Home, whose Patient card and top bar show them.
+  A click anywhere on the row selects it, and the Patient Name is a button, so
+  the keyboard and assistive technology select it too; rows show a hover state
+  and a pointer cursor. A selection replaces the patient already in context
+  with no confirmation; selecting the patient already in context only goes to
+  Home, the context unchanged and the patient not read again. No row marks the
+  patient in context. Coming back to Search starts afresh: only the box, with
+  no query, page, sort or filters kept.
 - **Sort.** Only the Date of Birth and Last Visit headings sort, one at a time,
   each a sortable column heading stating its direction with `aria-sort`, as the
   accounts listing's do. A press cycles ascending → descending → the default
@@ -375,8 +383,9 @@ a test states the day it runs on and the age never depends on the viewer's zone.
 ## The patient in context
 
 Home's **Patient card** shows the patient in context, and only that patient: the
-patient of the tab's **EHR context**, which nothing sets yet, so a running
-application shows none. With none in context it
+patient of the tab's **EHR context**, which selecting a Patient on the Search
+page sets. A patient leaves context only when another Patient is selected or
+the session ends. With none in context it
 shows "No patient in context" and reads nothing, and a `404` for the id in
 context shows the same. The top bar names the same patient by name and NRIC.
 Both render from **one reader** of the patient in context, which the signed-in

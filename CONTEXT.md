@@ -299,8 +299,9 @@ _Avoid_: single sign-on (spelled out), federated login
 
 **EHR context**:
 The patient this browser tab has in context, a FHIR id, possibly absent. Kept
-by the tab alone, never server-side, and ended with the session. Nothing sets
-it, so a tab holds none.
+by the tab alone, never server-side, and ended with the session. Selecting a
+Patient on the Search page sets it, replacing the patient there; only another
+selection or the session ending takes a patient out of context.
 _Avoid_: patient context, session context
 
 **MFA factor**:
@@ -426,7 +427,7 @@ of Birth or Last visit, and narrowed by gender and by a date range for each.
 The source sorts and filters; the service does neither. Every search the
 source answers is audited as `PATIENT_SEARCH`, by its kind, the filters it used
 and its count, and never its query or a filter's value; a read of one Patient
-by id is not.
+by id is not. Selecting a result puts that Patient into the EHR context.
 _Avoid_: patient lookup, patient list, patient query (no search lists every
 Patient)
 
