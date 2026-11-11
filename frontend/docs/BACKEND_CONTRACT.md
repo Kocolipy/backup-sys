@@ -190,10 +190,10 @@ change, when the backend side moves. What the SPA has to honour:
   holds, so signing in from a second browser or profile signs the first
   out; the first presents as the ordinary `401` path above.
 - **The tab's EHR context is the SPA's alone.** The backend keeps no patient
-  or encounter in context, and the SPA sends it none but the patient read
-  below. `src/auth/ehr-context.ts` keeps the tab's **EHR context** — a patient
-  and an encounter, each held to FHIR's id grammar, `[A-Za-z0-9\-.]{1,64}` (a
-  value outside it is left out, the other kept) — in `sessionStorage` under
+  in context, and the SPA sends it none but the patient read below.
+  `src/auth/ehr-context.ts` keeps the tab's **EHR context** — the patient in
+  context, held to FHIR's id grammar, `[A-Za-z0-9\-.]{1,64}` (a patient
+  outside it is left out) — in `sessionStorage` under
   `ehr-context`, per tab. The lifecycle: `setEhrContext` **replaces** it, and
   nothing in the SPA calls it yet, so a tab holds none; a reload **keeps** it;
   every session end (`end(reason)` in `session-transitions.ts`: sign-out,
@@ -202,9 +202,8 @@ change, when the backend side moves. What the SPA has to honour:
   held to the grammar again. The EHR context is a subscribable store
   (`useEhrContext`), so the Patient card re-renders when it changes, not only
   on load. Home's Patient card reads the patient in context through the
-  patient read below, and shows "No patient in context" with none; the
-  encounter is held but unused. The read is not bound to the EHR context:
-  `patient:read` reads any id.
+  patient read below, and shows "No patient in context" with none. The read
+  is not bound to the EHR context: `patient:read` reads any id.
 - **Logout answers `Clear-Site-Data: "cache","cookies","storage"`** — on a
   successful logout and on the `401` a logout with no live session gets. The
   browser drops anything in `localStorage` / `sessionStorage` along with the

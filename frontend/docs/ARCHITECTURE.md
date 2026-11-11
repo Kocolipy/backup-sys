@@ -85,9 +85,9 @@ straight into `lib/http`) but may never point back up.
   starts the next. `generation()` reads it, and `expire(generation)` ends the
   session as `expired` only while that generation is still current, so a
   `401` that lands after a sign-out or a fresh sign-in changes nothing.
-- `ehr-context.ts` — the tab's **EHR context**, the patient and encounter the
-  tab has in context, as a subscribable store under one `sessionStorage` key:
-  `setEhrContext()` replaces it, holding each value to FHIR's id grammar, and
+- `ehr-context.ts` — the tab's **EHR context**, the patient the tab has
+  in context, as a subscribable store under one `sessionStorage` key:
+  `setEhrContext()` replaces it, holding the patient to FHIR's id grammar, and
   nothing in the SPA calls it yet; `ehrContext()` reads it back, decoded rather
   than trusted, the same value until it changes, and `null` when the tab holds
   none; `subscribeEhrContext()` / `useEhrContext()` re-render a reader when it
