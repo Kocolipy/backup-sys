@@ -1,8 +1,7 @@
-import { Link, matchPath, Outlet, useLocation } from "react-router-dom";
+import { matchPath, Outlet, useLocation } from "react-router-dom";
 
 import { useAuth } from "@/auth/auth-context-value";
 import { PageStatusScope, useStatusReporter } from "@/auth/page-status";
-import { landingPath } from "@/auth/session-route";
 import { useSessionAction } from "@/auth/use-session-action";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
@@ -15,8 +14,8 @@ import { TopBar } from "@/shell/top-bar";
 /**
  * The layout route of every signed-in page: the navigation sidebar
  * (`navigation-sidebar.tsx`, which folds to its icons and holds Sign out), the
- * top bar (the patient in context, who is signed in), the page title, the
- * page's one error line and the back link.
+ * top bar (the patient in context, who is signed in), the page title and the
+ * page's one error line.
  *
  * The layout owns the page status (`page-status.ts`) and renders its line, the
  * only error line a signed-in page has. The page, its panels and Sign out each
@@ -55,7 +54,6 @@ function SignedInLayout({ error, pathname }: { error: string | null; pathname: s
   const { user } = useAuth();
   const signOut = useSessionAction("logout", useStatusReporter());
   const page = SIGNED_IN_PAGES.find((entry) => matchPath(entry.path, pathname)) ?? HOME_PAGE;
-  const confined = user?.passwordChangeRequired === true;
 
   return (
     <SidebarProvider>
@@ -66,12 +64,7 @@ function SignedInLayout({ error, pathname }: { error: string | null; pathname: s
       />
       <div className="flex min-h-svh min-w-0 flex-1 flex-col">
         <TopBar user={user} />
-        <SidebarInset
-          className={cn(
-            "flex flex-1 flex-col gap-6 p-8",
-            page.centered && "items-center justify-center",
-          )}
-        >
+        <SidebarInset className="flex flex-1 flex-col gap-6 p-8">
           <h1 className={cn("font-headline text-headline-lg", page.titleHidden && "sr-only")}>
             {page.title}
           </h1>
@@ -82,23 +75,8 @@ function SignedInLayout({ error, pathname }: { error: string | null; pathname: s
           ) : null}
 
           <Outlet />
-
-          {page.backLabel && !confined ? <BackLink label={page.backLabel} /> : null}
         </SidebarInset>
       </div>
     </SidebarProvider>
-  );
-}
-
-/** A page's back link: to the session's landing page (`landingPath`). */
-function BackLink({ label }: { label: string }) {
-  const { user } = useAuth();
-  return (
-    <Link
-      className="text-sm font-medium underline underline-offset-4"
-      to={landingPath(user?.permissions)}
-    >
-      {label}
-    </Link>
   );
 }

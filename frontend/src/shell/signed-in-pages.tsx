@@ -1,9 +1,9 @@
 import type { LucideIcon } from "lucide-react";
-import { IdCard, KeyRound, ScrollText, Search as SearchIcon, Settings, Users } from "lucide-react";
+import { IdCard, ScrollText, Search as SearchIcon, Settings, Users } from "lucide-react";
 import type { ReactNode } from "react";
 
 import type { Permission } from "@/auth/api";
-import { CREDENTIAL_CHANGE_PATH, HOME_PATH, PATIENT_SEARCH_PAGE_PATH } from "@/auth/session-route";
+import { HOME_PATH, PATIENT_SEARCH_PAGE_PATH, SETTINGS_PATH } from "@/auth/session-route";
 import { Accounts } from "@/pages/accounts/accounts";
 import { ADMINISTRATION_PERMISSIONS } from "@/pages/accounts/accounts-api";
 import { Audit } from "@/pages/audit/audit";
@@ -18,15 +18,6 @@ export type SidebarGroupName = "Admin";
 
 /** A signed-in page, and what the navigation sidebar reads to link it. */
 export interface SignedInPage {
-  /**
-   * The back link's label: a link to the session's landing page
-   * (`landingPath`), offered unless the session is confined to the password
-   * change. Only the password change has one: every other page is a sidebar
-   * link away from the rest.
-   */
-  backLabel?: string;
-  /** Centers the page vertically, for a page with little content. */
-  centered?: boolean;
   element: ReactNode;
   /**
    * The collapsible sidebar group its link sits in, beneath the group's own
@@ -42,10 +33,9 @@ export interface SignedInPage {
   permissions?: readonly Permission[];
   title: string;
   /**
-   * Keeps the title for screen readers only. A page the sidebar reaches hides
-   * it, the sidebar marking where the user is, unless the page is headed by
-   * the title alone, as Patient Search is; the password change a confined
-   * session is held to shows it.
+   * Keeps the title for screen readers only. A page the sidebar or the top
+   * bar reaches hides it, the link marking where the user is, unless the page
+   * is headed by the title alone, as Patient Search is.
    */
   titleHidden?: boolean;
 }
@@ -72,14 +62,6 @@ const PAGES_BEYOND_HOME: readonly SignedInPage[] = [
     title: "Audit",
     titleHidden: true,
   },
-  {
-    backLabel: "Back",
-    centered: true,
-    element: <ChangePassword />,
-    icon: KeyRound,
-    path: CREDENTIAL_CHANGE_PATH,
-    title: "Change password",
-  },
 ];
 
 /**
@@ -99,14 +81,13 @@ export const HOME_PAGE: SignedInPage = {
 
 /**
  * Settings, which holds the password change; linked from the top bar rather
- * than the navigation sidebar. The
- * change-required flag still confines a session to `/change-password`, the
- * same form on a page of its own.
+ * than the navigation sidebar. It holds both the voluntary change and the one
+ * the change-required flag requires: a flagged session is confined to it.
  */
 export const SETTINGS_PAGE: SignedInPage = {
   element: <ChangePassword />,
   icon: Settings,
-  path: "/settings",
+  path: SETTINGS_PATH,
   title: "Settings",
   titleHidden: true,
 };
@@ -130,7 +111,7 @@ const SEARCH_PAGE: SignedInPage = {
 /**
  * Every signed-in page, declared once: `App` turns each entry into a route
  * (behind its Permission guard, if any), `SignedInShell` reads the matching
- * entry for the title, back link and vertical alignment, and links each entry
+ * entry for the title, and links each entry
  * that carries a `homeLink` in the navigation sidebar. A new signed-in page
  * is one entry here, and the sidebar links them in this order.
  */
