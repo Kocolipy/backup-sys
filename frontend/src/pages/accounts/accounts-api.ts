@@ -15,7 +15,7 @@ import type { ReadDeclaration, WriteDeclaration } from "@/auth/declarations";
 import { SUPERUSER, type AllOf } from "@/auth/permissions";
 import { decodeArray, DecodeError, jsonDecoder, readObject } from "@/lib/decode";
 import { pageDecoder, pagedPath, type Page, type PageAt } from "@/lib/paging";
-import type { ColumnSort } from "@/lib/sorting";
+import { sortParameters, type ColumnSort } from "@/lib/sorting";
 
 /** A Group a User belongs to directly, as its row reports it. */
 export interface DirectGroup {
@@ -329,13 +329,12 @@ export const LISTING_PAGE_SIZE = 20;
 /**
  * A projection's own query string: the search when there is one, encoded as
  * one value — the backend binds it as a parameter and matches it literally, so
- * nothing in it is filter syntax — then the sort when there is one, its
- * attribute and its order always together.
+ * nothing in it is filter syntax — then the sort's parameters.
  */
 const listingQuery = ({ search, sort }: ListingQuery) =>
   [
     ...(search === "" ? [] : [`search=${encodeURIComponent(search)}`]),
-    ...(sort === null ? [] : [`sortBy=${encodeURIComponent(sort.by)}&sortOrder=${sort.order}`]),
+    ...sortParameters(sort),
   ].join("&");
 
 /**

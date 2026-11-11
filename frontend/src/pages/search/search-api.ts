@@ -14,7 +14,7 @@ import { DecodeError, jsonDecoder, readObject } from "@/lib/decode";
 import { pageDecoder, pagedPath, type Page, type PageAt } from "@/lib/paging";
 import { isCalendarDate } from "@/lib/time";
 import { PATIENT_GENDERS, type PatientGender } from "@/lib/patient-gender";
-import type { ColumnSort } from "@/lib/sorting";
+import { sortParameters, type ColumnSort } from "@/lib/sorting";
 
 /**
  * One Patient a search matched, as the backend answers it: the Patient's id
@@ -157,8 +157,7 @@ function searchQuery(query: string, filters: PatientFilters, sort: PatientSort |
   for (const field of ["birthDateFrom", "birthDateTo", "lastVisitFrom", "lastVisitTo"] as const) {
     if (filters[field] !== "") parts.push(`${field}=${filters[field]}`);
   }
-  if (sort !== null) parts.push(`sortBy=${sort.by}`, `sortOrder=${sort.order}`);
-  return parts.join("&");
+  return [...parts, ...sortParameters(sort)].join("&");
 }
 
 /**

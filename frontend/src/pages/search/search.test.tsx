@@ -380,7 +380,7 @@ describe("Search, sorted", () => {
     ["Date of Birth", "birthDate"],
     ["Last Visit", "lastVisit"],
   ] as const)(
-    "sorts by %s from the first page: ascending, descending, then the default order",
+    "sorts by %s from the first page: ascending, descending, then ascending again",
     async (heading, by) => {
       const { requests } = await renderSearch({
         [TAN_PAGE_1]: FIRST_OF_TWO,
@@ -392,7 +392,7 @@ describe("Search, sorted", () => {
       await toSecondPage();
 
       const directions: (string | null)[] = [];
-      for (const order of ["ascending", "descending", "none"]) {
+      for (const order of ["ascending", "descending", "ascending"]) {
         await userEvent.click(sortButton(heading));
         await waitFor(() => expect(columnHeader(heading)).toHaveAttribute("aria-sort", order));
         await screen.findByText(/^Showing 1 to 5 of 7 patients$/);
@@ -400,13 +400,13 @@ describe("Search, sorted", () => {
       }
 
       expect({ directions, sent: searchesSent(requests) }).toEqual({
-        directions: ["ascending", "descending", "none"],
+        directions: ["ascending", "descending", "ascending"],
         sent: [
           "/api/patient-search?q=tan&startIndex=1&count=5",
           "/api/patient-search?q=tan&startIndex=6&count=5",
           `/api/patient-search?q=tan&sortBy=${by}&sortOrder=ascending&startIndex=1&count=5`,
           `/api/patient-search?q=tan&sortBy=${by}&sortOrder=descending&startIndex=1&count=5`,
-          "/api/patient-search?q=tan&startIndex=1&count=5",
+          `/api/patient-search?q=tan&sortBy=${by}&sortOrder=ascending&startIndex=1&count=5`,
         ],
       });
     },

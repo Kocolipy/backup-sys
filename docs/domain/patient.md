@@ -198,9 +198,11 @@ NRIC", searched only on submit (Enter or the Search button).
   no query, page, sort or filters kept.
 - **Sort.** Only the Date of Birth and Last Visit headings sort, one at a time,
   each a sortable column heading stating its direction with `aria-sort`, as the
-  accounts listing's do. A press cycles ascending → descending → the default
-  order, newest Last visit first, which neither heading shows as sorted; another
-  heading replaces the sort, starting ascending.
+  accounts listing's do. The results open in the default order, newest Last
+  visit first, which neither heading shows as sorted. The first press on a
+  heading sorts it ascending, and each later press toggles it descending and
+  ascending, never back to the default order; another heading replaces the
+  sort, starting ascending.
 - **Filter.** A Filter button beside "Search Results" opens a panel of the
   filters, the button counting those applied ("Filter, 2 set", a badge of 2):
   Gender — All (the default), Male or Female — and a from–to range of

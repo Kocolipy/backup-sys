@@ -75,8 +75,9 @@ descending, and equal keys are ordered by `id`. On the Accounts page the "User"
 heading sorts by display name — so a User with none sorts as missing, not by the
 `userName` the row shows instead — and the "Active" heading by `active`. Each is
 a ghost icon button showing the direction (up ascending, down descending, both
-while unsorted), stated to assistive technology by `aria-sort`, and each press
-moves ascending, descending, then back to the default order. Changing the sort
+while unsorted), stated to assistive technology by `aria-sort`. The first press
+sorts its column ascending, and each later press toggles it descending and
+ascending, never back to the default order. Changing the sort
 reads the first page and keeps the search, and a new search keeps the sort. The
 API accepts any sortable User attribute as `sortBy`; an unsortable one, or a
 `sortOrder` that is neither direction, is `400` as a malformed `startIndex` is.
