@@ -215,7 +215,7 @@ nothing and leaves the panel open. A change in the picker or the toggle sends th
 typed values last applied, and leaves what is typed since waiting for Apply. Reset
 clears every control and reads the unfiltered first page. An Apply or Reset that
 reads closes the panel.
-It asks for 50 events at a time and moves through the trail with the pager the
+It asks for 20 events at a time and moves through the trail with the pager the
 Accounts page uses, which shows once a read has answered and the events run past
 one page: "Showing 51 to 100 of 120 events", the pages numbered between Previous
 and Next, Previous disabled on the first page, Next disabled once no events lie

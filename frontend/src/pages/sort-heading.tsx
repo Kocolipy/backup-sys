@@ -50,7 +50,7 @@ export function SortHeading<B extends string>({
   return (
     <TableHead aria-sort={direction} className="text-muted-foreground" scope="col">
       <Button
-        className="-ml-2 h-8 px-2 text-muted-foreground"
+        className="-ml-2 h-8 px-2 text-label-md font-semibold text-muted-foreground"
         disabled={disabled}
         onClick={() => onSort(nextSort(sort, by))}
         size="sm"
