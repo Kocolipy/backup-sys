@@ -220,8 +220,8 @@ specific sidebar chrome variant.
 Solid primary (`bg-primary text-white`), outline (`border-primary
 text-primary`), icon-only ghost (notification/settings/chevron/close icons
 in headers), and a text-link-as-button style (`View Details`,
-`Expand`/`Collapse` row actions). Disabled state is `disabled` + reduced
-opacity (0.3-0.6 range observed).
+`Expand`/`Collapse` row actions), every size on `rounded-lg`. Disabled state
+is `disabled` + reduced opacity (0.3-0.6 range observed).
 
 ### Input
 
@@ -268,7 +268,10 @@ every info panel, patient-banner wrapper, and nested sub-section.
 ### Table
 
 Header row on a tinted surface-container (`bg-accent`, which `TableHeader`
-applies and a hover leaves alone), `divide-y` body rows, often with a
+applies and a hover leaves alone) whose column headings are `label-md`
+(13px, semibold), a sortable heading's button included; header and body
+cells share `px-4` so a heading sits over its column's values, and a body
+cell adds `py-2.5`. `divide-y` body rows, often with a
 zebra-striped variant and an inline expandable detail row. Identifiers —
 UUIDs, correlation ids, routes — are set in monospace (`font-mono`, the
 `data-mono` role), and timestamps in tabular figures (`tabular-nums`) so a
@@ -301,7 +304,8 @@ two-line "eyebrow" header).
 ### Pagination
 
 Every paged table shares one shape: a muted "Showing X to Y of Z <rows>"
-caption on the left, and on the right a row of square buttons — `«`, one
+caption on the left, and on the right a row of compact square buttons
+(`size-8`, `gap-1.5`, an ellipsis the same size) — `«`, one
 per page number (the first, the last, and the shown page's neighbours once
 past seven, with an ellipsis for each gap), `»`. The page shown is filled
 with `primary`; the rest are outlined in muted text. A listing whose rows
