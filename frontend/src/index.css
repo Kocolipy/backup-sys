@@ -5,55 +5,62 @@
 @custom-variant dark (&:is(.dark *));
 
 /* Self-hosted from /public/fonts (latin subset only — this app's UI is
-   English-only), per frontend/docs/DESIGN.md's typography section: body,
-   label and mono text stay on Inter; headlines use Public Sans.
-   frontend/docs/BACKEND_CONTRACT.md's CSP forbids any third-party origin for
-   fonts ("Self-host instead of adding a CDN"), so these are vendored files
-   served from this app's own origin, not a Google Fonts <link>.
+   English-only): every sans level, headlines included, is IBM Plex Sans, and
+   `font-mono` is IBM Plex Mono, so an NRIC or an id renders in the same face
+   on every OS. frontend/docs/BACKEND_CONTRACT.md's CSP forbids any
+   third-party origin for fonts ("Self-host instead of adding a CDN"), so
+   these are vendored files served from this app's own origin.
 
    The vendored weights are exactly the ones the type scale and the
-   components use: Inter 400 (body), 500 (`font-medium`: buttons, labels, the
-   mono level) and 600 (`font-semibold`, label-md); Public Sans 600
-   (headline-sm/md) and 700 (headline-lg). A weight with no face here is
-   synthesized or falls back to the nearest vendored one, so a new weight in
-   the UI needs its file added beside these. The Inter files are
-   @fontsource/inter 5.2.8's `inter-latin-<weight>-normal.woff2`; add any
-   further Inter weight from that same release so the faces stay metrically
-   identical. */
+   components use: IBM Plex Sans 400 (body), 500 (`font-medium`), 600
+   (`font-semibold`, label-md, headline-sm/md) and 700 (`font-bold`,
+   headline-lg); IBM Plex Mono 400 (`font-mono`) and 500 (data-mono). A weight
+   with no face here is synthesized or falls back to the nearest vendored one,
+   so a new weight in the UI needs its file added beside these. The files are
+   @fontsource/ibm-plex-sans and @fontsource/ibm-plex-mono 5.3.0's
+   `<family>-latin-<weight>-normal.woff2`, under the SIL Open Font License in
+   /public/fonts/IBM-Plex-LICENSE.txt. */
 @font-face {
-  font-family: "Inter";
+  font-family: "IBM Plex Sans";
   font-style: normal;
   font-weight: 400;
   font-display: swap;
-  src: url("/fonts/inter-400.woff2") format("woff2");
+  src: url("/fonts/ibm-plex-sans-400.woff2") format("woff2");
 }
 @font-face {
-  font-family: "Inter";
+  font-family: "IBM Plex Sans";
   font-style: normal;
   font-weight: 500;
   font-display: swap;
-  src: url("/fonts/inter-500.woff2") format("woff2");
+  src: url("/fonts/ibm-plex-sans-500.woff2") format("woff2");
 }
 @font-face {
-  font-family: "Inter";
+  font-family: "IBM Plex Sans";
   font-style: normal;
   font-weight: 600;
   font-display: swap;
-  src: url("/fonts/inter-600.woff2") format("woff2");
+  src: url("/fonts/ibm-plex-sans-600.woff2") format("woff2");
 }
 @font-face {
-  font-family: "Public Sans";
-  font-style: normal;
-  font-weight: 600;
-  font-display: swap;
-  src: url("/fonts/public-sans-600.woff2") format("woff2");
-}
-@font-face {
-  font-family: "Public Sans";
+  font-family: "IBM Plex Sans";
   font-style: normal;
   font-weight: 700;
   font-display: swap;
-  src: url("/fonts/public-sans-700.woff2") format("woff2");
+  src: url("/fonts/ibm-plex-sans-700.woff2") format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/ibm-plex-mono-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/fonts/ibm-plex-mono-500.woff2") format("woff2");
 }
 
 /* ---------------------------------------------------------------------------
@@ -197,10 +204,12 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
 
-  /* DESIGN.md: body/label/mono stay on Inter (the default sans stack);
-     headlines use Public Sans (the font-headline utility this generates). */
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-headline: "Public Sans", ui-sans-serif, system-ui, sans-serif;
+  /* One sans family for every level: `font-headline` names the same face as
+     the default stack, so a headline differs by its size and weight alone.
+     `font-mono` is the vendored mono. */
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-headline: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
   /* DESIGN.md's named type scale, one `text-<level>` utility per level, each
      setting the level's size, line height, weight and letter spacing (a
@@ -208,7 +217,7 @@
      property). Reach for these rather than generic `text-sm`/`text-lg`. The
      family is not part of a text utility, so pair each level with its face:
      headline-sm/md/lg with `font-headline`, data-mono with `font-mono`, and
-     the body and label levels with nothing (Inter is the default). A new
+     the body and label levels with nothing (the sans is the default). A new
      level also goes in the twMerge list in src/lib/utils.ts, or `cn` reads
      it as a colour; src/lib/utils.test.ts fails on one missing there. */
   --text-body-sm: 12px;

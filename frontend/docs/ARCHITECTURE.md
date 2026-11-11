@@ -440,7 +440,7 @@ replaces it.
 The unit suite stubs CSS imports, so the E2E suite exercises the pipeline in a
 browser: `smoke.spec.ts` asserts the body's computed `background-color`
 resolved, and `packaged-type.spec.ts` the packaged bundle's type scale and
-Inter 500 face. The one unit test that reads the pipeline is
+IBM Plex Sans 500 face. The one unit test that reads the pipeline is
 `src/type-scale.test.ts`, which compiles `src/index.css` with Tailwind itself
 and checks each type-scale utility against DESIGN.md.
 

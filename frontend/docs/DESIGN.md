@@ -56,43 +56,43 @@ colors:
   condition-flag-text-observed: "#78350f" # amber-900 range, literal hex, undeclared role
 typography:
   body-sm:
-    fontFamily: Inter
+    fontFamily: IBM Plex Sans
     fontSize: 12px
     fontWeight: "400"
     lineHeight: 18px
   body-md:
-    fontFamily: Inter
+    fontFamily: IBM Plex Sans
     fontSize: 14px
     fontWeight: "400"
     lineHeight: 20px
   body-lg:
-    fontFamily: Inter
+    fontFamily: IBM Plex Sans
     fontSize: 16px
     fontWeight: "400"
     lineHeight: 24px
   label-md:
-    fontFamily: Inter
+    fontFamily: IBM Plex Sans
     fontSize: 13px
     fontWeight: "600"
     lineHeight: 16px
     letterSpacing: 0.02em
   data-mono:
-    fontFamily: monospace
+    fontFamily: IBM Plex Mono
     fontSize: 14px
     fontWeight: "500"
     lineHeight: 20px
   headline-sm:
-    fontFamily: Public Sans
+    fontFamily: IBM Plex Sans
     fontSize: 16px
     fontWeight: "600"
     lineHeight: 24px
   headline-md:
-    fontFamily: Public Sans
+    fontFamily: IBM Plex Sans
     fontSize: 20px
     fontWeight: "600"
     lineHeight: 28px
   headline-lg:
-    fontFamily: Public Sans
+    fontFamily: IBM Plex Sans
     fontSize: 28px
     fontWeight: "700"
     lineHeight: 36px
@@ -160,8 +160,9 @@ other gender keeps the `secondary` badge.
 
 The library uses one named type scale rather than generic Tailwind
 `text-sm`/`text-lg`: `body-sm/md/lg`, `label-md`, `data-mono`, and
-`headline-sm/md/lg`. Headlines use "Public Sans" while body, label, and mono
-levels stay on Inter.
+`headline-sm/md/lg`. Every sans level, headlines included, is IBM Plex Sans, so
+a headline differs from body text by its size and weight alone; `data-mono` is
+IBM Plex Mono, so an NRIC or an id renders in the same face on every OS.
 
 Each level is a Tailwind utility, `text-<level>` (`text-body-md`,
 `text-label-md`, `text-headline-lg`), defined as a `--text-<level>` token in
@@ -170,16 +171,18 @@ height, weight and letter spacing from the front matter above; a `leading-*`,
 `font-*` or `tracking-*` beside it overrides just that property. The family is
 not part of a text utility, so pair a level with its face: the headline levels
 with `font-headline` (`font-headline text-headline-lg`), `data-mono` with
-`font-mono`, and the body and label levels with nothing, since Inter is the
-default. `cn` knows the levels are font sizes, so a caller's text colour
+`font-mono`, and the body and label levels with nothing, since IBM Plex Sans is
+the default. `cn` knows the levels are font sizes, so a caller's text colour
 (`text-muted-foreground`) never drops one. The signed-in page title is
 `headline-lg` and a card title (`CardTitle`) is `headline-sm`.
 
 The faces are self-hosted from `public/fonts/` (latin subset), never a font
 CDN, because the backend's CSP admits fonts from the app's own origin only
-(`frontend/docs/BACKEND_CONTRACT.md`). The vendored weights are Inter 400, 500
-and 600 and Public Sans 600 and 700 — every weight the scale and the components
-use (Inter 500 is `font-medium`, on buttons, labels and `data-mono`). A weight
+(`frontend/docs/BACKEND_CONTRACT.md`). The vendored weights are IBM Plex Sans
+400, 500, 600 and 700 and IBM Plex Mono 400 and 500 — every weight the scale and
+the components use (Plex Sans 500 is `font-medium`, on buttons and labels; Plex
+Mono 500 is `data-mono`). They are licensed under the SIL Open Font License, in
+`public/fonts/IBM-Plex-LICENSE.txt`. A weight
 with no vendored face renders as the nearest one that is, so a new weight needs
 its file in `public/fonts/` and an `@font-face` beside the others.
 
