@@ -1,13 +1,13 @@
 /**
- * The **EHR context**: the patient and encounter this tab has in context, each
- * a FHIR id, either possibly absent — kept for this tab alone, under one
- * `sessionStorage` key. The backend keeps none of it.
+ * The **EHR context**: the patient this tab has in context, a FHIR id,
+ * possibly absent — kept for this tab alone, under one `sessionStorage` key.
+ * The backend keeps none of it.
  *
  * Its lifecycle (`docs/BACKEND_CONTRACT.md`):
  *
- * - {@link setEhrContext} **replaces** it, holding each value to FHIR's id
- *   grammar and keeping what passes; nothing in the SPA sets it, so a tab
- *   holds none;
+ * - {@link setEhrContext} **replaces** it, holding the patient to FHIR's id
+ *   grammar and keeping it only if it passes; nothing in the SPA sets it, so a
+ *   tab holds none;
  * - a reload **keeps** it, since `sessionStorage` outlives the page;
  * - every end of the session — sign-out, expiry, an Idle sign-out, a password
  *   change — and a password Login **clear** it (`session-transitions.ts`,
@@ -15,17 +15,15 @@
  *
  * It is a subscribable store, shaped for `useSyncExternalStore`
  * ({@link useEhrContext}): the signed-in layout's read of the patient in
- * context re-renders when it changes, not only on load. The encounter is held
- * but nothing reads it.
+ * context re-renders when it changes, not only on load.
  */
 
 import { useSyncExternalStore } from "react";
 
 import { watchers } from "@/lib/watchers";
 
-/** The patient and encounter in context, each a FHIR id; either may be absent. */
+/** The patient in context, a FHIR id; it may be absent. */
 export interface EhrContext {
-  encounter?: string;
   patient?: string;
 }
 
@@ -37,12 +35,9 @@ const STORAGE_KEY = "ehr-context";
 const isFhirId = (value: unknown): value is string =>
   typeof value === "string" && FHIR_ID.test(value);
 
-/** The context of whichever of the two values is a FHIR id; anything else is left out. */
-function withinGrammar(patient: unknown, encounter: unknown): EhrContext {
-  return {
-    ...(isFhirId(encounter) ? { encounter } : {}),
-    ...(isFhirId(patient) ? { patient } : {}),
-  };
+/** The context naming `patient` when it is a FHIR id, and no patient otherwise. */
+function withinGrammar(patient: unknown): EhrContext {
+  return isFhirId(patient) ? { patient } : {};
 }
 
 /** Whoever is watching the EHR context, told when it changes. */
@@ -57,7 +52,7 @@ function decoded(stored: string): EhrContext {
     // Not JSON: the value stays undefined, which decodes to nothing below.
   }
   if (typeof value !== "object" || value === null) return {};
-  return withinGrammar(Reflect.get(value, "patient"), Reflect.get(value, "encounter"));
+  return withinGrammar(Reflect.get(value, "patient"));
 }
 
 /** The last read, so an unchanged storage reads back as the same value. */
@@ -88,11 +83,11 @@ export function useEhrContext(): EhrContext | null {
 }
 
 /**
- * Replaces the tab's EHR context with whichever of `context`'s values is a
- * FHIR id, and tells every watcher. A value outside the grammar is left out.
+ * Replaces the tab's EHR context with `context`'s patient when it is a FHIR
+ * id, and tells every watcher. A patient outside the grammar is left out.
  */
 export function setEhrContext(context: EhrContext): void {
-  const kept = withinGrammar(context.patient, context.encounter);
+  const kept = withinGrammar(context.patient);
   window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(kept));
   watching.changed();
 }

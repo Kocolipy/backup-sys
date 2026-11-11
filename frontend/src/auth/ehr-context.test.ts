@@ -11,23 +11,17 @@ afterEach(() => {
 });
 
 describe("the EHR context", () => {
-  it("keeps the patient and encounter it is set to, for the tab", () => {
-    setEhrContext({ encounter: "enc.42-A", patient: TAN_WEI_MING });
+  it("keeps the patient it is set to, for the tab", () => {
+    setEhrContext({ patient: TAN_WEI_MING });
 
-    expect(ehrContext()).toEqual({ encounter: "enc.42-A", patient: TAN_WEI_MING });
-  });
-
-  it("keeps whichever of the two it is set to", () => {
-    setEhrContext({ encounter: "enc-1" });
-
-    expect(ehrContext()).toEqual({ encounter: "enc-1" });
+    expect(ehrContext()).toEqual({ patient: TAN_WEI_MING });
   });
 
   it("is replaced by every new context, not merged with the one before", () => {
-    setEhrContext({ encounter: "enc-1", patient: TAN_WEI_MING });
-    setEhrContext({ patient: "other-patient" });
+    setEhrContext({ patient: TAN_WEI_MING });
+    setEhrContext({});
 
-    expect(ehrContext()).toEqual({ patient: "other-patient" });
+    expect(ehrContext()).toEqual({});
   });
 
   it("is kept in the tab's storage, which a reload keeps", () => {
@@ -43,10 +37,10 @@ describe("the EHR context", () => {
     ["65 characters", "a".repeat(65)],
     ["nothing", ""],
     ["an underscore", "a_b"],
-  ])("leaves out a value with %s, keeping the other", (_name, value) => {
-    setEhrContext({ encounter: "enc-1", patient: value });
+  ])("leaves out a patient with %s", (_name, value) => {
+    setEhrContext({ patient: value });
 
-    expect(ehrContext()).toEqual({ encounter: "enc-1" });
+    expect(ehrContext()).toEqual({});
   });
 
   it("keeps a value of exactly 64 characters", () => {
@@ -116,12 +110,8 @@ describe("the EHR context", () => {
     ["not JSON", "{patient", {}],
     ["not an object", "42", {}],
     ["null", "null", {}],
-    [
-      "a value outside the grammar",
-      '{"patient":"a/b","encounter":"enc-1"}',
-      { encounter: "enc-1" },
-    ],
-    ["a value that is no string", '{"patient":7,"encounter":"enc-1"}', { encounter: "enc-1" }],
+    ["a patient outside the grammar", '{"patient":"a/b"}', {}],
+    ["a patient that is no string", '{"patient":7}', {}],
   ])("reads only what the grammar allows from storage holding %s", (_name, stored, expected) => {
     window.sessionStorage.setItem("ehr-context", stored);
 

@@ -298,10 +298,10 @@ factor ready for one.
 _Avoid_: single sign-on (spelled out), federated login
 
 **EHR context**:
-The patient and encounter this browser tab has in context, each a FHIR id,
-either possibly absent. Kept by the tab alone, never server-side, and ended with
-the session. Nothing sets it, so a tab holds none.
-_Avoid_: patient context (for the pair), session context
+The patient this browser tab has in context, a FHIR id, possibly absent. Kept
+by the tab alone, never server-side, and ended with the session. Nothing sets
+it, so a tab holds none.
+_Avoid_: patient context, session context
 
 **MFA factor**:
 The second factor an SSO Login was made with, recorded on its `LOGIN_SUCCESS`:

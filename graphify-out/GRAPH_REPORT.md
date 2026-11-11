@@ -1,9 +1,9 @@
-# Graph Report - backup-sys  (2026-11-11)
+# Graph Report - 17-ehr-context-hold-the-patient  (2026-11-11)
 
 ## Corpus Check
-- 1152 files · ~855,454 words
+- 1151 files · ~855,343 words
 - Verdict: corpus is large enough that graph structure adds value.
-- Unclassified: 21 file(s) not represented in the graph (top: (none) 10, .woff2 5, .example 1)
+- Unclassified: 22 file(s) not represented in the graph (top: (none) 11, .woff2 5, .example 1)
 
 ## Summary
 - 13319 nodes · 50429 edges · 552 communities (274 shown, 278 thin omitted)
@@ -11,7 +11,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `24d33a43`
+- Built from commit: `0b8dd776`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -1700,9 +1700,9 @@ Nodes (3): Graphify Runner, Reporting, Steps
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `The pages` connect `The pages` to `.withAction`, `use-gated-read.ts`, `LoginStateService`, `signed-in-pages.tsx`, `connectors.tsx`, `cn`, `audit.tsx`, `Patient`?**
-  _High betweenness centrality (0.062) - this node is a cross-community bridge._
+  _High betweenness centrality (0.063) - this node is a cross-community bridge._
 - **Why does `Patient` connect `Patient` to `domain/index.md`, `use-gated-read.ts`, `PatientQuery`, `PatientSourceAdapterContractTests`, `PatientSourceAdapter`, `tools.jackson.databind.json.JsonMapper`, `PatientStore`, `list`, `PatientSourceAdapter.java`, `PatientId`, `The pages`, `PatientMatches`, `.failed`, `LogEventTests`?**
-  _High betweenness centrality (0.055) - this node is a cross-community bridge._
+  _High betweenness centrality (0.056) - this node is a cross-community bridge._
 - **Why does `Backend contract` connect `use-gated-read.ts` to `SignedInSessionTests`, `patient-card.test.tsx`, `.require`, `org.springframework.http.ResponseEntity`, `auth.helpers.ts`, `Components`, `vitest`, `Patient`, `.sendError`?**
   _High betweenness centrality (0.041) - this node is a cross-community bridge._
 - **What connects `graphify-guard.sh script`, `graphify-refresh.sh script`, `com.example:backend` to the rest of the system?**

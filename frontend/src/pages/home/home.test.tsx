@@ -51,8 +51,8 @@ describe("Home", () => {
     ]).toEqual(["Tan Wei MingS1234567A", [TAN_WEI_MING_READ]]);
   });
 
-  it("asks for no patient when the tab's EHR context names none", async () => {
-    setEhrContext({ encounter: "enc-1" });
+  it("asks for no patient for an EHR context that names no patient", async () => {
+    setEhrContext({});
 
     const { requests } = await renderSignedIn("/", holding(BASELINE), {});
 
