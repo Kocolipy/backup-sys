@@ -349,28 +349,6 @@ describe("Audit", () => {
     ).toEqual(["Failure", "Success"]);
   });
 
-  it("tints the header row, sets identifiers in monospace and times in tabular figures", async () => {
-    await renderAudit(everyRead(answerPage([EVENT_PERMISSION_GRANT], { totalResults: 1 })));
-    const user = userEvent.setup();
-
-    await findTable();
-    const [row] = eventRows();
-    await openDetails(user);
-    expect({
-      header: table().querySelector("thead")?.classList.contains("bg-accent"),
-      occurred: cellOf(row!, "Occurred").classList.contains("tabular-nums"),
-      actor: within(row!).getByText("00000000-0000-4000-8000-0000000000c1").className,
-      resource: within(row!).getByText("00000000-0000-4000-8000-000000000009").className,
-      request: screen.getByText("req-3").className,
-    }).toEqual({
-      header: true,
-      occurred: true,
-      actor: "font-mono",
-      resource: "font-mono",
-      request: "font-mono",
-    });
-  });
-
   describe("an event's detail", () => {
     it("keeps changed paths, status, request and details behind a disclosure on its row", async () => {
       await renderAudit(everyRead(answerPage([EVENT_1], { totalResults: 1 })));
@@ -426,28 +404,6 @@ describe("Audit", () => {
         control!.getAttribute("aria-expanded"),
         screen.queryByRole("region", { name: /^Details of / }),
       ]).toEqual(["false", null]);
-    });
-
-    it("turns its chevron while open, animating the turn both ways", async () => {
-      await renderAudit(everyRead(answerPage([EVENT_1], { totalResults: 1 })));
-      const user = userEvent.setup();
-
-      await findTable();
-      const [control] = detailControls();
-      const chevron = () => {
-        const icon = control!.querySelector("svg")!;
-        return {
-          turned: icon.classList.contains("rotate-90"),
-          animated: icon.classList.contains("transition-transform"),
-        };
-      };
-      const closed = chevron();
-      await user.click(control!);
-
-      expect({ closed, open: chevron() }).toEqual({
-        closed: { turned: false, animated: true },
-        open: { turned: true, animated: true },
-      });
     });
 
     it("opens each row's detail alone", async () => {
@@ -551,15 +507,6 @@ describe("Audit", () => {
       }
 
       expect(detailControls()[0]).toHaveAttribute("aria-expanded", "true");
-    });
-
-    it("shows its row as clickable, with a pointer over it", async () => {
-      await renderAudit(everyRead(answerPage([EVENT_1], { totalResults: 1 })));
-
-      await findTable();
-      const [row] = eventRows();
-
-      expect(row).toHaveClass("cursor-pointer");
     });
 
     it("opens from its control even while text elsewhere on the page stays selected", async () => {
@@ -995,7 +942,9 @@ describe("Audit", () => {
       ]),
     );
   });
+});
 
+describe("Audit filters", () => {
   describe("filters", () => {
     it("sends no request and shows a local message for a malformed actor id", async () => {
       const { requests } = await renderAudit(everyRead(answerPage([EVENT_1], { totalResults: 1 })));

@@ -1012,21 +1012,21 @@ class ConnectorAdministrationServiceTests {
                     .containsExactlyInAnyOrderElementsOf(TokenPermissions.ALL);
         }
 
-        /** A token stored before Permissions existed has none to keep. */
+        /** A token carrying no Permissions has none to keep: its rotation must name some. */
         @Test
         void a_token_carrying_no_permissions_must_be_rotated_with_some() {
             ConnectorSummary connector = service.create("Okta", adminId);
-            ScimConnectorToken legacy = ScimConnectorToken.issue(UUID.randomUUID(),
-                    connector.id(), "legacy", ConnectorTokenDigest.of("legacy.secret"),
+            ScimConnectorToken unpermitted = ScimConnectorToken.issue(UUID.randomUUID(),
+                    connector.id(), "unpermitted", ConnectorTokenDigest.of("unpermitted.secret"),
                     TokenPermissions.of(Set.of()), NOW, NOW.plus(Duration.ofDays(30)));
-            tokens.save(legacy);
+            tokens.save(unpermitted);
 
             assertThatThrownBy(() -> service.rotateToken(
-                    connector.id(), legacy.id(), null, null, adminId))
+                    connector.id(), unpermitted.id(), null, null, adminId))
                     .isInstanceOf(InvalidConnectorTokenPermissionsException.class);
 
             IssuedConnectorToken replacement = service.rotateToken(connector.id(),
-                    legacy.id(), List.of(Permission.USER_READ), null, adminId);
+                    unpermitted.id(), List.of(Permission.USER_READ), null, adminId);
             assertThat(replacement.permissions()).containsExactly("user:read");
         }
     }

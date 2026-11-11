@@ -18,13 +18,14 @@ import { ADMIN_SESSION } from "./sessions";
  * Patient Search as a signed-in User meets it, against the patient source's
  * mock (`backend/patient-source-mock`): its canned name search spanning two
  * pages, sorted by each column both ways and filtered by gender and by each
- * date range, a filtered search spanning two pages, its NRIC search, its
- * search that matches nothing, a query too short to send, a from-date after
- * its to-date refused in the Filter panel, and the Search link first in the
- * sidebar. Nothing about a search, its filters or its sort reaches the URL.
- * Selecting a result puts its Patient into the tab's EHR context, shown on
- * Home's Patient card and the top bar; a second selection replaces it, Search
- * starts afresh after one, and signing out and back in leaves none.
+ * date range, a filtered search spanning two pages, its NRIC search, and its
+ * search that matches nothing. Nothing about a search, its filters or its sort
+ * reaches the URL. Selecting a result puts its Patient into the tab's EHR
+ * context, shown on Home's Patient card and the top bar, and signing out and
+ * back in leaves none. What the page decides without the backend — a query
+ * too short to send, a date range refused in the Filter panel, keyboard
+ * selection, a second selection, Search after one — is `search.test.tsx`'s;
+ * the sidebar's links are `roles-user.spec.ts`'.
  *
  * In the `user` project: `patient:read` is a baseline Permission, so the seeded
  * User holding nothing else searches as any signed-in User does. Signing out
@@ -99,18 +100,6 @@ test.describe("Patient Search", () => {
     await expect(page.getByText("No patients match your search")).toBeVisible();
     await expect(results(page)).toHaveCount(0);
     await expect(page.getByText(/^Showing/)).toHaveCount(0);
-  });
-
-  test("refuses a query under three characters, and sends nothing", async ({ page }) => {
-    const searches: string[] = [];
-    page.on("request", (request) => {
-      if (new URL(request.url()).pathname === "/api/patient-search") searches.push(request.url());
-    });
-
-    await search(page, "ta");
-
-    await expect(page.getByText("Enter at least 3 characters to search by name.")).toBeVisible();
-    expect(searches).toEqual([]);
   });
 
   test.describe("sorted", () => {
@@ -248,40 +237,6 @@ test.describe("Patient Search", () => {
         "Kavitha TanabalanS9512345AFemale09 Sep 199507 May 2026",
       ]);
     });
-
-    test("refuses a from-date after its to-date in the form, and sends nothing", async ({
-      page,
-    }) => {
-      await search(page, "tan");
-      await expect(page.getByText("Showing 1 to 5 of 7 patients")).toBeVisible();
-      const searches: string[] = [];
-      page.on("request", (request) => {
-        if (new URL(request.url()).pathname === "/api/patient-search") searches.push(request.url());
-      });
-      await filterButton(page).click();
-
-      await dateField(page, "Last Visit", "From").fill("2026-10-31");
-      await dateField(page, "Last Visit", "To").fill("2026-09-01");
-      await panel(page).getByRole("button", { name: "Apply" }).click();
-
-      await expect(
-        panel(page).getByText("The Last Visit from-date must not be after its to-date."),
-      ).toBeVisible();
-      await expect(dateField(page, "Last Visit", "From")).toHaveAttribute("aria-invalid", "true");
-      await expect(filterButton(page)).toHaveAccessibleName("Filter");
-      expect(searches).toEqual([]);
-    });
-  });
-
-  test("is the first link in the sidebar", async ({ page }) => {
-    await page.goto("/");
-    const links = page.locator('[data-slot="sidebar"]').getByRole("link");
-    await expect(links).toHaveText(["Search", "Profile"]);
-
-    await links.first().click();
-
-    await expect(page).toHaveURL("/search");
-    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Patient Search");
   });
 
   test.describe("selecting a result", () => {
@@ -315,41 +270,6 @@ test.describe("Patient Search", () => {
       await select(page, "Tan Hui Min");
 
       await expectOnHomeInContext(page, "Tan Hui Min", "S9012345A");
-    });
-
-    test("selects from the keyboard, by the Patient Name button", async ({ page }) => {
-      await search(page, "s9212345a");
-
-      await page.getByRole("button", { name: "Siti Nurhaliza binte Ahmad" }).press("Enter");
-
-      await expectOnHomeInContext(page, "Siti Nurhaliza binte Ahmad", "S9212345A");
-    });
-
-    test("replaces the patient in context with a second selection", async ({ page }) => {
-      await search(page, "tan");
-      await select(page, "Tan Hui Min");
-      await expectOnHomeInContext(page, "Tan Hui Min", "S9012345A");
-      await page.locator('[data-slot="sidebar"]').getByRole("link", { name: "Search" }).click();
-
-      await search(page, "s9212345a");
-      await select(page, "Siti Nurhaliza binte Ahmad");
-
-      await expectOnHomeInContext(page, "Siti Nurhaliza binte Ahmad", "S9212345A");
-    });
-
-    test("shows only the search box on coming back to Search after a selection", async ({
-      page,
-    }) => {
-      await search(page, "tan");
-      await select(page, "Tan Hui Min");
-      await expectOnHomeInContext(page, "Tan Hui Min", "S9012345A");
-
-      await page.locator('[data-slot="sidebar"]').getByRole("link", { name: "Search" }).click();
-
-      await expect(page.getByRole("heading", { level: 1 })).toHaveText("Patient Search");
-      await expect(box(page)).toHaveValue("");
-      await expect(page.getByRole("heading", { name: "Search Results" })).toHaveCount(0);
-      await expect(results(page)).toHaveCount(0);
     });
 
     test.describe("signing out", () => {
