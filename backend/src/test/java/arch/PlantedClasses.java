@@ -33,6 +33,18 @@ final class PlantedClasses {
         }));
     }
 
+    /**
+     * Plants a public abstract class, {@code name}, implementing {@code iface} and declaring
+     * nothing else, under {@code root}, and returns its class file.
+     */
+    static Path plantImplementing(Path root, String name, String iface) {
+        return write(root, name, ClassFile.of().build(ClassDesc.of(name), type -> {
+            type.withFlags(ClassFile.ACC_PUBLIC | ClassFile.ACC_ABSTRACT);
+            type.withSuperclass(ConstantDescs.CD_Object);
+            type.withInterfaceSymbols(ClassDesc.of(iface));
+        }));
+    }
+
     /** Writes {@code bytes} as {@code name}'s class file under {@code root}, and returns it. */
     static Path write(Path root, String name, byte[] bytes) {
         Path file = root.resolve(name.replace('.', '/') + ".class");

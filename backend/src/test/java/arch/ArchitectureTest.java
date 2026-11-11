@@ -1131,6 +1131,54 @@ public class ArchitectureTest {
             .because("ADR 0014: every outbound call goes through the patient source's adapter,"
                     + " which carries the timeouts and the redaction");
 
+    /**
+     * ADR 0014, "The module's edges": the patient module's uses of the logging base are a
+     * failure's redacted cause and its upstream fault, and the module writes no log record. The
+     * module graph admits every observability class, so a logger is held here, where a Patient's
+     * name or NRIC would otherwise reach the log.
+     */
+    @com.tngtech.archunit.junit.ArchTest
+    static final ArchRule the_patient_module_writes_no_log_record =
+        noClasses()
+            .that().resideInAPackage("com.example.backend.patient..")
+            .should().dependOnClassesThat().resideInAnyPackage(
+                    "org.slf4j..", "org.apache.logging..", "org.apache.commons.logging..",
+                    "ch.qos.logback..", "java.util.logging..")
+            .orShould().dependOnClassesThat().haveFullyQualifiedName("java.lang.System$Logger")
+            .because("ADR 0014: a failure of the patient source carries its cause redacted and is"
+                    + " recorded by the layer that answers it, so the patient module writes no"
+                    + " log record a Patient could reach");
+
+    /**
+     * ADR 0014: the service holds no Patient of its own — no table, no grant on one. Every Patient
+     * is read from the source, so the patient module reaches no database, store or cache.
+     */
+    @com.tngtech.archunit.junit.ArchTest
+    static final ArchRule the_patient_module_holds_no_patient =
+        noClasses()
+            .that().resideInAPackage("com.example.backend.patient..")
+            .should().dependOnClassesThat().resideInAnyPackage(
+                    "jakarta.persistence..", "org.hibernate..", "org.springframework.jdbc..",
+                    "org.springframework.data..", "org.springframework.cache..", "java.sql..",
+                    "javax.sql..")
+            .because("ADR 0014: the service holds no Patient of its own, so every Patient is the"
+                    + " patient source's answer of the moment");
+
+    /**
+     * ADR 0014: {@code PatientStore} has one adapter, the patient source's. A second, a cache or a
+     * fallback, would answer with a Patient the source did not just give.
+     */
+    private static final Named PATIENT_SOURCE_ADAPTER =
+            Named.type("com.example.backend.patient.infrastructure.http.PatientSourceAdapter");
+
+    @com.tngtech.archunit.junit.ArchTest
+    static final ArchRule the_patient_store_has_one_adapter =
+        classes()
+            .that().implement(com.example.backend.patient.domain.PatientStore.class)
+            .should().haveFullyQualifiedName(PATIENT_SOURCE_ADAPTER.type())
+            .because("ADR 0014: PatientStore has one adapter, PatientSourceAdapter, so every"
+                    + " Patient is read from the patient source");
+
     // Error namespaces
 
     /**
