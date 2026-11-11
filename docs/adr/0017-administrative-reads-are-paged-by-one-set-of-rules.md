@@ -103,9 +103,10 @@ a path only a connector has a value for (`externalId`, a `$ref`,
 `meta.location`, which a query asked without a connector cannot evaluate) are
 refused `400`, as a malformed `startIndex` is. Without a `sortBy` the order is
 D1's default. The Accounts page sorts the Users by the "User" heading (display
-name) and the "Active" heading, and the Groups by the "Group" heading, each
-toggling ascending, descending, then the default order; changing the sort reads
-the first page and keeps the search.
+name) and the "Active" heading, and the Groups by the "Group" heading, the
+first press on each sorting it ascending and each later press toggling it
+descending and ascending, never back to the default order; changing the sort
+reads the first page and keeps the search.
 
 **D6. The audit listing keeps its own order and its typed filters.** The search
 and sort of D2 and D5 are the projections' alone. The trail is always newest

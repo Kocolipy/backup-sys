@@ -250,11 +250,15 @@ two pages share moves up to `src/pages/` itself, and imports no page folder
   page's line, with a Retry that reads the same page again. Each row keeps the
   Patient's id, which it never shows.
 - `sort-heading.tsx` — the sortable column heading the accounts listing and
-  the Search page share: `aria-sort`, a direction icon, and a press cycling
-  ascending → descending → the listing's default order — and `PlainHeading`,
-  the heading of a column that does not sort. The sort it sets, `ColumnSort`,
-  is data in `src/lib/sorting.ts`, so each listing's `*-api.ts` names its sort
-  by it (`lb-api-modules-are-data`).
+  the Search page share: `aria-sort`, a direction icon, and a press that
+  sorts its column ascending first, then toggles descending → ascending → …,
+  never returning a sorted column to the listing's default order — and
+  `PlainHeading`, the heading of a column that does not sort. The sort it
+  sets, `ColumnSort`, lives in `src/lib/sorting.ts` beside `sortParameters`,
+  the one encoding of a sort as its `sortBy` and `sortOrder` query
+  parameters, so each listing's `*-api.ts` names its sort by it and sends it
+  through it (`lb-api-modules-are-data`), keeping only its own search and
+  filter parameters.
 - `home.tsx` — the Patient card.
 - `patient-in-context.ts` / `home-api.ts` — the **one reader of the patient in
   context**. `PatientInContextScope`, which the signed-in layout renders once

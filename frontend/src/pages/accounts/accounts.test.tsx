@@ -961,7 +961,7 @@ describe("the Users and Groups projections, sorted", () => {
     ["Users", "Active", "accounts", "active"],
     ["Groups", "Group", "groups", "displayName"],
   ] as const)(
-    "sort the %s by the %s heading from the first page, keeping the search: ascending, descending, then the default order",
+    "sort the %s by the %s heading from the first page, keeping the search: ascending, descending, then ascending again",
     async (title, heading, path, by) => {
       const table = title === "Users" ? usersTable : groupsTable;
       const page = (count: number, start = 1) =>
@@ -985,7 +985,7 @@ describe("the Users and Groups projections, sorted", () => {
       expect(columnHeader(table, heading)).toHaveAttribute("aria-sort", "none");
       expect(directionIcon(columnHeader(table, heading))).toBe(DIRECTION_ICONS.none);
 
-      for (const order of ["ascending", "descending", "none"] as const) {
+      for (const order of ["ascending", "descending", "ascending"] as const) {
         await userEvent.click(
           within(columnHeader(table, heading)).getByRole("button", { name: heading }),
         );
@@ -1008,7 +1008,7 @@ describe("the Users and Groups projections, sorted", () => {
         pageOf(path, 21, "an"),
         pageOf(path, 1, "an", [by, "ascending"]),
         pageOf(path, 1, "an", [by, "descending"]),
-        pageOf(path, 1, "an"),
+        pageOf(path, 1, "an", [by, "ascending"]),
       ]);
     },
   );

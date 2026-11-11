@@ -12,21 +12,22 @@ export interface ColumnSorting<B extends string> {
 
 /**
  * The sort a press of the heading for `by` asks for next: ascending first,
- * then descending, then the listing's default order. A heading other than
- * the sorted one starts ascending and replaces the sort, since a listing
- * sorts by one column only.
+ * then descending and ascending in turn, so a sorted column never returns to
+ * the listing's default order. A heading other than the sorted one starts
+ * ascending and replaces the sort, since a listing sorts by one column only.
  */
-function nextSort<B extends string>(sort: ColumnSort<B> | null, by: B): ColumnSort<B> | null {
+function nextSort<B extends string>(sort: ColumnSort<B> | null, by: B): ColumnSort<B> {
   if (sort?.by !== by) return { by, order: "ascending" };
-  return sort.order === "ascending" ? { by, order: "descending" } : null;
+  return { by, order: sort.order === "ascending" ? "descending" : "ascending" };
 }
 
 /**
  * A sortable column's heading, its `by` the column the backend sorts the
  * listing by. It states its direction with `aria-sort`, and its label is a
  * ghost icon button, as the design's icon buttons are, showing the direction
- * — up ascending, down descending, both while unsorted. Each press moves
- * ascending → descending → the listing's default order.
+ * — up ascending, down descending, both while unsorted. The first press sorts
+ * its column ascending, and each later press toggles it: ascending →
+ * descending → ascending → …; only a press on another heading unsorts it.
  */
 export function SortHeading<B extends string>({
   by,
