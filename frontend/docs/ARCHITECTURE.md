@@ -499,7 +499,10 @@ Guest to login with a return destination and the provider's sign-in reason;
 **confines a flagged session** (`passwordChangeRequired: true` on `/me`) to
 `/change-password`, ahead of the Permission check and any return destination;
 renders a Permission-guarded route for a session holding any of its
-Permissions; and redirects every other session to Home. The guards decide what is
+Permissions; and redirects every other session to its landing page
+(`landingPath`: Patient Search for a session holding `patient:read`, Home
+otherwise), as it does an authenticated visitor on `/login` with no return
+destination and one on a path with no route (`LandingRoute`). The guards decide what is
 _rendered_; Spring Security decides what is _permitted_.
 
 `BrowserRouter` means real paths, so the backend serves `index.html` for any

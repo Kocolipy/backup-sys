@@ -15,7 +15,9 @@ import {
   type Answers,
   type StartingSession,
 } from "@/auth/session-adapter.testHelpers";
+import { landingPath } from "@/auth/session-route";
 
+import { SIGNED_IN_PAGES } from "./signed-in-pages";
 import { SignedInShell } from "./signed-in-shell";
 import { renderSignedIn } from "./signed-in-shell.testHelpers";
 
@@ -71,9 +73,19 @@ describe("SignedInShell", () => {
     expect(screen.queryByRole("link", { name: /^Back/ })).not.toBeInTheDocument();
   });
 
-  it("offers a back link on the password change once unconfined", async () => {
+  it("offers a back link to Home on the password change once unconfined", async () => {
     await renderShell("/change-password");
     expect(screen.getByRole("link", { name: "Back" })).toHaveAttribute("href", "/");
+  });
+
+  it("offers a back link to Patient Search on the password change to a session holding patient:read", async () => {
+    await renderShell("/change-password", {}, holding(["patient:read"]));
+    expect(screen.getByRole("link", { name: "Back" })).toHaveAttribute("href", "/search");
+  });
+
+  it("lands a session holding only the Permission Patient Search is guarded by on Patient Search", () => {
+    const search = SIGNED_IN_PAGES.find((page) => page.title === "Patient Search");
+    expect(landingPath(search?.permissions)).toBe("/search");
   });
 
   it("signs out through the auth context", async () => {
@@ -124,6 +136,14 @@ describe("SignedInShell", () => {
     await renderShell("/search");
     expect(screen.getByRole("heading", { level: 1, name: "Patient Search" })).not.toHaveClass(
       "sr-only",
+    );
+  });
+
+  it("sets a page title it shows in the headline type", async () => {
+    await renderShell("/search");
+    expect(screen.getByRole("heading", { level: 1, name: "Patient Search" })).toHaveClass(
+      "font-headline",
+      "text-headline-lg",
     );
   });
 
@@ -189,7 +209,7 @@ describe("SignedInShell's navigation sidebar", () => {
   // Each page the sidebar links, with the Permissions its route guard opens it
   // for (none: every signed-in session), as the registry declares them today.
   it.each([
-    ["Search", "/search", []],
+    ["Search", "/search", ["patient:read"]],
     ["Profile", "/", []],
     ["Accounts", "/accounts", ["user:read", "group:read", "connector:read"]],
     ["Audit logs", "/audit", ["audit:read"]],
@@ -213,8 +233,18 @@ describe("SignedInShell's navigation sidebar", () => {
     },
   );
 
-  it("links Search first, for a session holding nothing beyond baseline access", async () => {
+  it("links Profile alone for a session holding baseline access alone", async () => {
     await renderSignedIn("/", holding([]));
+
+    expect(
+      within(screen.getAllByRole("list")[0])
+        .getAllByRole("link")
+        .map((link) => link.textContent),
+    ).toEqual(["Profile"]);
+  });
+
+  it("links Search first, then Profile, for a session holding patient:read alone", async () => {
+    await renderSignedIn("/search", holding(["patient:read"]));
 
     expect(
       within(screen.getAllByRole("list")[0])

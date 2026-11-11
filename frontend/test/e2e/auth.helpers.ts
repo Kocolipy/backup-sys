@@ -32,26 +32,24 @@ const ADMIN_CREDENTIALS = [ADMIN_USERNAME, ADMIN_PASSWORD] as const;
 export const FIXTURE_PASSWORD = process.env.APP_DEV_FIXTURES_PASSWORD ?? "P@ssw0rd";
 
 /**
- * The development fixtures (`backend/src/main/resources/authorization.yaml`):
- * one User per development Group, each with the Group whose stored Permissions
- * it signs in with, whether its session is the Superuser's, and the Permissions
- * it holds — what its Group carries plus the baseline `patient:read` every User
- * holds, sorted by name as `GET /api/auth/me` reports them. The Group
- * Permissions are the `local` profile's fixtures block, which `make
+ * The development fixtures holding administrative Permissions
+ * (`backend/src/main/resources/authorization.yaml`): one User per such
+ * development Group, each with the Permissions it holds — what its Group
+ * carries, sorted by name as `GET /api/auth/me` reports them.
+ * The Group Permissions are the `local` profile's fixtures block, which `make
  * integration-test` runs under. The Superuser's User is the Bootstrap Admin, on
  * the password `auth.setup.ts` settles: a direct member of the Admin group,
  * which carries no Permission, its session holds every delegatable one,
- * expanded in code. The Auditor holds every read and changes nothing; the
- * Helpdesk holds the same reads plus the helpdesk Permission `account:unlock`,
- * so it also Unlocks a locked User. Neither administers connectors or sets a
- * Group's Permissions, which only a Superuser does.
+ * `patient:read` among them, expanded in code. The Auditor holds every
+ * administrative read and changes nothing; the Helpdesk holds the same reads
+ * plus the helpdesk Permission `account:unlock`, so it also Unlocks a locked
+ * User. Neither reads a Patient, administers connectors or sets a Group's
+ * Permissions. The Medical Officers are {@link MEDICAL_OFFICERS}.
  */
 export const DEV_FIXTURES = {
   superuser: {
     username: ADMIN_USERNAME,
     password: ADMIN_PASSWORD,
-    group: "00000000-0000-4000-8000-00000000a001",
-    superuser: true,
     permissions: [
       "account:unlock",
       "audit:read",
@@ -65,29 +63,17 @@ export const DEV_FIXTURES = {
   auditor: {
     username: "auditor",
     password: FIXTURE_PASSWORD,
-    group: "00000000-0000-4000-8000-00000000a003",
-    superuser: false,
-    permissions: [
-      "audit:read",
-      "connector:read",
-      "group:read",
-      "ops:read",
-      "patient:read",
-      "user:read",
-    ],
+    permissions: ["audit:read", "connector:read", "group:read", "ops:read", "user:read"],
   },
   helpdesk: {
     username: "helpdesk",
     password: FIXTURE_PASSWORD,
-    group: "00000000-0000-4000-8000-00000000a006",
-    superuser: false,
     permissions: [
       "account:unlock",
       "audit:read",
       "connector:read",
       "group:read",
       "ops:read",
-      "patient:read",
       "user:read",
     ],
   },
@@ -96,12 +82,19 @@ export const DEV_FIXTURES = {
 export type DevFixture = keyof typeof DEV_FIXTURES;
 
 /**
- * What a fixture's Group carries: its User's Permissions less the baseline
- * `patient:read`, which no Group confers.
+ * The Medical Officer fixture Group's two members, on the fixture password,
+ * each holding `patient:read` alone. Two, because a login ends the User's other
+ * sessions: the `medical-officer` project replays a saved `mo1` session, and the
+ * `patient-sign-out` project, beside it, signs in and out as `mo2`. No other
+ * spec signs in as either.
  */
-export function groupPermissionsOf(fixture: Exclude<DevFixture, "superuser">): string[] {
-  return DEV_FIXTURES[fixture].permissions.filter((permission) => permission !== "patient:read");
-}
+export const MEDICAL_OFFICERS = { replayed: "mo1", signsOut: "mo2" } as const;
+
+/** Patient Search, the landing page of a session holding `patient:read`. */
+export const PATIENT_SEARCH_PATH = "/search";
+
+/** Home, the landing page of every session without `patient:read`. */
+export const HOME_PATH = "/";
 
 /**
  * Refused attempts that lock an account: the backend's
@@ -148,31 +141,40 @@ export async function submitLogin(page: Page, username: string, password: string
   await page.getByRole("button", { name: "Sign in" }).click();
 }
 
-/** Sign in as a named seeded identity and wait for the protected page. */
-export async function loginAs(page: Page, username: string, password: string) {
+/**
+ * Sign in as a named identity and wait for its landing page: Home unless
+ * `landing` says otherwise — Patient Search for a session holding
+ * `patient:read`.
+ */
+export async function loginAs(page: Page, username: string, password: string, landing = HOME_PATH) {
   await submitLogin(page, username, password);
 
-  await expect(page).toHaveURL("/");
+  await expect(page).toHaveURL(landing);
   await expect(page.getByText(`Signed in as ${username}`)).toBeVisible();
 }
 
-/** Sign in the seeded ADMIN identity used by the existing authenticated specs. */
+/**
+ * Sign in the seeded ADMIN identity used by the existing authenticated specs.
+ * The Superuser holds `patient:read`, so it lands on Patient Search.
+ */
 export async function login(page: Page) {
   const [username, password] = ADMIN_CREDENTIALS;
-  await loginAs(page, username, password);
+  await loginAs(page, username, password, PATIENT_SEARCH_PATH);
 }
 
 /**
  * Sign in as one development fixture's User, through the login page, and wait
- * for the protected page.
+ * for its landing page: Patient Search for a fixture whose Permissions
+ * include `patient:read`, and Home for every other.
  *
  * Signing in ends every other session of that User (one session per User), so
  * a spec doing this for `superuser` must not run beside one replaying
  * `admin.json`.
  */
 export async function loginAsFixture(page: Page, fixture: DevFixture) {
-  const { username, password } = DEV_FIXTURES[fixture];
-  await loginAs(page, username, password);
+  const { username, password, permissions } = DEV_FIXTURES[fixture];
+  const readsPatients = (permissions as readonly string[]).includes("patient:read");
+  await loginAs(page, username, password, readsPatients ? PATIENT_SEARCH_PATH : HOME_PATH);
 }
 
 /**

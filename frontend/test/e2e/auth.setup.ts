@@ -5,23 +5,35 @@ import {
   ADMIN_USERNAME,
   csrfHeaderFor,
   FIXTURE_PASSWORD,
+  MEDICAL_OFFICERS,
+  PATIENT_SEARCH_PATH,
   SEED_PASSWORD,
   loginAs,
   submitLogin,
   submitLoginViaApi,
 } from "./auth.helpers";
 import { sweepLeftovers } from "./scim.helpers";
-import { ADMIN_SESSION, USER_SESSION } from "./sessions";
+import { ADMIN_SESSION, MEDICAL_OFFICER_SESSION, USER_SESSION } from "./sessions";
 
-// `guest` is the development fixture in no Group, on the fixture password.
+// `guest` is the development fixture in no Group, on the fixture password: it
+// holds no patient access, so its sign-in lands on Home.
 setup("authenticate USER", async ({ page }) => {
   await loginAs(page, "guest", FIXTURE_PASSWORD);
   await page.context().storageState({ path: USER_SESSION });
 });
 
+// `mo1` is a member of the Medical Officer fixture Group, which carries
+// `patient:read`, so its sign-in lands on Patient Search.
+setup("authenticate MEDICAL OFFICER", async ({ page }) => {
+  await loginAs(page, MEDICAL_OFFICERS.replayed, FIXTURE_PASSWORD, PATIENT_SEARCH_PATH);
+  await page.context().storageState({ path: MEDICAL_OFFICER_SESSION });
+});
+
+// The Superuser holds `patient:read` through its expansion, so its sign-in
+// lands on Patient Search.
 setup("authenticate ADMIN", async ({ page }) => {
   await settleAdminPassword(page);
-  await loginAs(page, ADMIN_USERNAME, ADMIN_PASSWORD);
+  await loginAs(page, ADMIN_USERNAME, ADMIN_PASSWORD, PATIENT_SEARCH_PATH);
   // The login discarded the session's CSRF token. Issued here, once, so the
   // workers replaying this session all read the same one: left unissued, the
   // first fetches race, each generating a token of its own, and every worker
@@ -81,8 +93,8 @@ async function settleAdminPassword(page: Page) {
   // Through the page: the change the seed requires lands here by itself, the
   // voluntary one is opened directly. Either way the form is the same.
   await submitLogin(page, ADMIN_USERNAME, SEED_PASSWORD);
-  // The required change, or Home at the root exactly.
-  await expect(page).toHaveURL(/^https?:\/\/[^/]+\/(?:change-password)?$/);
+  // The required change, or the Superuser's landing page, Patient Search.
+  await expect(page).toHaveURL(/^https?:\/\/[^/]+\/(?:change-password|search)$/);
   await page.goto("/change-password");
   await expect(page.getByRole("heading", { name: "Change your password" })).toBeVisible();
 

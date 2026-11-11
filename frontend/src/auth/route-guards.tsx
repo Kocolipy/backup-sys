@@ -95,3 +95,11 @@ export function ProtectedRoute({
 export function GuestRoute({ children }: { children: ReactNode }) {
   return <SessionRoute requires="guest">{children}</SessionRoute>;
 }
+
+/**
+ * A path with no route of its own: an authenticated visitor is sent on to its
+ * landing page, and a guest to login.
+ */
+export function LandingRoute() {
+  return <SessionRoute requires="landing">{null}</SessionRoute>;
+}

@@ -1,6 +1,7 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 import { recordConsoleErrors } from "./console.helpers";
+import { expectNoPatientAccess } from "./patient.helpers";
 import { ROUTE_READY } from "./route.helpers";
 import { USER_SESSION } from "./sessions";
 
@@ -14,24 +15,36 @@ import { USER_SESSION } from "./sessions";
  * In the `routes` project, after every project whose specs create and delete
  * connectors: Accounts reads each listed connector's tokens, and one deleted
  * between the listing and that read would show an alert here that is no
- * fault of the route. It runs after `user` and ahead of `guest`, so
- * `user.json` and `admin.json` still replay live sessions here.
+ * fault of the route. It runs ahead of `guest`, whose sign-in as the seeded
+ * Admin ends the session `admin.json` replays; no project signs in as `guest`,
+ * so `user.json` replays a live session here too.
  */
 
-const IDENTITIES = [
+/**
+ * Each identity's routes, and what each shows once loaded where it differs from
+ * `ROUTE_READY`: the User holds no `patient:read`, so it opens no Patient
+ * Search, and Home's Patient card says it has no access.
+ */
+const IDENTITIES: readonly {
+  role: string;
+  routes: readonly string[];
+  ready?: Record<string, (page: Page) => Promise<void>>;
+  storageState?: string;
+}[] = [
   { role: "admin", routes: ["/search", "/", "/accounts", "/audit", "/change-password"] },
   {
     role: "user",
-    routes: ["/search", "/", "/change-password"],
+    routes: ["/", "/change-password"],
+    ready: { "/": expectNoPatientAccess },
     storageState: USER_SESSION,
   },
-] as const;
+];
 
 for (const identity of IDENTITIES) {
   test(`every ${identity.role} route loads without console errors`, async ({ browser, page }) => {
     // The project's own page replays the Admin; the User gets a context of its own.
     const target =
-      "storageState" in identity
+      identity.storageState !== undefined
         ? await (
             await browser.newContext({
               baseURL: test.info().project.use.baseURL,
@@ -47,7 +60,7 @@ for (const identity of IDENTITIES) {
         // than redirecting; no alert means neither a refused load nor the
         // error boundary's fallback.
         await expect(target).toHaveURL(route);
-        await ROUTE_READY[route]!(target);
+        await (identity.ready?.[route] ?? ROUTE_READY[route])!(target);
         await expect(target.getByRole("alert")).toHaveCount(0);
       }
       expect(errors).toEqual([]);

@@ -39,7 +39,8 @@ Unlock by `account:unlock`, the Groups projection by `group:read`
 to a Superuser), connectors by `connector:read`
 (create, delete and every token action are shown only to a Superuser) — and the
 page renders for a User who may see at least one view;
-a deep link from anyone else is routed to Home. The page never decides
+a deep link from anyone else is routed to its Landing page
+([sessions](./sessions.md)). The page never decides
 authorization: the backend refuses each operation to a caller lacking its
 Permission regardless.
 

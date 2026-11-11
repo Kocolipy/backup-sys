@@ -12,7 +12,7 @@ import {
 } from "@/pages/home/patient.testHelpers";
 import { renderSignedIn } from "@/shell/signed-in-shell.testHelpers";
 
-/** Any signed-in User: `patient:read` is a baseline Permission. */
+/** A Medical Officer: a session holding `patient:read`, which Patient Search requires. */
 const CLINICIAN = holding(["patient:read"]);
 
 const TAN_HUI_MIN = {

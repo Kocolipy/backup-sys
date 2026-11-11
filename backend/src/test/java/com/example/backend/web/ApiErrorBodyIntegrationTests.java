@@ -177,7 +177,8 @@ class ApiErrorBodyIntegrationTests {
 
     @Test
     void the_fhir_namespace_keeps_its_operation_outcome() throws Exception {
-        HttpResponse<String> response = send(user(), request("/api/patient/%3Cimg%3E").GET());
+        // The Superuser holds patient:read, so the chain passes the read and the id is judged.
+        HttpResponse<String> response = send(admin(), request("/api/patient/%3Cimg%3E").GET());
 
         assertThat(response.statusCode()).isEqualTo(400);
         assertThat(contentType(response)).isEqualTo(FHIR_JSON_R5);

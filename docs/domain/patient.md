@@ -10,7 +10,10 @@ tags: [patient, fhir]
 **Patient** — the person care is about, as this service reads them. The backend's
 `patient` module reads each from the **in-house patient source** on every read and
 serves it, read-only, as a FHIR **R5** `Patient` resource at
-`GET /api/patient/{id}`, holding `patient:read` (a baseline Permission). The
+`GET /api/patient/{id}`, to a session holding `patient:read`: a delegatable
+Permission a User holds only through a Group that carries it, or as the
+Superuser ([authorization](authorization.md)). A User in no Group reads no
+Patient and runs no Patient search. The
 resource is rendered from the domain's Patient, copied from the source's R4 one;
 nothing stores it. Why R5, and why the in-house source, read through, is ADR
 0014; the wire contract is `backend/docs/openapi.yaml`. The SPA never reaches
@@ -226,7 +229,8 @@ NRIC", searched only on submit (Enter or the Search button).
 
 Patient data is **Restricted, Sensitive Normal**: the NRIC, the name and the date
 of birth, and the resource or its JSON as a whole. It is shown to a signed-in
-user holding `patient:read` and goes nowhere else — not into a log, an error body
+user holding `patient:read`, through a Group that carries it or as the Superuser,
+and goes nowhere else — not into a log, an error body
 or an audit row.
 
 ## Errors
@@ -291,7 +295,8 @@ Every layer answers in this one shape, and the backend's `web` module owns it
   `error.category` `cert/auth`) and audited as an `ACCESS_DENIED`, as every
   authorization refusal is.
 - **The dispatcher** answers a write method `405` before any handler runs. The
-  chain lets one through for a session holding baseline access so that the answer
+  chain lets one through for a session holding baseline access, with or without
+  `patient:read`, so that the answer
   says what is true — the resource takes no write — rather than `403`.
 
 Every layer asks `web.ErrorNamespaces` which document the request's namespace
@@ -389,7 +394,12 @@ patient of the tab's **EHR context**, which selecting a Patient on the Search
 page sets. A patient leaves context only when another Patient is selected or
 the session ends. With none in context it
 shows "No patient in context" and reads nothing, and a `404` for the id in
-context shows the same. The top bar names the same patient by name and NRIC.
+context shows the same. For a session without `patient:read` it reads nothing
+and says "Your account has no access to patients.", and the top bar names no
+patient. Home is open to every signed-in session; Patient Search, the Landing
+page of a session holding `patient:read`, is guarded by it, so a session
+without it is offered no Search link and is routed to Home. The top bar names
+the same patient by name and NRIC.
 Both render from **one reader** of the patient in context, which the signed-in
 layout renders (`frontend/src/pages/home/patient-in-context.ts`): each change
 of the patient in context is one `GET /api/patient/{id}` — one read of the

@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import {
   CREDENTIAL_CHANGE_PATH,
-  DEFAULT_DESTINATION,
   LOGIN_PATH,
   resolveSessionRoute,
   type RoutedSession,
@@ -39,6 +38,11 @@ const ACCOUNTS: SessionRequirement = { anyOf: ["user:read", "group:read", "conne
 
 const toChangePassword: SessionRoute = { kind: "redirect", to: CREDENTIAL_CHANGE_PATH };
 
+/** Where a session holding `patient:read` lands: Patient Search. */
+const toSearch: SessionRoute = { kind: "redirect", to: "/search" };
+/** Where every other session lands: Home. */
+const toHome: SessionRoute = { kind: "redirect", to: "/" };
+
 describe("resolveSessionRoute for the change-required flag", () => {
   const cases: [string, SessionRouteInput, SessionRoute][] = [
     [
@@ -65,6 +69,11 @@ describe("resolveSessionRoute for the change-required flag", () => {
     [
       "sends a flagged session off the login route to the change",
       flagged({ pathname: LOGIN_PATH, requires: "guest" }),
+      toChangePassword,
+    ],
+    [
+      "confines a flagged session on a path with no route of its own",
+      flagged({ pathname: "/no-such-page", requires: "landing" }),
       toChangePassword,
     ],
     [
@@ -171,19 +180,45 @@ describe("resolveSessionRoute", () => {
       { kind: "render" },
     ],
     [
-      "sends an authenticated visitor off a guest route to the default destination",
-      input({ pathname: LOGIN_PATH, requires: "guest", session: AUTHENTICATED }),
-      { kind: "redirect", to: DEFAULT_DESTINATION },
+      "lands a session without patient:read off a guest route on Home",
+      input({ pathname: LOGIN_PATH, permissions: ["audit:read"], requires: "guest" }),
+      toHome,
     ],
     [
-      "replays the recorded return destination instead of the default",
+      "lands a session holding patient:read off a guest route on Patient Search",
+      input({ pathname: LOGIN_PATH, permissions: ["patient:read"], requires: "guest" }),
+      toSearch,
+    ],
+    [
+      "replays the recorded return destination instead of the landing page",
       input({
         pathname: LOGIN_PATH,
+        permissions: ["patient:read"],
         requires: "guest",
         returnTo: "/accounts/settings",
         session: AUTHENTICATED,
       }),
       { kind: "redirect", to: "/accounts/settings" },
+    ],
+    [
+      "lands a session without patient:read on Home from a path with no route of its own",
+      input({ pathname: "/no-such-page", permissions: [], requires: "landing" }),
+      toHome,
+    ],
+    [
+      "lands a session holding patient:read on Patient Search from a path with no route of its own",
+      input({ pathname: "/no-such-page", permissions: ["patient:read"], requires: "landing" }),
+      toSearch,
+    ],
+    [
+      "sends a guest on a path with no route of its own to login, recording it",
+      input({ pathname: "/no-such-page", requires: "landing", session: guest() }),
+      { kind: "redirect", state: { from: "/no-such-page" }, to: LOGIN_PATH },
+    ],
+    [
+      "waits on a path with no route of its own while the session status is unknown",
+      input({ pathname: "/no-such-page", requires: "landing", session: CHECKING }),
+      { kind: "pending" },
     ],
     [
       "renders login for a Guest whose session expired",
@@ -213,17 +248,33 @@ describe("resolveSessionRoute", () => {
     ).toEqual({ kind: "render" });
   });
 
-  it("redirects a session holding none of its Permissions away from it", () => {
+  it("routes a session holding none of its Permissions, and no patient:read, to Home", () => {
     expect(
       resolveSessionRoute(
         input({
           pathname: "/accounts",
           // Real Permissions, just not this route's: an Auditor and a Monitoring account.
-          permissions: ["audit:read", "ops:read", "patient:read"],
+          permissions: ["audit:read", "ops:read"],
           requires: ACCOUNTS,
         }),
       ),
-    ).toEqual({ kind: "redirect", to: DEFAULT_DESTINATION });
+    ).toEqual(toHome);
+  });
+
+  it("routes a session holding none of its Permissions but patient:read to Patient Search", () => {
+    expect(
+      resolveSessionRoute(
+        input({ pathname: "/accounts", permissions: ["patient:read"], requires: ACCOUNTS }),
+      ),
+    ).toEqual(toSearch);
+  });
+
+  it("routes a session without patient:read off Patient Search to Home", () => {
+    expect(
+      resolveSessionRoute(
+        input({ pathname: "/search", permissions: [], requires: { anyOf: ["patient:read"] } }),
+      ),
+    ).toEqual(toHome);
   });
 
   it("sends a guest on a Permission-guarded route to login with its return destination", () => {

@@ -85,7 +85,7 @@ public class ScimSeedConfig {
                 seeding.seedDevFixtures(
                         devFixtures.groups() == null ? List.of() : devFixtures.groups().stream()
                                 .map(group -> new DevFixture(
-                                        group.id(), group.displayName(), group.member()))
+                                        group.id(), group.displayName(), group.members()))
                                 .toList(),
                         devFixtures.baselineMember(),
                         devFixtures.password());

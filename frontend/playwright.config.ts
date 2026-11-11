@@ -1,6 +1,6 @@
 import { defineConfig, devices } from "@playwright/test";
 
-import { ADMIN_SESSION, USER_SESSION } from "./test/e2e/sessions";
+import { ADMIN_SESSION, MEDICAL_OFFICER_SESSION, USER_SESSION } from "./test/e2e/sessions";
 
 /**
  * The projects only `make integration-test` declares (frontend/AGENTS.md), each
@@ -33,16 +33,15 @@ const adminSessionExtras = [
 ];
 
 /**
- * The projects whose specs create and delete connectors of their own: `user`,
- * whose Patient search spec provisions a User to sign out and back in, and
- * `admin`. A spec asserting that Accounts loads with no alert runs after them, not
+ * The projects whose specs create and delete connectors of their own: `admin`.
+ * A spec asserting that Accounts loads with no alert runs after them, not
  * beside them — Accounts reads each listed connector's tokens, and a connector
  * another worker deletes between the listing and that read fails it with an
  * alert. A function declaration, so `packaged`, declared above it, can name
  * them too.
  */
 function connectorWriters(): string[] {
-  return ["user", "admin"];
+  return ["admin"];
 }
 
 export default defineConfig({
@@ -90,13 +89,35 @@ export default defineConfig({
         storageState: { cookies: [], origins: [] },
       },
     },
+    // A session without patient:read: the `guest` fixture, in no Group.
     {
       name: "user",
-      testMatch: /(?:roles-user|patient-search)\.spec\.ts/,
+      testMatch: /roles-user\.spec\.ts/,
       dependencies: ["setup"],
       use: {
         ...devices["Desktop Chrome"],
         storageState: USER_SESSION,
+      },
+    },
+    // A session holding patient:read: the `mo1` Medical Officer, whose session
+    // `setup` saves and no other project signs in as, so it runs beside the rest.
+    {
+      name: "medical-officer",
+      testMatch: /(?:roles-medical-officer|patient-search)\.spec\.ts/,
+      dependencies: ["setup"],
+      use: {
+        ...devices["Desktop Chrome"],
+        storageState: MEDICAL_OFFICER_SESSION,
+      },
+    },
+    // Signing out and back in as `mo2`, the Medical Officer no other project
+    // signs in as: no saved session to keep, so it waits on no project.
+    {
+      name: "patient-sign-out",
+      testMatch: /patient-sign-out\.spec\.ts/,
+      use: {
+        ...devices["Desktop Chrome"],
+        storageState: { cookies: [], origins: [] },
       },
     },
     {

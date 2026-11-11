@@ -638,7 +638,7 @@ class ScimSeedServiceTests {
             UUID.fromString("00000000-0000-4000-8000-0000000000d1");
 
     private static final List<DevFixture> FIXTURES =
-            List.of(new DevFixture(FIXTURE_GROUP, "Account admins", "account-admin"));
+            List.of(new DevFixture(FIXTURE_GROUP, "Account admins", List.of("account-admin")));
 
     @Test
     void the_fixtures_create_each_group_under_its_id_with_its_user_in_it() {
@@ -657,6 +657,17 @@ class ScimSeedServiceTests {
         assertThat(passwordEncoder.matches("fixture-password", member.login().passwordHash()))
                 .isTrue();
         assertThat(seedLock.usersSeenAtEachAcquire).containsExactly(0L);
+    }
+
+    /** A fixture Group with several members is created with each of them in it, in no other. */
+    @Test
+    void a_fixture_group_with_several_members_is_created_with_each_of_them_in_it() {
+        seeding.seedDevFixtures(List.of(new DevFixture(
+                FIXTURE_GROUP, "Medical Officer", List.of("mo1", "mo2"))), null, "fixture-password");
+
+        assertThat(groups.findById(FIXTURE_GROUP).orElseThrow().members())
+                .extracting(ScimGroupMember::userId)
+                .containsExactly(users.require("mo1").id(), users.require("mo2").id());
     }
 
     /** Never overwrites: a second run, or a fixture User changed since, is left as it is. */

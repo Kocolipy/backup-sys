@@ -43,11 +43,19 @@ redirected to sign in, recorded as `from` in router state and replayed once the
 status turns `authenticated`. Owned by the route guards, so no page navigates on
 its own behalf after signing in.
 
-**Home** — the signed-in landing page, at `/`, and the default destination: a
-sign-in with no return destination lands there, and an authenticated visitor on the login page (`/login`) or on a page it may not
-see is sent there. `/` is a protected route like any other, so a Guest's cold
-visit records it as the return destination and goes to `/login`. A path with no
-route of its own goes to `/`, which is Home for a User and login for a Guest.
+**Landing page** — where the SPA sends an authenticated visitor with no return
+destination, by one rule: Patient Search (`/search`) for a session holding
+`patient:read`, Home (`/`) for every other. It applies after a sign-in with no
+return destination, to an authenticated visitor on the login page (`/login`),
+on a path with no route of its own, or on a page its guard refuses, and to the
+password change's Back link. A return destination still wins, and a confined
+session is still held to the password change. A Guest on a path with no route
+of its own goes to `/login`, recording that path.
+
+**Home** — the signed-in page at `/`, open to every signed-in session, and the
+Landing page of one without `patient:read`. `/` is a protected route like any
+other, so a Guest's cold visit records it as the return destination and goes to
+`/login`.
 
 **Idle timeout** and **absolute session lifetime** — the two independent bounds
 on every authenticated session, a Superuser's included: 15 minutes without a request

@@ -4,6 +4,8 @@ import static com.example.backend.TestJson.JSON;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.backend.ServerSession;
+import com.example.backend.ScimTestRows;
+import com.example.backend.TestMedicalOfficer;
 import com.example.backend.ContainerTestConfiguration;
 import com.example.backend.TokenPermissions;
 import com.example.backend.observability.EcsLogCapture;
@@ -27,6 +29,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.micrometer.metrics.test.autoconfigure.AutoConfigureMetrics;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Import;
 import org.springframework.core.env.Environment;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -84,16 +87,24 @@ class PatientErrorContractIntegrationTests {
     @Autowired
     private ConnectorAdministrationService connectors;
 
+    @Autowired
+    private ApplicationContext context;
+
     private EcsLogCapture logs;
+
+    /** The reader every read here is made as: a Medical Officer of this suite's own. */
+    private TestMedicalOfficer reader;
 
     @BeforeEach
     void setUp() {
+        reader = TestMedicalOfficer.create(context, "patient-error-reader");
         logs = EcsLogCapture.attach(environment);
     }
 
     @AfterEach
     void tearDown() {
         logs.close();
+        reader.delete(jdbc);
         provisioned.forEach(user -> jdbc.update(
                 "DELETE FROM scim_resources WHERE id = ? AND reserved_name IS NULL",
                 UUID.fromString(user)));
@@ -149,6 +160,24 @@ class PatientErrorContractIntegrationTests {
 
         assertThat(answer(response))
                 .isEqualTo(answer(405, "not-supported", "The request is not supported."));
+    }
+
+    /**
+     * Reading a Patient is a Group's to confer: a User in no Group is refused the read and the
+     * search with the generic outcome, each refusal audited as an authorization refusal.
+     */
+    @Test
+    void aUserInNoGroupIsRefusedTheReadAndTheSearchEachAuditedAsAccessDenied() throws Exception {
+        UUID actor = UUID.randomUUID();
+        HttpClient outsider = inNoGroup(actor);
+
+        List<Integer> statuses = List.of(
+                send(outsider, patient(id).GET()).statusCode(),
+                send(outsider, request("/api/patient-search?q=tan&count=5").GET()).statusCode());
+
+        assertThat(List.of(statuses, accessDeniedTo(actor))).containsExactly(
+                List.of(403, 403),
+                List.of("GET /api/patient/{id}", "GET /api/patient-search"));
     }
 
     /** The 403's one record is the existing authorization refusal's, classified as cert/auth. */
@@ -312,7 +341,26 @@ class PatientErrorContractIntegrationTests {
     }
 
     private HttpClient signedIn() throws Exception {
-        return ServerSession.logIn(port, "test-user", "test-password");
+        return ServerSession.logIn(port, reader.userName(), TestMedicalOfficer.PASSWORD);
+    }
+
+    /**
+     * A session holding baseline access and no Permission, as {@code actor}: a User of this
+     * suite's own in no Group, removed after the test.
+     */
+    private HttpClient inNoGroup(UUID actor) throws Exception {
+        String userName = ScimTestRows.unique("patient-no-group");
+        ScimTestRows.createUser(context, actor, userName, TestMedicalOfficer.PASSWORD);
+        provisioned.add(actor.toString());
+        return ServerSession.logIn(port, userName, TestMedicalOfficer.PASSWORD);
+    }
+
+    /** The {@code ACCESS_DENIED} events of this actor, as {@code method route} pairs, in order. */
+    private List<String> accessDeniedTo(UUID actor) {
+        return jdbc.queryForList("""
+                SELECT http_method + ' ' + http_path FROM audit_events
+                 WHERE operation = 'ACCESS_DENIED' AND actor_id = ?
+                 ORDER BY occurred_at""", String.class, actor);
     }
 
     /** A session confined by a required password change, which holds no Permission. */

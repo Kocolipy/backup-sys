@@ -312,8 +312,7 @@ public class AuthController {
      *                               {@code username}
      * @param username               the User's {@code userName} at sign-in; a display value only
      * @param permissions            the Permissions the session was issued with, by name, sorted
-     *                               by name: the baseline and what the User's direct Groups
-     *                               carry; empty while a password change is required. A Superuser's include every
+     *                               by name: what the User's direct Groups carry; empty while a password change is required. A Superuser's include every
      *                               delegatable Permission
      * @param superuser              whether the session is the Superuser's: its User is a direct
      *                               member of the Admin group. Not a Permission, so never among
