@@ -274,6 +274,33 @@
     }
   }
 
+  /* A collapsible sidebar group's links as they open and close: they grow
+     from no height to the height Radix measures for them and fade in, then
+     shrink back and fade out, Radix holding them mounted until the closing
+     animation ends. The animated element clips its overflow. */
+  --animate-group-open: group-open 180ms ease-out;
+  --animate-group-close: group-close 150ms ease-in forwards;
+  @keyframes group-open {
+    from {
+      height: 0;
+      opacity: 0;
+    }
+    to {
+      height: var(--radix-collapsible-content-height);
+      opacity: 1;
+    }
+  }
+  @keyframes group-close {
+    from {
+      height: var(--radix-collapsible-content-height);
+      opacity: 1;
+    }
+    to {
+      height: 0;
+      opacity: 0;
+    }
+  }
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);

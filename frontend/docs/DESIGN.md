@@ -299,7 +299,19 @@ Vertical header dividers and horizontal card/table-section dividers.
 The persistent left nav rail. Some variants add a real collapsible/toggle
 interaction and a nested two-level sub-nav; others are a structurally
 simpler flat list with two distinct chrome variants (plain header vs.
-two-line "eyebrow" header).
+two-line "eyebrow" header). The navigation sidebar's labels are set in
+capitals (`uppercase`, so the accessible names keep their case). Its items
+stand with no gap between them, the padding filling it — `px-4 py-2.5` on a
+top-level item, `px-4 py-2` on a group's link — so each is hovered and clicked
+edge to edge; a sidebar folded to its icons keeps its square `size-8` items.
+Its Sign out, at the foot, is `destructive` red, hovered on a `destructive/10`
+tint. Accounts and Audit logs sit in a collapsible ADMIN group: a
+`Collapsible` whose button carries the group's icon and a chevron that turns
+when open, with the links in a `SidebarMenuSub` beneath it, indented `ml-5` and
+padded `px-3`. The group starts open; its links grow from no height and fade in
+as it opens (`animate-group-open`, 180ms) and shrink and fade out as it closes
+(`animate-group-close`, 150ms), at once with reduced motion. On a sidebar
+folded to its icons the button opens the sidebar out to the group.
 
 ### Pagination
 

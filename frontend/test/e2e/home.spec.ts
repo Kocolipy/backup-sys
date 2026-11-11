@@ -20,8 +20,8 @@ test.describe("Home", () => {
     await expect(sidebar(page).getByRole("link")).toHaveText([
       "Search",
       "Profile",
-      "Manage accounts",
-      "View audit log",
+      "Accounts",
+      "Audit logs",
     ]);
   });
 
@@ -29,8 +29,8 @@ test.describe("Home", () => {
   // Profile link lands on Home again.
   for (const [link, title] of [
     ["Search", "Patient Search"],
-    ["Manage accounts", "Accounts"],
-    ["View audit log", "Audit"],
+    ["Accounts", "Accounts"],
+    ["Audit logs", "Audit"],
   ] as const) {
     test(`returns from ${title} to Home through the sidebar`, async ({ page }) => {
       await page.goto("/");

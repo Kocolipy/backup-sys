@@ -468,7 +468,10 @@ optional `homeLink`, and the shell's metadata (title, back link, width,
 centering). `App.tsx` maps the table to routes, wrapping an entry with
 `permissions` in its own `ProtectedRoute`; the shell finds the current entry
 with `matchPath`, and its navigation sidebar links each entry with a
-`homeLink` that `mayOpen` admits. **Adding a signed-in page is one entry
+`homeLink` that `mayOpen` admits — beneath its collapsible group's button
+where the entry names a `group` (Accounts and Audit are both in Admin), a
+group standing where its first entry would and showing only while it links
+one. **Adding a signed-in page is one entry
 there**, nothing in `App.tsx` or the shell. (`BrowserRouter` has no route
 `handle` / `useMatches`, so the table is the single source.)
 
