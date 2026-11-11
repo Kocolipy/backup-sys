@@ -247,6 +247,33 @@
   --text-headline-lg--letter-spacing: -0.02em;
   --text-headline-lg--font-weight: 700;
 
+  /* An expandable table row's detail as it opens and closes: it grows from no
+     height and fades in, then shrinks back and fades out, holding the closed
+     frame until it is removed. The animated element is a one-row grid whose
+     child clips its overflow. */
+  --animate-detail-open: detail-open 180ms ease-out;
+  --animate-detail-close: detail-close 150ms ease-in forwards;
+  @keyframes detail-close {
+    from {
+      grid-template-rows: 1fr;
+      opacity: 1;
+    }
+    to {
+      grid-template-rows: 0fr;
+      opacity: 0;
+    }
+  }
+  @keyframes detail-open {
+    from {
+      grid-template-rows: 0fr;
+      opacity: 0;
+    }
+    to {
+      grid-template-rows: 1fr;
+      opacity: 1;
+    }
+  }
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);

@@ -141,7 +141,7 @@ function pageOf(events: object[], overrides: Partial<Record<string, unknown>> = 
 }
 
 /** The read starting at `startIndex` with no filter, as the page names it. */
-const at = (startIndex: number) => `GET ${AUDIT_EVENTS_PATH}?startIndex=${startIndex}&count=50`;
+const at = (startIndex: number) => `GET ${AUDIT_EVENTS_PATH}?startIndex=${startIndex}&count=20`;
 
 /** The same answer to every read of the listing, whatever its filters or page. */
 const everyRead = (answer: WireAnswer): Answers => ({ [`GET ${AUDIT_EVENTS_PATH}*`]: answer });
@@ -234,7 +234,7 @@ async function openDetails(user: User): Promise<Record<string, string>[]> {
   );
 }
 
-const unfiltered = `${AUDIT_EVENTS_PATH}?startIndex=1&count=50`;
+const unfiltered = `${AUDIT_EVENTS_PATH}?startIndex=1&count=20`;
 const applyButton = () => screen.getByRole("button", { name: "Apply" });
 
 /** Presses Apply, opening the filters first if an earlier Apply closed them. */
@@ -266,7 +266,7 @@ describe("Audit", () => {
       "Users listed",
     ]);
     expect(requests()).toEqual([
-      { method: "GET", path: `${AUDIT_EVENTS_PATH}?startIndex=1&count=50` },
+      { method: "GET", path: `${AUDIT_EVENTS_PATH}?startIndex=1&count=20` },
     ]);
   });
 
@@ -872,7 +872,7 @@ describe("Audit", () => {
 
       await screen.findByText("Showing 2 to 2 of 51 events");
       expect(within(table()).getByText("Users listed")).toBeInTheDocument();
-      expect(readPaths(requests).slice(-1)[0]).toBe(`${AUDIT_EVENTS_PATH}?startIndex=2&count=50`);
+      expect(readPaths(requests).slice(-1)[0]).toBe(`${AUDIT_EVENTS_PATH}?startIndex=2&count=20`);
     });
 
     it("shows no pager, and sends no request, for a session lacking audit:read", async () => {
@@ -898,31 +898,31 @@ describe("Audit", () => {
       await vi.waitFor(() => expect(requests()).toHaveLength(5));
 
       expect(lastRead(requests)).toBe(
-        `${AUDIT_EVENTS_PATH}?operation=LOGOUT&operation=LOCKOUT_SET&outcome=FAILURE&startIndex=2&count=50`,
+        `${AUDIT_EVENTS_PATH}?operation=LOGOUT&operation=LOCKOUT_SET&outcome=FAILURE&startIndex=2&count=20`,
       );
     });
 
     it("moves back by the page size it asks for", async () => {
       const { requests } = await renderAudit({
         [at(1)]: answerPage(
-          Array.from({ length: 50 }, (_, index) => ({ ...EVENT_1, id: `e-${index}` })),
-          { totalResults: 51 },
+          Array.from({ length: 20 }, (_, index) => ({ ...EVENT_1, id: `e-${index}` })),
+          { totalResults: 21 },
         ),
-        [at(51)]: answerPage([EVENT_2], { startIndex: 51, totalResults: 51 }),
+        [at(21)]: answerPage([EVENT_2], { startIndex: 21, totalResults: 21 }),
       });
       const user = userEvent.setup();
 
       await findTable();
       await user.click(screen.getByRole("button", { name: "Next" }));
-      await screen.findByText("Showing 51 to 51 of 51 events");
+      await screen.findByText("Showing 21 to 21 of 21 events");
       expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
       await user.click(screen.getByRole("button", { name: "Previous" }));
-      await screen.findByText("Showing 1 to 50 of 51 events");
+      await screen.findByText("Showing 1 to 20 of 21 events");
 
       expect(readPaths(requests)).toEqual([
-        `${AUDIT_EVENTS_PATH}?startIndex=1&count=50`,
-        `${AUDIT_EVENTS_PATH}?startIndex=51&count=50`,
-        `${AUDIT_EVENTS_PATH}?startIndex=1&count=50`,
+        `${AUDIT_EVENTS_PATH}?startIndex=1&count=20`,
+        `${AUDIT_EVENTS_PATH}?startIndex=21&count=20`,
+        `${AUDIT_EVENTS_PATH}?startIndex=1&count=20`,
       ]);
     });
   });
@@ -990,8 +990,8 @@ describe("Audit", () => {
 
     await vi.waitFor(() =>
       expect(readPaths(requests)).toEqual([
-        `${AUDIT_EVENTS_PATH}?startIndex=1&count=50`,
-        `${AUDIT_EVENTS_PATH}?startIndex=1&count=50`,
+        `${AUDIT_EVENTS_PATH}?startIndex=1&count=20`,
+        `${AUDIT_EVENTS_PATH}?startIndex=1&count=20`,
       ]),
     );
   });
@@ -1023,7 +1023,7 @@ describe("Audit", () => {
 
       // Each bound is read as Singapore time, eight hours ahead of UTC.
       expect(readPaths(requests).slice(-1)[0]).toBe(
-        `${AUDIT_EVENTS_PATH}?resourceId=00000000-0000-4000-8000-000000000002&from=2025-12-31T16%3A00%3A00.000Z&to=2026-01-01T16%3A00%3A00.000Z&startIndex=1&count=50`,
+        `${AUDIT_EVENTS_PATH}?resourceId=00000000-0000-4000-8000-000000000002&from=2025-12-31T16%3A00%3A00.000Z&to=2026-01-01T16%3A00%3A00.000Z&startIndex=1&count=20`,
       );
     });
 
@@ -1044,7 +1044,7 @@ describe("Audit", () => {
 
       // From is the first event's minute, so it is included; To is the second's.
       expect(readPaths(requests).slice(-1)[0]).toBe(
-        `${AUDIT_EVENTS_PATH}?from=2026-01-02T19%3A04%3A00.000Z&to=2026-01-03T10%3A11%3A00.000Z&startIndex=1&count=50`,
+        `${AUDIT_EVENTS_PATH}?from=2026-01-02T19%3A04%3A00.000Z&to=2026-01-03T10%3A11%3A00.000Z&startIndex=1&count=20`,
       );
     });
 
@@ -1089,9 +1089,9 @@ describe("Audit", () => {
       await vi.waitFor(() =>
         expect(readPaths(requests)).toEqual([
           unfiltered,
-          `${AUDIT_EVENTS_PATH}?outcome=FAILURE&startIndex=1&count=50`,
-          `${AUDIT_EVENTS_PATH}?outcome=FAILURE&startIndex=1&count=50`,
-          `${AUDIT_EVENTS_PATH}?outcome=FAILURE&startIndex=1&count=50`,
+          `${AUDIT_EVENTS_PATH}?outcome=FAILURE&startIndex=1&count=20`,
+          `${AUDIT_EVENTS_PATH}?outcome=FAILURE&startIndex=1&count=20`,
+          `${AUDIT_EVENTS_PATH}?outcome=FAILURE&startIndex=1&count=20`,
         ]),
       );
     });
@@ -1175,9 +1175,9 @@ describe("Audit", () => {
       await screen.findByText("Showing 1 to 1 of 51 events");
 
       expect(readPaths(requests)).toEqual([
-        `${AUDIT_EVENTS_PATH}?startIndex=1&count=50`,
-        `${AUDIT_EVENTS_PATH}?startIndex=2&count=50`,
-        `${AUDIT_EVENTS_PATH}?startIndex=1&count=50`,
+        `${AUDIT_EVENTS_PATH}?startIndex=1&count=20`,
+        `${AUDIT_EVENTS_PATH}?startIndex=2&count=20`,
+        `${AUDIT_EVENTS_PATH}?startIndex=1&count=20`,
       ]);
     });
 
@@ -1195,7 +1195,7 @@ describe("Audit", () => {
       await vi.waitFor(() =>
         expect(readPaths(requests)).toEqual([
           unfiltered,
-          `${AUDIT_EVENTS_PATH}?actorId=${id}&startIndex=1&count=50`,
+          `${AUDIT_EVENTS_PATH}?actorId=${id}&startIndex=1&count=20`,
         ]),
       );
     });
@@ -1211,7 +1211,7 @@ describe("Audit", () => {
 
       await vi.waitFor(() =>
         expect(lastRead(requests)).toBe(
-          `${AUDIT_EVENTS_PATH}?resourceId=${id}&startIndex=1&count=50`,
+          `${AUDIT_EVENTS_PATH}?resourceId=${id}&startIndex=1&count=20`,
         ),
       );
     });
@@ -1275,7 +1275,7 @@ describe("Audit", () => {
         expect(lastRead(requests)).toBe(
           `${AUDIT_EVENTS_PATH}?` +
             AUDIT_OPERATIONS.map((operation) => `operation=${operation}`).join("&") +
-            "&startIndex=1&count=50",
+            "&startIndex=1&count=20",
         ),
       );
     });
@@ -1363,9 +1363,9 @@ describe("Audit", () => {
       await vi.waitFor(() =>
         expect(readPaths(requests)).toEqual([
           unfiltered,
-          `${AUDIT_EVENTS_PATH}?operation=LOGOUT&startIndex=1&count=50`,
-          `${AUDIT_EVENTS_PATH}?operation=LOGOUT&operation=LOCKOUT_SET&startIndex=1&count=50`,
-          `${AUDIT_EVENTS_PATH}?operation=LOCKOUT_SET&startIndex=1&count=50`,
+          `${AUDIT_EVENTS_PATH}?operation=LOGOUT&startIndex=1&count=20`,
+          `${AUDIT_EVENTS_PATH}?operation=LOGOUT&operation=LOCKOUT_SET&startIndex=1&count=20`,
+          `${AUDIT_EVENTS_PATH}?operation=LOCKOUT_SET&startIndex=1&count=20`,
         ]),
       );
     });
@@ -1469,8 +1469,8 @@ describe("Audit", () => {
       await vi.waitFor(() =>
         expect(readPaths(requests)).toEqual([
           unfiltered,
-          `${AUDIT_EVENTS_PATH}?operation=LOGOUT&startIndex=1&count=50`,
-          `${AUDIT_EVENTS_PATH}?operation=LOGOUT&actorId=${ACTOR_A}&startIndex=1&count=50`,
+          `${AUDIT_EVENTS_PATH}?operation=LOGOUT&startIndex=1&count=20`,
+          `${AUDIT_EVENTS_PATH}?operation=LOGOUT&actorId=${ACTOR_A}&startIndex=1&count=20`,
         ]),
       );
     });
@@ -1500,7 +1500,7 @@ describe("Audit", () => {
       await vi.waitFor(() => expect(requests()).toHaveLength(3));
       expect(lastRead(requests)).toBe(
         `${AUDIT_EVENTS_PATH}?operation=LOGOUT&actorId=${ACTOR_A}&resourceId=${RESOURCE_A}` +
-          "&from=2025-12-31T16%3A00%3A00.000Z&to=2026-01-01T16%3A00%3A00.000Z&startIndex=1&count=50",
+          "&from=2025-12-31T16%3A00%3A00.000Z&to=2026-01-01T16%3A00%3A00.000Z&startIndex=1&count=20",
       );
     });
 
@@ -1536,7 +1536,7 @@ describe("Audit", () => {
 
       await vi.waitFor(() =>
         expect(lastRead(requests)).toBe(
-          `${AUDIT_EVENTS_PATH}?operation=LOGOUT&actorId=${ACTOR_A}&startIndex=1&count=50`,
+          `${AUDIT_EVENTS_PATH}?operation=LOGOUT&actorId=${ACTOR_A}&startIndex=1&count=20`,
         ),
       );
     });
@@ -1556,7 +1556,7 @@ describe("Audit", () => {
 
       await vi.waitFor(() =>
         expect(lastRead(requests)).toBe(
-          `${AUDIT_EVENTS_PATH}?operation=LOGOUT&startIndex=1&count=50`,
+          `${AUDIT_EVENTS_PATH}?operation=LOGOUT&startIndex=1&count=20`,
         ),
       );
     });
@@ -1576,7 +1576,7 @@ describe("Audit", () => {
 
       await vi.waitFor(() =>
         expect(lastRead(requests)).toBe(
-          `${AUDIT_EVENTS_PATH}?operation=LOGOUT&outcome=FAILURE&startIndex=1&count=50`,
+          `${AUDIT_EVENTS_PATH}?operation=LOGOUT&outcome=FAILURE&startIndex=1&count=20`,
         ),
       );
     });
@@ -1597,7 +1597,7 @@ describe("Audit", () => {
 
       await vi.waitFor(() =>
         expect(lastRead(requests)).toBe(
-          `${AUDIT_EVENTS_PATH}?outcome=SUCCESS&actorId=${ACTOR_A}&startIndex=1&count=50`,
+          `${AUDIT_EVENTS_PATH}?outcome=SUCCESS&actorId=${ACTOR_A}&startIndex=1&count=20`,
         ),
       );
     });
@@ -1606,7 +1606,7 @@ describe("Audit", () => {
       await renderAudit({
         [at(1)]: answerPage([EVENT_1], { totalResults: 51 }),
         [at(2)]: answerPage([EVENT_2], { startIndex: 2, totalResults: 51 }),
-        [`GET ${AUDIT_EVENTS_PATH}?operation=LOGOUT&startIndex=1&count=50`]: answerPage([EVENT_1], {
+        [`GET ${AUDIT_EVENTS_PATH}?operation=LOGOUT&startIndex=1&count=20`]: answerPage([EVENT_1], {
           totalResults: 51,
         }),
       });
@@ -1632,7 +1632,7 @@ describe("Audit", () => {
       await user.keyboard("lockout l{Enter}");
       await vi.waitFor(() =>
         expect(lastRead(requests)).toBe(
-          `${AUDIT_EVENTS_PATH}?operation=LOCKOUT_LIFT&startIndex=1&count=50`,
+          `${AUDIT_EVENTS_PATH}?operation=LOCKOUT_LIFT&startIndex=1&count=20`,
         ),
       );
       await user.keyboard("{Escape}");
@@ -1688,7 +1688,7 @@ describe("Audit", () => {
       await vi.waitFor(() =>
         expect(readPaths(requests)).toEqual([
           unfiltered,
-          `${AUDIT_EVENTS_PATH}?outcome=${value}&startIndex=1&count=50`,
+          `${AUDIT_EVENTS_PATH}?outcome=${value}&startIndex=1&count=20`,
         ]),
       );
     });
@@ -1744,7 +1744,7 @@ describe("Audit", () => {
 
       await vi.waitFor(() =>
         expect(lastRead(requests)).toBe(
-          `${AUDIT_EVENTS_PATH}?outcome=SUCCESS&startIndex=1&count=50`,
+          `${AUDIT_EVENTS_PATH}?outcome=SUCCESS&startIndex=1&count=20`,
         ),
       );
     });

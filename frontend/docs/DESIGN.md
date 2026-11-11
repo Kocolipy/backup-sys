@@ -326,9 +326,13 @@ rest into a detail row beneath it. The row's last cell holds a ghost icon
 `Button` — a chevron that turns when open — named for the row
 (`Details of Login failed at 2026-01-03 03:04`), with `aria-expanded` stating
 its state and `aria-controls` naming the detail. The detail row is one cell
-spanning every column, rendered only while open, holding a `region` of the
+spanning every column, rendered while open and through its closing animation,
+holding a `region` of the
 same name with the fields as a `<dl>`. Each row opens on its own, and a native
-button gives Enter and Space for free. The Audit page's rows are this pattern,
+button gives Enter and Space for free. The detail grows from no height and
+fades in as it opens (`animate-detail-open`, 180ms) and shrinks and fades out
+as it closes (`animate-detail-close`, 150ms); with reduced motion it appears
+and leaves at once. The Audit page's rows are this pattern,
 and also toggle on a click anywhere on the row or its detail — except a click
 that ends a text selection — with the button stopping propagation so it toggles
 once;
