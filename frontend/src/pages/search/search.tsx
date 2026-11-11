@@ -1,4 +1,7 @@
 import { useId, useState } from "react";
+import { useNavigate } from "react-router-dom";
+
+import { setEhrContext } from "@/auth/ehr-context";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -45,8 +48,15 @@ const GENDER_BADGE_TINTS: Readonly<Record<PatientGender, string | undefined>> = 
  * The matching Patients, one row each: the official name, the full NRIC, the
  * gender as a badge (Male blue, Female pink) and both dates as `dd MMM yyyy`, a missing Last visit
  * shown as `—`. Date of Birth and Last Visit sort, one at a time; the name,
- * NRIC and gender do not. A row is not a control: nothing happens on clicking
- * it. Each row is keyed by the Patient's id, which is kept and never shown.
+ * NRIC and gender do not. Each row is keyed by the Patient's id, which is kept
+ * and never shown.
+ *
+ * Selecting a row puts its Patient into the tab's EHR context, replacing any
+ * patient there with no confirmation, and goes to Home. A click anywhere on the
+ * row selects it; the Patient Name is a button, so the keyboard and assistive
+ * technology select it too, its click reaching the row's. The same Patient
+ * selected again leaves the context as it was, so the signed-in layout reads
+ * them no second time. No row marks the patient in context.
  */
 function ResultsTable({
   patients,
@@ -55,6 +65,11 @@ function ResultsTable({
   patients: readonly PatientMatch[];
   sorting: ResultsSorting;
 }) {
+  const navigate = useNavigate();
+  const select = (patient: PatientMatch) => {
+    setEhrContext({ patient: patient.id });
+    void navigate("/");
+  };
   return (
     <Table>
       <TableCaption className="sr-only">Matching patients</TableCaption>
@@ -69,8 +84,12 @@ function ResultsTable({
       </TableHeader>
       <TableBody>
         {patients.map((patient) => (
-          <TableRow key={patient.id}>
-            <TableCell className="font-medium">{patient.name}</TableCell>
+          <TableRow className="cursor-pointer" key={patient.id} onClick={() => select(patient)}>
+            <TableCell>
+              <Button className="h-auto p-0 text-foreground" variant="link">
+                {patient.name}
+              </Button>
+            </TableCell>
             <TableCell className="font-mono">{patient.nric}</TableCell>
             <TableCell>
               <Badge className={GENDER_BADGE_TINTS[patient.gender]} variant="secondary">

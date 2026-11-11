@@ -31,7 +31,7 @@ previous one in `dependencies`:
 
 - `routes` holds `console-errors.spec.ts`, which asserts that every signed-in
   route, Accounts among them, loads with no alert. It follows every project
-  whose specs create and delete connectors (`admin`): Accounts reads each listed connector's tokens, and a
+  whose specs create and delete connectors (`user` and `admin`): Accounts reads each listed connector's tokens, and a
   connector another worker deleted between the listing and that read showed
   an alert there.
 - `guest` follows `routes` (and the `packaged` project below, when declared)
@@ -87,7 +87,10 @@ replayed session can issue its connector: `workerConnector` creates it from
 the project's `storageState`. So `login-lockout.spec.ts` sits in `admin`, not
 beside `login.spec.ts` in `guest`, which replays no session, and whose own
 sign-ins as the seeded Admin would end any Admin session it held for that
-connector's cleanup.
+connector's cleanup. A spec in `user`, which runs before `guest` ends the
+saved Admin session, passes that session to `workerConnector` instead
+(`ADMIN_SESSION`), as `patient-search.spec.ts` does for the User it signs out
+and back in; that makes `user` a connector writer in `playwright.config.ts`.
 
 A spec that loads pages with an empty console as its subject collects through
 `recordConsoleErrors` in `test/e2e/console.helpers.ts`: `smoke.spec.ts` owns the

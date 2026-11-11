@@ -264,15 +264,19 @@ export function rowOf(page: Page, table: Locator, name: string): Locator {
 
 /**
  * Registers `beforeAll`/`afterAll` hooks giving every test a worker runs from
- * the calling file one shared connector holding every token Permission and its SCIM client, created
- * through the project's own Admin session and deleted afterwards. Call it at
- * the top level of a spec in the `admin` project.
+ * the calling scope one shared connector holding every token Permission and its
+ * SCIM client, created through the project's own Admin session and deleted
+ * afterwards. Call it at the top level of a spec in the `admin` project. A spec
+ * in a project replaying no Admin session passes `session`
+ * (`ADMIN_SESSION`, `sessions.ts`), and calls it inside the `describe` needing it, so
+ * the project's other tests create none; its project is then a connector
+ * writer (`playwright.config.ts`).
  *
  * One per worker rather than one per test: a connector and token are two admin
  * writes and a token hash each, and nothing a test does depends on the
  * connector being fresh.
  */
-export function workerConnector(label: string) {
+export function workerConnector(label: string, { session }: { session?: string } = {}) {
   const name = `${E2E_PREFIX}${label}-${runId()}`;
   let owner: Page | undefined;
   let connector: Connector | undefined;
@@ -281,7 +285,7 @@ export function workerConnector(label: string) {
   test.beforeAll(async ({ browser }) => {
     const context = await browser.newContext({
       baseURL: test.info().project.use.baseURL,
-      storageState: test.info().project.use.storageState,
+      storageState: session ?? test.info().project.use.storageState,
     });
     owner = await context.newPage();
     connector = await createConnector(owner, name);

@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 
 import { recordConsoleErrors } from "./console.helpers";
 import { ROUTE_READY } from "./route.helpers";
+import { USER_SESSION } from "./sessions";
 
 /**
  * Every authenticated route loads with an empty console, as an Admin and as a
@@ -22,7 +23,7 @@ const IDENTITIES = [
   {
     role: "user",
     routes: ["/search", "/", "/change-password"],
-    storageState: "test/e2e/.auth/user.json",
+    storageState: USER_SESSION,
   },
 ] as const;
 

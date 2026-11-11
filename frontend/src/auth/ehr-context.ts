@@ -6,8 +6,8 @@
  * Its lifecycle (`docs/BACKEND_CONTRACT.md`):
  *
  * - {@link setEhrContext} **replaces** it, holding the patient to FHIR's id
- *   grammar and keeping it only if it passes; nothing in the SPA sets it, so a
- *   tab holds none;
+ *   grammar and keeping it only if it passes; the Search page sets it when a
+ *   result is selected;
  * - a reload **keeps** it, since `sessionStorage` outlives the page;
  * - every end of the session — sign-out, expiry, an Idle sign-out, a password
  *   change — and a password Login **clear** it (`session-transitions.ts`,

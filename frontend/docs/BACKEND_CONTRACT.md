@@ -195,7 +195,7 @@ change, when the backend side moves. What the SPA has to honour:
   context, held to FHIR's id grammar, `[A-Za-z0-9\-.]{1,64}` (a patient
   outside it is left out) — in `sessionStorage` under
   `ehr-context`, per tab. The lifecycle: `setEhrContext` **replaces** it, and
-  nothing in the SPA calls it yet, so a tab holds none; a reload **keeps** it;
+  the Search page calls it when a result is selected; a reload **keeps** it;
   every session end (`end(reason)` in `session-transitions.ts`: sign-out,
   expiry, an Idle sign-out, a password change that ends the session, a refused
   login) and a password Login **clear** it. What is read back from storage is

@@ -1,5 +1,19 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { loginAs } from "./auth.helpers";
+import { expectNoPatientInContext } from "./patient.helpers";
+import {
+  deprovisionUser,
+  E2E_PREFIX,
+  freshBrowser,
+  OWN_PASSWORD,
+  provisionUser,
+  runId,
+  settlePassword,
+  workerConnector,
+} from "./scim.helpers";
+import { ADMIN_SESSION } from "./sessions";
+
 /**
  * Patient Search as a signed-in User meets it, against the patient source's
  * mock (`backend/patient-source-mock`): its canned name search spanning two
@@ -8,9 +22,15 @@ import { expect, test, type Page } from "@playwright/test";
  * search that matches nothing, a query too short to send, a from-date after
  * its to-date refused in the Filter panel, and the Search link first in the
  * sidebar. Nothing about a search, its filters or its sort reaches the URL.
+ * Selecting a result puts its Patient into the tab's EHR context, shown on
+ * Home's Patient card and the top bar; a second selection replaces it, Search
+ * starts afresh after one, and signing out and back in leaves none.
  *
  * In the `user` project: `patient:read` is a baseline Permission, so the seeded
- * User holding nothing else searches as any signed-in User does.
+ * User holding nothing else searches as any signed-in User does. Signing out
+ * would end the session the project replays, so the test that signs out and
+ * back in does it as a User it provisions, through a connector the saved Admin
+ * session creates, and deletes both afterwards.
  */
 
 const box = (page: Page) => page.getByRole("searchbox", { name: "Search by name or NRIC" });
@@ -262,5 +282,103 @@ test.describe("Patient Search", () => {
 
     await expect(page).toHaveURL("/search");
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Patient Search");
+  });
+
+  test.describe("selecting a result", () => {
+    /** Home's Patient card holding a patient: a banner named Patient, headed by their name. */
+    const patientCard = (page: Page) => page.getByRole("region", { exact: true, name: "Patient" });
+
+    const topBarPatient = (page: Page) => page.getByRole("region", { name: "Patient in context" });
+
+    /** Selects the result row naming `name`, by a click on its NRIC cell. */
+    const select = (page: Page, name: string) =>
+      rowTexts(page)
+        .filter({ has: page.getByRole("button", { exact: true, name }) })
+        .getByRole("cell")
+        .nth(1)
+        .click();
+
+    /** Home, showing the Patient `name` with NRIC `nric` on its Patient card and the top bar. */
+    async function expectOnHomeInContext(page: Page, name: string, nric: string) {
+      await expect(page).toHaveURL("/");
+      await expect(page.getByRole("heading", { level: 1 })).toHaveText("Profile");
+      await expect(patientCard(page).getByRole("heading")).toHaveText(name);
+      await expect(patientCard(page).getByText(nric, { exact: true })).toBeVisible();
+      await expect(topBarPatient(page)).toHaveText(`${name}${nric}`);
+    }
+
+    test("puts the Patient of a selected row in context, on Home's Patient card and the top bar", async ({
+      page,
+    }) => {
+      await search(page, "tan");
+
+      await select(page, "Tan Hui Min");
+
+      await expectOnHomeInContext(page, "Tan Hui Min", "S9012345A");
+    });
+
+    test("selects from the keyboard, by the Patient Name button", async ({ page }) => {
+      await search(page, "s9212345a");
+
+      await page.getByRole("button", { name: "Siti Nurhaliza binte Ahmad" }).press("Enter");
+
+      await expectOnHomeInContext(page, "Siti Nurhaliza binte Ahmad", "S9212345A");
+    });
+
+    test("replaces the patient in context with a second selection", async ({ page }) => {
+      await search(page, "tan");
+      await select(page, "Tan Hui Min");
+      await expectOnHomeInContext(page, "Tan Hui Min", "S9012345A");
+      await page.locator('[data-slot="sidebar"]').getByRole("link", { name: "Search" }).click();
+
+      await search(page, "s9212345a");
+      await select(page, "Siti Nurhaliza binte Ahmad");
+
+      await expectOnHomeInContext(page, "Siti Nurhaliza binte Ahmad", "S9212345A");
+    });
+
+    test("shows only the search box on coming back to Search after a selection", async ({
+      page,
+    }) => {
+      await search(page, "tan");
+      await select(page, "Tan Hui Min");
+      await expectOnHomeInContext(page, "Tan Hui Min", "S9012345A");
+
+      await page.locator('[data-slot="sidebar"]').getByRole("link", { name: "Search" }).click();
+
+      await expect(page.getByRole("heading", { level: 1 })).toHaveText("Patient Search");
+      await expect(box(page)).toHaveValue("");
+      await expect(page.getByRole("heading", { name: "Search Results" })).toHaveCount(0);
+      await expect(results(page)).toHaveCount(0);
+    });
+
+    test.describe("signing out", () => {
+      const connector = workerConnector("patient-search", { session: ADMIN_SESSION });
+
+      test("leaves no patient in context after signing out and back in", async ({ browser }) => {
+        const userName = `${E2E_PREFIX}patient-search-${runId()}`;
+        const id = await provisionUser(connector.scim, userName);
+        const context = await freshBrowser(browser);
+        try {
+          await settlePassword(userName);
+          const page = await context.newPage();
+          await loginAs(page, userName, OWN_PASSWORD);
+          await page.goto("/search");
+          await search(page, "tan");
+          await select(page, "Tan Hui Min");
+          await expectOnHomeInContext(page, "Tan Hui Min", "S9012345A");
+
+          await page.getByRole("button", { name: "Sign out" }).click();
+          await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
+          await loginAs(page, userName, OWN_PASSWORD);
+
+          await expectNoPatientInContext(page);
+          await expect(topBarPatient(page)).toHaveCount(0);
+        } finally {
+          await context.close();
+          await deprovisionUser(connector.scim, id);
+        }
+      });
+    });
   });
 });
