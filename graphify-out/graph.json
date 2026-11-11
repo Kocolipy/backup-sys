@@ -13235,7 +13235,7 @@
       "file_type": "code",
       "norm_label": "ehrcontext",
       "source_file": "frontend/src/auth/ehr-context.ts",
-      "source_location": "L74"
+      "source_location": "L69"
     },
     {
       "id": "frontend_src_auth_permissions_allof",
@@ -116119,7 +116119,7 @@
       "file_type": "code",
       "norm_label": "useehrcontext()",
       "source_file": "frontend/src/auth/ehr-context.ts",
-      "source_location": "L86"
+      "source_location": "L81"
     },
     {
       "id": "frontend_src_auth_idle_sign_out_test_pollingpage",
@@ -123707,7 +123707,7 @@
       "file_type": "code",
       "norm_label": "clearehrcontext()",
       "source_file": "frontend/src/auth/ehr-context.ts",
-      "source_location": "L101"
+      "source_location": "L96"
     },
     {
       "id": "frontend_src_auth_ehr_context_decoded",
@@ -123719,7 +123719,7 @@
       "file_type": "code",
       "norm_label": "decoded()",
       "source_file": "frontend/src/auth/ehr-context.ts",
-      "source_location": "L52"
+      "source_location": "L47"
     },
     {
       "id": "frontend_src_auth_ehr_context_isfhirid",
@@ -123731,7 +123731,7 @@
       "file_type": "code",
       "norm_label": "isfhirid()",
       "source_file": "frontend/src/auth/ehr-context.ts",
-      "source_location": "L37"
+      "source_location": "L35"
     },
     {
       "id": "frontend_src_auth_ehr_context_setehrcontext",
@@ -123743,7 +123743,7 @@
       "file_type": "code",
       "norm_label": "setehrcontext()",
       "source_file": "frontend/src/auth/ehr-context.ts",
-      "source_location": "L94"
+      "source_location": "L89"
     },
     {
       "id": "frontend_src_auth_ehr_context_withingrammar",
@@ -123755,7 +123755,7 @@
       "file_type": "code",
       "norm_label": "withingrammar()",
       "source_file": "frontend/src/auth/ehr-context.ts",
-      "source_location": "L41"
+      "source_location": "L39"
     },
     {
       "id": "frontend_src_auth_session_adapter_testhelpers_holding",
@@ -191033,7 +191033,7 @@
       "file_type": "code",
       "norm_label": "lastread",
       "source_file": "frontend/src/auth/ehr-context.ts",
-      "source_location": "L64"
+      "source_location": "L59"
     },
     {
       "id": "frontend_src_auth_ehr_context_subscribeehrcontext",
@@ -191044,7 +191044,7 @@
       "file_type": "code",
       "norm_label": "subscribeehrcontext",
       "source_file": "frontend/src/auth/ehr-context.ts",
-      "source_location": "L83"
+      "source_location": "L78"
     },
     {
       "id": "frontend_src_auth_ehr_context_test",
@@ -191066,7 +191066,7 @@
       "file_type": "code",
       "norm_label": "watching",
       "source_file": "frontend/src/auth/ehr-context.ts",
-      "source_location": "L49"
+      "source_location": "L44"
     },
     {
       "id": "frontend_src_lib_watchers",
@@ -380069,7 +380069,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "frontend/src/auth/ehr-context.ts",
-      "source_location": "L60",
+      "source_location": "L55",
       "weight": 1.0
     },
     {
@@ -380081,7 +380081,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "frontend/src/auth/ehr-context.ts",
-      "source_location": "L77",
+      "source_location": "L72",
       "weight": 1.0
     },
     {
@@ -380093,7 +380093,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "frontend/src/auth/ehr-context.ts",
-      "source_location": "L95",
+      "source_location": "L90",
       "weight": 1.0
     },
     {
@@ -380105,7 +380105,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "frontend/src/auth/ehr-context.ts",
-      "source_location": "L43",
+      "source_location": "L40",
       "weight": 1.0
     },
     {
@@ -536825,7 +536825,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "frontend/src/auth/ehr-context.ts",
-      "source_location": "L24",
+      "source_location": "L23",
       "weight": 1.0
     },
     {
@@ -551473,7 +551473,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "frontend/src/auth/ehr-context.ts",
-      "source_location": "L22",
+      "source_location": "L21",
       "weight": 1.0
     },
     {
@@ -551485,7 +551485,7 @@
       "confidence_score": 1.0,
       "context": "import",
       "source_file": "frontend/src/auth/ehr-context.ts",
-      "source_location": "L24",
+      "source_location": "L23",
       "weight": 1.0
     },
     {
@@ -622004,24 +622004,13 @@
     },
     {
       "source": "frontend_src_auth_ehr_context",
-      "target": "frontend_src_auth_ehr_context_clearehrcontext",
-      "relation": "contains",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "frontend/src/auth/ehr-context.ts",
-      "source_location": "L101",
-      "weight": 1.0
-    },
-    {
-      "source": "frontend_src_auth_ehr_context",
       "target": "frontend_src_auth_ehr_context_isfhirid",
       "relation": "contains",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "frontend/src/auth/ehr-context.ts",
-      "source_location": "L37",
+      "source_location": "L35",
       "weight": 1.0
     },
     {
@@ -622032,7 +622021,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "frontend/src/auth/ehr-context.ts",
-      "source_location": "L41",
+      "source_location": "L39",
       "weight": 1.0
     },
     {
@@ -622043,7 +622032,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "frontend/src/auth/ehr-context.ts",
-      "source_location": "L49",
+      "source_location": "L44",
       "weight": 1.0
     },
     {
@@ -622054,7 +622043,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "frontend/src/auth/ehr-context.ts",
-      "source_location": "L52",
+      "source_location": "L47",
       "weight": 1.0
     },
     {
@@ -622065,7 +622054,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "frontend/src/auth/ehr-context.ts",
-      "source_location": "L64",
+      "source_location": "L59",
       "weight": 1.0
     },
     {
@@ -622076,7 +622065,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "frontend/src/auth/ehr-context.ts",
-      "source_location": "L74",
+      "source_location": "L69",
       "weight": 1.0
     },
     {
@@ -622087,7 +622076,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "frontend/src/auth/ehr-context.ts",
-      "source_location": "L83",
+      "source_location": "L78",
       "weight": 1.0
     },
     {
@@ -622098,7 +622087,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "frontend/src/auth/ehr-context.ts",
-      "source_location": "L86",
+      "source_location": "L81",
       "weight": 1.0
     },
     {
@@ -622109,7 +622098,18 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "frontend/src/auth/ehr-context.ts",
-      "source_location": "L94",
+      "source_location": "L89",
+      "weight": 1.0
+    },
+    {
+      "source": "frontend_src_auth_ehr_context",
+      "target": "frontend_src_auth_ehr_context_clearehrcontext",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "frontend/src/auth/ehr-context.ts",
+      "source_location": "L96",
       "weight": 1.0
     },
     {
@@ -803313,5 +803313,5 @@
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "24d33a4360a066b8f51e2b0dbdb1d5c3fe10c8e1"
+  "built_at_commit": "0b8dd7768ce0a030a479218d5f56ae8508ebd2b5"
 }
