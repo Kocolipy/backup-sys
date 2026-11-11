@@ -53,7 +53,7 @@ alone, granted to every session not [confined](./passwords.md) by the
 change-required flag, whatever its Groups carry, so no Group can take
 self-service away. It carries no Permission: a User in no Group reads no Patient.
 
-**Admin** — a direct member of the Admin group, `Admins`, and so the Superuser.
+**Admin** — a direct member of the Admin group, `Admin`, and so the Superuser.
 A User holding administrative Permissions through other Groups is not an Admin,
 and there is no administrative authority beside the Superuser: such a User may do
 exactly what its Permissions allow — a helpdesk operator holding `user:read` and
@@ -143,7 +143,11 @@ access without a configuration change or a redeploy (ADR 0015). The rules:
   are checked — never from the read that found the User by name, so a membership
   removed or a Group's Permissions reduced while the password was compared is not
   in the session, and one gained then may already be. A confined session holds none. Nothing about the Group Permissions is
-  recorded on the session.
+  recorded on the session. The display names of the User's direct Groups come
+  from the same read and are kept with the session as a snapshot, which the
+  login response and `GET /api/auth/me` report as `groups`: a Group renamed or a
+  membership changed shows from the next Login, as a Permission gained does. A
+  confined session names no Group.
 - **Losing Permissions ends the sessions they were issued to; gaining waits for
   Login.** A SCIM write that removes a User from a Group that carries
   Permissions — a `PATCH` `remove` or `replace` of the members, a `PUT` whose
@@ -229,7 +233,7 @@ a Group has, never who ([administration](./administration.md)).
 
 **Development fixtures** — the shipped `authorization.yaml` seeds, with
 `APP_DEV_FIXTURES_ENABLED=true`, one Group per development access level, each
-with the Users its `members` list names in it: Auditors (`auditor`), Helpdesk
+with the Users its `members` list names in it: Auditor (`auditor`), Helpdesk
 (`helpdesk`) and Medical Officer (`mo1` and `mo2`, so parallel e2e projects each
 sign in as their own). The Superuser's User is the Bootstrap Admin. Their Users
 get `APP_DEV_FIXTURES_PASSWORD`, never
@@ -238,7 +242,7 @@ holding only baseline access, and `dormant`, put past the dormancy lockout windo
 at every startup. Every fixture is off unless the fixtures are enabled and refused outside the `local`
 profile. What each Group confers is a separate block active under the
 `local` profile alone, applied at startup only to a Group that carries nothing
-yet; no other profile seeds a Group Permission. The Auditors hold every read —
+yet; no other profile seeds a Group Permission. The Auditor holds every read —
 `user:read`, `group:read`, `ops:read`, `connector:read` and `audit:read` — and
 change nothing. The Helpdesk holds the same reads plus `account:unlock`: it also
 unlocks a locked User. Medical Officer holds `patient:read` alone, and neither of
