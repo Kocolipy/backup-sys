@@ -472,8 +472,19 @@ reaches a deployed environment. The backend holds no fixture of its own.
   extension (["Last visit"](#last-visit)) but Tan Boon Huat, who has none.
 - **More than the five elements.** Each stub is an R4 Patient as a real source
   would answer it — an MRN identifier ahead of the NRIC, `usual` and `maiden`
-  names beside the official one, `meta`, `active`, `telecom`, `address` — so
-  the tests read the selection, not merely the copy.
+  names beside the official one, `meta`, `active`, `telecom`, `address`,
+  `contact`, `extension` — so the tests read the selection, not merely the
+  copy.
+- **Tan Wei Ming carries Demographic data the service does not serve.** His
+  stub holds a mobile phone and an email (`telecom`), a `home` address with its
+  `text`, a next of kin (a `contact` whose relationship is coded v2-0131 `N`,
+  with the text `Mother`, a name and a phone), and his military service under
+  the placeholder extension
+  `http://example.org/fhir/StructureDefinition/military-service`: two service
+  records (`serviceType`, `rank`, `unit`, `service`, `vocation`) and his
+  `enlistmentDate`, `ordDate` and `rodDate`. The adapter reads none of it
+  (["The in-house patient source"](#the-in-house-patient-source)); the
+  extension's URL is a stand-in until the in-house source names its own.
 - **Dummy NRICs.** Every fixture's NRIC has the NRIC shape — a prefix letter,
   seven digits and a check letter — but carries a **deliberately wrong check
   letter**, so it cannot be a real person's: Tan Wei Ming's `S1234567A`

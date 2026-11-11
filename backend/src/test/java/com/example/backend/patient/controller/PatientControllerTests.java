@@ -116,7 +116,8 @@ class PatientControllerTests {
     /**
      * Exactly the five elements, though the source's R4 Patient carries more — a {@code meta}, an
      * MRN identifier ahead of the NRIC, a {@code usual} name ahead of the official one,
-     * {@code active} and a {@code telecom}.
+     * {@code active}, a {@code telecom}, an {@code address}, a {@code contact} and an
+     * {@code extension}.
      */
     @Test
     void aPatientIsServedAsAnR5PatientResourceOfItsFiveElements() throws Exception {
