@@ -355,6 +355,13 @@ Every listing renders these through the one listing body
   are `aria-hidden`; the listing's loading copy ("Loading users…") sits beside
   them in a `status` region, visually hidden, so a screen reader still hears
   it.
+- **A later read of a paged listing** — a move, a sort, a filter — holds the
+  page last read in place, dimmed to `opacity-60` after 150ms, `aria-busy` and
+  out of the pointer's reach, with the pager disabled, so the listing never
+  drops back to its skeletons; its loading copy is still said in a visually
+  hidden `status` region. A page with no rows is not held, and a failed read
+  drops the held page. A page short of rows stands as tall as the listing's
+  last full page did, so the pager stays where it was.
 - **Empty** — a successful read with no rows shows a centered, muted
   `lucide-react` `Inbox` icon (`size-8`, decorative) above the listing's empty
   copy in `text-sm text-muted-foreground`, with `py-8` around both. The copy is
