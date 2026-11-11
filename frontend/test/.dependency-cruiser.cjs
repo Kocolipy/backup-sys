@@ -105,6 +105,18 @@ module.exports = {
     },
 
     {
+      name: "mb-patient-in-context-has-one-reader",
+      comment:
+        "patient-in-context.ts is the one reader of the patient in context (docs/ARCHITECTURE.md): it reads PATIENT once per patient change and hands its view to the top bar and the Patient card, which only render it. A second importer of home-api.ts could send that read again on every page. A type-only import, such as patient-card.tsx's PatientSummary, sends nothing.",
+      severity: "error",
+      from: {
+        path: "^src/",
+        pathNot: ["^src/pages/home/patient-in-context\\.ts$", "\\.(test|spec)\\.[tj]sx?$"],
+      },
+      to: { path: "^src/pages/home/home-api\\.ts$", dependencyTypesNot: ["type-only"] },
+    },
+
+    {
       name: "mb-auth-does-not-import-up",
       comment:
         "Imports point down the tree and may never point back up (docs/ARCHITECTURE.md). src/auth/ sits below the pages, the shell and the composition root, so it must not import any of them.",

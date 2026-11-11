@@ -228,7 +228,74 @@ class ModuleRulesTests {
                 .contains("Planted");
     }
 
+    // ---- the patient module (ADR 0014) ---------------------------------------------------------
+
+    @Test
+    void a_patient_class_reaching_a_logger_is_reported() {
+        assertThat(violations(ArchitectureTest.the_patient_module_writes_no_log_record,
+                        "com.example.backend.patient.infrastructure.http.Planted",
+                        "org.slf4j.Logger"))
+                .contains("Planted");
+    }
+
+    @Test
+    void a_patient_class_reaching_a_redacted_fault_is_not_reported() {
+        assertThat(violations(ArchitectureTest.the_patient_module_writes_no_log_record,
+                        "com.example.backend.patient.infrastructure.http.Planted",
+                        "com.example.backend.observability.RedactedFaultException"))
+                .isEmpty();
+    }
+
+    @Test
+    void a_patient_class_reaching_the_jpa_api_is_reported() {
+        assertThat(violations(ArchitectureTest.the_patient_module_holds_no_patient,
+                        "com.example.backend.patient.infrastructure.persistence.Planted",
+                        "jakarta.persistence.EntityManager"))
+                .contains("Planted");
+    }
+
+    @Test
+    void a_patient_class_reaching_a_cache_is_reported() {
+        assertThat(violations(ArchitectureTest.the_patient_module_holds_no_patient,
+                        "com.example.backend.patient.application.Planted",
+                        "org.springframework.cache.Cache"))
+                .contains("Planted");
+    }
+
+    @Test
+    void a_patient_class_reaching_the_paging_rules_is_not_reported() {
+        assertThat(violations(ArchitectureTest.the_patient_module_holds_no_patient,
+                        "com.example.backend.patient.application.Planted",
+                        "com.example.backend.paging.domain.PageRequest"))
+                .isEmpty();
+    }
+
+    @Test
+    void a_second_patient_store_adapter_is_reported() {
+        assertThat(implementingViolations(ArchitectureTest.the_patient_store_has_one_adapter,
+                        "com.example.backend.patient.infrastructure.http.CachingPatientStore",
+                        "com.example.backend.patient.domain.PatientStore"))
+                .contains("CachingPatientStore");
+    }
+
+    @Test
+    void the_patient_source_adapter_is_not_reported() {
+        assertThat(implementingViolations(ArchitectureTest.the_patient_store_has_one_adapter,
+                        "com.example.backend.patient.infrastructure.http.PatientSourceAdapter",
+                        "com.example.backend.patient.domain.PatientStore"))
+                .isEmpty();
+    }
+
     // ---- helpers -------------------------------------------------------------------------------
+
+    /** {@code rule}'s violations on one planted class, {@code name}, implementing {@code iface}. */
+    private String implementingViolations(ArchRule rule, String name, String iface) {
+        EvaluationResult result = rule.evaluate(new ClassFileImporter()
+                .importPath(PlantedClasses.plantImplementing(planted, name, iface)));
+        return result.hasViolation() ? String.join("\n", result.getFailureReport().getDetails())
+                : "";
+    }
+
 
     /** One planted class, {@code name}, holding a field per type, imported. */
     private JavaClasses imported(String name, String... reaches) {

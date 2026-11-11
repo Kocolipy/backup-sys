@@ -36,10 +36,14 @@ MVN=${MVN:-./mvnw}
 # file does not exist.
 FAST_GATE=(
   arch/ArchitectureTest
+  arch/AuditTrailRulesTests
   arch/DeadlockRetryRulesTests
+  arch/ErrorNamespaceRulesTests
   arch/ModuleRulesTests
   arch/NamedTargetRulesTests
+  arch/SessionAndIdentityRulesTests
   arch/TestHelperRulesTests
+  arch/TestPolicyRulesTests
   arch/TestSourceArchitectureTest
   arch/TrustServerCertificateTest
   arch/UtilityClassRulesTests
@@ -251,12 +255,12 @@ FAST_GATE=(
 subsystem_pattern() {
   case "$1" in
     arch) echo 'arch/**' ;;
-    auth|scim|audit|authorization|contract|observability|database|lifecycle|paging|scheduling|web)
+    auth|scim|audit|authorization|contract|observability|database|lifecycle|paging|patient|scheduling|web)
       echo "com/example/backend/$1/**" ;;
     *) return 1 ;;
   esac
 }
-SUBSYSTEM_NAMES="arch auth scim audit authorization contract observability database lifecycle paging scheduling web"
+SUBSYSTEM_NAMES="arch auth scim audit authorization contract observability database lifecycle paging patient scheduling web"
 
 usage() {
   echo "usage: $0 fast | subsystem <${SUBSYSTEM_NAMES// /|}> | subsystems | broad" >&2
