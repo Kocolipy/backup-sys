@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { expectSignedInLines } from "./auth.helpers";
 import { expectNoPatientAccess, recordPatientRequests } from "./patient.helpers";
 
 // The seeded `guest`: a User in no Group, holding baseline access and no
@@ -27,6 +28,12 @@ test.describe("baseline User pages", () => {
     await expectNoPatientAccess(page);
     await expect(page.getByRole("alert")).toHaveCount(0);
     expect(patientRequests()).toEqual([]);
+  });
+
+  test("is named in the top bar by its username alone, in no Group", async ({ page }) => {
+    await page.goto("/");
+
+    await expectSignedInLines(page, ["guest"]);
   });
 
   test("is offered no Search link, only Profile", async ({ page }) => {

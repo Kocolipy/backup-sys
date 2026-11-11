@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
@@ -36,7 +37,7 @@ class SessionAuditActorContextTests {
     @Test
     void aRequestServedUnderASignedInSessionNamesItsOwner() {
         HttpSessionAttributes.signedIn(serving().getSession())
-                .signIn(OWNER, Instant.parse("2026-10-10T08:00:00Z"));
+                .signIn(OWNER, Instant.parse("2026-10-10T08:00:00Z"), List.of());
 
         assertThat(actors.signedInUser()).contains(OWNER);
     }

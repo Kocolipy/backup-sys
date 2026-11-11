@@ -70,7 +70,7 @@ another id keeps it.
 `local` profile, where startup fails rather than seeding them:
 
 - `app.dev-fixtures.groups` — one Group per development access level, under a
-  fixed id, with each User its `members` list names seeded into it: Auditors
+  fixed id, with each User its `members` list names seeded into it: Auditor
   (`members: [auditor]`, reading everything an administrator reads), Helpdesk
   (`members: [helpdesk]`, which adds `account:unlock`) and Medical Officer
   (`00000000-0000-4000-8000-00000000a007`, `members: [mo1, mo2]`, reading
@@ -94,7 +94,7 @@ spring:
 app:
   dev-fixtures:
     group-permissions:
-      - group: 00000000-0000-4000-8000-00000000a003 # Auditors
+      - group: 00000000-0000-4000-8000-00000000a003 # Auditor
         permissions:
           [user:read, group:read, ops:read, connector:read, audit:read]
       - group: 00000000-0000-4000-8000-00000000a006 # Helpdesk
