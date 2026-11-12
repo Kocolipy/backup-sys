@@ -53,15 +53,8 @@ record R4Patient(
         if (!"Patient".equals(resourceType)) {
             throw PatientSourceException.failed(Failure.ANOTHER_RESOURCE);
         }
-        if (id == null) {
-            throw PatientSourceException.failed(Failure.NO_ID);
-        }
-        PatientId own;
-        try {
-            own = new PatientId(id);
-        } catch (IllegalArgumentException outsideTheGrammar) {
-            throw PatientSourceException.failed(Failure.INVALID_ID);
-        }
+        PatientId own = new PatientId(
+                SourceSearchset.ownId(id, Failure.NO_ID, Failure.INVALID_ID));
         return new PatientMatch(toPatient(own), lastVisit());
     }
 

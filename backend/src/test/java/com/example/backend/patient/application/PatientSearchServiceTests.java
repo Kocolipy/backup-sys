@@ -9,6 +9,7 @@ import com.example.backend.audit.domain.AuditOperation;
 import com.example.backend.paging.domain.PageRequest;
 import com.example.backend.patient.domain.AdministrativeGender;
 import com.example.backend.patient.domain.DateRange;
+import com.example.backend.patient.domain.FfiHistory;
 import com.example.backend.patient.domain.Patient;
 import com.example.backend.patient.domain.PatientId;
 import com.example.backend.patient.domain.PatientMatch;
@@ -74,6 +75,11 @@ class PatientSearchServiceTests {
                 throw failure;
             }
             return answer;
+        }
+
+        @Override
+        public Optional<FfiHistory> findFfiHistory(PatientId id, PageRequest page) {
+            throw new UnsupportedOperationException("a search reads no FFI History");
         }
     }
 

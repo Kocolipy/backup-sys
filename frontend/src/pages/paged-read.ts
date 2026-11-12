@@ -22,17 +22,20 @@ import type { Page, PageAt } from "@/lib/paging";
 /**
  * A paged read's declaration: a gated read answering a {@link Page}, whose last
  * argument is the {@link PageAt} the hook asks for and whose others are the
- * listing's own (a Group's id, a search, a filter set).
+ * listing's own (a Group's id, a search, a filter set). `N` says whether a
+ * `404` is an ordinary answer — nothing there — read as `absent`, as
+ * {@link ReadDeclaration}'s `N` does.
  */
 export type PagedDeclaration<
   R,
   A extends readonly unknown[],
   P extends ReadRequirement = Permission,
-> = ReadDeclaration<Page<R>, [...A, at: PageAt], false, P>;
+  N extends boolean = false,
+> = ReadDeclaration<Page<R>, [...A, at: PageAt], N, P>;
 
-export interface PagedRead<R> {
-  /** What the listing renders. */
-  view: ReadView<Page<R>>;
+export interface PagedRead<R, N extends boolean = false> {
+  /** What the listing renders; `absent` only for a declaration whose `N` opts in. */
+  view: ReadView<Page<R>, N>;
   /** Reads the page `startIndex` starts. */
   move: (startIndex: number) => void;
   /** How many rows a page asks for, and so how far Previous moves back. */
@@ -55,10 +58,15 @@ export interface PagedRead<R> {
  * filter set — starts again from the first page, in the same render, so the
  * page it had moved to is never read for the new arguments.
  */
-export function usePagedRead<R, A extends readonly unknown[], P extends ReadRequirement>(
-  declaration: PagedDeclaration<R, A, P>,
+export function usePagedRead<
+  R,
+  A extends readonly unknown[],
+  P extends ReadRequirement,
+  N extends boolean = false,
+>(
+  declaration: PagedDeclaration<R, A, P, N>,
   { args, failureMessage, pageSize }: { args: A; failureMessage: string; pageSize: number },
-): PagedRead<R> {
+): PagedRead<R, N> {
   // The declaration with the listing's own arguments bound, addressed by page alone.
   const pathAt = (at: PageAt) => declaration.path(...args, at);
   // The first page's path names the listing's arguments: a new one is a new listing.
@@ -71,7 +79,12 @@ export function usePagedRead<R, A extends readonly unknown[], P extends ReadRequ
   const { startIndex } = position;
 
   const read = useGatedRead(
-    { decode: declaration.decode, path: pathAt, permission: declaration.permission },
+    {
+      absentOnNotFound: declaration.absentOnNotFound,
+      decode: declaration.decode,
+      path: pathAt,
+      permission: declaration.permission,
+    },
     { args: [{ count: pageSize, startIndex }], failureMessage },
   );
   const move = (next: number) => setPosition({ listing, startIndex: next });

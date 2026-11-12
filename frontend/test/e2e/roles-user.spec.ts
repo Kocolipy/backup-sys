@@ -36,13 +36,13 @@ test.describe("baseline User pages", () => {
     await expectSignedInLines(page, ["guest"]);
   });
 
-  test("is offered no Search link, only Profile", async ({ page }) => {
+  test("is offered no Search or FFI link, only Profile", async ({ page }) => {
     await page.goto("/");
 
     await expect(sidebar(page).getByRole("link")).toHaveText(["Profile"]);
   });
 
-  for (const path of ["/search", "/accounts"]) {
+  for (const path of ["/search", "/ffi", "/accounts"]) {
     test(`is routed from ${path} to Home`, async ({ page }) => {
       await page.goto(path);
 

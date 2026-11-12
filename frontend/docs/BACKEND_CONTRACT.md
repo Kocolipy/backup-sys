@@ -92,7 +92,7 @@ change, when the backend side moves. What the SPA has to honour:
   the status alone classifies it, so the `401` / `403` split holds here as
   everywhere. The Patient card sends it only for a patient in context, so a
   session with none sends no patient read at all. Its declaration (`PATIENT`,
-  `src/pages/home/home-api.ts`) opts in to
+  `src/pages/patient-api.ts`) opts in to
   `absentOnNotFound`, so that `404` is the Patient card's "No patient in
   context" and reports nothing to the page status; every other failure — a
   `400`, a `403` (the card passes `forbiddenAsFailure`) or a `5xx`, the
@@ -112,6 +112,16 @@ change, when the backend side moves. What the SPA has to honour:
   the Search page reports with a Retry. Its query, filters and sort travel only
   in that request's query string — the query through `encodeURIComponent` —
   never in the page's URL.
+- **A patient's FFI History answers plain JSON, not FHIR.**
+  `GET /api/patient-ffi/{patientId}` sits outside `/api/patient` too, so it
+  answers `application/json` and every refusal or fault the application API's
+  `ApiError`. Its declaration (`FFI_HISTORY`, `src/pages/ffi/ffi-api.ts`) opts
+  in to `absentOnNotFound`: the `404` of a patient the source holds none under
+  is the FFI page's "No patient in context" and reports nothing; the `502` of
+  the source failing is "Couldn't load FFIs" with Try again. The `{patientId}`
+  is the EHR context's patient, sent through `encodeURIComponent`. Each FFI is
+  decoded strictly: an unknown code or a field the decoder does not know is a
+  failure, never passed through.
 - **A request body is JSON, and says so.** The backend reads a request body
   through its JSON converter only, so a body sent without
   `Content-Type: application/json` is refused `415` before any handler runs.
@@ -204,10 +214,10 @@ change, when the backend side moves. What the SPA has to honour:
   patient read below, and shows "No patient in context" with none. The read
   is not bound to the EHR context: `patient:read` reads any id. It is a
   delegatable Permission the backend issues only to a member of a Group that
-  carries it and to the Superuser; a session without it is refused the read
-  and the Patient search `403`, so the SPA sends neither — the Patient card
-  says the account has no access to patients, and Patient Search is neither
-  linked nor opened.
+  carries it and to the Superuser; a session without it is refused the read,
+  the Patient search and the FFI History `403`, so the SPA sends none of them —
+  the Patient card says the account has no access to patients, and neither
+  Patient Search nor FFI is linked or opened.
 - **Logout answers `Clear-Site-Data: "cache","cookies","storage"`** — on a
   successful logout and on the `401` a logout with no live session gets. The
   browser drops anything in `localStorage` / `sessionStorage` along with the

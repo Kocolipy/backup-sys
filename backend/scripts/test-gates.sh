@@ -143,8 +143,10 @@ FAST_GATE=(
   com/example/backend/patient/PatientSourceFixturesTests
   com/example/backend/patient/application/PatientSearchServiceTests
   com/example/backend/patient/controller/PatientControllerTests
+  com/example/backend/patient/controller/PatientFfiControllerTests
   com/example/backend/patient/controller/PatientSearchControllerTests
   com/example/backend/patient/controller/PatientR5ConformanceTests
+  com/example/backend/patient/domain/FfiTests
   com/example/backend/patient/domain/PatientFilterTests
   com/example/backend/patient/domain/PatientIdTests
   com/example/backend/patient/domain/PatientMatchTests
@@ -152,6 +154,7 @@ FAST_GATE=(
   com/example/backend/patient/domain/PatientSortTests
   com/example/backend/patient/domain/PatientTests
   com/example/backend/patient/infrastructure/http/PatientSourceAdapterContractTests
+  com/example/backend/patient/infrastructure/http/PatientSourceFfiAdapterTests
   com/example/backend/patient/infrastructure/http/PatientSourceSearchAdapterTests
   com/example/backend/scheduling/InMemoryScheduledJobLockContractTests
   com/example/backend/scheduling/application/ScheduledJobRunServiceTests

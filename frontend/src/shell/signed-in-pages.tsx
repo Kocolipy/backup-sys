@@ -1,5 +1,12 @@
 import type { LucideIcon } from "lucide-react";
-import { IdCard, ScrollText, Search as SearchIcon, Settings, Users } from "lucide-react";
+import {
+  ClipboardCheck,
+  IdCard,
+  ScrollText,
+  Search as SearchIcon,
+  Settings,
+  Users,
+} from "lucide-react";
 import type { ReactNode } from "react";
 
 import type { Permission } from "@/auth/api";
@@ -9,6 +16,8 @@ import { ADMINISTRATION_PERMISSIONS } from "@/pages/accounts/accounts-api";
 import { Audit } from "@/pages/audit/audit";
 import { AUDIT_EVENTS } from "@/pages/audit/audit-api";
 import { ChangePassword } from "@/pages/change-password/change-password";
+import { Ffis } from "@/pages/ffi/ffi";
+import { FFI_HISTORY } from "@/pages/ffi/ffi-api";
 import { Home } from "@/pages/home/home";
 import { Search } from "@/pages/search/search";
 import { PATIENT_SEARCH } from "@/pages/search/search-api";
@@ -109,6 +118,21 @@ const SEARCH_PAGE: SignedInPage = {
 };
 
 /**
+ * FFI: the FFI History of the patient in context, linked after Profile for a
+ * session holding `patient:read`, the Permission its read requires, and
+ * guarded by it as Patient Search is, so a session without it is routed to
+ * its landing page and offered no link. Its title heads the page.
+ */
+const FFI_PAGE: SignedInPage = {
+  element: <Ffis />,
+  homeLink: "FFI",
+  icon: ClipboardCheck,
+  path: "/ffi",
+  permissions: [FFI_HISTORY.permission],
+  title: "FFI History",
+};
+
+/**
  * Every signed-in page, declared once: `App` turns each entry into a route
  * (behind its Permission guard, if any), `SignedInShell` reads the matching
  * entry for the title, and links each entry
@@ -118,6 +142,7 @@ const SEARCH_PAGE: SignedInPage = {
 export const SIGNED_IN_PAGES: readonly SignedInPage[] = [
   SEARCH_PAGE,
   HOME_PAGE,
+  FFI_PAGE,
   ...PAGES_BEYOND_HOME,
   SETTINGS_PAGE,
 ];

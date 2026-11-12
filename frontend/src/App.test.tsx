@@ -147,6 +147,22 @@ describe("App", () => {
     expect(window.location.pathname).toBe("/");
   });
 
+  it("redirects a User holding no patient:read away from FFI to Home", async () => {
+    renderApp(SIGNED_IN, "/ffi");
+
+    expect(await screen.findByRole("heading", { name: "Profile" })).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/");
+  });
+
+  it("renders FFI for a session holding patient:read", async () => {
+    renderApp({ [ME]: json(MEDICAL_OFFICER) }, "/ffi");
+
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "FFI History" }),
+    ).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/ffi");
+  });
+
   it("renders Patient Search for a session holding patient:read", async () => {
     renderApp({ [ME]: json(MEDICAL_OFFICER) }, "/search");
 
