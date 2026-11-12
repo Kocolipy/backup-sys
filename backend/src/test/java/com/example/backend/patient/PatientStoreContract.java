@@ -5,6 +5,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.example.backend.paging.domain.PageRequest;
 import com.example.backend.patient.domain.AdministrativeGender;
 import com.example.backend.patient.domain.DateRange;
+import com.example.backend.patient.domain.Ffi;
+import com.example.backend.patient.domain.FfiHigherAuthority;
+import com.example.backend.patient.domain.FfiHistory;
+import com.example.backend.patient.domain.FfiOutcome;
+import com.example.backend.patient.domain.FfiStatus;
+import com.example.backend.patient.domain.FfiSubmittingMc;
+import com.example.backend.patient.domain.FfiType;
 import com.example.backend.patient.domain.Patient;
 import com.example.backend.patient.domain.PatientId;
 import com.example.backend.patient.domain.PatientMatch;
@@ -26,8 +33,9 @@ import org.junit.jupiter.params.provider.MethodSource;
  * What every {@link PatientStore} reads, whatever it reads from, given the patient source's twelve
  * development fixtures and its canned searches ({@code patient-source-mock/mappings},
  * /docs/domain/patient.md): each fixture by its id, exactly as the domain holds it, nothing under
- * an id no fixture holds, and each documented search's page of matches with its Last visits and
- * its total, in the source's order — newest Last visit first.
+ * an id no fixture holds, each documented search's page of matches with its Last visits and
+ * its total, in the source's order — newest Last visit first — and each FFI History the mock
+ * serves (/docs/domain/ffi.md, "The patient source's FFI fixtures"), page by page.
  *
  * <p>The expected Patients are written out here, not derived from the stub files, so a stub that
  * drifted from the fixture table in /docs/domain/patient.md fails here.
@@ -292,5 +300,81 @@ public abstract class PatientStoreContract {
     void a_search_nothing_matches_reads_no_patients_and_a_total_of_none() {
         assertThat(patients().search(new PatientQuery.ByName("nobody"), PatientFilter.NONE, PatientSort.DEFAULT, FIRST_FIVE))
                 .isEqualTo(new PatientMatches(0, List.of()));
+    }
+
+    // ---- the FFI Histories -----------------------------------------------------------------
+
+    private static Ffi ffi(String id, FfiType type, FfiOutcome outcome, String issueDate,
+            String expiryDate, FfiHigherAuthority higherAuthority, FfiSubmittingMc submittingMc,
+            FfiStatus status) {
+        return new Ffi(id, type, outcome, LocalDate.parse(issueDate), LocalDate.parse(expiryDate),
+                higherAuthority, submittingMc, status);
+    }
+
+    /** Tan Wei Ming's four FFIs, in the source's own order. */
+    @Test
+    void tan_wei_mings_ffi_history_is_his_four_ffis_in_the_sources_order() {
+        assertThat(patients().findFfiHistory(new PatientId("eq081-VQEgP8drUUqCWzHfw3"),
+                FIRST_FIVE)).contains(new FfiHistory(4, List.of(
+                        ffi("ffi-tan-wei-ming-1", FfiType.OVERSEAS_EXERCISES, FfiOutcome.FIT,
+                                "2023-10-14", "2024-10-13", FfiHigherAuthority.CAMO,
+                                FfiSubmittingMc.NEE_SOON_CAMP, FfiStatus.INACTIVE),
+                        ffi("ffi-tan-wei-ming-2", FfiType.IPPT, FfiOutcome.REQUEST_WAIVER,
+                                "2024-01-10", "2025-01-09", FfiHigherAuthority.CNMO,
+                                FfiSubmittingMc.KRANJI_CAMP, FfiStatus.ACTIVE),
+                        ffi("ffi-tan-wei-ming-3", FfiType.DENTAL, FfiOutcome.FIT,
+                                "2023-11-22", "2024-11-21", FfiHigherAuthority.CARMO,
+                                FfiSubmittingMc.HENDON_CAMP, FfiStatus.ACTIVE),
+                        ffi("ffi-tan-wei-ming-4", FfiType.VOCATIONAL, FfiOutcome.UNFIT,
+                                "2023-08-05", "2024-08-04", FfiHigherAuthority.CAMO,
+                                FfiSubmittingMc.MANDAI_HILL_CAMP, FfiStatus.INACTIVE))));
+    }
+
+    /** Tan Hui Min's seven FFIs over two pages of five: the first page. */
+    @Test
+    void tan_hui_mins_ffi_history_reads_its_first_page_of_five_of_seven() {
+        assertThat(patients().findFfiHistory(new PatientId("dev-patient-05"), FIRST_FIVE))
+                .contains(new FfiHistory(7, List.of(
+                        ffi("ffi-tan-hui-min-1", FfiType.ORD_RELEASE_FROM_SERVICE,
+                                FfiOutcome.FIT, "2025-03-03", "2026-03-02",
+                                FfiHigherAuthority.DIS, FfiSubmittingMc.NEE_SOON_CAMP,
+                                FfiStatus.ACTIVE),
+                        ffi("ffi-tan-hui-min-2", FfiType.CAT_A_OCS_SCS, FfiOutcome.UNFIT,
+                                "2024-11-18", "2025-11-17", FfiHigherAuthority.COMD_MMI,
+                                FfiSubmittingMc.KRANJI_CAMP, FfiStatus.INACTIVE),
+                        ffi("ffi-tan-hui-min-3", FfiType.IPPT, FfiOutcome.REQUEST_WAIVER,
+                                "2024-06-10", "2025-06-09", FfiHigherAuthority.CNMO,
+                                FfiSubmittingMc.HENDON_CAMP, FfiStatus.ACTIVE),
+                        ffi("ffi-tan-hui-min-4", FfiType.OVERSEAS_EXERCISES, FfiOutcome.FIT,
+                                "2024-02-26", "2025-02-25", FfiHigherAuthority.CARMO,
+                                FfiSubmittingMc.MANDAI_HILL_CAMP, FfiStatus.ACTIVE),
+                        ffi("ffi-tan-hui-min-5", FfiType.DENTAL, FfiOutcome.FIT, "2023-09-04",
+                                "2024-09-03", FfiHigherAuthority.CAMO,
+                                FfiSubmittingMc.NEE_SOON_CAMP, FfiStatus.INACTIVE))));
+    }
+
+    @Test
+    void tan_hui_mins_ffi_history_reads_its_last_two_on_the_second_page() {
+        assertThat(patients().findFfiHistory(new PatientId("dev-patient-05"), NEXT_FIVE))
+                .contains(new FfiHistory(7, List.of(
+                        ffi("ffi-tan-hui-min-6", FfiType.VOCATIONAL, FfiOutcome.REQUEST_WAIVER,
+                                "2023-04-17", "2024-04-16", FfiHigherAuthority.CNMO,
+                                FfiSubmittingMc.KRANJI_CAMP, FfiStatus.INACTIVE),
+                        ffi("ffi-tan-hui-min-7", FfiType.IPPT, FfiOutcome.UNFIT, "2022-12-05",
+                                "2023-12-04", FfiHigherAuthority.CAMO,
+                                FfiSubmittingMc.HENDON_CAMP, FfiStatus.INACTIVE))));
+    }
+
+    /** Siti Nurhaliza binte Ahmad, as every fixture but those two, has no FFI. */
+    @Test
+    void a_patient_with_no_ffis_reads_an_empty_history_of_none() {
+        assertThat(patients().findFfiHistory(new PatientId("erXuFYUfucBZaryVksYEcMg3"),
+                FIRST_FIVE)).contains(new FfiHistory(0, List.of()));
+    }
+
+    /** {@code not-a-uuid} is a well-formed id the source holds no patient under. */
+    @Test
+    void a_well_formed_id_no_patient_is_held_under_has_no_ffi_history() {
+        assertThat(patients().findFfiHistory(new PatientId("not-a-uuid"), FIRST_FIVE)).isEmpty();
     }
 }

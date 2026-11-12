@@ -31,3 +31,4 @@ bodies, and the ADRs in `/docs/adr/` record the decisions.
 # Clinical data
 
 - [Patients](patient.md) - The FHIR R5 Patient's elements, NRIC and name rules, derived age, Patient search and the Last visit, its Restricted classification, the error contract, logging, the absence of auditing for reads by id and the audit of every search, the Patient card's patient in context, the Search page, the dev fixtures and search stubs, and R5 conformance.
+- [FFIs](ffi.md) - A patient's FFI History, the patient source's own, read through its FHIR-shaped but non-conformant page in the source's order: the elements and the five closed sets carried as codes, Status never derived from the Expiry Date, the failures and their log reasons, no caching, no auditing, the FFI page and its empty states, and the mock's FFI fixtures and fault stubs.

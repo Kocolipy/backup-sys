@@ -29,6 +29,11 @@ set-equal to the one before it. The document's enums are named under
 | Token Permissions      | `Permission.tokenGrantable()`                | `ConnectorTokenPermissions/items`, `ConnectorTokenSummary/properties/permissions/items` | `TOKEN_PERMISSIONS` (`accounts-api.ts`) |
 | Audit operations       | `AuditOperation`, by `name()`                | `AuditOperation`                                                                        | `AUDIT_OPERATIONS` (`audit-api.ts`)     |
 | Lock causes            | `LockCause`, by `name()`                     | `AccountSummary/properties/lockCause` (its `null` is no member)                         | `LOCK_CAUSES` (`accounts-api.ts`)       |
+| FFI Types              | `FfiType`, by `code()`                       | `FfiType`                                                                               | `FFI_TYPES` (`ffi-api.ts`)              |
+| FFI Outcomes           | `FfiOutcome`, by `code()`                    | `FfiOutcome`                                                                            | `FFI_OUTCOMES` (`ffi-api.ts`)           |
+| Higher Authorities     | `FfiHigherAuthority`, by `code()`            | `FfiHigherAuthority`                                                                    | `FFI_HIGHER_AUTHORITIES` (`ffi-api.ts`) |
+| Submitting MCs         | `FfiSubmittingMc`, by `code()`               | `FfiSubmittingMc`                                                                       | `FFI_SUBMITTING_MCS` (`ffi-api.ts`)     |
+| FFI Statuses           | `FfiStatus`, by `code()`                     | `FfiStatus`                                                                             | `FFI_STATUSES` (`ffi-api.ts`)           |
 
 - **Java ↔ document**: the backend's `VocabularyContractTests`
   (`backend/docs/api-contract-check.md`) compares each Java set with each enum

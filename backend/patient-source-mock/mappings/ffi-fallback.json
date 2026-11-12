@@ -1,0 +1,20 @@
+{
+  "name": "FFI History: no FFI for any other development fixture, or any other page",
+  "priority": 9,
+  "request": {
+    "method": "GET",
+    "urlPathPattern": "/Patient/(eq081-VQEgP8drUUqCWzHfw3|erXuFYUfucBZaryVksYEcMg3|e0w0LEDCYtfckT6N\\.CkJKCw3|egqBHVfQlt4Bw3XGXoxVxHg3|dev-patient-05|dev-patient-06|dev-patient-07|dev-patient-08|dev-patient-09|dev-patient-10|dev-patient-11|dev-patient-12)/ffi"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/fhir+json"
+    },
+    "jsonBody": {
+      "resourceType": "Bundle",
+      "id": "ffi-history",
+      "type": "searchset",
+      "total": 0
+    }
+  }
+}

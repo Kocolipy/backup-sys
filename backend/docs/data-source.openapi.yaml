@@ -33,9 +33,10 @@ tags:
       `PatientSourceAdapter`. A mock of it matches, filters, sorts, pages and
       counts over its own Patients.
 
-      - **Two reads.** `GET /Patient/{id}` for one Patient (Home's Patient card)
-        and `GET /Patient?…` for a Patient search (the Search page). The backend
-        calls nothing else on it.
+      - **Three reads.** `GET /Patient/{id}` for one Patient (Home's Patient
+        card), `GET /Patient?…` for a Patient search (the Search page) and
+        `GET /Patient/{id}/ffi?…` for a patient's FFI History (the FFI page,
+        ADR 0019). The backend calls nothing else on it.
       - **FHIR R4 JSON, no credential.** Every call is a `GET` with
         `Accept: application/fhir+json` and no `Authorization` header; the
         source answers `application/fhir+json` (`application/json` is read too).
@@ -269,6 +270,95 @@ paths:
               schema:
                 $ref: "#/components/schemas/SearchsetBundle"
 
+  /Patient/{id}/ffi:
+    servers:
+      - url: http://127.0.0.1:8104
+        description: The patient source's local mock (`APP_PATIENT_SOURCE_BASE_URL`)
+    get:
+      tags: [patient-source]
+      operationId: readFfiHistory
+      summary: Read one page of a patient's FFI History, in the source's own order
+      description: |
+        The patient's FFIs (Fit for Instruction), paged and counted by the
+        source, in its own default order: no `_sort` is sent. **FHIR-shaped
+        paging only, not FHIR-conformant**: the answer borrows a searchset
+        `Bundle`'s shape, and its entries are a custom `FFI` object no FHIR
+        version defines (ADR 0019). The id is sent unchanged, as a read by id's
+        is.
+
+        **Fault ids (mock only).** Beside the fixtures' histories, the mock
+        serves one failure of this read per patient id, none a fixture's:
+
+        | Id                                     | Answers                                                    |
+        | -------------------------------------- | ---------------------------------------------------------- |
+        | `fault-ffi-unreachable`                | the connection reset, no answer                            |
+        | `fault-ffi-slow`                       | `200` page after 7 seconds, past the read timeout          |
+        | `fault-ffi-server-error`               | `503`                                                      |
+        | `fault-ffi-unexpected-status`          | `400`                                                      |
+        | `fault-ffi-not-a-searchset`            | `200` Bundle of `type: collection`                         |
+        | `fault-ffi-no-total`                   | `200` searchset with no `total`                            |
+        | `fault-ffi-no-id`                      | `200` page whose FFI has no `id`                           |
+        | `fault-ffi-invalid-id`                 | `200` page whose FFI's `id` is outside FHIR's id grammar   |
+        | `fault-ffi-no-outcome`                 | `200` page whose FFI has no `outcome`                      |
+        | `fault-ffi-unknown-higher-authority`   | `200` page whose FFI's `higherAuthority` is no code of its set |
+        | `fault-ffi-expiry-date-not-to-the-day` | `200` page whose FFI's `expiryDate` is a month             |
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[A-Za-z0-9\-.]{1,64}$'
+          example: eq081-VQEgP8drUUqCWzHfw3
+        - name: _count
+          in: query
+          required: true
+          description: |
+            The most FFIs to return. The FFI page asks for 5; the backend passes
+            through anything from 0 to 200. `0` returns no entries and still the
+            full `total`.
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 200
+          example: 5
+        - name: _offset
+          in: query
+          required: true
+          description: |
+            How many FFIs to skip, in the source's order: the page's
+            `startIndex - 1`. An offset at or past `total` returns no entries and
+            still the full `total`, never an error.
+          schema:
+            type: integer
+            minimum: 0
+          example: 0
+        - name: _total
+          in: query
+          required: true
+          description: Always `accurate`. The `total` must be the exact count, never an estimate.
+          schema:
+            type: string
+            const: accurate
+      responses:
+        "200":
+          description: |
+            One page of the patient's FFIs, in the source's order, and the
+            `total` of every FFI they have. A patient with none is this answer
+            with `total: 0`.
+          content:
+            application/fhir+json:
+              schema:
+                $ref: "#/components/schemas/FfiSearchset"
+        "404":
+          description: |
+            No patient under the id: the one answer the backend reads as "no
+            patient", shown as "No patient in context". The body is never read.
+          content:
+            application/fhir+json:
+              schema:
+                $ref: "#/components/schemas/OperationOutcome"
+
   /__admin/health:
     servers:
       - url: http://127.0.0.1:8104
@@ -451,6 +541,113 @@ components:
                   given: [Boon, Huat]
               gender: male
               birthDate: "1955-01-23"
+
+    FfiSearchset:
+      description: |
+        A FHIR-R4-shaped searchset `Bundle` of `FFI` objects: FHIR's paging
+        shape, not a FHIR-conformant Bundle. The backend reads `resourceType`,
+        `type`, `total` and each entry's `resource`; `id`, `link` and `fullUrl`
+        may be sent and are ignored.
+      type: object
+      required: [resourceType, type, total]
+      properties:
+        resourceType:
+          const: Bundle
+        type:
+          const: searchset
+        total:
+          description: Every FFI the patient has, not the page's size. Required.
+          type: integer
+          minimum: 0
+        entry:
+          description: The page, at most `_count` long. Left out, or empty, for a page with none.
+          type: array
+          items:
+            type: object
+            required: [resource]
+            properties:
+              resource:
+                $ref: "#/components/schemas/Ffi"
+      example:
+        resourceType: Bundle
+        type: searchset
+        total: 4
+        entry:
+          - resource:
+              resourceType: FFI
+              id: ffi-tan-wei-ming-2
+              type: ippt
+              outcome: request-waiver
+              issueDate: "2024-01-10"
+              expiryDate: "2025-01-09"
+              higherAuthority: cnmo
+              submittingMc: kranji-camp
+              status: active
+
+    Ffi:
+      description: |
+        One FFI (Fit for Instruction), a custom object no FHIR version defines,
+        of flat fields. Every field is required, and each rule below is one the
+        backend holds: an FFI breaking any is the source failing, the backend's
+        `502`. A field it does not read is ignored.
+      type: object
+      required:
+        [
+          resourceType,
+          id,
+          type,
+          outcome,
+          issueDate,
+          expiryDate,
+          higherAuthority,
+          submittingMc,
+          status,
+        ]
+      properties:
+        resourceType:
+          const: FFI
+        id:
+          description: The FFI's own id, in FHIR's id grammar.
+          type: string
+          pattern: '^[A-Za-z0-9\-.]{1,64}$'
+        type:
+          description: The FFI Type, by its code.
+          type: string
+          enum:
+            [
+              overseas-exercises,
+              cat-a-ocs-scs,
+              ippt,
+              dental,
+              ord-release-from-service,
+              vocational,
+            ]
+        outcome:
+          description: The Outcome, by its code.
+          type: string
+          enum: [fit, request-waiver, unfit]
+        issueDate:
+          description: To the day.
+          type: string
+          format: date
+        expiryDate:
+          description: To the day. The backend derives nothing from it.
+          type: string
+          format: date
+        higherAuthority:
+          description: The Higher Authority, by its code.
+          type: string
+          enum: [camo, carmo, cnmo, comd-mmi, dis]
+        submittingMc:
+          description: The Submitting MC, by its code.
+          type: string
+          enum: [nee-soon-camp, kranji-camp, hendon-camp, mandai-hill-camp]
+        status:
+          description: |
+            The source's own Status, never derived from the Expiry Date: an FFI
+            past its Expiry Date may still be `active`.
+          type: string
+          enum: [active, inactive]
 
     OperationOutcome:
       description: The `404`'s body, which the backend never reads.

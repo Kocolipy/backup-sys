@@ -58,6 +58,18 @@ export const VOCABULARIES = [
       },
     ],
   },
+  // An FFI's five closed sets, each carried as its code.
+  ...[
+    ["FFI_TYPES", "FfiType"],
+    ["FFI_OUTCOMES", "FfiOutcome"],
+    ["FFI_HIGHER_AUTHORITIES", "FfiHigherAuthority"],
+    ["FFI_SUBMITTING_MCS", "FfiSubmittingMc"],
+    ["FFI_STATUSES", "FfiStatus"],
+  ].map(([set, schema]) => ({
+    set,
+    module: "src/pages/ffi/ffi-api.ts",
+    mirrors: [{ pointer: `#/components/schemas/${schema}`, relation: "equal" }],
+  })),
 ];
 
 /** The node a `#/a/b` JSON pointer names in `doc`, or `undefined`. */

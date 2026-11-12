@@ -110,7 +110,10 @@ class PagingContractTests {
         pathValues = Map.of(
                 "id", groups.findByReservedName(ReservedResourceName.ADMIN_GROUP)
                         .orElseThrow().id().toString(),
-                "connectorId", connectorId.toString());
+                "connectorId", connectorId.toString(),
+                // A development fixture the patient source's mock answers every page of the FFI
+                // History of, with none (PatientSourceStubs).
+                "patientId", "erXuFYUfucBZaryVksYEcMg3");
     }
 
     @AfterAll

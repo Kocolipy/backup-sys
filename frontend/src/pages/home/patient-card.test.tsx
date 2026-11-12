@@ -14,7 +14,7 @@ import {
   patientReads,
   TAN_WEI_MING,
   TAN_WEI_MING_READ,
-} from "./patient.testHelpers";
+} from "@/pages/patient.testHelpers";
 import { renderInLayout } from "@/shell/signed-in-shell.testHelpers";
 
 /** An error answer as the backend sends it: one issue, its diagnostics fixed per code. */

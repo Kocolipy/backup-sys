@@ -3,7 +3,7 @@ import { describe, expect, expectTypeOf, it } from "vitest";
 
 import type { PatientGender } from "@/lib/patient-gender";
 
-import { PATIENT } from "./home-api";
+import { PATIENT } from "./patient-api";
 import { TAN_WEI_MING } from "./patient.testHelpers";
 
 describe("PATIENT", () => {
@@ -25,10 +25,11 @@ describe("PATIENT", () => {
 });
 
 describe("PATIENT's answer", () => {
-  it("is read down to the name text, NRIC, gender and date of birth", async () => {
+  it("is read down to the id, name text, NRIC, gender and date of birth", async () => {
     await expect(PATIENT.decode(Response.json(TAN_WEI_MING))).resolves.toEqual({
       birthDate: "1985-03-12",
       gender: "male",
+      id: "eq081-VQEgP8drUUqCWzHfw3",
       name: "Tan Wei Ming",
       nric: "S1234567A",
     });
@@ -59,6 +60,7 @@ describe("PATIENT's answer", () => {
       { ...TAN_WEI_MING, resourceType: "Practitioner" },
       "Patient.resourceType is not Patient",
     ],
+    ["no id", { ...TAN_WEI_MING, id: undefined }, "Patient.id is not a string"],
     ["no name", { ...TAN_WEI_MING, name: [] }, "Patient.name has no entry"],
     [
       "a name with no text",

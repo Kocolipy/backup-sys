@@ -1,0 +1,13 @@
+{
+  "name": "Fault, FFI History: the connection reset before any answer",
+  "metadata": {
+    "fault": "unreachable"
+  },
+  "request": {
+    "method": "GET",
+    "urlPath": "/Patient/fault-ffi-unreachable/ffi"
+  },
+  "response": {
+    "fault": "CONNECTION_RESET_BY_PEER"
+  }
+}

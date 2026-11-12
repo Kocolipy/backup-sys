@@ -11,7 +11,7 @@ import {
   patientReads,
   TAN_WEI_MING,
   TAN_WEI_MING_READ,
-} from "./patient.testHelpers";
+} from "@/pages/patient.testHelpers";
 import { renderSignedIn } from "@/shell/signed-in-shell.testHelpers";
 
 /** The page for a session holding exactly `permissions`, inside the signed-in layout. */

@@ -6,7 +6,7 @@ import { PatientCard } from "./patient-card";
  *
  * The Patient card comes first: the patient of the tab's EHR context
  * (`ehr-context.ts`), read with `patient:read` — read once, by the signed-in
- * layout (`patient-in-context.ts`), for the card and the top bar both. With no
+ * layout (`patient-in-context.ts`), for the card, the top bar and the FFI page. With no
  * patient in context the card shows "No patient in context", and for a session
  * without `patient:read` it says the account has no access to patients; either
  * way nothing is asked for. The other signed-in pages are linked from the

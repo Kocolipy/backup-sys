@@ -1,6 +1,7 @@
 /**
- * The endpoint the Home page reads — the patient it shows —
- * `/frontend/AGENTS.md`'s page-owned `api.ts`, named for its page.
+ * The endpoint the patient in context is read from — the patient Home's
+ * Patient card and the top bar show, and whose id the FFI page reads the FFI
+ * History of — shared by those pages, so it sits beside them in `src/pages/`.
  *
  * Nothing here requests anything: the one reader of the patient in context
  * (`patient-in-context.ts`) sends the declaration through `useGatedRead` (behind `useSessionRequest`), so a `401` still ends
@@ -21,11 +22,13 @@ const NRIC_SYSTEM = "https://fhir.synapxe.sg/NamingSystem/nric";
  * The part of an R5 `Patient` Home shows, read off the wire (its suite reads
  * `fhir5.Patient` fixtures through the decoder): the official
  * name's `text`, which is authoritative (its `family` and `given` parts are
- * optional and never read), the NRIC, the gender code and the birth date.
- * No age: age is derived where it is shown, never sent.
+ * optional and never read), the NRIC, the gender code and the birth date,
+ * and the id the patient's FFI History is read by. No age: age is derived where it is shown, never sent.
  */
 export interface PatientSummary {
   birthDate: string;
+  /** Its FHIR id, which the patient's other reads (its FFI History) name it by. */
+  id: string;
   gender: PatientGender;
   name: string;
   nric: string;
@@ -56,6 +59,7 @@ const decodePatient = jsonDecoder((body: unknown): PatientSummary => {
   if (!isCalendarDate(birthDate)) throw new DecodeError("Patient.birthDate is not a date");
   return {
     birthDate,
+    id: patient.string("id"),
     gender: patient.oneOf("gender", PATIENT_GENDERS),
     name: nameTextOf(patient.array("name", (name) => name)),
     nric: nricOf(patient.array("identifier", (identifier) => identifier)),

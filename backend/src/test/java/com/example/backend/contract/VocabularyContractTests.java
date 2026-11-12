@@ -4,6 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.backend.audit.domain.AuditOperation;
 import com.example.backend.authorization.domain.Permission;
+import com.example.backend.patient.domain.FfiCode;
+import com.example.backend.patient.domain.FfiHigherAuthority;
+import com.example.backend.patient.domain.FfiOutcome;
+import com.example.backend.patient.domain.FfiStatus;
+import com.example.backend.patient.domain.FfiSubmittingMc;
+import com.example.backend.patient.domain.FfiType;
 import com.example.backend.scim.domain.LockCause;
 import java.util.Arrays;
 import java.util.List;
@@ -25,6 +31,9 @@ import org.junit.jupiter.api.Test;
  * write halves no session holds. No Permission escapes the comparison: one no session holds is
  * {@linkplain Permission#tokenOnly() token-only}, so token-grantable by that definition, and the
  * token enums compare it.
+ *
+ * <p>An FFI's five closed sets — its FFI Type, Outcome, Higher Authority, Submitting MC and
+ * Status — are carried by their codes, not their names, and are compared so.
  *
  * <p>An enum the document refers to by {@code $ref} — the audit trail's {@code operation} query
  * parameter, the Group Permissions' request and listing — is the schema compared here, so it is
@@ -50,6 +59,16 @@ class VocabularyContractTests {
 
     private static final String LOCK_CAUSES =
             "#/components/schemas/AccountSummary/properties/lockCause";
+
+    private static final String FFI_TYPES = "#/components/schemas/FfiType";
+
+    private static final String FFI_OUTCOMES = "#/components/schemas/FfiOutcome";
+
+    private static final String FFI_HIGHER_AUTHORITIES = "#/components/schemas/FfiHigherAuthority";
+
+    private static final String FFI_SUBMITTING_MCS = "#/components/schemas/FfiSubmittingMc";
+
+    private static final String FFI_STATUSES = "#/components/schemas/FfiStatus";
 
     private static final Predicate<Permission> HELD_BY_A_SESSION = permission -> !permission.tokenOnly();
 
@@ -86,6 +105,40 @@ class VocabularyContractTests {
     @Test
     void every_lock_cause_is_a_documented_lock_cause_and_no_other_is() {
         assertThat(CONTRACT.enumDisagreements(LOCK_CAUSES, names(LockCause.values()))).isEmpty();
+    }
+
+    @Test
+    void every_ffi_type_is_a_documented_ffi_type_and_no_other_is() {
+        assertThat(CONTRACT.enumDisagreements(FFI_TYPES, codes(FfiType.values()))).isEmpty();
+    }
+
+    @Test
+    void every_ffi_outcome_is_a_documented_ffi_outcome_and_no_other_is() {
+        assertThat(CONTRACT.enumDisagreements(FFI_OUTCOMES, codes(FfiOutcome.values())))
+                .isEmpty();
+    }
+
+    @Test
+    void every_higher_authority_is_a_documented_higher_authority_and_no_other_is() {
+        assertThat(CONTRACT.enumDisagreements(FFI_HIGHER_AUTHORITIES,
+                codes(FfiHigherAuthority.values()))).isEmpty();
+    }
+
+    @Test
+    void every_submitting_mc_is_a_documented_submitting_mc_and_no_other_is() {
+        assertThat(CONTRACT.enumDisagreements(FFI_SUBMITTING_MCS,
+                codes(FfiSubmittingMc.values()))).isEmpty();
+    }
+
+    @Test
+    void every_ffi_status_is_a_documented_ffi_status_and_no_other_is() {
+        assertThat(CONTRACT.enumDisagreements(FFI_STATUSES, codes(FfiStatus.values())))
+                .isEmpty();
+    }
+
+    /** An FFI's closed set's members as the wire spells them: by their code. */
+    private static List<String> codes(FfiCode[] values) {
+        return Arrays.stream(values).map(FfiCode::code).toList();
     }
 
     /** The Permissions the filter admits, as the wire spells them. */

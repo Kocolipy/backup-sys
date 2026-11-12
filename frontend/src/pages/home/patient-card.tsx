@@ -5,8 +5,8 @@ import { type Clock, completedYears, formatCalendarDate, today, systemClock } fr
 
 import { PATIENT_GENDER_LABELS } from "@/lib/patient-gender";
 
-import type { PatientSummary } from "./home-api";
-import { usePatientInContext } from "./patient-in-context";
+import type { PatientSummary } from "@/pages/patient-api";
+import { usePatientInContext } from "@/pages/patient-in-context";
 
 const NOTE_CLASS = "text-sm text-muted-foreground";
 
