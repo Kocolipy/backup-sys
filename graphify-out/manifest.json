@@ -2064,9 +2064,9 @@
     "semantic_hash": ""
   },
   "AGENTS.md": {
-    "mtime": 1794466803.455866,
-    "seen": 1794496324.7399247,
-    "ast_hash": "14966f0ab6464517055577d78ce25327",
+    "mtime": 1794525299.930846,
+    "seen": 1794525384.0461712,
+    "ast_hash": "0cf1cea21b01e265baa8d4155ac7e6d4",
     "semantic_hash": ""
   },
   "CLAUDE.md": {
@@ -2088,9 +2088,9 @@
     "semantic_hash": ""
   },
   "backend/AGENTS.md": {
-    "mtime": 1794466803.4570646,
-    "seen": 1794496324.739927,
-    "ast_hash": "abb816ed656eeb5660e45e0181a232a5",
+    "mtime": 1794525303.634845,
+    "seen": 1794525384.0462787,
+    "ast_hash": "c8f82701bfcaa4a9132a5966a860ab3b",
     "semantic_hash": ""
   },
   "backend/README.md": {
