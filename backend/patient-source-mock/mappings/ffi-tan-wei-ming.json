@@ -1,0 +1,105 @@
+{
+  "name": "FFI History: Tan Wei Ming's four FFIs",
+  "request": {
+    "method": "GET",
+    "urlPath": "/Patient/eq081-VQEgP8drUUqCWzHfw3/ffi",
+    "queryParameters": {
+      "_count": {
+        "equalTo": "5"
+      },
+      "_offset": {
+        "equalTo": "0"
+      },
+      "_total": {
+        "equalTo": "accurate"
+      },
+      "_sort": {
+        "absent": true
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/fhir+json"
+    },
+    "jsonBody": {
+      "resourceType": "Bundle",
+      "id": "ffi-history",
+      "type": "searchset",
+      "total": 4,
+      "link": [
+        {
+          "relation": "self",
+          "url": "http://127.0.0.1:8104/Patient/eq081-VQEgP8drUUqCWzHfw3/ffi?_offset=0&_count=5"
+        }
+      ],
+      "entry": [
+        {
+          "resource": {
+            "resourceType": "FFI",
+            "id": "ffi-tan-wei-ming-1",
+            "type": "overseas-exercises",
+            "outcome": "fit",
+            "issueDate": "2023-10-14",
+            "expiryDate": "2024-10-13",
+            "higherAuthority": "camo",
+            "submittingMc": "nee-soon-camp",
+            "status": "inactive"
+          },
+          "search": {
+            "mode": "match"
+          }
+        },
+        {
+          "resource": {
+            "resourceType": "FFI",
+            "id": "ffi-tan-wei-ming-2",
+            "type": "ippt",
+            "outcome": "request-waiver",
+            "issueDate": "2024-01-10",
+            "expiryDate": "2025-01-09",
+            "higherAuthority": "cnmo",
+            "submittingMc": "kranji-camp",
+            "status": "active"
+          },
+          "search": {
+            "mode": "match"
+          }
+        },
+        {
+          "resource": {
+            "resourceType": "FFI",
+            "id": "ffi-tan-wei-ming-3",
+            "type": "dental",
+            "outcome": "fit",
+            "issueDate": "2023-11-22",
+            "expiryDate": "2024-11-21",
+            "higherAuthority": "carmo",
+            "submittingMc": "hendon-camp",
+            "status": "active"
+          },
+          "search": {
+            "mode": "match"
+          }
+        },
+        {
+          "resource": {
+            "resourceType": "FFI",
+            "id": "ffi-tan-wei-ming-4",
+            "type": "vocational",
+            "outcome": "unfit",
+            "issueDate": "2023-08-05",
+            "expiryDate": "2024-08-04",
+            "higherAuthority": "camo",
+            "submittingMc": "mandai-hill-camp",
+            "status": "inactive"
+          },
+          "search": {
+            "mode": "match"
+          }
+        }
+      ]
+    }
+  }
+}

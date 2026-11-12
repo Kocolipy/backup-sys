@@ -83,8 +83,9 @@ declares nothing is refused. Four kinds of operation:
   members, since who they are is Users-projection data (ADR 0015); `audit:read`
   lists audit events; `connector:read` lists connectors; `ops:read` reaches every
   actuator endpoint but health, on whichever port actuator is served.
-  `patient:read` reads a Patient (`GET /api/patient/{id}`) and runs a Patient
-  search (`GET /api/patient-search`, [patient](patient.md)); a session without it,
+  `patient:read` reads a Patient (`GET /api/patient/{id}`), runs a Patient
+  search (`GET /api/patient-search`, [patient](patient.md)) and reads a
+  patient's FFI History (`GET /api/patient-ffi/{patientId}`, [ffi](ffi.md)); a session without it,
   a User in no Group that carries it included, gets the Authorization refusal.
 - **Superuser only** — connector creation and deletion, issuing, rotating and
   revoking a token, and setting a Group's Permissions

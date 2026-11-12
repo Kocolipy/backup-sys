@@ -376,8 +376,8 @@ patient. Home is open to every signed-in session; Patient Search, the Landing
 page of a session holding `patient:read`, is guarded by it, so a session
 without it is offered no Search link and is routed to Home. The top bar names
 the same patient by name and NRIC.
-Both render from **one reader** of the patient in context, which the signed-in
-layout renders (`frontend/src/pages/home/patient-in-context.ts`): each change
+Both, and the FFI page ([ffi](ffi.md)), render from **one reader** of the patient in context, which the signed-in
+layout renders (`frontend/src/pages/patient-in-context.ts`): each change
 of the patient in context is one `GET /api/patient/{id}` — one read of the
 uncached patient source — on Home as on every other signed-in page, and a
 failed read is one "Couldn't load patient" on the page's error line. The SPA
@@ -423,6 +423,9 @@ reaches a deployed environment. The backend holds no fixture of its own.
     `search-no-match`, the name search `nobody`, `total: 0`.
   - **The gender filters** on the name search `tan`: `search-name-tan-male`
     (`total: 3`) and `-female` (`total: 4`).
+
+  The FFI Histories of the fixtures, and the FFI fault stubs, are
+  [ffi](ffi.md)'s ("The patient source's FFI fixtures").
 
   A low-priority fallback, `search-fallback`, answers any other `/Patient`
   search — a gender filter on any other search or page included — with an

@@ -3,13 +3,17 @@ package com.example.backend.patient.infrastructure.http;
 import com.example.backend.observability.OutboundCallFailure;
 import com.example.backend.observability.RedactedFaultException;
 import com.example.backend.paging.domain.PageRequest;
+import com.example.backend.patient.domain.Ffi;
+import com.example.backend.patient.domain.FfiHistory;
 import com.example.backend.patient.domain.Patient;
 import com.example.backend.patient.domain.PatientId;
+import com.example.backend.patient.domain.PatientMatch;
 import com.example.backend.patient.domain.PatientMatches;
 import com.example.backend.patient.domain.PatientFilter;
 import com.example.backend.patient.domain.PatientQuery;
 import com.example.backend.patient.domain.PatientStore;
 import com.example.backend.patient.infrastructure.http.PatientSourceException.Failure;
+import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.http.HttpClient;
@@ -23,16 +27,19 @@ import java.util.function.Supplier;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.convert.DurationStyle;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.ClientHttpResponse;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
 /**
  * Adapts the domain's {@link PatientStore} port onto the in-house patient source (ADR 0014):
- * {@code GET {base}/Patient/{id}} for a read by id, and {@code GET {base}/Patient?…} for a
- * Patient search ({@link #search}, ADR 0018). The source is assumed to answer FHIR R4 and to need
+ * {@code GET {base}/Patient/{id}} for a read by id, {@code GET {base}/Patient?…} for a
+ * Patient search ({@link #search}, ADR 0018), and {@code GET {base}/Patient/{id}/ffi?…} for a
+ * patient's FFI History ({@link #findFfiHistory}, ADR 0019). The source is assumed to answer FHIR R4 and to need
  * no authorisation, so the call carries no credential of any kind. The patient's id is its EHR's
  * FHIR id, sent unchanged.
  *
@@ -71,7 +78,20 @@ class PatientSourceAdapter implements PatientStore {
     private static final Set<String> SCHEMES = Set.of("http", "https");
 
     /** The source's paging, which every search asks for alike. */
-    private static final String SEARCH_PAGE = "&_count={count}&_offset={offset}&_total=accurate";
+    private static final String SEARCH_PAGE = "&" + SourceSearchset.PAGE_QUERY;
+
+    /** A searchset of Patients, a search's answer. */
+    private static final ParameterizedTypeReference<SourceSearchset<R4Patient>> PATIENTS =
+            new ParameterizedTypeReference<>() {
+            };
+
+    /** A patient's FFI History, a page at a time, in the source's own order (ADR 0019). */
+    static final String FFI_HISTORY = "/Patient/{id}/ffi?" + SourceSearchset.PAGE_QUERY;
+
+    /** A searchset of FFIs, an FFI History's answer. */
+    private static final ParameterizedTypeReference<SourceSearchset<SourceFfi>> FFIS =
+            new ParameterizedTypeReference<>() {
+            };
 
     /** A name search: FHIR's {@code name:contains}, matched as the source decides. */
     static final String SEARCH_BY_NAME = "/Patient?name:contains={name}";
@@ -118,15 +138,9 @@ class PatientSourceAdapter implements PatientStore {
         return called(() -> source.get()
                 .uri("/Patient/{id}", id.value())
                 .accept(FHIR_JSON)
-                .exchange((request, response) -> {
-                    if (response.getStatusCode().isSameCodeAs(HttpStatus.NOT_FOUND)) {
-                        return Optional.<Patient>empty();
-                    }
-                    if (!response.getStatusCode().isSameCodeAs(HttpStatus.OK)) {
-                        throw PatientSourceException.answered(response.getStatusCode().value());
-                    }
-                    return Optional.of(response.bodyTo(R4Patient.class).toPatient(id));
-                }));
+                .exchange((request, response) -> found(response)
+                        ? Optional.of(response.bodyTo(R4Patient.class).toPatient(id))
+                        : Optional.<Patient>empty()));
     }
 
     /**
@@ -142,8 +156,7 @@ class PatientSourceAdapter implements PatientStore {
     @Override
     public PatientMatches search(PatientQuery query, PatientFilter filter, PageRequest page) {
         Map<String, Object> variables = new HashMap<>();
-        variables.put("count", page.count());
-        variables.put("offset", page.offset());
+        SourceSearchset.pageVariables(variables, page);
         StringBuilder template = new StringBuilder(switch (query) {
             case PatientQuery.ByName name -> {
                 variables.put("name", name.text());
@@ -167,8 +180,51 @@ class PatientSourceAdapter implements PatientStore {
                     if (!response.getStatusCode().isSameCodeAs(HttpStatus.OK)) {
                         throw PatientSourceException.answered(response.getStatusCode().value());
                     }
-                    return response.bodyTo(R4SearchBundle.class).toMatches();
+                    SourceSearchset.Page<PatientMatch> matches =
+                            response.bodyTo(PATIENTS).page(R4Patient::toMatch);
+                    return new PatientMatches(matches.total(), matches.entries());
                 }));
+    }
+
+    /**
+     * {@code GET {base}/Patient/{id}/ffi?…}: the patient's FFI History, paged and counted by the
+     * source, in its own order — no {@code _sort} is sent (ADR 0019). A {@code 404} is no patient
+     * under the id; the one other good answer is a {@code 200} searchset of FFIs, and anything
+     * else is a fault, as is a searchset with no total or an entry that is no FFI the service
+     * can hold. The id is a URI variable, so the call is observed under the template alone.
+     */
+    @Override
+    public Optional<FfiHistory> findFfiHistory(PatientId id, PageRequest page) {
+        Map<String, Object> variables = new HashMap<>();
+        variables.put("id", id.value());
+        SourceSearchset.pageVariables(variables, page);
+        return called(() -> source.get()
+                .uri(FFI_HISTORY, variables)
+                .accept(FHIR_JSON)
+                .exchange((request, response) -> {
+                    if (!found(response)) {
+                        return Optional.<FfiHistory>empty();
+                    }
+                    SourceSearchset.Page<Ffi> ffis =
+                            response.bodyTo(FFIS).page(SourceFfi::toFfi);
+                    return Optional.of(new FfiHistory(ffis.total(), ffis.entries()));
+                }));
+    }
+
+    /**
+     * Whether a read of one patient by its id found them: a {@code 200} is the patient's answer
+     * and a {@code 404} is no patient under the id. Any other status is a fault.
+     *
+     * @throws PatientSourceException for any status but those two
+     */
+    private static boolean found(ClientHttpResponse response) throws IOException {
+        if (response.getStatusCode().isSameCodeAs(HttpStatus.NOT_FOUND)) {
+            return false;
+        }
+        if (!response.getStatusCode().isSameCodeAs(HttpStatus.OK)) {
+            throw PatientSourceException.answered(response.getStatusCode().value());
+        }
+        return true;
     }
 
     /**

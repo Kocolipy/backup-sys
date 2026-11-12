@@ -5,7 +5,10 @@ import static org.assertj.core.api.Assertions.tuple;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 import org.junit.jupiter.api.Test;
@@ -304,6 +307,130 @@ class PatientSourceFixturesTests {
                 .hasSize(7)
                 .allSatisfy(fault -> assertThat(fault.response().at("/jsonBody/id").asString())
                         .isEqualTo(fault.id()));
+    }
+
+    // ---- the FFI Histories ------------------------------------------------------------------
+
+    private static List<String> fixtureIds() {
+        return FIXTURES.stream().map(fixture -> fixture.get("id").asString()).toList();
+    }
+
+    /** The FFIs a stub's searchset holds, in its order. */
+    private static List<JsonNode> ffisOf(PatientSourceStubs.FfiStub stub) {
+        return StreamSupport.stream(stub.bundle().at("/entry").spliterator(), false)
+                .map(entry -> entry.get("resource"))
+                .toList();
+    }
+
+    /** The FFIs of every page of {@code patient}'s FFI History, page after page. */
+    private static List<JsonNode> ffisOf(String patient) {
+        return PatientSourceStubs.ffiHistories().stream()
+                .filter(stub -> stub.path().equals("/Patient/" + patient + "/ffi"))
+                .sorted(Comparator.comparing(stub -> stub.query().at("/_offset/equalTo")
+                        .asInt()))
+                .flatMap(stub -> ffisOf(stub).stream())
+                .toList();
+    }
+
+    /**
+     * Two fixtures have FFIs, each page its own stub — Tan Wei Ming's one page of four and Tan
+     * Hui Min's two of seven — and a fallback answers every fixture's other read with none.
+     */
+    @Test
+    void twoFixturesHaveAnFfiHistoryAndTheFallbackServesEveryFixture() {
+        List<String> exact = PatientSourceStubs.ffiHistories().stream()
+                .filter(stub -> !stub.path().contains("("))
+                .map(stub -> stub.path() + " " + stub.query().at("/_offset/equalTo").asString()
+                        + " of " + stub.bundle().at("/total").asInt())
+                .toList();
+        String fallback = PatientSourceStubs.ffiHistories().stream()
+                .map(PatientSourceStubs.FfiStub::path)
+                .filter(path -> path.contains("("))
+                .findFirst().orElseThrow();
+
+        assertThat(exact).containsExactlyInAnyOrder(
+                "/Patient/eq081-VQEgP8drUUqCWzHfw3/ffi 0 of 4",
+                "/Patient/dev-patient-05/ffi 0 of 7",
+                "/Patient/dev-patient-05/ffi 5 of 7");
+        assertThat(fixtureIds()).allSatisfy(id ->
+                assertThat("/Patient/" + id + "/ffi").matches(fallback));
+        assertThat("/Patient/fault-ffi-no-id/ffi").doesNotMatch(fallback);
+    }
+
+    /** Each page holds no more than five FFIs, and a history's pages hold its total. */
+    @Test
+    void everyFfiHistoryPageHoldsAtMostFiveAndItsPagesHoldTheirTotal() {
+        assertThat(PatientSourceStubs.ffiHistories())
+                .allSatisfy(stub -> assertThat(ffisOf(stub)).hasSizeLessThanOrEqualTo(5));
+        assertThat(List.of(ffisOf("eq081-VQEgP8drUUqCWzHfw3").size(),
+                ffisOf("dev-patient-05").size())).containsExactly(4, 7);
+    }
+
+    /** Every code of every closed set an FFI has, as the five sets spell them on the wire. */
+    private static final Map<String, Set<String>> CLOSED_SETS = Map.of(
+            "type", Set.of("overseas-exercises", "cat-a-ocs-scs", "ippt", "dental",
+                    "ord-release-from-service", "vocational"),
+            "outcome", Set.of("fit", "request-waiver", "unfit"),
+            "higherAuthority", Set.of("camo", "carmo", "cnmo", "comd-mmi", "dis"),
+            "submittingMc", Set.of("nee-soon-camp", "kranji-camp", "hendon-camp",
+                    "mandai-hill-camp"),
+            "status", Set.of("active", "inactive"));
+
+    /**
+     * Tan Hui Min's history, over its two pages, holds every code of every closed set — every
+     * Outcome, Higher Authority and Status among them — so a page reading it shows each label.
+     */
+    @Test
+    void theTwoPageHistoryCoversEveryCodeOfEveryClosedSet() {
+        List<JsonNode> ffis = ffisOf("dev-patient-05");
+
+        CLOSED_SETS.forEach((field, codes) -> assertThat(ffis)
+                .extracting(ffi -> ffi.get(field).asString())
+                .as(field)
+                .containsOnlyElementsOf(codes)
+                .containsAll(codes));
+    }
+
+    /**
+     * Some of the FFIs past their Expiry Date are still Active: Status is the source's own, never
+     * derived from the date, and the fixtures show it.
+     */
+    @Test
+    void anFfiPastItsExpiryDateMayStillBeActive() {
+        assertThat(ffisOf("dev-patient-05"))
+                .filteredOn(ffi -> ffi.get("status").asString().equals("active"))
+                .extracting(ffi -> ffi.get("expiryDate").asString())
+                .anyMatch(expiry -> expiry.compareTo("2026-01-01") < 0);
+    }
+
+    /** Every FFI's id is in FHIR's id grammar and no other FFI's. */
+    @Test
+    void everyFfiIdIsAFhirIdOfItsOwn() {
+        List<String> ids = PatientSourceStubs.ffiHistories().stream()
+                .flatMap(stub -> ffisOf(stub).stream())
+                .map(ffi -> ffi.get("id").asString())
+                .toList();
+
+        assertThat(ids).hasSize(11).doesNotHaveDuplicates()
+                .allSatisfy(id -> assertThat(id).matches("[A-Za-z0-9\\-.]{1,64}"));
+    }
+
+    /**
+     * The FFI fault stubs, each by the failure it serves under a well-formed patient id no fixture
+     * uses, so it never shadows a fixture's history and the read reaches the source.
+     */
+    @Test
+    void theFfiFaultStubsServeEachFailureUnderAPatientIdOfItsOwn() {
+        assertThat(PatientSourceStubs.ffiFaults())
+                .allSatisfy(fault -> assertThat(fault.id())
+                        .isEqualTo("fault-ffi-" + fault.fault())
+                        .matches("[A-Za-z0-9\\-.]{1,64}")
+                        .isNotIn(fixtureIds()))
+                .extracting(PatientSourceStubs.FaultStub::fault)
+                .containsExactlyInAnyOrder("unreachable", "slow", "server-error",
+                        "unexpected-status", "not-a-searchset", "no-total", "no-id",
+                        "invalid-id", "no-outcome", "unknown-higher-authority",
+                        "expiry-date-not-to-the-day");
     }
 
     /**

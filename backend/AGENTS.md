@@ -112,12 +112,15 @@ errors.
 mock: WireMock answering FHIR R4 `Patient/{id}` for the development
 fixtures, a failure of the source for each fault stub (`metadata.fault`),
 `404` for any other well-formed id, and `Patient?…` for each canned Patient
-search, with an empty searchset for any other. Compose runs it beside SQL
+search, with an empty searchset for any other, and `Patient/{id}/ffi?…` for
+each fixture's FFI History, with a failure for each `fault-ffi-*` stub. Compose
+runs it beside SQL
 Server and Redis (`patient-source`, no profile), so `make infra-up` and `make
 integration-test` start it; nothing under `/infra/` builds or deploys it. The
 backend's patient tests serve the same files in process, so a change to a stub
 is a change to the tests' fixtures: `/docs/domain/patient.md` ("The patient
-source's fixtures") has the rules they hold, and
+source's fixtures") and `/docs/domain/ffi.md` ("The patient source's FFI
+fixtures") have the rules they hold, and
 `docs/configuration/patient-source.md` the setting and the port.
 
 ## Architecture constraints
@@ -191,7 +194,9 @@ needs both its documentation and a fixture that produces it
 (`docs/api-contract-check.md`).
 
 The SPA mirrors the Permission, token-Permission, `AuditOperation` and
-`lockCause` enums and each called operation's `security`; `VOCABULARIES` in
+`lockCause` enums, an FFI's five closed sets (`FfiType`, `FfiOutcome`,
+`FfiHigherAuthority`, `FfiSubmittingMc`, `FfiStatus`) and each called
+operation's `security`; `VOCABULARIES` in
 `/scripts/spa-contract/check.mjs` lists exactly what the root's contract check
 compares.
 

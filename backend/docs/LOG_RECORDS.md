@@ -50,18 +50,18 @@ their written copy. Why each rule is what it is lives in
 
 ## Shapes
 
-| Shape                                              | Level                     | Sets                                                                                                         |
-| -------------------------------------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `success`                                          | `INFO`                    | `event.outcome` `success` (an overload adds `event.duration_ms`)                                             |
-| `successAtWarn`                                    | `WARN`                    | the same, for the dormancy lockout                                                                           |
-| `refused`                                          | `WARN`                    | `event.outcome` `failure`; the caller adds `event.reason` where one is told                                  |
-| `error`                                            | `ERROR`                   | the error fields (below), `event.outcome` `failure`                                                          |
-| `jobScheduled`                                     | `INFO`                    | `batch.job.name`, `app.job.description`, `trigger.cron.*`                                                    |
-| `jobStart`                                         | `INFO`                    | —                                                                                                            |
-| `jobEnd`                                           | `INFO`                    | `success`, `event.duration_ms`, `batch.job.status` `completed`, or `skipped` with `event.reason` `lock-held` |
-| `jobFailed`                                        | `ERROR`                   | `error.code` `500`, `failure`, `batch.job.status` `failed`, `event.severity` `high`, `event.duration_ms`     |
-| `requestEnd`                                       | by status                 | `http.response.status_code`, `event.duration_ms`, `event.outcome`                                            |
-| `deadlockRetried`                                  | `WARN`                    | `error.category` `database`, `app.retry.attempt` `1`, `event.reason` `deadlock`, no outcome (below)          |
+| Shape             | Level     | Sets                                                                                                         |
+| ----------------- | --------- | ------------------------------------------------------------------------------------------------------------ |
+| `success`         | `INFO`    | `event.outcome` `success` (an overload adds `event.duration_ms`)                                             |
+| `successAtWarn`   | `WARN`    | the same, for the dormancy lockout                                                                           |
+| `refused`         | `WARN`    | `event.outcome` `failure`; the caller adds `event.reason` where one is told                                  |
+| `error`           | `ERROR`   | the error fields (below), `event.outcome` `failure`                                                          |
+| `jobScheduled`    | `INFO`    | `batch.job.name`, `app.job.description`, `trigger.cron.*`                                                    |
+| `jobStart`        | `INFO`    | —                                                                                                            |
+| `jobEnd`          | `INFO`    | `success`, `event.duration_ms`, `batch.job.status` `completed`, or `skipped` with `event.reason` `lock-held` |
+| `jobFailed`       | `ERROR`   | `error.code` `500`, `failure`, `batch.job.status` `failed`, `event.severity` `high`, `event.duration_ms`     |
+| `requestEnd`      | by status | `http.response.status_code`, `event.duration_ms`, `event.outcome`                                            |
+| `deadlockRetried` | `WARN`    | `error.category` `database`, `app.retry.attempt` `1`, `event.reason` `deadlock`, no outcome (below)          |
 
 `withError` is public for the one `WARN` that carries a `data` error
 classification (`http.request.refusal`).
@@ -222,7 +222,10 @@ page, which quoted the path.
   timeout), `server-error`, `unexpected-status`, `unreadable` (a body that
   arrived whole and could not be read), or the domain rule a Patient broke
   (`no-nric`, `no-official-name`, `no-name-text`, `no-gender`,
-  `no-birth-date`, `birth-date-not-to-the-day`, `another-resource`) — and its
+  `no-birth-date`, `birth-date-not-to-the-day`, `another-resource`), or the
+  rule a page of a Patient search or of an FFI History broke (listed in
+  `/docs/domain/patient.md`, "Logging", and `/docs/domain/ffi.md`,
+  "Failures") — and its
   `error.category` is the fault's own, as ADR 0014's table has it for an
   outbound call: `network` and `server` with no follow-up, `data` with one.
 - A `4xx` that Spring MVC maps (validation, an unreadable body, an unbindable

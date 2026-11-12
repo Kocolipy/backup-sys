@@ -1,7 +1,8 @@
 /**
  * The **patient in context**, read once: the one reader of the tab's EHR
- * context's patient (`@/auth/ehr-context`), whose view the top bar and Home's
- * Patient card both render from.
+ * context's patient (`@/auth/ehr-context`), whose view the top bar, Home's
+ * Patient card and the FFI page all render from — so it sits in `src/pages/`,
+ * shared by the pages it serves.
  *
  * The gated read keeps no shared cache, so two readers of one patient would
  * send two `GET /api/patient/{id}` — each a call to the uncached patient
@@ -39,7 +40,7 @@ import { useEhrContext } from "@/auth/ehr-context";
 import { holds } from "@/auth/permissions";
 import { firstReadView, type ReadView, useGatedRead } from "@/auth/use-gated-read";
 
-import { PATIENT, type PatientSummary } from "./home-api";
+import { PATIENT, type PatientSummary } from "./patient-api";
 
 /**
  * What the read of the patient in context has to show: `none` with no patient

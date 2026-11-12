@@ -9,7 +9,7 @@ import {
   TAN_WEI_MING,
   TAN_WEI_MING_READ,
   withPatientInContext,
-} from "@/pages/home/patient.testHelpers";
+} from "@/pages/patient.testHelpers";
 import { renderSignedIn } from "@/shell/signed-in-shell.testHelpers";
 
 /** A Medical Officer: a session holding `patient:read`, which Patient Search requires. */

@@ -449,6 +449,53 @@ Patient (its `last-visit` extension); a Patient may have none. Patient search
 shows it in each row.
 _Avoid_: last seen, last encounter, last admission
 
+### FFIs
+
+Rules: [ffi](docs/domain/ffi.md). Decided in ADR 0019.
+
+**FFI (Fit for Instruction)**:
+One record of whether a patient was found fit for an instruction — an
+exercise, a test, a release — as the Patient source holds it: its FFI Type,
+Outcome, Issue Date, Expiry Date, Higher Authority, Submitting MC and Status,
+every one required. Read from the Patient source on every read, never held,
+and not audited.
+_Avoid_: fitness record, medical clearance, certificate
+
+**FFI History**:
+Every FFI of one patient, in the Patient source's own order, read five to a
+page on the FFI page (`/ffi`) for the patient in context, by a session
+holding `patient:read`.
+_Avoid_: FFI list, FFI log
+
+**FFI Type**:
+What an FFI is for, one of a closed set: Overseas Exercises, CAT A - OCS/SCS,
+IPPT FFI, Dental FFI, ORD / Release from Service, Vocational FFI.
+
+**Outcome**:
+What an FFI found, one of FIT, REQUEST WAIVER and UNFIT.
+_Avoid_: result, verdict (the dormancy job's word)
+
+**Issue Date**:
+The calendar date an FFI was issued.
+
+**Expiry Date**:
+The calendar date an FFI runs to. Nothing is derived from it: it does not
+decide the Status.
+
+**Higher Authority**:
+The medical authority an FFI answers to, one of CAMO, CARMO, CNMO, Comd MMI
+and DIS.
+
+**Submitting MC**:
+The camp medical centre that submitted an FFI, one of Nee Soon Camp MC,
+Kranji Camp MC, Hendon Camp MC and Mandai Hill Camp MC.
+
+**Status**:
+Whether an FFI is Active or Inactive, as the Patient source says. It is the
+source's own and is never derived from the Expiry Date: an FFI past its
+Expiry Date may still be Active, and nothing works out "expired".
+_Avoid_: expired, valid
+
 ### Database
 
 Decided in ADR 0013. Every term here names a database principal, never the

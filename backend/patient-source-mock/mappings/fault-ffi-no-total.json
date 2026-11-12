@@ -1,0 +1,45 @@
+{
+  "name": "Fault, FFI History: a searchset with no total",
+  "metadata": {
+    "fault": "no-total"
+  },
+  "request": {
+    "method": "GET",
+    "urlPath": "/Patient/fault-ffi-no-total/ffi"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/fhir+json"
+    },
+    "jsonBody": {
+      "resourceType": "Bundle",
+      "id": "ffi-history",
+      "type": "searchset",
+      "link": [
+        {
+          "relation": "self",
+          "url": "http://127.0.0.1:8104/Patient/fault-ffi-no-total/ffi?_offset=0&_count=5"
+        }
+      ],
+      "entry": [
+        {
+          "resource": {
+            "resourceType": "FFI",
+            "id": "ffi-fault-3",
+            "type": "dental",
+            "outcome": "fit",
+            "issueDate": "2015-03-16",
+            "expiryDate": "2016-03-15",
+            "higherAuthority": "carmo",
+            "submittingMc": "kranji-camp",
+            "status": "active"
+          },
+          "search": {
+            "mode": "match"
+          }
+        }
+      ]
+    }
+  }
+}

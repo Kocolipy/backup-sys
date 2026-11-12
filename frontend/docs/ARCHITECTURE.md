@@ -127,7 +127,7 @@ straight into `lib/http`) but may never point back up.
 patient in context — goes through `useGatedRead`, handed a declaration, its
 arguments and the page's failure copy. The hook keeps no shared cache, so each
 caller is its own read: a value two parts of the screen show has one reader,
-as the patient in context has (`pages/home/patient-in-context.ts`). It sends nothing without the Permission, resets when
+as the patient in context has (`pages/patient-in-context.ts`). It sends nothing without the Permission, resets when
 the Permission or path changes, and **the newest read wins**: every read it
 sends (on opening, a key change, `reload()`, or a write's `after`) supersedes
 the one in flight, in the view and the page status alike. A `reload()` in the
@@ -248,6 +248,18 @@ two pages share moves up to `src/pages/` itself, and imports no page folder
   reads from the first page. A failure is reported on the
   page's line, with a Retry that reads the same page again. Each row keeps the
   Patient's id, which it never shows.
+- `ffi.tsx` / `ffi-api.ts` — FFI, `/ffi`, linked after Profile for a session
+  holding `patient:read` and guarded by it. It renders from
+  `usePatientInContext()` — with none in context, or a `404` for the id there,
+  it says "No patient in context" and reads nothing; while the patient is read
+  it says "Loading FFIs…"; a failed patient read leaves it empty — and, once
+  the patient is read, that patient's FFI History, `GET /api/patient-ffi/{patientId}`,
+  five at a time through `FFI_HISTORY` and the shared paged listing, naming the
+  range on a single page too. `FFI_HISTORY` reads a `404` as `absent`, the same
+  "No patient in context"; a failure is "Couldn't load FFIs" on the page's
+  line, with Try again. `decodeFfi` is strict, and each of an FFI's five
+  closed sets is a `Record` of labels keyed by its codes, so a code added
+  fails typecheck until it has one. Read-only: no row action.
 - `sort-heading.tsx` — the sortable column heading of the accounts listing:
   `aria-sort`, a direction icon, and a press that sorts its column ascending
   first, then toggles descending → ascending → …, never returning a sorted
@@ -259,21 +271,24 @@ two pages share moves up to `src/pages/` itself, and imports no page folder
   through it (`lb-api-modules-are-data`), keeping only its own search and
   filter parameters.
 - `home.tsx` — the Patient card.
-- `patient-in-context.ts` / `home-api.ts` — the **one reader of the patient in
+- `patient-in-context.ts` / `patient-api.ts` — the **one reader of the patient in
   context**. `PatientInContextScope`, which the signed-in layout renders once
   inside its page status, reads `GET /api/patient/{id}` through `PATIENT`
   (opting in to `absent`, a `403` reported as failure) for the EHR context's
-  patient, decoding the R5 `Patient` (typed by `@types/fhir`'s `fhir5`); with
+  patient, decoding the R5 `Patient` (typed by `@types/fhir`'s `fhir5`) down to
+  the fields shown and the id the FFI page reads by; with
   none in context it reads nothing. A new id is a new path, so a new first read,
   and a late answer for the id before never lands. A failure is reported to the
   page's error line once, by this read. `usePatientInContext()` hands its view —
-  `none`, or the gated read's — to the top bar and the Patient card, which only
-  render it, so each patient change sends one request on every page. The read is
+  `none`, or the gated read's — to the top bar, the Patient card and the FFI
+  page, which only render it, so each patient change sends one request on every
+  page. The read is
   a sibling of the layout's children, never their parent, so a patient coming
-  into context or leaving it never remounts the page. It lives in `pages/home/`
-  because that is the lowest layer both the Shell and the Patient card may
-  import that also holds `PATIENT`: `mb-pages-do-not-import-the-shell` rules out
-  `src/shell/`.
+  into context or leaving it never remounts the page. It lives in `src/pages/`
+  itself, a part the pages share, because that is the lowest layer the Shell,
+  the Patient card and the FFI page may all import:
+  `mb-pages-do-not-import-the-shell` rules out `src/shell/`, and
+  `mb-pages-do-not-import-another-page` a page folder.
 - `patient-card.tsx` — the Patient card, rendered from `usePatientInContext()`:
   "No patient in context" for none or a `404`, "Loading the patient…", an empty
   card for a failure (its copy is on the error line), or the banner. Every

@@ -107,19 +107,79 @@ public final class PatientSourceStubs {
     }
 
     /**
-     * Every fault stub: a stub whose {@code metadata.fault} names the failure it serves — a delay
+     * Every fault stub of a read by id: a stub whose {@code metadata.fault} names the failure it
+     * serves — a delay
      * past the read timeout, a body dribbled out past it, a {@code 5xx}, or a Patient breaking
      * one domain rule — under a
      * well-formed id no fixture uses.
      */
     public static List<FaultStub> faults() {
-        return stubs()
-                .filter(stub -> !stub.at(FAULT).isMissingNode())
+        return faultStubs(false).stream()
                 .map(stub -> new FaultStub(stub.at(FAULT).asString(),
                         stub.at("/request/urlPath").asString().substring("/Patient/".length()),
                         stub.at("/response")))
                 .toList();
     }
+
+    /**
+     * Every FFI fault stub: a stub whose {@code metadata.fault} names the failure an FFI History
+     * read meets there — no answer, a status but a {@code 200} or a {@code 404}, or a page the
+     * service cannot hold — under a well-formed patient id no fixture uses
+     * (/docs/domain/ffi.md, "The patient source's FFI fixtures").
+     */
+    public static List<FaultStub> ffiFaults() {
+        return faultStubs(true).stream()
+                .map(stub -> {
+                    String path = stub.at("/request/urlPath").asString();
+                    return new FaultStub(stub.at(FAULT).asString(),
+                            path.substring("/Patient/".length(), path.length() - FFI.length()),
+                            stub.at("/response"));
+                })
+                .toList();
+    }
+
+    /**
+     * Every FFI History stub that is no fault stub: each development fixture's page as the patient
+     * id it answers for — or, for a stub answering several, its pattern — beside the searchset it
+     * serves.
+     */
+    public static List<FfiStub> ffiHistories() {
+        return stubs()
+                .filter(stub -> stub.at(FAULT).isMissingNode())
+                .filter(stub -> stub.at("/response/status").asInt() == 200)
+                .filter(stub -> path(stub).endsWith(FFI))
+                .map(stub -> new FfiStub(path(stub), stub.at("/request/queryParameters"),
+                        stub.at("/response/jsonBody")))
+                .toList();
+    }
+
+    /**
+     * One FFI History stub.
+     *
+     * @param path   the path it answers, {@code /Patient/{id}/ffi}, or the pattern of paths
+     * @param query  its query parameters' matchers — missing for one answering any page
+     * @param bundle the searchset it answers
+     */
+    public record FfiStub(String path, JsonNode query, JsonNode bundle) {
+    }
+
+    /** The path a stub matches, exactly or by pattern. */
+    private static String path(JsonNode stub) {
+        JsonNode request = stub.at("/request");
+        return request.optional("urlPath").or(() -> request.optional("urlPathPattern"))
+                .map(JsonNode::asString).orElse("");
+    }
+
+    /** The fault stubs of FFI History reads ({@code ffi}) or of Patient reads by id. */
+    private static List<JsonNode> faultStubs(boolean ffi) {
+        return stubs()
+                .filter(stub -> !stub.at(FAULT).isMissingNode())
+                .filter(stub -> path(stub).endsWith(FFI) == ffi)
+                .toList();
+    }
+
+    /** The FFI History's path segment, after the patient's id. */
+    private static final String FFI = "/ffi";
 
     /**
      * One fault stub.
@@ -144,6 +204,20 @@ public final class PatientSourceStubs {
                 name.at("/given").forEach(given -> values.add(given.asString()));
             });
             body.optional("birthDate").ifPresent(birthDate -> values.add(birthDate.asString()));
+            body.at("/issue").forEach(issue -> values.add(issue.at("/diagnostics").asString()));
+            return List.copyOf(values);
+        }
+
+        /**
+         * What a record of an FFI History's failure must not quote: each FFI's id and dates, and
+         * an error body's diagnostics.
+         */
+        public List<String> ffiValues() {
+            JsonNode body = response.at("/jsonBody");
+            List<String> values = new ArrayList<>();
+            body.at("/entry").forEach(entry -> List.of("id", "issueDate", "expiryDate").forEach(
+                    field -> entry.at("/resource").optional(field)
+                            .ifPresent(value -> values.add(value.asString()))));
             body.at("/issue").forEach(issue -> values.add(issue.at("/diagnostics").asString()));
             return List.copyOf(values);
         }

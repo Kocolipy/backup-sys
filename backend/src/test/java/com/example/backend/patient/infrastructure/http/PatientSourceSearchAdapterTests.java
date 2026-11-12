@@ -266,10 +266,10 @@ class PatientSourceSearchAdapterTests {
      */
     @ParameterizedTest
     @CsvSource(delimiter = '|', textBlock = """
-        {"resourceType": "Bundle", "type": "collection", "total": 0} | not-a-searchset | The patient source's search answered with no searchset
-        {"resourceType": "OperationOutcome", "type": "searchset", "total": 0} | not-a-searchset | The patient source's search answered with no searchset
-        {"resourceType": "Bundle", "type": "searchset"} | no-total | The patient source's search has no total
-        {"resourceType": "Bundle", "type": "searchset", "total": -1} | no-total | The patient source's search has no total
+        {"resourceType": "Bundle", "type": "collection", "total": 0} | not-a-searchset | The patient source's page is no searchset
+        {"resourceType": "OperationOutcome", "type": "searchset", "total": 0} | not-a-searchset | The patient source's page is no searchset
+        {"resourceType": "Bundle", "type": "searchset"} | no-total | The patient source's page has no total
+        {"resourceType": "Bundle", "type": "searchset", "total": -1} | no-total | The patient source's page has no total
         {"resourceType": "Bundle", "type": "searchset", "total": 1, "entry": [{}]} | another-resource | The patient source answered with another resource
         {"resourceType": "Bundle", "type": "searchset", "total": 1, "entry": [{"resource": {"resourceType": "OperationOutcome", "id": "x"}}]} | another-resource | The patient source answered with another resource
         """)

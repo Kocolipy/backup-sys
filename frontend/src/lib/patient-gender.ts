@@ -6,7 +6,7 @@
 /**
  * The FHIR R5 administrative gender codes. Spelled out rather than imported:
  * `@types/fhir` is a devDependency, which production source may not import
- * (`cq-no-devdep-in-prod`), so `home-api.test.ts` holds this to `fhir5`'s own.
+ * (`cq-no-devdep-in-prod`), so `pages/patient-api.test.ts` holds this to `fhir5`'s own.
  */
 export const PATIENT_GENDERS = ["male", "female", "other", "unknown"] as const;
 

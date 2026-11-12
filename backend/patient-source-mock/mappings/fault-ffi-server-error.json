@@ -1,0 +1,26 @@
+{
+  "name": "Fault, FFI History: the source answers 503",
+  "metadata": {
+    "fault": "server-error"
+  },
+  "request": {
+    "method": "GET",
+    "urlPath": "/Patient/fault-ffi-server-error/ffi"
+  },
+  "response": {
+    "status": 503,
+    "headers": {
+      "Content-Type": "application/fhir+json"
+    },
+    "jsonBody": {
+      "resourceType": "OperationOutcome",
+      "issue": [
+        {
+          "severity": "error",
+          "code": "transient",
+          "diagnostics": "FFI store unavailable: ffi-fault-0 2015-04-20"
+        }
+      ]
+    }
+  }
+}

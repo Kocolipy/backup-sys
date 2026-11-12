@@ -52,6 +52,11 @@ function document() {
         AccountSummary: {
           properties: { lockCause: { enum: ["FAILURES", "DORMANCY", null] } },
         },
+        FfiType: { type: "string", enum: ["ippt", "dental"] },
+        FfiOutcome: { type: "string", enum: ["fit", "unfit"] },
+        FfiHigherAuthority: { type: "string", enum: ["camo", "dis"] },
+        FfiSubmittingMc: { type: "string", enum: ["kranji-camp"] },
+        FfiStatus: { type: "string", enum: ["active", "inactive"] },
       },
     },
   };
@@ -77,6 +82,13 @@ function spa() {
           path: (groupId, startIndex) =>
             `/api/admin/groups/${encodeURIComponent(groupId)}/members?startIndex=${startIndex}`,
         },
+      },
+      "src/pages/ffi/ffi-api.ts": {
+        FFI_TYPES: ["ippt", "dental"],
+        FFI_OUTCOMES: ["fit", "unfit"],
+        FFI_HIGHER_AUTHORITIES: ["camo", "dis"],
+        FFI_SUBMITTING_MCS: ["kranji-camp"],
+        FFI_STATUSES: ["active", "inactive"],
       },
       "src/pages/audit/audit-api.ts": {
         AUDIT_OPERATIONS: ["LOGIN_SUCCESS", "LOGOUT"],
@@ -149,7 +161,10 @@ describe("the SPA's vocabularies", () => {
     ],
     [
       "the SPA loses a token Permission",
-      (s) => s.modules["src/pages/accounts/accounts-api.ts"].TOKEN_PERMISSIONS.shift(),
+      (s) =>
+        s.modules[
+          "src/pages/accounts/accounts-api.ts"
+        ].TOKEN_PERMISSIONS.shift(),
       [
         `TOKEN_PERMISSIONS (src/pages/accounts/accounts-api.ts) lacks "user:read", which ${TOKEN_REQUEST} has`,
         `TOKEN_PERMISSIONS (src/pages/accounts/accounts-api.ts) lacks "user:read", which ${TOKEN_SUMMARY} has`,
@@ -163,7 +178,9 @@ describe("the SPA's vocabularies", () => {
     [
       "the SPA gains an audit operation",
       (s) =>
-        s.modules["src/pages/audit/audit-api.ts"].AUDIT_OPERATIONS.push("ROLE_GRANT"),
+        s.modules["src/pages/audit/audit-api.ts"].AUDIT_OPERATIONS.push(
+          "ROLE_GRANT",
+        ),
       `AUDIT_OPERATIONS (src/pages/audit/audit-api.ts) has "ROLE_GRANT", which ${AUDIT_OPERATION} lacks`,
     ],
     [
@@ -176,6 +193,24 @@ describe("the SPA's vocabularies", () => {
       "the SPA loses a lock cause",
       (s) => s.modules["src/pages/accounts/accounts-api.ts"].LOCK_CAUSES.pop(),
       `LOCK_CAUSES (src/pages/accounts/accounts-api.ts) lacks "DORMANCY", which ${LOCK_CAUSE} has`,
+    ],
+    // One case per FFI set: each is its own row of VOCABULARIES, so each is
+    // the only proof its set is compared at all.
+    ...[
+      ["FFI_TYPES", "FfiType", "vocational"],
+      ["FFI_OUTCOMES", "FfiOutcome", "request-waiver"],
+      ["FFI_HIGHER_AUTHORITIES", "FfiHigherAuthority", "cnmo"],
+      ["FFI_SUBMITTING_MCS", "FfiSubmittingMc", "hendon-camp"],
+      ["FFI_STATUSES", "FfiStatus", "lapsed"],
+    ].map(([set, schema, code]) => [
+      `the document gains a code of ${schema}`,
+      (_spa, doc) => schemas(doc)[schema].enum.push(code),
+      `${set} (src/pages/ffi/ffi-api.ts) lacks "${code}", which #/components/schemas/${schema} has`,
+    ]),
+    [
+      "the SPA gains an FFI Status",
+      (s) => s.modules["src/pages/ffi/ffi-api.ts"].FFI_STATUSES.push("expired"),
+      `FFI_STATUSES (src/pages/ffi/ffi-api.ts) has "expired", which #/components/schemas/FfiStatus lacks`,
     ],
     [
       "the document no longer holds an enum the SPA mirrors",
@@ -338,7 +373,8 @@ describe("the SPA's request declarations", () => {
   it("refuses to pass an SPA in which it finds no declaration at all", () => {
     const s = spa();
     delete s.modules["src/pages/accounts/accounts-api.ts"].USERS;
-    delete s.modules["src/pages/accounts/accounts-api.ts"].SET_GROUP_PERMISSIONS;
+    delete s.modules["src/pages/accounts/accounts-api.ts"]
+      .SET_GROUP_PERMISSIONS;
     delete s.modules["src/pages/accounts/accounts-api.ts"].GROUP_MEMBERS;
     delete s.modules["src/pages/audit/audit-api.ts"].AUDIT_EVENTS;
     s.declared = {};
@@ -411,6 +447,7 @@ export const TOKENS: PagedDeclaration<
       "src/auth/api.ts",
       "src/pages/accounts/accounts-api.ts",
       "src/pages/audit/audit-api.ts",
+      "src/pages/ffi/ffi-api.ts",
       "src/pages/tokens/tokens-api.ts",
     ]);
   });

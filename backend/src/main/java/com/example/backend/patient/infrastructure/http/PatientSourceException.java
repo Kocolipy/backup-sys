@@ -7,8 +7,9 @@ import com.example.backend.observability.UpstreamFaultException;
 import java.util.stream.Stream;
 
 /**
- * The in-house patient source could not be read: it gave no answer, an answer other than a
- * Patient or a {@code 404} — or for a search, a searchset — or a Patient the service cannot hold. A fault of the source, answered
+ * The in-house patient source could not be read: it gave no answer, an answer other than the
+ * read's own — a Patient or a {@code 404}, a search's searchset, or an FFI History's searchset or
+ * a {@code 404} — or one the service cannot hold. A fault of the source, answered
  * {@code 502} with the {@code exception} outcome (/docs/domain/patient.md, "Errors"), its one
  * fault record naming the {@link Failure} as its {@code event.reason} ({@link #reason()}) under
  * the {@code error.category} ADR 0014 gives an outbound call's failure ({@link #category()}):
@@ -20,8 +21,9 @@ import java.util.stream.Stream;
  *   <li>{@code server}: the source answered {@code 5xx}, {@code server-error};
  *   <li>{@code data}: the source answered with something the service cannot use — another status
  *       ({@code unexpected-status}), a body that is not JSON or not a Patient
- *       ({@code unreadable}), a Patient breaking one of the domain's rules, or a search's answer
- *       that is no searchset, has no total, or holds a Patient with no id.
+ *       ({@code unreadable}), a Patient breaking one of the domain's rules, a search's answer
+ *       or an FFI History that is no searchset, has no total, or holds an entry with no id, or
+ *       an FFI missing a field, holding a code outside its closed set or a date not to the day.
  * </ul>
  *
  * <p>Its message is fixed text, naming at most a status or an element, and its cause, when it has
@@ -47,7 +49,7 @@ public final class PatientSourceException extends UpstreamFaultException {
         /** Another status, neither a {@code 200}, a {@code 404} nor a {@code 5xx}. */
         UNEXPECTED_STATUS(Reason.UNEXPECTED_STATUS, "unexpected-status",
                 "The patient source answered"),
-        /** A {@code 200} whose body could not be read as a Patient at all. */
+        /** A {@code 200} whose body could not be read as the read's answer at all. */
         UNREADABLE(Reason.UNREADABLE, "unreadable", "The patient source could not be read"),
         ANOTHER_RESOURCE("another-resource", "The patient source answered with another resource",
                 ErrorCategory.DATA),
@@ -61,11 +63,11 @@ public final class PatientSourceException extends UpstreamFaultException {
                 ErrorCategory.DATA),
         BIRTH_DATE_NOT_TO_THE_DAY("birth-date-not-to-the-day",
                 "The patient source's Patient's birth date is not to the day", ErrorCategory.DATA),
-        /** A search's {@code 200} that is no searchset {@code Bundle}. */
-        NOT_A_SEARCHSET("not-a-searchset",
-                "The patient source's search answered with no searchset", ErrorCategory.DATA),
+        /** A paged read's {@code 200} — a search's or an FFI History's — that is no searchset. */
+        NOT_A_SEARCHSET("not-a-searchset", "The patient source's page is no searchset",
+                ErrorCategory.DATA),
         /** A searchset with no {@code total}, or a negative one: there is no telling the pages. */
-        NO_TOTAL("no-total", "The patient source's search has no total", ErrorCategory.DATA),
+        NO_TOTAL("no-total", "The patient source's page has no total", ErrorCategory.DATA),
         /** A search's Patient with no {@code id}, which no later read could open it by. */
         NO_ID("no-id", "The patient source's Patient has no id", ErrorCategory.DATA),
         /** A search's Patient whose {@code id} is outside FHIR's id grammar. */
@@ -73,7 +75,53 @@ public final class PatientSourceException extends UpstreamFaultException {
                 ErrorCategory.DATA),
         /** A search's Patient whose Last visit is no date to the day. */
         LAST_VISIT_NOT_TO_THE_DAY("last-visit-not-to-the-day",
-                "The patient source's Patient's last visit is not to the day", ErrorCategory.DATA);
+                "The patient source's Patient's last visit is not to the day", ErrorCategory.DATA),
+        /** An FFI History's entry with no {@code id}. */
+        FFI_NO_ID("no-id", "The patient source's FFI has no id", ErrorCategory.DATA),
+        /** An FFI History's entry whose {@code id} is outside FHIR's id grammar. */
+        FFI_INVALID_ID("invalid-id", "The patient source's FFI's id is not a FHIR id",
+                ErrorCategory.DATA),
+        /** An FFI with no {@code type}. */
+        NO_FFI_TYPE("no-type", "The patient source's FFI has no type", ErrorCategory.DATA),
+        /** An FFI whose {@code type} is no FFI Type's code. */
+        UNKNOWN_FFI_TYPE("unknown-type", "The patient source's FFI's type is not an FFI Type",
+                ErrorCategory.DATA),
+        /** An FFI with no {@code outcome}. */
+        NO_OUTCOME("no-outcome", "The patient source's FFI has no outcome", ErrorCategory.DATA),
+        /** An FFI whose {@code outcome} is no Outcome's code. */
+        UNKNOWN_OUTCOME("unknown-outcome",
+                "The patient source's FFI's outcome is not an Outcome", ErrorCategory.DATA),
+        /** An FFI with no {@code issueDate}. */
+        NO_ISSUE_DATE("no-issue-date", "The patient source's FFI has no issue date",
+                ErrorCategory.DATA),
+        /** An FFI whose Issue Date is no date to the day. */
+        ISSUE_DATE_NOT_TO_THE_DAY("issue-date-not-to-the-day",
+                "The patient source's FFI's issue date is not to the day", ErrorCategory.DATA),
+        /** An FFI with no {@code expiryDate}. */
+        NO_EXPIRY_DATE("no-expiry-date", "The patient source's FFI has no expiry date",
+                ErrorCategory.DATA),
+        /** An FFI whose Expiry Date is no date to the day. */
+        EXPIRY_DATE_NOT_TO_THE_DAY("expiry-date-not-to-the-day",
+                "The patient source's FFI's expiry date is not to the day", ErrorCategory.DATA),
+        /** An FFI with no {@code higherAuthority}. */
+        NO_HIGHER_AUTHORITY("no-higher-authority",
+                "The patient source's FFI has no higher authority", ErrorCategory.DATA),
+        /** An FFI whose {@code higherAuthority} is no Higher Authority's code. */
+        UNKNOWN_HIGHER_AUTHORITY("unknown-higher-authority",
+                "The patient source's FFI's higher authority is not a Higher Authority",
+                ErrorCategory.DATA),
+        /** An FFI with no {@code submittingMc}. */
+        NO_SUBMITTING_MC("no-submitting-mc", "The patient source's FFI has no submitting MC",
+                ErrorCategory.DATA),
+        /** An FFI whose {@code submittingMc} is no Submitting MC's code. */
+        UNKNOWN_SUBMITTING_MC("unknown-submitting-mc",
+                "The patient source's FFI's submitting MC is not a Submitting MC",
+                ErrorCategory.DATA),
+        /** An FFI with no {@code status}. */
+        NO_STATUS("no-status", "The patient source's FFI has no status", ErrorCategory.DATA),
+        /** An FFI whose {@code status} is no Status's code. */
+        UNKNOWN_STATUS("unknown-status", "The patient source's FFI's status is not a Status",
+                ErrorCategory.DATA);
 
         /** The call's own failure this is, or {@code null} for a broken domain rule. */
         private final Reason outbound;
@@ -124,7 +172,7 @@ public final class PatientSourceException extends UpstreamFaultException {
         return new PatientSourceException(failure, failure.message, redactedCause);
     }
 
-    /** The source answered {@code status}, neither a Patient's {@code 200} nor a {@code 404}. */
+    /** The source answered {@code status}, one the read does not take as its answer. */
     static PatientSourceException answered(int status) {
         Failure failure = status >= 500 ? Failure.SERVER_ERROR : Failure.UNEXPECTED_STATUS;
         return new PatientSourceException(failure, failure.message + " " + status, null);
