@@ -97,7 +97,9 @@ authorities:
 - **Runtime** (CSRF, CSP, sessions): `frontend/docs/BACKEND_CONTRACT.md` — read
   it before changing request handling on either side.
 - **Vocabulary** (Permissions, token Permissions, audit operations, lock causes,
-  each request's Permission or Superuser requirement): `backend/docs/openapi.yaml`,
+  an FFI's five closed sets — FFI Type, Outcome, Higher Authority, Submitting
+  MC, Status — and each request's Permission or Superuser requirement):
+  `backend/docs/openapi.yaml`,
   held by the contract check, so a backend change to any lands with the SPA's.
 
 ## Line endings and ignores
