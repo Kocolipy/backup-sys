@@ -1,12 +1,13 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { DEV_FIXTURES, loginAsFixture, type DevFixture } from "./auth.helpers";
+import { DEV_FIXTURES, expectSignedInLines, loginAsFixture, type DevFixture } from "./auth.helpers";
 import { expectNoPatientAccess, recordPatientRequests } from "./patient.helpers";
 
 // The development fixtures holding administrative Permissions, and only those:
 // each fixture's User signs in through the login page and sees exactly the
 // pages and actions its Group's Permissions allow (the `local` profile's stored
-// Group Permissions, ADR 0015). The Medical Officers are left out on purpose:
+// Group Permissions, ADR 0015), and the top bar names it beneath its username by
+// its Group, upper-cased. The Medical Officers are left out on purpose:
 // a further sign-in as `mo1` or `mo2` would end the session the
 // `medical-officer` or `patient-sign-out` project relies on beside this file,
 // and their pages are `roles-medical-officer.spec.ts`'. None of them is the Superuser,
@@ -28,17 +29,19 @@ type AccountsView = { users: boolean; groups: boolean; connectors: boolean } | n
 
 const EXPECTED: Record<
   Exclude<DevFixture, "superuser">,
-  { accounts: AccountsView; audit: boolean; createConnector: boolean }
+  { accounts: AccountsView; audit: boolean; createConnector: boolean; groupLines: string[] }
 > = {
   auditor: {
     accounts: { connectors: true, groups: true, users: true },
     audit: true,
     createConnector: false,
+    groupLines: ["AUDITOR"],
   },
   helpdesk: {
     accounts: { connectors: true, groups: true, users: true },
     audit: true,
     createConnector: false,
+    groupLines: ["HELPDESK"],
   },
 };
 
@@ -108,6 +111,7 @@ test.describe("development Group Permissions", () => {
       page,
     }) => {
       await loginAsFixture(page, fixture);
+      await expectSignedInLines(page, [username, ...expected.groupLines]);
 
       // The pages and actions it is shown.
       await expectHome(page, expected.accounts !== null, expected.audit);

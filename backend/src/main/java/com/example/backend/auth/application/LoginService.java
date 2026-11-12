@@ -8,6 +8,7 @@ import com.example.backend.auth.application.LoginOutcome.PasswordRefused;
 import com.example.backend.auth.application.LoginOutcome.SignedIn;
 import com.example.backend.auth.application.LoginStateService.LoginVerdict;
 import com.example.backend.auth.application.LoginStateService.VerifiedPassword;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -255,8 +256,8 @@ public class LoginService {
                         signedInRecorded(new Audited.LoginSuccess(userId, AuditLoginMethod.PASSWORD),
                                 userId, retainedSessionId);
                         yield LoginDecision.signedIn(accepted(
-                                identities.issued(authentication, granted.authorities()),
-                                new SignedIn(userId)));
+                                identities.issued(authentication, granted.grant().authorities()),
+                                new SignedIn(userId), granted.grant().groups()));
                     }
                 })
                 // Deleted since the authentication read it, before or after the comparison: gone
@@ -311,11 +312,12 @@ public class LoginService {
 
     /**
      * What the caller establishes the session from, once the success is recorded: the
-     * authentication, and {@code signedIn}, naming the User by the stable id its principal
-     * carries.
+     * authentication, {@code signedIn}, naming the User by the stable id its principal carries,
+     * and the {@code groups} the decision read beside the authentication's authorities.
      */
-    private AcceptedLogin accepted(Authentication authentication, SignedIn signedIn) {
-        return new AcceptedLogin(authentication, signedIn);
+    private AcceptedLogin accepted(
+            Authentication authentication, SignedIn signedIn, List<String> groups) {
+        return new AcceptedLogin(authentication, signedIn, groups);
     }
 
     /**
@@ -325,8 +327,13 @@ public class LoginService {
      * lookups survive a later {@code userName} change instead of following
      * {@code authentication.getName()}. Its {@link SignedIn} is the outcome the caller records
      * once the session is signed in.
+     *
+     * @param groups the display names of the User's direct Groups, read under its lock with the
+     *               authentication's authorities ({@link SessionGrant}), which the session keeps
+     *               as its snapshot; empty for a User in no Group and for a confined session
      */
-    public record AcceptedLogin(Authentication authentication, SignedIn signedIn) {
+    public record AcceptedLogin(
+            Authentication authentication, SignedIn signedIn, List<String> groups) {
 
         /** The identity's stable id, which the session is indexed and logged by. */
         public UUID userId() {

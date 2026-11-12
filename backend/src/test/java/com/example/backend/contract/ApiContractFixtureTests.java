@@ -401,7 +401,7 @@ class ApiContractFixtureTests {
                     assertThat(List.of(users.get("totalResults").asInt(),
                                     users.get("users").get(0).get("userName").asText()))
                             .containsExactly(1, member);
-                    JsonNode groups = json(t.expect(t.get("/api/admin/groups?search=Admins"
+                    JsonNode groups = json(t.expect(t.get("/api/admin/groups?search=Admin"
                             + "&sortBy=displayName&startIndex=1&count=200").cookie(admin), 200));
                     assertThat(groups.get("groups").get(0).get("adminGroup").asBoolean())
                             .isTrue();

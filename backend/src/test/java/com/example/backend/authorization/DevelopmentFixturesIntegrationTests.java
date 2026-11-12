@@ -113,7 +113,7 @@ class DevelopmentFixturesIntegrationTests {
 
     /**
      * Each development Group's fixture Users sign in holding exactly what their Group carries,
-     * sorted by name: Auditors and Helpdesk no patient access, each Medical Officer that alone.
+     * sorted by name: Auditor and Helpdesk no patient access, each Medical Officer that alone.
      */
     @Test
     void eachDevelopmentGroupsUserSignsInHoldingThatGroupsPermissions() throws Exception {
@@ -150,6 +150,40 @@ class DevelopmentFixturesIntegrationTests {
         }
     }
 
+    /**
+     * Each seeded Group's User signs in naming that Group, by the name it is seeded with: the
+     * Bootstrap Admin the Admin group, each fixture its development Group, and a User in no Group
+     * none.
+     */
+    @Test
+    void eachSeededGroupsUserSignsInNamingThatGroup() throws Exception {
+        assertThat(Map.of(
+                        "test-admin", groupsOnMe(logIn(mvc, "test-admin", "test-admin-password")),
+                        "auditor", groupsOnMe(logIn(mvc, "auditor", FIXTURE_PASSWORD)),
+                        "helpdesk", groupsOnMe(logIn(mvc, "helpdesk", FIXTURE_PASSWORD)),
+                        "mo1", groupsOnMe(logIn(mvc, "mo1", FIXTURE_PASSWORD)),
+                        "test-user", groupsOnMe(logIn(mvc, "test-user", "test-password"))))
+                .isEqualTo(Map.of(
+                        "test-admin", List.of("Admin"),
+                        "auditor", List.of("Auditor"),
+                        "helpdesk", List.of("Helpdesk"),
+                        "mo1", List.of("Medical Officer"),
+                        "test-user", List.of()));
+    }
+
+    /** A User in several Groups names each, sorted ignoring case. */
+    @Test
+    void aUserInSeveralGroupsNamesEachOfThem() throws Exception {
+        UUID auditor = userId("auditor");
+        addMember(HELPDESK, auditor);
+        try {
+            assertThat(groupsOnMe(logIn(mvc, "auditor", FIXTURE_PASSWORD)))
+                    .containsExactly("Auditor", "Helpdesk");
+        } finally {
+            removeMember(HELPDESK, auditor);
+        }
+    }
+
     /** Belonging to an extra Group never takes a power away: the result is the union. */
     @Test
     void aUserInSeveralGroupsHoldsTheUnionOfWhatTheyCarry() throws Exception {
@@ -178,6 +212,19 @@ class DevelopmentFixturesIntegrationTests {
         assertThat(mvc.perform(get("/api/self").cookie(session))
                         .andReturn().getResponse().getStatus())
                 .isEqualTo(200);
+    }
+
+    /** The session stored in Redis keeps the Groups it was signed in with. */
+    @Test
+    void theStoredSessionKeepsItsGroups() throws Exception {
+        logIn(mvc, "auditor", FIXTURE_PASSWORD);
+
+        Map<String, ? extends Session> stored =
+                sessions.findByPrincipalName(userId("auditor").toString());
+        assertThat(stored).hasSize(1);
+
+        assertThat(stored.values().iterator().next().<Object>getAttribute("app.signed-in-groups"))
+                .isEqualTo(List.of("Auditor"));
     }
 
     /** The stored session carries the resolved Permissions. */
@@ -293,6 +340,12 @@ class DevelopmentFixturesIntegrationTests {
         List<String> permissions = new ArrayList<>();
         me(session).get("permissions").forEach(name -> permissions.add(name.asString()));
         return permissions;
+    }
+
+    private List<String> groupsOnMe(Cookie session) throws Exception {
+        List<String> groups = new ArrayList<>();
+        me(session).get("groups").forEach(name -> groups.add(name.asString()));
+        return groups;
     }
 
     private JsonNode me(Cookie session) throws Exception {

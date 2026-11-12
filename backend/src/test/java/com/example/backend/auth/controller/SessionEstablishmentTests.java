@@ -16,6 +16,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -43,7 +44,7 @@ class SessionEstablishmentTests {
             "ada", null, AuthorityUtils.createAuthorityList("ROLE_USER"));
 
     private final AcceptedLogin passwordLogin =
-            new AcceptedLogin(authentication, new SignedIn(USER_ID));
+            new AcceptedLogin(authentication, new SignedIn(USER_ID), List.of("Auditor", "Helpdesk"));
 
     /**
      * The application's clock, a day after the test's sessions are created: what the session is
@@ -154,6 +155,16 @@ class SessionEstablishmentTests {
         assertThat(HttpSessionAttributes.signedIn(signedIn).hasOutlived(
                 new AbsoluteSessionLifetimePolicy(Duration.ofHours(8)),
                 signedInAt.plus(Duration.ofHours(1)))).isFalse();
+    }
+
+    /** The session keeps the Groups the Login was accepted with, as its snapshot of them. */
+    @Test
+    void theSessionKeepsTheGroupsTheLoginWasAcceptedWith() {
+        HttpSession signedIn = establishment.establish(
+                passwordLogin, new MockHttpServletRequest(), new MockHttpServletResponse());
+
+        assertThat(HttpSessionAttributes.signedIn(signedIn).groups())
+                .containsExactly("Auditor", "Helpdesk");
     }
 
     /** A CSRF token fetched before signing in does not survive into the signed-in session. */

@@ -22,19 +22,20 @@ export const PATIENT_SEARCH_PAGE_PATH = "/search";
 /**
  * The landing page: where the SPA sends an authenticated session with no
  * return destination recorded — after login, off the login route, from a path
- * with no route of its own, off a page its guard refuses, and back from the
- * password change. Patient Search for a session holding `patient:read`, the
- * Permission that page is guarded by; Home for every other session.
+ * with no route of its own, and off a page its guard refuses. Patient Search
+ * for a session holding `patient:read`, the Permission that page is guarded
+ * by; Home for every other session.
  */
 export function landingPath(permissions: readonly Permission[] | undefined): string {
   return holds({ permissions }, "patient:read") ? PATIENT_SEARCH_PAGE_PATH : HOME_PATH;
 }
 
 /**
- * The self-service password change: open to every authenticated visitor, and
- * the only route a session with the change-required flag is offered.
+ * Settings, which holds the self-service password change: open to every
+ * authenticated visitor, and the only route a session with the change-required
+ * flag is offered.
  */
-export const CREDENTIAL_CHANGE_PATH = "/change-password";
+export const SETTINGS_PATH = "/settings";
 
 /**
  * What a route requires of the current visitor: a guest, what a signed-in
@@ -78,7 +79,7 @@ export type RoutedSession =
   | { signInReason: SessionEndReason | null; status: "guest" };
 
 export interface SessionRouteInput {
-  /** The session carries the change-required flag and is confined to the change. */
+  /** The session carries the change-required flag and is confined to Settings. */
   passwordChangeRequired: boolean;
   /** The path being visited, recorded as the return destination on a redirect. */
   pathname: string;
@@ -123,9 +124,9 @@ export function resolveSessionRoute({
   // Superuser's Permissions included: the session may do nothing else until it
   // changes.
   if (passwordChangeRequired) {
-    return pathname === CREDENTIAL_CHANGE_PATH
+    return pathname === SETTINGS_PATH
       ? { kind: "render" }
-      : { kind: "redirect", to: CREDENTIAL_CHANGE_PATH };
+      : { kind: "redirect", to: SETTINGS_PATH };
   }
 
   return authenticatedRoute(requires, permissions, returnTo);

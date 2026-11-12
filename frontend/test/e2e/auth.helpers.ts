@@ -13,10 +13,10 @@ export const ADMIN_USERNAME = "admin";
  *
  * Not the seed password: the backend seeds the Bootstrap Admin with a password
  * change required, so on a fresh database `admin` / `P@ssw0rd` is confined to
- * `/change-password`. `auth.setup.ts` makes that change, to this value, and every
- * later Admin sign-in uses it. Password history refuses the seed password from
- * then on, so the change cannot be undone — set `E2E_ADMIN_PASSWORD` to choose
- * the value (at least 12 characters, not containing the user name).
+ * Settings (`/settings`). `auth.setup.ts` makes that change, to this value, and
+ * every later Admin sign-in uses it. Password history refuses the seed password
+ * from then on, so the change cannot be undone — set `E2E_ADMIN_PASSWORD` to
+ * choose the value (at least 12 characters, not containing the user name).
  */
 export const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD ?? "E2e-Bootstrap-Secret-4m";
 
@@ -175,6 +175,20 @@ export async function loginAsFixture(page: Page, fixture: DevFixture) {
   const { username, password, permissions } = DEV_FIXTURES[fixture];
   const readsPatients = (permissions as readonly string[]).includes("patient:read");
   await loginAs(page, username, password, readsPatients ? PATIENT_SEARCH_PATH : HOME_PATH);
+}
+
+/**
+ * Expect the top bar to name who is signed in in exactly `lines`, top to
+ * bottom, as a person reads them: the username as stored, then one line per
+ * Group, which the bar upper-cases. Read as rendered text, so the case is the
+ * one shown. The bar keeps its 64px whatever it names.
+ */
+export async function expectSignedInLines(page: Page, lines: readonly string[]) {
+  const banner = page.getByRole("banner");
+  await expect(banner.getByTestId("signed-in-line")).toHaveText(lines, {
+    useInnerText: true,
+  });
+  expect((await banner.boundingBox())?.height, "the top bar's height").toBe(64);
 }
 
 /**

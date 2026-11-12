@@ -31,10 +31,10 @@ const IDENTITIES: readonly {
   ready?: Record<string, (page: Page) => Promise<void>>;
   storageState?: string;
 }[] = [
-  { role: "admin", routes: ["/search", "/", "/accounts", "/audit", "/change-password"] },
+  { role: "admin", routes: ["/search", "/", "/accounts", "/audit", "/settings"] },
   {
     role: "user",
-    routes: ["/", "/change-password"],
+    routes: ["/", "/settings"],
     ready: { "/": expectNoPatientAccess },
     storageState: USER_SESSION,
   },

@@ -50,8 +50,8 @@ setup("authenticate ADMIN", async ({ page }) => {
  * Leave the seeded Admin on `ADMIN_PASSWORD` with no change pending.
  *
  * A fresh database seeds the Bootstrap Admin on the seed password with a change
- * required, so its first sign-in is confined to `/change-password`; that change
- * is made here, through the page, exactly as a person would. A database seeded
+ * required, so its first sign-in is confined to Settings (`/settings`); that
+ * change is made here, through the page, exactly as a person would. A database seeded
  * before the flag existed holds the seed password with nothing pending; the
  * same change is made voluntarily, so every database converges on one Admin
  * password and the specs need to know only that one.
@@ -93,9 +93,9 @@ async function settleAdminPassword(page: Page) {
   // Through the page: the change the seed requires lands here by itself, the
   // voluntary one is opened directly. Either way the form is the same.
   await submitLogin(page, ADMIN_USERNAME, SEED_PASSWORD);
-  // The required change, or the Superuser's landing page, Patient Search.
-  await expect(page).toHaveURL(/^https?:\/\/[^/]+\/(?:change-password|search)$/);
-  await page.goto("/change-password");
+  // Settings, for the required change, or the Superuser's landing page, Patient Search.
+  await expect(page).toHaveURL(/^https?:\/\/[^/]+\/(?:settings|search)$/);
+  await page.goto("/settings");
   await expect(page.getByRole("heading", { name: "Change your password" })).toBeVisible();
 
   await page.getByLabel("Current password").fill(SEED_PASSWORD);

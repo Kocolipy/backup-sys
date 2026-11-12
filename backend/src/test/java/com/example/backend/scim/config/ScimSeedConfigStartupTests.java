@@ -269,7 +269,7 @@ class ScimSeedConfigStartupTests {
 
     /**
      * The {@code local} profile seeds the shipped fixture Users into their Groups: one member
-     * each for Auditors and Helpdesk — beside the dormant fixture, put back into both for the
+     * each for Auditor and Helpdesk — beside the dormant fixture, put back into both for the
      * startup dormancy run to remove — and two for Medical Officer.
      */
     @Test
