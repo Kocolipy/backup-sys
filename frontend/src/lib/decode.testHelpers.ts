@@ -26,28 +26,35 @@ async function refused(decode: (value: unknown) => unknown, value: unknown, mess
 /**
  * The decoder sweep: one decoder's contract, applied to every field so no
  * field's check can be dropped unnoticed — a valid body decodes to itself, an
- * extra field is dropped, every field the type has is checked, and each field
- * missing or wrong-typed, and a body that is no object, is refused. Each
- * refusal names the field that failed, so a case cannot pass on some other
- * field's failure. `decode` may answer a promise, as a decoder of a `Response`
- * does.
+ * extra field is dropped (or, for a `strict` decoder, refused), every field the
+ * type has is checked, and each field missing or wrong-typed, and a body that
+ * is no object, is refused. Each refusal names the field that failed, so a
+ * case cannot pass on some other field's failure. `decode` may answer a
+ * promise, as a decoder of a `Response` does.
  */
 export function describeDecoder(
   name: string,
   decode: (value: unknown) => unknown,
   valid: object,
   fields: Record<string, FieldCheck>,
+  { strict = false }: { strict?: boolean } = {},
 ) {
   describe(name, () => {
     it("decodes a valid body to the same value", async () => {
       expect(await decode(valid)).toStrictEqual(valid);
     });
 
-    it("drops nothing the wire did not send and adds nothing", async () => {
-      expect(
-        Object.keys((await decode({ ...valid, extra: "ignored" })) as object).sort(),
-      ).toStrictEqual(Object.keys(valid).sort());
-    });
+    if (strict) {
+      it("refuses a field it does not know, rather than drop it", async () => {
+        await refused(decode, { ...valid, extra: "unknown" }, `${name}.extra is not expected`);
+      });
+    } else {
+      it("drops nothing the wire did not send and adds nothing", async () => {
+        expect(
+          Object.keys((await decode({ ...valid, extra: "ignored" })) as object).sort(),
+        ).toStrictEqual(Object.keys(valid).sort());
+      });
+    }
 
     it("checks every field the type has", () => {
       expect(Object.keys(fields).sort()).toStrictEqual(Object.keys(valid).sort());

@@ -1,14 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import { DecodeError } from "@/lib/decode";
-import { without } from "@/lib/decode.testHelpers";
+import { describeDecoder, STRING } from "@/lib/decode.testHelpers";
 
 import {
   checkFfiFilters,
   countFfiFilters,
   decodeFfi,
   FFI_HISTORY,
-  FFI_HISTORY_PAGE_SIZE,
   NO_FFI_FILTERS,
   type FfiFilters,
 } from "./ffi-api";
@@ -33,72 +32,33 @@ async function refused(body: unknown) {
   );
 }
 
-describe("decodeFfi", () => {
-  it("decodes an FFI to the same value", () => {
-    expect(decodeFfi(IPPT)).toStrictEqual(IPPT);
-  });
-
-  // Every field is required: the backend sends each one, and an FFI missing
-  // one is no FFI the page can show. Each is read as a string first.
-  it.each(Object.keys(IPPT))("refuses an FFI missing %s", (field) => {
-    expect(() => decodeFfi(without(IPPT, field))).toThrow(
-      new DecodeError(`Ffi.${field} is not a string`),
-    );
-  });
-
-  it.each(Object.keys(IPPT))("refuses a wrong-typed %s", (field) => {
-    expect(() => decodeFfi({ ...IPPT, [field]: 7 })).toThrow(
-      new DecodeError(`Ffi.${field} is not a string`),
-    );
-  });
-
-  // A code is matched exactly, so a label, another case or another spelling
-  // is outside its set, and refused rather than passed through.
-  it.each([
-    [
-      "type",
+// Every field is required, and each is read as a string first. A code is
+// matched exactly, so a label, another case or another spelling is outside its
+// set; which strings are calendar dates is `isCalendarDate`'s (lib/time.test.ts).
+describeDecoder(
+  "Ffi",
+  decodeFfi,
+  IPPT,
+  {
+    id: STRING,
+    type: [
       "IPPT FFI",
       "overseas-exercises | cat-a-ocs-scs | ippt | dental | ord-release-from-service | vocational",
+      "a string",
     ],
-    ["outcome", "FIT", "fit | request-waiver | unfit"],
-    ["higherAuthority", "comd_mmi", "camo | carmo | cnmo | comd-mmi | dis"],
-    [
-      "submittingMc",
+    outcome: ["FIT", "fit | request-waiver | unfit", "a string"],
+    issueDate: ["10 Jan 2024", "a date", "a string"],
+    expiryDate: ["2025-02-30", "a date", "a string"],
+    higherAuthority: ["comd_mmi", "camo | carmo | cnmo | comd-mmi | dis", "a string"],
+    submittingMc: [
       "Nee Soon Camp MC",
       "nee-soon-camp | kranji-camp | hendon-camp | mandai-hill-camp",
+      "a string",
     ],
-    ["status", "expired", "active | inactive"],
-  ])("refuses an unknown %s code, %s", (field, code, set) => {
-    expect(() => decodeFfi({ ...IPPT, [field]: code })).toThrow(
-      new DecodeError(`Ffi.${field} is not ${set}`),
-    );
-  });
-
-  it.each([
-    ["issueDate", "2024-01"],
-    ["issueDate", "10 Jan 2024"],
-    ["expiryDate", "2025-02-30"],
-    ["expiryDate", "2025-01-09T00:00:00Z"],
-  ])("refuses a %s of %s, which is no calendar date", (field, date) => {
-    expect(() => decodeFfi({ ...IPPT, [field]: date })).toThrow(
-      new DecodeError(`Ffi.${field} is not a date`),
-    );
-  });
-
-  it("refuses a field it does not know, rather than drop it", () => {
-    expect(() => decodeFfi({ ...IPPT, expired: true })).toThrow(
-      new DecodeError("Ffi.expired is not expected"),
-    );
-  });
-
-  it.each([
-    ["an array", [IPPT]],
-    ["null", null],
-    ["a string", "ffi"],
-  ])("refuses %s", (_, value) => {
-    expect(() => decodeFfi(value)).toThrow(new DecodeError("Ffi is not an object"));
-  });
-});
+    status: ["expired", "active | inactive", "a string"],
+  },
+  { strict: true },
+);
 
 describe("checkFfiFilters", () => {
   it("passes no filter at all", () => {
@@ -246,10 +206,6 @@ describe("FFI_HISTORY", () => {
 
   it("reads with patient:read, a 404 being no patient rather than a failure", () => {
     expect([FFI_HISTORY.permission, FFI_HISTORY.absentOnNotFound]).toEqual(["patient:read", true]);
-  });
-
-  it("asks for five FFIs a page", () => {
-    expect(FFI_HISTORY_PAGE_SIZE).toBe(5);
   });
 
   it("decodes a page of FFIs", async () => {

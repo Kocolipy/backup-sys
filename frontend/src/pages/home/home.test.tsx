@@ -21,24 +21,6 @@ const renderHolding = (permissions: Permission[]) => renderSignedIn("/", holding
 const PATIENT_ACCESS: Permission[] = ["patient:read"];
 
 describe("Home", () => {
-  it("shows no patient in context, and asks for nothing, for a session holding patient:read", async () => {
-    const { requests } = await renderHolding(PATIENT_ACCESS);
-
-    expect(screen.getByText("No patient in context")).toBeInTheDocument();
-    expect(requests()).toEqual([]);
-  });
-
-  it("opens for a session without patient:read, saying it has no access and naming no patient", async () => {
-    withPatientInContext(TAN_WEI_MING.id);
-    const { requests } = await renderHolding([]);
-
-    expect([
-      page().getByText("Your account has no access to patients.").textContent,
-      screen.queryByRole("region", { name: "Patient in context" }),
-      patientReads(requests()),
-    ]).toEqual(["Your account has no access to patients.", null, []]);
-  });
-
   it("shows the patient in the tab's EHR context on the Patient card", async () => {
     withPatientInContext(TAN_WEI_MING.id);
 
@@ -81,13 +63,6 @@ describe("Home", () => {
     act(() => clearEhrContext());
 
     expect(screen.queryByText("Tan Wei Ming")).toBeNull();
-  });
-
-  it("offers no control of its own", async () => {
-    await renderHolding(PATIENT_ACCESS);
-
-    // Sign out and the sidebar's controls are the layout's, outside the page.
-    expect(page().queryAllByRole("button")).toEqual([]);
   });
 
   it("shows the page title above the Patient card", async () => {

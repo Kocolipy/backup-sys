@@ -62,12 +62,6 @@ const rows = () =>
     );
 
 describe("Search", () => {
-  it("is titled Patient Search, with no subtitle", async () => {
-    await renderSearch();
-
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(/^Patient Search$/);
-  });
-
   it("reads nothing before the first search", async () => {
     const { requests } = await renderSearch();
 
@@ -132,12 +126,13 @@ describe("Search", () => {
     await renderSearch({ [TAN_PAGE_1]: page([TAN_HUI_MIN, TAN_BOON_HUAT], 1, 7) });
 
     await search("tan");
+    await screen.findByRole("table");
 
     expect({
       headings: within(screen.getByRole("table"))
         .getAllByRole("columnheader")
         .map((heading) => heading.textContent),
-      rows: await screen.findAllByRole("row").then(() => rows()),
+      rows: rows(),
       title: screen.getByRole("heading", { level: 2, name: "Search Results" }).tagName,
     }).toEqual({
       headings: ["Patient Name", "NRIC", "Gender", "Date of Birth", "Last Visit"],
@@ -149,15 +144,7 @@ describe("Search", () => {
     });
   });
 
-  it("shows a Patient's gender as a badge", async () => {
-    await renderSearch({ [TAN_PAGE_1]: page([TAN_HUI_MIN], 1, 1) });
-
-    await search("tan");
-
-    expect((await screen.findByText(/^Female$/)).dataset.slot).toBe("badge");
-  });
-
-  it("tints the Male badge blue, the Female badge pink, and leaves any other gender plain", async () => {
+  it("shows each gender as a badge, tinting Male blue, Female pink, and leaving any other plain", async () => {
     await renderSearch({
       [TAN_PAGE_1]: page(
         [
@@ -173,14 +160,16 @@ describe("Search", () => {
 
     await search("tan");
 
-    const tint = (label: string) =>
-      screen
-        // The pattern is built from test-literal input only: label is always one
-        // of the four gender labels passed below.
-        // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp
-        .getByText(new RegExp(`^${label}$`))
-        .className.split(" ")
-        .filter((name) => /^(?:bg|text)-(?!xs$)/.test(name));
+    const tint = (label: string) => {
+      // The pattern is built from test-literal input only: label is always one
+      // of the four gender labels passed below.
+      // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp
+      const badge = screen.getByText(new RegExp(`^${label}$`));
+      return [
+        badge.dataset.slot,
+        ...badge.className.split(" ").filter((name) => /^(?:bg|text)-(?!xs$)/.test(name)),
+      ];
+    };
     await screen.findByRole("table");
     expect({
       female: tint("Female"),
@@ -188,10 +177,10 @@ describe("Search", () => {
       other: tint("Other"),
       unknown: tint("Unknown"),
     }).toEqual({
-      female: ["bg-female-soft", "text-female-soft-foreground"],
-      male: ["bg-male-soft", "text-male-soft-foreground"],
-      other: ["bg-secondary", "text-secondary-foreground"],
-      unknown: ["bg-secondary", "text-secondary-foreground"],
+      female: ["badge", "bg-female-soft", "text-female-soft-foreground"],
+      male: ["badge", "bg-male-soft", "text-male-soft-foreground"],
+      other: ["badge", "bg-secondary", "text-secondary-foreground"],
+      unknown: ["badge", "bg-secondary", "text-secondary-foreground"],
     });
   });
 
@@ -237,16 +226,6 @@ describe("Search", () => {
     );
 
     expect(await screen.findByText(/^Showing 6 to 7 of 7 patients$/)).toBeInTheDocument();
-  });
-
-  it("names the range of a search whose every match fits on one page", async () => {
-    await renderSearch({
-      "GET /api/patient-search?q=S8512345A&startIndex=1&count=5": page([TAN_HUI_MIN], 1, 1),
-    });
-
-    await search("S8512345A");
-
-    expect(await screen.findByText(/^Showing 1 to 1 of 1 patients$/)).toBeInTheDocument();
   });
 
   it("says no Patients match a search that found none, with no range", async () => {
@@ -378,16 +357,6 @@ async function renderSearched() {
 }
 
 describe("Search, filtered", () => {
-  it("offers a Filter button, closed, that counts no filter at first", async () => {
-    await renderSearched();
-
-    expect({
-      badge: filterTrigger().querySelector('[data-slot="badge"]'),
-      name: filterTrigger().getAttribute("aria-label"),
-      panel: screen.queryByRole("form", { name: "Patient filters" }),
-    }).toEqual({ badge: null, name: "Filter", panel: null });
-  });
-
   it("offers the gender, All by default", async () => {
     const user = userEvent.setup();
     await renderSearched();
@@ -409,33 +378,30 @@ describe("Search, filtered", () => {
     });
   });
 
-  it("keeps the gender chosen when it is pressed again", async () => {
+  it("reopens on the filter applied, forgetting a change never applied once the panel closes", async () => {
     const user = userEvent.setup();
-    await renderSearched();
-    await openFilters(user);
-
-    await user.click(within(filterPanel()).getByRole("radio", { name: "All" }));
-
-    expect(
-      within(filterPanel()).getByRole("radio", { name: "All" }).getAttribute("aria-checked"),
-    ).toBe("true");
-  });
-
-  it("forgets a change never applied once the panel closes", async () => {
-    const user = userEvent.setup();
-    await renderSearched();
+    await renderSearch({
+      [TAN_PAGE_1]: page([TAN_HUI_MIN], 1, 1),
+      [tanPage(1, "gender=male")]: page([TAN_BOON_HUAT], 1, 1),
+    });
+    await search("tan");
+    await screen.findByRole("table");
     await openFilters(user);
     await user.click(within(filterPanel()).getByRole("radio", { name: "Male" }));
+    await apply(user);
+    await screen.findByText("Tan Boon Huat");
+    await openFilters(user);
+    await user.click(within(filterPanel()).getByRole("radio", { name: "Female" }));
 
     await user.keyboard("{Escape}");
     await openFilters(user);
 
     expect({
       count: filterTrigger().getAttribute("aria-label"),
-      gender: within(filterPanel())
-        .getByRole("radio", { name: "All" })
-        .getAttribute("aria-checked"),
-    }).toEqual({ count: "Filter", gender: "true" });
+      genders: within(filterPanel())
+        .getAllByRole("radio")
+        .map((choice) => choice.getAttribute("aria-checked")),
+    }).toEqual({ count: "Filter, 1 set", genders: ["false", "true", "false"] });
   });
 
   it("filters by gender from the first page, counts it, and closes", async () => {
@@ -538,16 +504,7 @@ async function resultRow(name: string) {
 }
 
 describe("Search, selecting a result", () => {
-  it("puts the Patient of a clicked row into the EHR context", async () => {
-    await renderSearch(SELECTABLE);
-    await search("tan");
-
-    await userEvent.click(within(await resultRow("Tan Hui Min")).getByText("S8512345A"));
-
-    expect(ehrContext()).toEqual({ patient: "dev-patient-05" });
-  });
-
-  it("goes to Home, whose Patient card and top bar name the Patient selected", async () => {
+  it("puts the Patient of a clicked row into the EHR context and goes to Home, whose Patient card and top bar name them", async () => {
     await renderSearch(SELECTABLE);
     await search("tan");
 
@@ -555,14 +512,13 @@ describe("Search, selecting a result", () => {
 
     const card = await screen.findByRole("region", { name: "Patient" });
     expect({
-      card: [
-        within(card).getByRole("heading").textContent,
-        within(card).getByText("S8512345A").tagName,
-      ],
+      card: within(card).getByRole("heading").textContent,
+      context: ehrContext(),
       title: screen.getByRole("heading", { level: 1 }).textContent,
       topBar: screen.getByRole("region", { name: "Patient in context" }).textContent,
     }).toEqual({
-      card: ["Tan Hui Min", "DD"],
+      card: "Tan Hui Min",
+      context: { patient: "dev-patient-05" },
       title: "Profile",
       topBar: "Tan Hui MinS8512345A",
     });

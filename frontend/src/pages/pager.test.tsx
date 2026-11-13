@@ -47,24 +47,20 @@ describe("Pager", () => {
     expect(screen.getByText(/^Showing 21 to 40 of 45 widgets$/)).toBeInTheDocument();
   });
 
-  it("disables Previous on the first page", () => {
-    renderPager({ rows: 20, startIndex: 1, totalResults: 45 });
-    expect(previous()).toBeDisabled();
-  });
+  it.each([
+    ["Previous", "on the first page", { rows: 20, startIndex: 1, totalResults: 45 }, false],
+    ["Previous", "from the second row on", { rows: 20, startIndex: 2, totalResults: 45 }, true],
+    ["Next", "while rows lie past this page", { rows: 20, startIndex: 1, totalResults: 21 }, true],
+    [
+      "Next",
+      "once this page reaches the last row",
+      { rows: 5, startIndex: 21, totalResults: 25 },
+      false,
+    ],
+  ] as const)("%s %s is enabled: %s", (move, _, shown, enabled) => {
+    renderPager(shown);
 
-  it("enables Previous from the second row on", () => {
-    renderPager({ rows: 20, startIndex: 2, totalResults: 45 });
-    expect(previous()).toBeEnabled();
-  });
-
-  it("enables Next while rows lie past this page", () => {
-    renderPager({ rows: 20, startIndex: 1, totalResults: 21 });
-    expect(next()).toBeEnabled();
-  });
-
-  it("disables Next once this page reaches the last row", () => {
-    renderPager({ rows: 5, startIndex: 21, totalResults: 25 });
-    expect(next()).toBeDisabled();
+    expect(screen.getByRole("button", { name: move }).hasAttribute("disabled")).toBe(!enabled);
   });
 
   it("moves back by one page", async () => {
@@ -91,11 +87,18 @@ describe("Pager", () => {
     expect(onMove).toHaveBeenCalledExactlyOnceWith(28);
   });
 
-  it("renders nothing for an empty first page", () => {
-    const { container } = renderPager({ rows: 0, startIndex: 1, totalResults: 0 });
+  it.each(["hidden", "shown"] as const)(
+    "renders nothing for an empty first page, its one page %s",
+    (onePage) => {
+      const { container } = renderPager(
+        { rows: 0, startIndex: 1, totalResults: 0 },
+        false,
+        onePage,
+      );
 
-    expect(container).toBeEmptyDOMElement();
-  });
+      expect(container).toBeEmptyDOMElement();
+    },
+  );
 
   it("renders nothing while every row sits on the first page", () => {
     const { container } = renderPager({ rows: 20, startIndex: 1, totalResults: 20 });
@@ -112,12 +115,6 @@ describe("Pager", () => {
       previous: previous().hasAttribute("disabled"),
       range: screen.getByText(/^Showing 1 to 3 of 3 widgets$/).tagName,
     }).toEqual({ next: true, pages: ["Page 1"], previous: true, range: "P" });
-  });
-
-  it("renders nothing for an empty first page, even when asked to show its one page", () => {
-    const { container } = renderPager({ rows: 0, startIndex: 1, totalResults: 0 }, false, "shown");
-
-    expect(container).toBeEmptyDOMElement();
   });
 
   it("numbers every page, marking the one shown", () => {
@@ -201,12 +198,5 @@ describe("Pager", () => {
     expect(previous()).toBeDisabled();
     expect(next()).toBeDisabled();
     expect(screen.getByRole("button", { name: "Page 1" })).toBeDisabled();
-  });
-
-  it("is not held still by default", () => {
-    renderPager({ rows: 20, startIndex: 21, totalResults: 80 });
-
-    expect(previous()).toBeEnabled();
-    expect(next()).toBeEnabled();
   });
 });

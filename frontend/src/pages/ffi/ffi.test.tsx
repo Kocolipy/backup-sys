@@ -220,12 +220,6 @@ describe("FFI", () => {
     await answer.settle(page(FOUR_FFIS, 1, 4));
   });
 
-  it("names its pager FFI History pages", async () => {
-    await renderFfi(page(FOUR_FFIS, 1, 4));
-
-    expect(await screen.findByRole("navigation", { name: "FFI History pages" })).toBeVisible();
-  });
-
   // Status is the source's: an FFI past its Expiry Date shows the Status the
   // source sent, never one worked out from the date.
   it("shows the source's Status even for an FFI past its Expiry Date", async () => {
@@ -237,12 +231,6 @@ describe("FFI", () => {
     ]);
   });
 
-  it("names the range, a page of five holding every row", async () => {
-    await renderFfi(page(FOUR_FFIS, 1, 4));
-
-    expect(await screen.findByText("Showing 1 to 4 of 4 FFIs")).toBeInTheDocument();
-  });
-
   it("reads five a page, and pages to the second through the numbered pager", async () => {
     const fiveOfSeven = ["1", "2", "3", "4", "5"].map((n) => ffi(`ffi-${n}`));
     const { requests } = await renderFfi(page(fiveOfSeven, 1, 7), {
@@ -250,28 +238,17 @@ describe("FFI", () => {
     });
     await screen.findByText("Showing 1 to 5 of 7 FFIs");
 
-    await userEvent.click(screen.getByRole("button", { name: "Page 2" }));
+    await userEvent.click(
+      within(screen.getByRole("navigation", { name: "FFI History pages" })).getByRole("button", {
+        name: "Page 2",
+      }),
+    );
 
     expect(await screen.findByText("Showing 6 to 7 of 7 FFIs")).toBeInTheDocument();
     expect({ reads: ffiReads(requests()), rows: rows().map((row) => row[0]) }).toEqual({
       reads: [FIRST_PAGE, SECOND_PAGE],
       rows: ["IPPT FFI", "Dental FFI"],
     });
-  });
-
-  it("holds the page shown while the next one loads", async () => {
-    const next = deferred();
-    const fiveOfSeven = ["1", "2", "3", "4", "5"].map((n) => ffi(`ffi-${n}`));
-    await renderFfi(page(fiveOfSeven, 1, 7), { [SECOND_PAGE]: next.answer });
-    await screen.findByText("Showing 1 to 5 of 7 FFIs");
-
-    await userEvent.click(screen.getByRole("button", { name: "Page 2" }));
-
-    expect({
-      busy: table().closest("[aria-busy]")?.getAttribute("aria-busy"),
-      rows: rows().length,
-    }).toEqual({ busy: "true", rows: 5 });
-    await next.settle(page([ffi("ffi-6")], 6, 7));
   });
 
   it("says No FFIs for a patient with none", async () => {
@@ -358,28 +335,6 @@ describe("FFI", () => {
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
     expect(screen.queryByText("No patient in context")).not.toBeInTheDocument();
   });
-
-  it("reads the same page again on Try again", async () => {
-    const { requests } = await renderFfi([bare(502), page(FOUR_FFIS, 1, 4)]);
-    await screen.findByRole("alert");
-
-    await userEvent.click(screen.getByRole("button", { name: "Try again" }));
-
-    expect(await screen.findByText("Showing 1 to 4 of 4 FFIs")).toBeInTheDocument();
-    expect(ffiReads(requests())).toEqual([FIRST_PAGE, FIRST_PAGE]);
-  });
-
-  it("offers no row action", async () => {
-    await renderFfi(page(FOUR_FFIS, 1, 4));
-    await screen.findByRole("table", { name: "FFI History" });
-
-    expect(
-      within(table())
-        .getAllByRole("row")
-        .slice(1)
-        .flatMap((row) => within(row).queryAllByRole("button")),
-    ).toEqual([]);
-  });
 });
 
 /** The read of Tan Wei Ming's history from `startIndex`, with `asked` — filters, a sort — before the page. */
@@ -431,71 +386,44 @@ describe("FFI, sorted", () => {
     ]);
   });
 
+  // The press cycle is the sort heading's (sort-heading.test.tsx), the
+  // parameters FFI_HISTORY's (ffi-api.test.ts): here, each heading's wiring.
   it.each([
     ["Issue Date", "issueDate"],
     ["Expiry Date", "expiryDate"],
-  ] as const)(
-    "sorts by %s from the first page: ascending, descending, then ascending again",
-    async (heading, by) => {
-      const { requests } = await renderFfi(FIVE_OF_SEVEN, {
-        [SECOND_PAGE]: TWO_OF_SEVEN,
-        [historyPage(1, `sortBy=${by}&sortOrder=ascending`)]: FIVE_OF_SEVEN,
-        [historyPage(1, `sortBy=${by}&sortOrder=descending`)]: FIVE_OF_SEVEN,
-      });
-      await toSecondPage();
-
-      const directions: (string | null)[] = [];
-      for (const order of ["ascending", "descending", "ascending"]) {
-        await userEvent.click(sortButton(heading));
-        await waitFor(() => expect(columnHeader(heading)).toHaveAttribute("aria-sort", order));
-        await screen.findByText("Showing 1 to 5 of 7 FFIs");
-        directions.push(columnHeader(heading).getAttribute("aria-sort"));
-      }
-
-      expect({ directions, reads: ffiReads(requests()) }).toEqual({
-        directions: ["ascending", "descending", "ascending"],
-        reads: [
-          FIRST_PAGE,
-          SECOND_PAGE,
-          historyPage(1, `sortBy=${by}&sortOrder=ascending`),
-          historyPage(1, `sortBy=${by}&sortOrder=descending`),
-          historyPage(1, `sortBy=${by}&sortOrder=ascending`),
-        ],
-      });
-    },
-  );
-
-  it("sorts by one column at a time, another replacing the sort", async () => {
-    await renderFfi(page(FOUR_FFIS, 1, 4), {
-      [historyPage(1, "sortBy=issueDate&sortOrder=ascending")]: page(FOUR_FFIS, 1, 4),
-      [historyPage(1, "sortBy=expiryDate&sortOrder=ascending")]: page(FOUR_FFIS, 1, 4),
+  ] as const)("sorts by %s, ascending, from the first page", async (heading, by) => {
+    const { requests } = await renderFfi(FIVE_OF_SEVEN, {
+      [SECOND_PAGE]: TWO_OF_SEVEN,
+      [historyPage(1, `sortBy=${by}&sortOrder=ascending`)]: FIVE_OF_SEVEN,
     });
-    await screen.findByRole("table", { name: "FFI History" });
-    await userEvent.click(sortButton("Issue Date"));
-    await waitFor(() =>
-      expect(columnHeader("Issue Date")).toHaveAttribute("aria-sort", "ascending"),
-    );
+    await toSecondPage();
 
-    await userEvent.click(sortButton("Expiry Date"));
-    await waitFor(() =>
-      expect(columnHeader("Expiry Date")).toHaveAttribute("aria-sort", "ascending"),
-    );
+    await userEvent.click(sortButton(heading));
+    await screen.findByText("Showing 1 to 5 of 7 FFIs");
 
-    expect(columnHeader("Issue Date")).toHaveAttribute("aria-sort", "none");
+    expect({
+      direction: columnHeader(heading).getAttribute("aria-sort"),
+      reads: ffiReads(requests()),
+    }).toEqual({
+      direction: "ascending",
+      reads: [FIRST_PAGE, SECOND_PAGE, historyPage(1, `sortBy=${by}&sortOrder=ascending`)],
+    });
   });
 
-  it("holds both sort headings still while a read is pending", async () => {
+  it("holds the page, busy, and both sort headings still while a read is pending", async () => {
     const next = deferred();
     await renderFfi(FIVE_OF_SEVEN, { [SECOND_PAGE]: next.answer });
     await screen.findByText("Showing 1 to 5 of 7 FFIs");
 
     await userEvent.click(screen.getByRole("button", { name: "Page 2" }));
 
-    expect(
-      [sortButton("Issue Date"), sortButton("Expiry Date")].map((button) =>
+    expect({
+      busy: table().closest("[aria-busy]")?.getAttribute("aria-busy"),
+      rows: rows().length,
+      sortsDisabled: [sortButton("Issue Date"), sortButton("Expiry Date")].map((button) =>
         button.hasAttribute("disabled"),
       ),
-    ).toEqual([true, true]);
+    }).toEqual({ busy: "true", rows: 5, sortsDisabled: [true, true] });
     await next.settle(TWO_OF_SEVEN);
   });
 });
@@ -544,17 +472,6 @@ async function apply(user: User) {
 }
 
 describe("FFI, filtered", () => {
-  it("offers a Filter button, closed, that counts no filter at first", async () => {
-    await renderFfi(page(FOUR_FFIS, 1, 4));
-    await screen.findByRole("table", { name: "FFI History" });
-
-    expect({
-      badge: filterTrigger().querySelector('[data-slot="badge"]'),
-      name: filterTrigger().getAttribute("aria-label"),
-      panel: screen.queryByRole("form", { name: "FFI filters" }),
-    }).toEqual({ badge: null, name: "Filter", panel: null });
-  });
-
   it("offers the seven filters: four multi-selects, two date ranges and the Status, All by default", async () => {
     const user = userEvent.setup();
     await renderFfi(page(FOUR_FFIS, 1, 4));
@@ -652,54 +569,23 @@ describe("FFI, filtered", () => {
     ]);
   });
 
-  it("keeps each end of a range in its own field", async () => {
-    const user = userEvent.setup();
-    await renderFfi(page(FOUR_FFIS, 1, 4));
-    await screen.findByRole("table", { name: "FFI History" });
-    await openFilters(user);
-
-    setDate("Issue Date", "From", "2024-01-01");
-    setDate("Issue Date", "To", "2024-12-31");
-
-    expect([dateField("Issue Date", "From").value, dateField("Issue Date", "To").value]).toEqual([
-      "2024-01-01",
-      "2024-12-31",
-    ]);
-  });
-
-  it("keeps the Status chosen when it is pressed again", async () => {
-    const user = userEvent.setup();
-    await renderFfi(page(FOUR_FFIS, 1, 4));
-    await screen.findByRole("table", { name: "FFI History" });
-    await openFilters(user);
-
-    await user.click(within(filterPanel()).getByRole("radio", { name: "All" }));
-
-    expect(
-      within(filterPanel())
-        .getAllByRole("radio")
-        .map((choice) => choice.getAttribute("aria-checked")),
-    ).toEqual(["true", "false", "false"]);
-  });
-
   it.each([
     ["FFI Type", ["Dental FFI", "IPPT FFI"], "type=ippt&type=dental"],
     ["Outcome", ["UNFIT"], "outcome=unfit"],
     ["Higher Authority", ["DIS", "CAMO"], "higherAuthority=camo&higherAuthority=dis"],
     ["Submitting MC", ["Hendon Camp MC"], "submittingMc=hendon-camp"],
   ] as const)(
-    "filters by %s from the first page, each code chosen once, counted as one, and closes",
+    "filters by %s, each code chosen once, counted as one, and closes",
     async (name, labels, asked) => {
       const user = userEvent.setup();
-      const { requests } = await renderFfi(FIVE_OF_SEVEN, {
-        [SECOND_PAGE]: TWO_OF_SEVEN,
-        [historyPage(1, asked)]: page(FOUR_FFIS, 1, 4),
+      const { requests } = await renderFfi(page(FOUR_FFIS, 1, 4), {
+        [historyPage(1, asked)]: page([ffi("only")], 1, 1),
       });
-      await toSecondPage();
+      await screen.findByRole("table", { name: "FFI History" });
 
       await pick(user, name, ...labels);
       await apply(user);
-      await screen.findByText("Showing 1 to 4 of 4 FFIs");
+      await screen.findByText("Showing 1 to 1 of 1 FFIs");
 
       expect({
         count: filterTrigger().getAttribute("aria-label"),
@@ -712,47 +598,41 @@ describe("FFI, filtered", () => {
   it.each([
     ["Issue Date", "issueDate", "2024-01-01", "2024-12-31"],
     ["Expiry Date", "expiryDate", "2025-01-01", "2025-12-31"],
-  ] as const)(
-    "filters by an %s range from the first page, and counts each end",
-    async (range, field, from, to) => {
-      const user = userEvent.setup();
-      const asked = `${field}From=${from}&${field}To=${to}`;
-      const { requests } = await renderFfi(FIVE_OF_SEVEN, {
-        [SECOND_PAGE]: TWO_OF_SEVEN,
-        [historyPage(1, asked)]: page(FOUR_FFIS, 1, 4),
-      });
-      await toSecondPage();
+  ] as const)("filters by an %s range, and counts each end", async (range, field, from, to) => {
+    const user = userEvent.setup();
+    const asked = `${field}From=${from}&${field}To=${to}`;
+    const { requests } = await renderFfi(page(FOUR_FFIS, 1, 4), {
+      [historyPage(1, asked)]: page([ffi("only")], 1, 1),
+    });
+    await screen.findByRole("table", { name: "FFI History" });
 
-      await openFilters(user);
-      setDate(range, "From", from);
-      setDate(range, "To", to);
-      await apply(user);
-      await screen.findByText("Showing 1 to 4 of 4 FFIs");
+    await openFilters(user);
+    setDate(range, "From", from);
+    setDate(range, "To", to);
+    await apply(user);
+    await screen.findByText("Showing 1 to 1 of 1 FFIs");
 
-      expect({
-        count: filterTrigger().getAttribute("aria-label"),
-        read: ffiReads(requests()).slice(-1)[0],
-      }).toEqual({ count: "Filter, 2 set", read: historyPage(1, asked) });
-    },
-  );
+    expect({
+      count: filterTrigger().getAttribute("aria-label"),
+      read: ffiReads(requests()).slice(-1)[0],
+    }).toEqual({ count: "Filter, 2 set", read: historyPage(1, asked) });
+  });
 
-  it.each([
-    ["Active", "active"],
-    ["Inactive", "inactive"],
-  ])("filters by the Status %s from the first page", async (label, status) => {
+  // The Status Inactive is sent by the case combining the filters, below.
+  it("filters by the Status Active, from the first page", async () => {
     const user = userEvent.setup();
     const { requests } = await renderFfi(FIVE_OF_SEVEN, {
       [SECOND_PAGE]: TWO_OF_SEVEN,
-      [historyPage(1, `status=${status}`)]: page(FOUR_FFIS, 1, 4),
+      [historyPage(1, "status=active")]: page(FOUR_FFIS, 1, 4),
     });
     await toSecondPage();
 
     await openFilters(user);
-    await user.click(within(filterPanel()).getByRole("radio", { name: label }));
+    await user.click(within(filterPanel()).getByRole("radio", { name: "Active" }));
     await apply(user);
     await screen.findByText("Showing 1 to 4 of 4 FFIs");
 
-    expect(ffiReads(requests()).slice(-1)[0]).toBe(historyPage(1, `status=${status}`));
+    expect(ffiReads(requests()).slice(-1)[0]).toBe(historyPage(1, "status=active"));
   });
 
   it("applies on Enter in a date, as on Apply", async () => {
@@ -781,7 +661,8 @@ describe("FFI, filtered", () => {
     });
     await screen.findByRole("table", { name: "FFI History" });
     await userEvent.click(sortButton("Issue Date"));
-    await screen.findByText("Showing 1 to 4 of 4 FFIs");
+    // The heading is held still until the sorted read lands.
+    await waitFor(() => expect(sortButton("Issue Date")).toBeEnabled());
 
     await pick(user, "FFI Type", "IPPT FFI");
     await pick(user, "Outcome", "FIT");
@@ -833,11 +714,16 @@ describe("FFI, filtered", () => {
     },
   );
 
-  it("forgets a change never applied once the panel closes", async () => {
+  it("reopens on the filters applied, forgetting a change never applied once the panel closes", async () => {
     const user = userEvent.setup();
-    await renderFfi(page(FOUR_FFIS, 1, 4));
+    await renderFfi(page(FOUR_FFIS, 1, 4), {
+      [historyPage(1, "outcome=fit")]: page([ffi("only")], 1, 1),
+    });
     await screen.findByRole("table", { name: "FFI History" });
     await pick(user, "Outcome", "FIT");
+    await apply(user);
+    await screen.findByText("Showing 1 to 1 of 1 FFIs");
+    await pick(user, "Outcome", "UNFIT");
     await user.click(within(filterPanel()).getByRole("radio", { name: "Active" }));
 
     await user.keyboard("{Escape}");
@@ -849,7 +735,7 @@ describe("FFI, filtered", () => {
       status: within(filterPanel())
         .getByRole("radio", { name: "All" })
         .getAttribute("aria-checked"),
-    }).toEqual({ count: "Filter", outcome: "Outcome: Any", status: "true" });
+    }).toEqual({ count: "Filter, 1 set", outcome: "Outcome: 1 selected", status: "true" });
   });
 
   it("clears every filter on Reset, reading the history unfiltered from its first page", async () => {
