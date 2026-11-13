@@ -3,7 +3,15 @@ import { describe, expect, it } from "vitest";
 import { DecodeError } from "@/lib/decode";
 import { without } from "@/lib/decode.testHelpers";
 
-import { decodeFfi, FFI_HISTORY, FFI_HISTORY_PAGE_SIZE } from "./ffi-api";
+import {
+  checkFfiFilters,
+  countFfiFilters,
+  decodeFfi,
+  FFI_HISTORY,
+  FFI_HISTORY_PAGE_SIZE,
+  NO_FFI_FILTERS,
+  type FfiFilters,
+} from "./ffi-api";
 
 /** One FFI exactly as the backend serialises it. */
 const IPPT = {
@@ -92,10 +100,147 @@ describe("decodeFfi", () => {
   });
 });
 
+describe("checkFfiFilters", () => {
+  it("passes no filter at all", () => {
+    expect(checkFfiFilters(NO_FFI_FILTERS)).toEqual({ ok: true });
+  });
+
+  it.each([
+    ["issueDate", "Issue Date"],
+    ["expiryDate", "Expiry Date"],
+  ] as const)("refuses a %s from-date after its to-date, naming the range", (range, label) => {
+    expect(
+      checkFfiFilters({
+        ...NO_FFI_FILTERS,
+        [`${range}From`]: "2024-01-02",
+        [`${range}To`]: "2024-01-01",
+      }),
+    ).toEqual({
+      message: `The ${label} from-date must not be after its to-date.`,
+      ok: false,
+      range,
+    });
+  });
+
+  it.each([
+    ["issueDateTo", "issueDate", "Issue Date"],
+    ["expiryDateFrom", "expiryDate", "Expiry Date"],
+  ] as const)(
+    "refuses a %s the calendar does not have, naming the range",
+    (field, range, label) => {
+      expect(checkFfiFilters({ ...NO_FFI_FILTERS, [field]: "2024-02-30" })).toEqual({
+        message: `Enter the ${label} dates as real dates.`,
+        ok: false,
+        range,
+      });
+    },
+  );
+
+  it("passes a range of one day on each date", () => {
+    expect(
+      checkFfiFilters({
+        ...NO_FFI_FILTERS,
+        expiryDateFrom: "2025-01-09",
+        expiryDateTo: "2025-01-09",
+        issueDateFrom: "2024-01-10",
+        issueDateTo: "2024-01-10",
+      }),
+    ).toEqual({ ok: true });
+  });
+});
+
+describe("countFfiFilters", () => {
+  it("counts none for no filter", () => {
+    expect(countFfiFilters(NO_FFI_FILTERS)).toBe(0);
+  });
+
+  it.each([
+    ["the FFI Types, however many", { types: ["ippt", "dental"] }],
+    ["the Outcomes", { outcomes: ["fit"] }],
+    ["an Issue Date from-date", { issueDateFrom: "2024-01-01" }],
+    ["an Issue Date to-date", { issueDateTo: "2024-12-31" }],
+    ["an Expiry Date from-date", { expiryDateFrom: "2025-01-01" }],
+    ["an Expiry Date to-date", { expiryDateTo: "2025-12-31" }],
+    ["the Higher Authorities", { higherAuthorities: ["camo", "cnmo", "dis"] }],
+    ["the Submitting MCs", { submittingMcs: ["kranji-camp"] }],
+    ["the Status", { status: "inactive" }],
+  ] as const)("counts %s as one", (_, set) => {
+    expect(countFfiFilters({ ...NO_FFI_FILTERS, ...set })).toBe(1);
+  });
+
+  it("counts every filter set", () => {
+    expect(countFfiFilters(EVERY_FILTER)).toBe(9);
+  });
+});
+
+/** Every filter set, the codes of each set given out of their set's order. */
+const EVERY_FILTER: FfiFilters = {
+  expiryDateFrom: "2025-01-01",
+  expiryDateTo: "2025-12-31",
+  higherAuthorities: ["dis", "camo"],
+  issueDateFrom: "2024-01-01",
+  issueDateTo: "2024-12-31",
+  outcomes: ["unfit", "fit"],
+  status: "active",
+  submittingMcs: ["mandai-hill-camp", "nee-soon-camp"],
+  types: ["vocational", "ippt"],
+};
+
+const FIRST_PAGE = { count: 5, startIndex: 1 };
+
 describe("FFI_HISTORY", () => {
   it("reads a patient's FFI History a page at a time, by the patient's id", () => {
-    expect(FFI_HISTORY.path("eq081-VQEgP8drUUqCWzHfw3", { count: 5, startIndex: 6 })).toBe(
-      "/api/patient-ffi/eq081-VQEgP8drUUqCWzHfw3?startIndex=6&count=5",
+    expect(
+      FFI_HISTORY.path("eq081-VQEgP8drUUqCWzHfw3", NO_FFI_FILTERS, null, {
+        count: 5,
+        startIndex: 6,
+      }),
+    ).toBe("/api/patient-ffi/eq081-VQEgP8drUUqCWzHfw3?startIndex=6&count=5");
+  });
+
+  // Each code is a parameter of its own, repeated, in its closed set's order.
+  it("asks for every filter set, and the sort, before the page", () => {
+    expect(
+      FFI_HISTORY.path(
+        "dev-patient-05",
+        EVERY_FILTER,
+        { by: "expiryDate", order: "descending" },
+        FIRST_PAGE,
+      ),
+    ).toBe(
+      "/api/patient-ffi/dev-patient-05?type=ippt&type=vocational&outcome=fit&outcome=unfit" +
+        "&issueDateFrom=2024-01-01&issueDateTo=2024-12-31" +
+        "&expiryDateFrom=2025-01-01&expiryDateTo=2025-12-31" +
+        "&higherAuthority=camo&higherAuthority=dis" +
+        "&submittingMc=nee-soon-camp&submittingMc=mandai-hill-camp&status=active" +
+        "&sortBy=expiryDate&sortOrder=descending&startIndex=1&count=5",
+    );
+  });
+
+  it.each([
+    ["an FFI Type", { types: ["cat-a-ocs-scs"] }, "type=cat-a-ocs-scs"],
+    ["an Outcome", { outcomes: ["request-waiver"] }, "outcome=request-waiver"],
+    ["an Issue Date from-date", { issueDateFrom: "2024-01-01" }, "issueDateFrom=2024-01-01"],
+    ["an Issue Date to-date", { issueDateTo: "2024-12-31" }, "issueDateTo=2024-12-31"],
+    ["an Expiry Date from-date", { expiryDateFrom: "2025-01-01" }, "expiryDateFrom=2025-01-01"],
+    ["an Expiry Date to-date", { expiryDateTo: "2025-12-31" }, "expiryDateTo=2025-12-31"],
+    ["a Higher Authority", { higherAuthorities: ["comd-mmi"] }, "higherAuthority=comd-mmi"],
+    ["a Submitting MC", { submittingMcs: ["hendon-camp"] }, "submittingMc=hendon-camp"],
+    ["the Status Active", { status: "active" }, "status=active"],
+    ["the Status Inactive", { status: "inactive" }, "status=inactive"],
+  ] as const)("asks for %s alone when it is the one filter set", (_, set, asked) => {
+    expect(FFI_HISTORY.path("p1", { ...NO_FFI_FILTERS, ...set }, null, FIRST_PAGE)).toBe(
+      `/api/patient-ffi/p1?${asked}&startIndex=1&count=5`,
+    );
+  });
+
+  it.each([
+    ["issueDate", "ascending"],
+    ["issueDate", "descending"],
+    ["expiryDate", "ascending"],
+  ] as const)("asks for the sort by %s, %s", (by, order) => {
+    expect(FFI_HISTORY.path("p1", NO_FFI_FILTERS, { by, order }, FIRST_PAGE)).toBe(
+      `/api/patient-ffi/p1?sortBy=${by}&sortOrder=${order}&startIndex=1&count=5`,
     );
   });
 

@@ -21,6 +21,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.http.HttpMethod;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -146,6 +147,211 @@ class PatientFfiControllerTests {
                         "_offset", List.of("0"),
                         "_count", List.of("0"),
                         "_total", List.of("accurate")));
+    }
+
+    /**
+     * Each filter reaches the source as its own search parameter: one case for each request
+     * parameter, beside the parameter the source is sent for it. A repeated code is one parameter,
+     * its codes joined by commas — FHIR's OR.
+     */
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', textBlock = """
+        type            | ippt                  | type             | ippt
+        type            | ippt,dental           | type             | ippt,dental
+        outcome         | request-waiver        | outcome          | request-waiver
+        issueDateFrom   | 2024-01-01            | issue-date       | ge2024-01-01
+        issueDateTo     | 2024-12-31            | issue-date       | le2024-12-31
+        expiryDateFrom  | 2025-01-01            | expiry-date      | ge2025-01-01
+        expiryDateTo    | 2025-12-31            | expiry-date      | le2025-12-31
+        higherAuthority | comd-mmi              | higher-authority | comd-mmi
+        submittingMc    | mandai-hill-camp      | submitting-mc    | mandai-hill-camp
+        status          | active                | status           | active
+        status          | inactive              | status           | inactive
+        """)
+    void eachFilterIsForwardedToTheSource(String parameter, String values, String forwarded,
+            String sent) throws Exception {
+        MockHttpServletRequestBuilder read = ffis(TAN_WEI_MING);
+        for (String value : values.split(",")) {
+            read.param(parameter, value);
+        }
+
+        assertThat(reading(read).getStatus()).isEqualTo(200);
+        assertThat(sentToTheSource(TAN_WEI_MING)).containsEntry(forwarded, List.of(sent));
+    }
+
+    /** Every filter at once reaches the source, combined, with the sort. */
+    @Test
+    void everyFilterAndTheSortAreForwardedTogether() throws Exception {
+        assertThat(reading(ffis(TAN_WEI_MING).param("type", "dental").param("type", "ippt")
+                .param("outcome", "fit").param("issueDateFrom", "2023-01-01")
+                .param("expiryDateTo", "2025-12-31").param("higherAuthority", "carmo")
+                .param("submittingMc", "hendon-camp").param("status", "active")
+                .param("sortBy", "issueDate").param("sortOrder", "descending")).getStatus())
+                .isEqualTo(200);
+
+        assertThat(sentToTheSource(TAN_WEI_MING)).isEqualTo(Map.ofEntries(
+                Map.entry("type", List.of("ippt,dental")),
+                Map.entry("outcome", List.of("fit")),
+                Map.entry("issue-date", List.of("ge2023-01-01")),
+                Map.entry("expiry-date", List.of("le2025-12-31")),
+                Map.entry("higher-authority", List.of("carmo")),
+                Map.entry("submitting-mc", List.of("hendon-camp")),
+                Map.entry("status", List.of("active")),
+                Map.entry("_sort", List.of("-issue-date,_id")),
+                Map.entry("_offset", List.of("0")),
+                Map.entry("_count", List.of("5")),
+                Map.entry("_total", List.of("accurate"))));
+    }
+
+    /**
+     * The sort reaches the source as its {@code _sort}: a column with no direction ascending.
+     * With no column — whatever the direction says — no {@code _sort} is sent, and the order is
+     * the source's own.
+     */
+    @ParameterizedTest
+    @CsvSource(nullValues = "-", value = {
+        "issueDate, ascending, 'issue-date,_id'",
+        "issueDate, descending, '-issue-date,_id'",
+        "expiryDate, ascending, 'expiry-date,_id'",
+        "expiryDate, descending, '-expiry-date,_id'",
+        "expiryDate, -, 'expiry-date,_id'",
+        "-, descending, -",
+        "-, -, -"})
+    void theSortIsForwardedToTheSource(String sortBy, String sortOrder, String sent)
+            throws Exception {
+        MockHttpServletRequestBuilder sorted = ffis(TAN_WEI_MING);
+        if (sortBy != null) {
+            sorted.param("sortBy", sortBy);
+        }
+        if (sortOrder != null) {
+            sorted.param("sortOrder", sortOrder);
+        }
+
+        assertThat(reading(sorted).getStatus()).isEqualTo(200);
+        assertThat(sentToTheSource(TAN_WEI_MING).get("_sort"))
+                .isEqualTo(sent == null ? null : List.of(sent));
+    }
+
+    /**
+     * A filter or sort the read cannot take is the application API's {@code 400}, refused before
+     * the source is called: a column but the two dates, a direction but ascending or descending,
+     * a code outside its closed set — a label, another case, a Java constant's name or another
+     * spelling — and a date that
+     * is no calendar date {@code YYYY-MM-DD}.
+     */
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', textBlock = """
+        sortBy          | type
+        sortBy          | issue-date
+        sortBy          | IssueDate
+        sortOrder       | desc
+        sortOrder       | Ascending
+        type            | IPPT FFI
+        type            | swimming
+        type            | IPPT
+        outcome         | FIT
+        outcome         | expired
+        higherAuthority | comd_mmi
+        higherAuthority | COMD_MMI
+        submittingMc    | nee-soon-camp-mc
+        submittingMc    | KRANJI_CAMP
+        status          | Active
+        status          | expired
+        status          | ACTIVE
+        issueDateFrom   | 2024-02-30
+        issueDateTo     | 01/02/2024
+        expiryDateFrom  | 2025-1-1
+        expiryDateTo    | 2025-12-31T00:00:00
+        expiryDateTo    | yesterday
+        """)
+    void aFilterOrSortTheReadCannotTakeIsRefused(String parameter, String value)
+            throws Exception {
+        MockHttpServletResponse response = reading(ffis(TAN_WEI_MING).param(parameter, value));
+
+        assertThat(body(response)).isEqualTo(apiError(400, "invalid-request",
+                "The request could not be read or did not pass validation."));
+        SOURCE.verify(0, anyRequestedFor(anyUrl()));
+    }
+
+    /** A blank code, as an empty field sends one, is no filter on its column. */
+    @ParameterizedTest
+    @ValueSource(strings = {"type", "outcome", "higherAuthority", "submittingMc", "status"})
+    void aBlankCodeIsNoFilter(String parameter) throws Exception {
+        assertThat(reading(ffis(TAN_WEI_MING).param(parameter, "")).getStatus()).isEqualTo(200);
+        assertThat(sentToTheSource(TAN_WEI_MING)).isEqualTo(Map.of(
+                "_offset", List.of("0"),
+                "_count", List.of("5"),
+                "_total", List.of("accurate")));
+    }
+
+    /** A blank code beside a good one leaves the good one alone. */
+    @Test
+    void aBlankCodeBesideAnotherIsThatOneAlone() throws Exception {
+        assertThat(reading(ffis(TAN_WEI_MING).param("outcome", "", "unfit")).getStatus())
+                .isEqualTo(200);
+        assertThat(sentToTheSource(TAN_WEI_MING)).containsEntry("outcome", List.of("unfit"));
+    }
+
+    /** One code outside its set among good ones refuses the whole read. */
+    @Test
+    void oneCodeOutsideItsSetAmongOthersIsRefused() throws Exception {
+        assertThat(reading(ffis(TAN_WEI_MING).param("type", "ippt").param("type", "Dental FFI"))
+                .getStatus()).isEqualTo(400);
+        SOURCE.verify(0, anyRequestedFor(anyUrl()));
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "issueDateFrom, issueDateTo, 2024-01-02, 2024-01-01",
+        "expiryDateFrom, expiryDateTo, 2025-12-31, 2025-01-01"})
+    void aFromDateAfterItsToDateIsRefused(String fromParameter, String toParameter, String from,
+            String to) throws Exception {
+        MockHttpServletResponse response = reading(ffis(TAN_WEI_MING)
+                .param(fromParameter, from).param(toParameter, to));
+
+        assertThat(body(response)).isEqualTo(apiError(400, "invalid-request",
+                "The request could not be read or did not pass validation."));
+        SOURCE.verify(0, anyRequestedFor(anyUrl()));
+    }
+
+    /** A range one day long is a from-date equal to its to-date, and is no refusal. */
+    @Test
+    void aRangeOfOneDayIsRead() throws Exception {
+        assertThat(reading(ffis(TAN_WEI_MING)
+                .param("expiryDateFrom", "2024-11-21").param("expiryDateTo", "2024-11-21"))
+                .getStatus()).isEqualTo(200);
+        assertThat(sentToTheSource(TAN_WEI_MING))
+                .containsEntry("expiry-date", List.of("ge2024-11-21", "le2024-11-21"));
+    }
+
+    /** The ids of a page's FFIs, in its order, beside its total. */
+    private List<Object> idsAndTotal(MockHttpServletResponse response) throws Exception {
+        JsonNode page = body(response);
+        return List.of(page.at("/totalResults").asInt(),
+                page.at("/ffis").valueStream().map(ffi -> ffi.at("/id").asString()).toList());
+    }
+
+    /** A canned sorted read, answered in the order the source sorted it: earliest Issue Date first. */
+    @Test
+    void aSortedReadIsAnsweredInTheSourcesSortedOrder() throws Exception {
+        assertThat(idsAndTotal(reading(ffis(TAN_WEI_MING).param("sortBy", "issueDate"))))
+                .containsExactly(4, List.of("ffi-tan-wei-ming-4", "ffi-tan-wei-ming-1",
+                        "ffi-tan-wei-ming-3", "ffi-tan-wei-ming-2"));
+    }
+
+    /** A canned filtered read over two pages: its second page is the source's, its total six. */
+    @Test
+    void aFilteredReadIsAnsweredAsTheSourceFilteredIt() throws Exception {
+        assertThat(idsAndTotal(reading(ffis("dev-patient-05")
+                .param("issueDateFrom", "2023-01-01").param("startIndex", "6"))))
+                .containsExactly(6, List.of("ffi-tan-hui-min-6"));
+    }
+
+    @Test
+    void aFilterTheSourceMatchesNothingWithIsAnEmptyPage() throws Exception {
+        assertThat(body(reading(ffis("dev-patient-05").param("expiryDateTo", "2022-12-31"))))
+                .isEqualTo(json.readTree("""
+                        {"totalResults": 0, "startIndex": 1, "ffis": []}"""));
     }
 
     @Test

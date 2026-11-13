@@ -228,14 +228,35 @@ paths:
     get:
       tags: [patient-source]
       operationId: readFfiHistory
-      summary: Read one page of a patient's FFI History, in the source's own order
+      summary: Read one page of a patient's FFI History — filtered, sorted, paged and counted by the source
       description: |
-        The patient's FFIs (Fit for Instruction), paged and counted by the
-        source, in its own default order: no `_sort` is sent. **FHIR-shaped
-        paging only, not FHIR-conformant**: the answer borrows a searchset
-        `Bundle`'s shape, and its entries are a custom `FFI` object no FHIR
-        version defines (ADR 0019). The id is sent unchanged, as a read by id's
-        is.
+        The patient's FFIs (Fit for Instruction). The backend does none of this
+        work itself: it forwards the filters and the sort and shows the page
+        and the total the source answers. A mock must therefore compute every
+        step below over all the patient's FFIs, for any combination of
+        parameters.
+
+        1. **Filter** by every `type`, `outcome`, `issue-date`,
+           `expiry-date`, `higher-authority`, `submitting-mc` and `status`
+           sent, combined with AND.
+        2. **Count** what is left: that number is the Bundle's `total`,
+           whatever the page.
+        3. **Sort** by `_sort` when it is sent; with none, keep the source's
+           own default order.
+        4. **Page**: skip `_offset` FFIs, then return up to `_count` of them
+           as the Bundle's entries, in that order.
+
+        **Worked example** over the fixtures: Tan Hui Min (`dev-patient-05`)
+        has seven FFIs, so `total` is 7; `issue-date=ge2023-01-01` leaves six,
+        `total: 6`, over two pages of five. `higher-authority=camo,cnmo` leaves
+        four. Tan Wei Ming's four with `_sort=issue-date,_id` are his
+        Vocational, Overseas Exercises, Dental and IPPT FFIs, in that order.
+
+        **FHIR-shaped paging only, not FHIR-conformant**: the answer borrows a
+        searchset `Bundle`'s shape and FHIR's search-parameter syntax, and its
+        entries are a custom `FFI` object no FHIR version defines (ADR 0019).
+        The id is sent unchanged, as a read by id's is. The backend sends
+        parameters in no guaranteed order; read them by name.
 
         **Fault ids (mock only).** Beside the fixtures' histories, the mock
         serves one failure of this read per patient id, none a fixture's:
@@ -261,6 +282,96 @@ paths:
             type: string
             pattern: '^[A-Za-z0-9\-.]{1,64}$'
           example: eq081-VQEgP8drUUqCWzHfw3
+        - name: type
+          in: query
+          description: |
+            Keeps only FFIs whose `type` is any of these codes, joined by commas
+            (FHIR's OR). Sent once at most, the codes in their set's order.
+          schema:
+            type: string
+            pattern: "^(overseas-exercises|cat-a-ocs-scs|ippt|dental|ord-release-from-service|vocational)(,(overseas-exercises|cat-a-ocs-scs|ippt|dental|ord-release-from-service|vocational))*$"
+          example: ippt,dental
+        - name: outcome
+          in: query
+          description: |
+            Keeps only FFIs whose `outcome` is any of these codes, joined by
+            commas.
+          schema:
+            type: string
+            pattern: "^(fit|request-waiver|unfit)(,(fit|request-waiver|unfit))*$"
+          example: fit
+        - name: issue-date
+          in: query
+          description: |
+            An Issue Date range, inclusive: `ge<date>` keeps an `issueDate` on
+            or after the date, `le<date>` one on or before it. Sent once for each
+            end the range has, so zero, one or two times; both apply together.
+            The backend guarantees the from-date is not after the to-date.
+          style: form
+          explode: true
+          schema:
+            type: array
+            maxItems: 2
+            items:
+              type: string
+              pattern: '^(ge|le)\d{4}-\d{2}-\d{2}$'
+          example: [ge2024-01-01, le2024-12-31]
+        - name: expiry-date
+          in: query
+          description: |
+            An Expiry Date range, read as `issue-date` is but against
+            `expiryDate`.
+          style: form
+          explode: true
+          schema:
+            type: array
+            maxItems: 2
+            items:
+              type: string
+              pattern: '^(ge|le)\d{4}-\d{2}-\d{2}$'
+          example: [le2024-12-31]
+        - name: higher-authority
+          in: query
+          description: |
+            Keeps only FFIs whose `higherAuthority` is any of these codes,
+            joined by commas.
+          schema:
+            type: string
+            pattern: "^(camo|carmo|cnmo|comd-mmi|dis)(,(camo|carmo|cnmo|comd-mmi|dis))*$"
+          example: camo,cnmo
+        - name: submitting-mc
+          in: query
+          description: |
+            Keeps only FFIs whose `submittingMc` is any of these codes, joined by
+            commas.
+          schema:
+            type: string
+            pattern: "^(nee-soon-camp|kranji-camp|hendon-camp|mandai-hill-camp)(,(nee-soon-camp|kranji-camp|hendon-camp|mandai-hill-camp))*$"
+          example: kranji-camp
+        - name: status
+          in: query
+          description: |
+            Keeps only FFIs with this `status`. Absent for either.
+          schema:
+            type: string
+            enum: [active, inactive]
+        - name: _sort
+          in: query
+          description: |
+            One date column, then the id. `-` first is descending; `_id` is
+            always ascending and breaks every tie, so the order is total and a
+            page never repeats or skips an FFI. **Absent** when no sort is
+            chosen on the FFI page: the source's own default order applies.
+
+            - `issue-date`: by `issueDate`.
+            - `expiry-date`: by `expiryDate`.
+          schema:
+            type: string
+            enum:
+              - "issue-date,_id"
+              - "-issue-date,_id"
+              - "expiry-date,_id"
+              - "-expiry-date,_id"
         - name: _count
           in: query
           required: true
@@ -277,7 +388,7 @@ paths:
           in: query
           required: true
           description: |
-            How many FFIs to skip, in the source's order: the page's
+            How many FFIs to skip, filtered and in sort order: the page's
             `startIndex - 1`. An offset at or past `total` returns no entries and
             still the full `total`, never an error.
           schema:
@@ -294,9 +405,9 @@ paths:
       responses:
         "200":
           description: |
-            One page of the patient's FFIs, in the source's order, and the
-            `total` of every FFI they have. A patient with none is this answer
-            with `total: 0`.
+            One page of the patient's FFIs the filters keep, in sort order, and
+            the `total` of every FFI they keep. A patient with none, or a filter
+            keeping none, is this answer with `total: 0`.
           content:
             application/fhir+json:
               schema:

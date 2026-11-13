@@ -746,13 +746,28 @@ paths:
   /api/patient-ffi/{patientId}:
     get:
       tags: [Patient]
-      summary: Read a patient's FFI History, a page at a time, in the patient source's order
+      summary: Read a patient's FFI History, filtered and sorted, a page at a time
       description: |
-        The FFIs (Fit for Instruction) of the patient held under `patientId`,
-        one page at a time, as the in-house patient source pages, orders and
-        counts them (ADR 0019): the service reads them from the source on every
-        call and pages, orders, holds and caches nothing of its own. No sort is
-        asked for, so the order is the source's own. Read-only.
+        The FFIs (Fit for Instruction) of the patient held under `patientId`
+        that the filters narrow, one page at a time, in the order `sortBy` and
+        `sortOrder` name, as the in-house patient source filters, orders, pages
+        and counts them (ADR 0019): the service reads them from the source on
+        every call and filters, orders, pages, holds and caches nothing of its
+        own. With no `sortBy`, whatever `sortOrder` says, no sort is asked of
+        the source, so the order is its own; with one, ties are broken by id.
+        Read-only.
+
+        **Filters** narrow the history, combined with AND, each optional: any
+        of the FFI Types (`type`), Outcomes (`outcome`), Higher Authorities
+        (`higherAuthority`) and Submitting MCs (`submittingMc`), each repeated
+        for each code; one Status (`status`); and a range for the Issue Date
+        (`issueDateFrom`, `issueDateTo`) and for the Expiry Date
+        (`expiryDateFrom`, `expiryDateTo`), each end a calendar date,
+        inclusive. They reach the source as `type`, `outcome`,
+        `higher-authority` and `submitting-mc`, each once with its codes joined
+        by commas (FHIR's OR), `status`, `issue-date=ge…`, `issue-date=le…`,
+        `expiry-date=ge…` and `expiry-date=le…`, and the sort as
+        `_sort=±issue-date|±expiry-date,_id`.
 
         Each FFI's FFI Type, Outcome, Higher Authority, Submitting MC and
         Status are closed sets, carried as their codes; the SPA names each code
@@ -788,6 +803,122 @@ paths:
           schema:
             type: string
             pattern: "^[A-Za-z0-9\\-.]{1,64}$"
+        - name: type
+          in: query
+          required: false
+          description: |
+            Only FFIs of any of these FFI Types, one code to each repetition.
+            Sent to the source once, as `type`, the codes joined by commas.
+          style: form
+          explode: true
+          schema:
+            type: array
+            items:
+              $ref: "#/components/schemas/FfiType"
+        - name: outcome
+          in: query
+          required: false
+          description: |
+            Only FFIs with any of these Outcomes, one code to each repetition.
+            Sent to the source once, as `outcome`, the codes joined by commas.
+          style: form
+          explode: true
+          schema:
+            type: array
+            items:
+              $ref: "#/components/schemas/FfiOutcome"
+        - name: issueDateFrom
+          in: query
+          required: false
+          description: |
+            Only FFIs issued on or after this day. Sent as `issue-date=ge…`.
+          schema:
+            type: string
+            format: date
+            example: "2024-01-01"
+        - name: issueDateTo
+          in: query
+          required: false
+          description: |
+            Only FFIs issued on or before this day; not before `issueDateFrom`.
+            Sent as `issue-date=le…`.
+          schema:
+            type: string
+            format: date
+            example: "2024-12-31"
+        - name: expiryDateFrom
+          in: query
+          required: false
+          description: |
+            Only FFIs whose Expiry Date is on or after this day. Sent as
+            `expiry-date=ge…`.
+          schema:
+            type: string
+            format: date
+            example: "2025-01-01"
+        - name: expiryDateTo
+          in: query
+          required: false
+          description: |
+            Only FFIs whose Expiry Date is on or before this day; not before
+            `expiryDateFrom`. Sent as `expiry-date=le…`.
+          schema:
+            type: string
+            format: date
+            example: "2025-12-31"
+        - name: higherAuthority
+          in: query
+          required: false
+          description: |
+            Only FFIs answering to any of these Higher Authorities, one code to
+            each repetition. Sent to the source once, as `higher-authority`, the
+            codes joined by commas.
+          style: form
+          explode: true
+          schema:
+            type: array
+            items:
+              $ref: "#/components/schemas/FfiHigherAuthority"
+        - name: submittingMc
+          in: query
+          required: false
+          description: |
+            Only FFIs submitted by any of these Submitting MCs, one code to each
+            repetition. Sent to the source once, as `submitting-mc`, the codes
+            joined by commas.
+          style: form
+          explode: true
+          schema:
+            type: array
+            items:
+              $ref: "#/components/schemas/FfiSubmittingMc"
+        - name: status
+          in: query
+          required: false
+          description: |
+            Only FFIs with this Status, the source's own. Absent for either.
+            Sent to the source as `status`.
+          schema:
+            $ref: "#/components/schemas/FfiStatus"
+        - name: sortBy
+          in: query
+          required: false
+          description: |
+            The one column to sort by: `issueDate` (the source's `issue-date`)
+            or `expiryDate` (its `expiry-date`). With none, the source's own
+            order, whatever `sortOrder` says: no `_sort` is sent.
+          schema:
+            type: string
+            enum: [issueDate, expiryDate]
+        - name: sortOrder
+          in: query
+          required: false
+          description: |
+            The direction `sortBy` sorts in; `ascending` when `sortBy` is given
+            alone. Descending is sent with a leading `-`.
+          schema:
+            type: string
+            enum: [ascending, descending]
         - name: startIndex
           in: query
           required: false
@@ -816,10 +947,14 @@ paths:
                 $ref: "#/components/schemas/FfiHistoryPage"
         "400":
           description: |
-            `patientId` is outside FHIR's id grammar, or `startIndex` or `count`
-            is not an integer. Refused before the patient source is called, with
-            the generic `invalid-request` `ApiError`, which quotes nothing of the
-            request.
+            `patientId` is outside FHIR's id grammar; a `type`, `outcome`,
+            `higherAuthority`, `submittingMc` or `status` is no code of its closed
+            set, matched exactly; `sortBy` is neither `issueDate` nor
+            `expiryDate`, or `sortOrder` neither `ascending` nor `descending`; a
+            date is no calendar date `YYYY-MM-DD`; a from-date is after its
+            to-date; or `startIndex` or `count` is not an integer. Refused before
+            the patient source is called, with the generic `invalid-request`
+            `ApiError`, which quotes nothing of the request.
           content:
             application/json:
               schema:
@@ -4138,13 +4273,13 @@ components:
       properties:
         totalResults:
           type: integer
-          description: The patient's FFIs across every page, as the patient source counted them.
+          description: The patient's FFIs the filters select, across every page, as the patient source counted them.
         startIndex:
           type: integer
           description: One-based index of this page's first FFI, as coerced.
         ffis:
           type: array
-          description: This page's FFIs, in the source's own order.
+          description: This page's FFIs, in the order asked for, or the source's own with no sort.
           items:
             $ref: "#/components/schemas/Ffi"
     Ffi:

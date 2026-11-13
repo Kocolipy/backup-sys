@@ -3,14 +3,19 @@ package com.example.backend.patient.infrastructure.http;
 import com.example.backend.observability.OutboundCallFailure;
 import com.example.backend.observability.RedactedFaultException;
 import com.example.backend.paging.domain.PageRequest;
+import com.example.backend.patient.domain.DateRange;
 import com.example.backend.patient.domain.Ffi;
+import com.example.backend.patient.domain.FfiCode;
+import com.example.backend.patient.domain.FfiFilter;
 import com.example.backend.patient.domain.FfiHistory;
+import com.example.backend.patient.domain.FfiSort;
 import com.example.backend.patient.domain.Patient;
 import com.example.backend.patient.domain.PatientId;
 import com.example.backend.patient.domain.PatientMatch;
 import com.example.backend.patient.domain.PatientMatches;
 import com.example.backend.patient.domain.PatientFilter;
 import com.example.backend.patient.domain.PatientQuery;
+import com.example.backend.patient.domain.SortOrder;
 import com.example.backend.patient.domain.PatientStore;
 import com.example.backend.patient.infrastructure.http.PatientSourceException.Failure;
 import java.io.IOException;
@@ -85,8 +90,22 @@ class PatientSourceAdapter implements PatientStore {
             new ParameterizedTypeReference<>() {
             };
 
-    /** A patient's FFI History, a page at a time, in the source's own order (ADR 0019). */
+    /**
+     * A patient's FFI History, a page at a time (ADR 0019), before the filters and the sort a read
+     * adds to it.
+     */
     static final String FFI_HISTORY = "/Patient/{id}/ffi?" + SourceSearchset.PAGE_QUERY;
+
+    /** The source's search parameter for an FFI's Issue Date. */
+    private static final String ISSUE_DATE = "issue-date";
+
+    /** The source's search parameter for an FFI's Expiry Date. */
+    private static final String EXPIRY_DATE = "expiry-date";
+
+    /** The source's search parameter each column of an FFI History sorts on. */
+    private static final Map<FfiSort.Field, String> FFI_SORTED_ON = Map.of(
+            FfiSort.Field.ISSUE_DATE, ISSUE_DATE,
+            FfiSort.Field.EXPIRY_DATE, EXPIRY_DATE);
 
     /** A searchset of FFIs, an FFI History's answer. */
     private static final ParameterizedTypeReference<SourceSearchset<SourceFfi>> FFIS =
@@ -154,25 +173,21 @@ class PatientSourceAdapter implements PatientStore {
      * whether the gender filter was asked for, and none of the values.
      */
     @Override
-    public PatientMatches search(PatientQuery query, PatientFilter filter, PageRequest page) {
-        Map<String, Object> variables = new HashMap<>();
-        SourceSearchset.pageVariables(variables, page);
-        StringBuilder template = new StringBuilder(switch (query) {
-            case PatientQuery.ByName name -> {
-                variables.put("name", name.text());
-                yield SEARCH_BY_NAME;
-            }
-            case PatientQuery.ByNric nric -> {
-                variables.put("identifier", Patient.NRIC_SYSTEM + "|" + nric.nric());
-                yield SEARCH_BY_NRIC;
-            }
-        });
+    public PatientMatches search(PatientQuery patientQuery, PatientFilter filter,
+            PageRequest page) {
+        SourceQuery query = switch (patientQuery) {
+            case PatientQuery.ByName name ->
+                    new SourceQuery(SEARCH_BY_NAME).variable("name", name.text());
+            case PatientQuery.ByNric nric -> new SourceQuery(SEARCH_BY_NRIC)
+                    .variable("identifier", Patient.NRIC_SYSTEM + "|" + nric.nric());
+        };
+        query.paged(page);
         if (filter.gender() != null) {
-            template.append("&gender={gender}");
-            variables.put("gender", filter.gender().code());
+            query.parameter("gender", "gender", filter.gender().code());
         }
-        template.append(SEARCH_PAGE);
-        String uri = template.toString();
+        query.append(SEARCH_PAGE);
+        String uri = query.template();
+        Map<String, Object> variables = query.variables();
         return called(() -> source.get()
                 .uri(uri, variables)
                 .accept(FHIR_JSON)
@@ -187,19 +202,41 @@ class PatientSourceAdapter implements PatientStore {
     }
 
     /**
-     * {@code GET {base}/Patient/{id}/ffi?…}: the patient's FFI History, paged and counted by the
-     * source, in its own order — no {@code _sort} is sent (ADR 0019). A {@code 404} is no patient
-     * under the id; the one other good answer is a {@code 200} searchset of FFIs, and anything
-     * else is a fault, as is a searchset with no total or an entry that is no FFI the service
-     * can hold. The id is a URI variable, so the call is observed under the template alone.
+     * {@code GET {base}/Patient/{id}/ffi?…}: the patient's FFI History, filtered, sorted, paged and
+     * counted by the source (ADR 0019) — each set of codes as its search parameter once, its codes
+     * joined by commas, FHIR's OR ({@code type}, {@code outcome}, {@code higher-authority},
+     * {@code submitting-mc}); the Status as {@code status}; each end of a date range as its search
+     * parameter, {@code issue-date} or {@code expiry-date}, {@code ge} the from-date and {@code le}
+     * the to-date; and a sort as {@code _sort} on the same date parameters, {@code -} first for
+     * descending, ties broken by id. With no column to sort by, no {@code _sort} is sent, and the
+     * order is the source's own. A {@code 404} is no patient under the id; the one other good
+     * answer is a {@code 200} searchset of FFIs, and anything else is a fault, as is a searchset
+     * with no total or an entry that is no FFI the service can hold. The id and the filters'
+     * values are URI variables, so the call is observed under the template alone: which filters
+     * were asked for and the sort, and none of their values.
      */
     @Override
-    public Optional<FfiHistory> findFfiHistory(PatientId id, PageRequest page) {
-        Map<String, Object> variables = new HashMap<>();
-        variables.put("id", id.value());
-        SourceSearchset.pageVariables(variables, page);
+    public Optional<FfiHistory> findFfiHistory(PatientId id, FfiFilter filter, FfiSort sort,
+            PageRequest page) {
+        SourceQuery query = new SourceQuery(FFI_HISTORY).variable("id", id.value());
+        query.paged(page);
+        query.anyOf("type", "type", filter.types());
+        query.anyOf("outcome", "outcome", filter.outcomes());
+        query.narrowing(ISSUE_DATE, "issueDate", filter.issueDate());
+        query.narrowing(EXPIRY_DATE, "expiryDate", filter.expiryDate());
+        query.anyOf("higher-authority", "higherAuthority", filter.higherAuthorities());
+        query.anyOf("submitting-mc", "submittingMc", filter.submittingMcs());
+        if (filter.status() != null) {
+            query.parameter("status", "status", filter.status().code());
+        }
+        if (sort.field() != null) {
+            query.append("&_sort=" + sorted(FFI_SORTED_ON.get(sort.field()), sort.order())
+                    + ",_id");
+        }
+        String uri = query.template();
+        Map<String, Object> variables = query.variables();
         return called(() -> source.get()
-                .uri(FFI_HISTORY, variables)
+                .uri(uri, variables)
                 .accept(FHIR_JSON)
                 .exchange((request, response) -> {
                     if (!found(response)) {
@@ -225,6 +262,11 @@ class PatientSourceAdapter implements PatientStore {
             throw PatientSourceException.answered(response.getStatusCode().value());
         }
         return true;
+    }
+
+    /** {@code parameter} sorted in {@code order}, before its tie-break: {@code -} first descending. */
+    private static String sorted(String parameter, SortOrder order) {
+        return order == SortOrder.DESCENDING ? "-" + parameter : parameter;
     }
 
     /**
@@ -317,6 +359,94 @@ class PatientSourceAdapter implements PatientStore {
             return new URI(configured);
         } catch (URISyntaxException unparseable) {
             return null;
+        }
+    }
+
+    /**
+     * A read of the source as it is built: its URI template, and the URI variables the template
+     * names. Every value the read sends is a variable, never part of the template, so the call is
+     * observed under the template alone.
+     */
+    private static final class SourceQuery {
+
+        private final StringBuilder template;
+
+        private final Map<String, Object> variables = new HashMap<>();
+
+        /** A read whose template starts {@code start}. */
+        SourceQuery(String start) {
+            this.template = new StringBuilder(start);
+        }
+
+        /** {@code value} as the URI variable {@code name}, which the template names already. */
+        SourceQuery variable(String name, Object value) {
+            variables.put(name, value);
+            return this;
+        }
+
+        /** The variables of the source's paging for {@code page} ({@link SourceSearchset}). */
+        void paged(PageRequest page) {
+            SourceSearchset.pageVariables(variables, page);
+        }
+
+        /** {@code text} added to the template as it is. */
+        void append(String text) {
+            template.append(text);
+        }
+
+        /** {@code parameter} once, its value {@code value} the URI variable {@code variable}. */
+        void parameter(String parameter, String variable, Object value) {
+            template.append('&').append(parameter).append("={").append(variable).append('}');
+            variables.put(variable, value);
+        }
+
+        /**
+         * {@code range} narrowing the read by {@code parameter}: the parameter once for each end the
+         * range has, {@code ge} its from-date and {@code le} its to-date, each date the URI variable
+         * {@code variable} named for its end.
+         */
+        void narrowing(String parameter, String variable, DateRange range) {
+            if (range.from() != null) {
+                template.append('&').append(parameter).append("=ge{").append(variable)
+                        .append("From}");
+                variables.put(variable + "From", range.from().toString());
+            }
+            if (range.to() != null) {
+                template.append('&').append(parameter).append("=le{").append(variable)
+                        .append("To}");
+                variables.put(variable + "To", range.to().toString());
+            }
+        }
+
+        /**
+         * {@code codes} narrowing the read by {@code parameter}: the parameter once, its codes joined
+         * by commas — FHIR's OR — in their set's order; nothing for no codes. Each code is a URI
+         * variable of its own, {@code variable} and its place, so the commas stay in the template
+         * and reach the source as commas: a value's own comma would be encoded, and read as part of
+         * a code.
+         */
+        void anyOf(String parameter, String variable, Set<? extends FfiCode> codes) {
+            if (codes.isEmpty()) {
+                return;
+            }
+            template.append('&').append(parameter).append('=');
+            int place = 0;
+            for (FfiCode code : codes) {
+                String name = variable + place;
+                template.append(place == 0 ? "" : ",").append('{').append(name).append('}');
+                variables.put(name, code.code());
+                place++;
+            }
+        }
+
+        /** The template as built so far. */
+        String template() {
+            return template.toString();
+        }
+
+        /** The URI variables the template names. */
+        Map<String, Object> variables() {
+            return variables;
         }
     }
 }

@@ -1,0 +1,126 @@
+{
+  "name": "FFI History: Tan Hui Min's FFIs answering to CAMO or CNMO",
+  "request": {
+    "method": "GET",
+    "urlPath": "/Patient/dev-patient-05/ffi",
+    "queryParameters": {
+      "_count": {
+        "equalTo": "5"
+      },
+      "_offset": {
+        "equalTo": "0"
+      },
+      "_total": {
+        "equalTo": "accurate"
+      },
+      "_sort": {
+        "absent": true
+      },
+      "type": {
+        "absent": true
+      },
+      "outcome": {
+        "absent": true
+      },
+      "issue-date": {
+        "absent": true
+      },
+      "expiry-date": {
+        "absent": true
+      },
+      "higher-authority": {
+        "equalTo": "camo,cnmo"
+      },
+      "submitting-mc": {
+        "absent": true
+      },
+      "status": {
+        "absent": true
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/fhir+json"
+    },
+    "jsonBody": {
+      "resourceType": "Bundle",
+      "id": "ffi-history",
+      "type": "searchset",
+      "total": 4,
+      "link": [
+        {
+          "relation": "self",
+          "url": "http://127.0.0.1:8104/Patient/dev-patient-05/ffi?_offset=0&_count=5"
+        }
+      ],
+      "entry": [
+        {
+          "resource": {
+            "resourceType": "FFI",
+            "id": "ffi-tan-hui-min-3",
+            "type": "ippt",
+            "outcome": "request-waiver",
+            "issueDate": "2024-06-10",
+            "expiryDate": "2025-06-09",
+            "higherAuthority": "cnmo",
+            "submittingMc": "hendon-camp",
+            "status": "active"
+          },
+          "search": {
+            "mode": "match"
+          }
+        },
+        {
+          "resource": {
+            "resourceType": "FFI",
+            "id": "ffi-tan-hui-min-5",
+            "type": "dental",
+            "outcome": "fit",
+            "issueDate": "2023-09-04",
+            "expiryDate": "2024-09-03",
+            "higherAuthority": "camo",
+            "submittingMc": "nee-soon-camp",
+            "status": "inactive"
+          },
+          "search": {
+            "mode": "match"
+          }
+        },
+        {
+          "resource": {
+            "resourceType": "FFI",
+            "id": "ffi-tan-hui-min-6",
+            "type": "vocational",
+            "outcome": "request-waiver",
+            "issueDate": "2023-04-17",
+            "expiryDate": "2024-04-16",
+            "higherAuthority": "cnmo",
+            "submittingMc": "kranji-camp",
+            "status": "inactive"
+          },
+          "search": {
+            "mode": "match"
+          }
+        },
+        {
+          "resource": {
+            "resourceType": "FFI",
+            "id": "ffi-tan-hui-min-7",
+            "type": "ippt",
+            "outcome": "unfit",
+            "issueDate": "2022-12-05",
+            "expiryDate": "2023-12-04",
+            "higherAuthority": "camo",
+            "submittingMc": "hendon-camp",
+            "status": "inactive"
+          },
+          "search": {
+            "mode": "match"
+          }
+        }
+      ]
+    }
+  }
+}

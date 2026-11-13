@@ -8,7 +8,9 @@ import com.example.backend.audit.RecordingAuditTrail.Recorded;
 import com.example.backend.audit.domain.AuditOperation;
 import com.example.backend.paging.domain.PageRequest;
 import com.example.backend.patient.domain.AdministrativeGender;
+import com.example.backend.patient.domain.FfiFilter;
 import com.example.backend.patient.domain.FfiHistory;
+import com.example.backend.patient.domain.FfiSort;
 import com.example.backend.patient.domain.Patient;
 import com.example.backend.patient.domain.PatientId;
 import com.example.backend.patient.domain.PatientMatch;
@@ -73,7 +75,8 @@ class PatientSearchServiceTests {
         }
 
         @Override
-        public Optional<FfiHistory> findFfiHistory(PatientId id, PageRequest page) {
+        public Optional<FfiHistory> findFfiHistory(PatientId id, FfiFilter filter, FfiSort sort,
+                PageRequest page) {
             throw new UnsupportedOperationException("a search reads no FFI History");
         }
     }

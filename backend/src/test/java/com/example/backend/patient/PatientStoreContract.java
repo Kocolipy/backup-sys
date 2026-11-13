@@ -6,7 +6,9 @@ import com.example.backend.paging.domain.PageRequest;
 import com.example.backend.patient.domain.AdministrativeGender;
 import com.example.backend.patient.domain.Ffi;
 import com.example.backend.patient.domain.FfiHigherAuthority;
+import com.example.backend.patient.domain.FfiFilter;
 import com.example.backend.patient.domain.FfiHistory;
+import com.example.backend.patient.domain.FfiSort;
 import com.example.backend.patient.domain.FfiOutcome;
 import com.example.backend.patient.domain.FfiStatus;
 import com.example.backend.patient.domain.FfiSubmittingMc;
@@ -258,7 +260,7 @@ public abstract class PatientStoreContract {
     /** Tan Wei Ming's four FFIs, in the source's own order. */
     @Test
     void tan_wei_mings_ffi_history_is_his_four_ffis_in_the_sources_order() {
-        assertThat(patients().findFfiHistory(new PatientId("eq081-VQEgP8drUUqCWzHfw3"),
+        assertThat(patients().findFfiHistory(new PatientId("eq081-VQEgP8drUUqCWzHfw3"), FfiFilter.NONE, FfiSort.SOURCE_ORDER,
                 FIRST_FIVE)).contains(new FfiHistory(4, List.of(
                         ffi("ffi-tan-wei-ming-1", FfiType.OVERSEAS_EXERCISES, FfiOutcome.FIT,
                                 "2023-10-14", "2024-10-13", FfiHigherAuthority.CAMO,
@@ -277,7 +279,7 @@ public abstract class PatientStoreContract {
     /** Tan Hui Min's seven FFIs over two pages of five: the first page. */
     @Test
     void tan_hui_mins_ffi_history_reads_its_first_page_of_five_of_seven() {
-        assertThat(patients().findFfiHistory(new PatientId("dev-patient-05"), FIRST_FIVE))
+        assertThat(patients().findFfiHistory(new PatientId("dev-patient-05"), FfiFilter.NONE, FfiSort.SOURCE_ORDER, FIRST_FIVE))
                 .contains(new FfiHistory(7, List.of(
                         ffi("ffi-tan-hui-min-1", FfiType.ORD_RELEASE_FROM_SERVICE,
                                 FfiOutcome.FIT, "2025-03-03", "2026-03-02",
@@ -299,7 +301,7 @@ public abstract class PatientStoreContract {
 
     @Test
     void tan_hui_mins_ffi_history_reads_its_last_two_on_the_second_page() {
-        assertThat(patients().findFfiHistory(new PatientId("dev-patient-05"), NEXT_FIVE))
+        assertThat(patients().findFfiHistory(new PatientId("dev-patient-05"), FfiFilter.NONE, FfiSort.SOURCE_ORDER, NEXT_FIVE))
                 .contains(new FfiHistory(7, List.of(
                         ffi("ffi-tan-hui-min-6", FfiType.VOCATIONAL, FfiOutcome.REQUEST_WAIVER,
                                 "2023-04-17", "2024-04-16", FfiHigherAuthority.CNMO,
@@ -312,13 +314,13 @@ public abstract class PatientStoreContract {
     /** Siti Nurhaliza binte Ahmad, as every fixture but those two, has no FFI. */
     @Test
     void a_patient_with_no_ffis_reads_an_empty_history_of_none() {
-        assertThat(patients().findFfiHistory(new PatientId("erXuFYUfucBZaryVksYEcMg3"),
+        assertThat(patients().findFfiHistory(new PatientId("erXuFYUfucBZaryVksYEcMg3"), FfiFilter.NONE, FfiSort.SOURCE_ORDER,
                 FIRST_FIVE)).contains(new FfiHistory(0, List.of()));
     }
 
     /** {@code not-a-uuid} is a well-formed id the source holds no patient under. */
     @Test
     void a_well_formed_id_no_patient_is_held_under_has_no_ffi_history() {
-        assertThat(patients().findFfiHistory(new PatientId("not-a-uuid"), FIRST_FIVE)).isEmpty();
+        assertThat(patients().findFfiHistory(new PatientId("not-a-uuid"), FfiFilter.NONE, FfiSort.SOURCE_ORDER, FIRST_FIVE)).isEmpty();
     }
 }

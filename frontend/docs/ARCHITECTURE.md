@@ -226,7 +226,10 @@ two pages share moves up to `src/pages/` itself, and imports no page folder
   A row shows Occurred, Operation, Outcome, Actor and Resource; its disclosure
   button, or a click on the row or its open detail, toggles a detail row with the
   changed paths, status, request and details. A click that ends a text selection
-  toggles nothing, so ids stay copyable.
+  toggles nothing, so ids stay copyable. `audit-filter-popover.tsx` builds its
+  panel from the shared filter parts: `FilterPopover`, a `MultiSelectPicker`
+  for the operations and a `ChoiceToggle` for the outcome; its time range is its
+  own, two `datetime-local` fields read by `parseTypedTime`.
 - `audit-operation-labels.ts` — each operation's label, in the rows and in the
   Operation picker, which searches and shows labels and sends the operation, and
   while anything is selected offers Clear selection first and last in its list. A
@@ -243,9 +246,10 @@ two pages share moves up to `src/pages/` itself, and imports no page folder
   remounts the results, which read `GET /api/patient-search` five at a time
   through `PATIENT_SEARCH` and the shared paged listing, naming the range
   whenever there is a match, in the patient source's own order: every heading
-  is a `PlainHeading`. `patient-filter-popover.tsx` holds the Filter panel, its
-  one filter the gender; the filter is component state too, and a change of it
-  reads from the first page. A failure is reported on the
+  is a `PlainHeading`. `patient-filter-popover.tsx` holds the Filter panel,
+  built from the shared filter parts (`FilterPopover`, a `ChoiceToggle` for
+  the gender), its one filter the gender; the filter is component state too,
+  and a change of it reads from the first page. A failure is reported on the
   page's line, with a Retry that reads the same page again. Each row keeps the
   Patient's id, which it never shows.
 - `ffi.tsx` / `ffi-api.ts` — FFI, `/ffi`, linked after Profile for a session
@@ -259,17 +263,48 @@ two pages share moves up to `src/pages/` itself, and imports no page folder
   "No patient in context"; a failure is "Couldn't load FFIs" on the page's
   line, with Try again. `decodeFfi` is strict, and each of an FFI's five
   closed sets is a `Record` of labels keyed by its codes, so a code added
-  fails typecheck until it has one. Read-only: no row action.
-- `sort-heading.tsx` — the sortable column heading of the accounts listing:
-  `aria-sort`, a direction icon, and a press that sorts its column ascending
-  first, then toggles descending → ascending → …, never returning a sorted
-  column to the listing's default order — and `PlainHeading`, the heading of a
-  column that does not sort, every column of the Search page's. The sort it
+  fails typecheck until it has one. Read-only: no row action. Issue Date and
+  Expiry Date sort through the shared `SortHeading`, disabled while a read is
+  pending, and every other column is a `PlainHeading`; with no column sorted,
+  `FFI_HISTORY` sends no `sortBy` and the source's own order applies.
+  `ffi-filter-popover.tsx` holds the Filter panel at the history's top right,
+  built from the shared filter parts: a `MultiSelectPicker` for each closed
+  set but the Status, a `DateRangeFields` for Issue Date and Expiry Date, and
+  a `ChoiceToggle` for the Status. It applies only on Apply, and
+  `checkFfiFilters` refuses an inverted or impossible range beneath its field,
+  through `checkDateRanges`, with nothing sent. `FFI_HISTORY` sends each filter
+  only when set, each code set as its parameter repeated in the set's own
+  order, then the sort through `sortParameters`. The filters
+  and the sort are component state alone, never the URL; a change of either
+  reads from the first page, and a new patient in context starts with
+  neither. With a filter applied, an empty history says "No FFIs match the
+  filters" rather than "No FFIs".
+- `sort-heading.tsx` — the sortable column heading the accounts listing and
+  the FFI page share: `aria-sort`, a direction icon, and a press that sorts
+  its column ascending first, then toggles descending → ascending → …, never
+  returning a sorted column to the listing's default order — and
+  `PlainHeading`, the heading of a column that does not sort, every column of
+  the Search page's. The sort it
   sets, `ColumnSort`, lives in `src/lib/sorting.ts` beside `sortParameters`,
   the one encoding of a sort as its `sortBy` and `sortOrder` query
   parameters, so each listing's `*-api.ts` names its sort by it and sends it
   through it (`lb-api-modules-are-data`), keeping only its own search and
   filter parameters.
+- `filter-popover.tsx` / `multi-select-picker.tsx` / `choice-toggle.tsx` /
+  `date-range-fields.tsx` — the shared filter parts the Audit, Patient Search
+  and FFI panels are built from. `FilterPopover` is the Filter button and its
+  panel: the button names how many applied filters are set (`setCount`), and
+  the panel's form is mounted each time it opens, so an edit never applied is
+  forgotten, and closes only once an Apply or Reset has applied.
+  `MultiSelectPicker` is a searchable multi-select over a closed set, by label,
+  with "Clear selection" first and last while anything is selected.
+  `ChoiceToggle` is a one-of-several toggle row (All, or one value) that never
+  leaves the choice empty. `DateRangeFields` is a from–to pair of date fields,
+  both marked invalid with the refusal shown beneath. Each panel's form keeps
+  its own draft, Apply and Reset. A range is checked by `src/lib/date-range.ts`:
+  `dateRangeRefusal` refuses a date the calendar does not have and a from-date
+  after its to-date, both ends inclusive, as the backend does; and
+  `checkDateRanges` checks each range a panel offers, naming the first refused.
 - `home.tsx` — the Patient card.
 - `patient-in-context.ts` / `patient-api.ts` — the **one reader of the patient in
   context**. `PatientInContextScope`, which the signed-in layout renders once
