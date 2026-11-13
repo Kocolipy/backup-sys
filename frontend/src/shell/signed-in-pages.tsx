@@ -1,5 +1,12 @@
 import type { LucideIcon } from "lucide-react";
-import { IdCard, ScrollText, Search as SearchIcon, Settings, Users } from "lucide-react";
+import {
+  IdCard,
+  LayoutTemplate,
+  ScrollText,
+  Search as SearchIcon,
+  Settings,
+  Users,
+} from "lucide-react";
 import type { ReactNode } from "react";
 
 import type { Permission } from "@/auth/api";
@@ -7,6 +14,7 @@ import { HOME_PATH, PATIENT_SEARCH_PAGE_PATH, SETTINGS_PATH } from "@/auth/sessi
 import { Accounts } from "@/pages/accounts/accounts";
 import { ADMINISTRATION_PERMISSIONS } from "@/pages/accounts/accounts-api";
 import { Audit } from "@/pages/audit/audit";
+import { BannerPrototype } from "@/pages/banner-prototype/banner-prototype";
 import { AUDIT_EVENTS } from "@/pages/audit/audit-api";
 import { ChangePassword } from "@/pages/change-password/change-password";
 import { Home } from "@/pages/home/home";
@@ -51,6 +59,13 @@ const PAGES_BEYOND_HOME: readonly SignedInPage[] = [
     permissions: ADMINISTRATION_PERMISSIONS,
     title: "Accounts",
     titleHidden: true,
+  },
+  {
+    element: <BannerPrototype />,
+    homeLink: "Banner prototype",
+    icon: LayoutTemplate,
+    path: "/prototype/banner",
+    title: "Patient banner prototype",
   },
   {
     element: <Audit />,
