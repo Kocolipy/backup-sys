@@ -13,6 +13,8 @@
  * one is a dependency decision of its own.
  */
 
+import { isCalendarDate } from "./time";
+
 /** A body that does not have the shape its decoder expects. */
 export class DecodeError extends Error {
   override name = "DecodeError";
@@ -56,6 +58,15 @@ export interface ObjectReader {
 export function decodeArray<T>(value: unknown, decode: (item: unknown) => T, what: string): T[] {
   if (!Array.isArray(value)) throw new DecodeError(`${what} is not an array`);
   return value.map((item: unknown) => decode(item));
+}
+
+/**
+ * `value` read as a calendar date, `YYYY-MM-DD` and a day the calendar has
+ * ({@link isCalendarDate}); `what` names it in the error.
+ */
+export function calendarDate(value: string, what: string): string {
+  if (!isCalendarDate(value)) throw new DecodeError(`${what} is not a date`);
+  return value;
 }
 
 /** Reads `value` as an object; `what` names it in every error a read throws. */

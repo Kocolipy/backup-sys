@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { DecodeError, decodeArray, jsonDecoder, readObject } from "./decode";
+import { calendarDate, DecodeError, decodeArray, jsonDecoder, readObject } from "./decode";
 
 const BODY = {
   name: "ada",
@@ -170,6 +170,19 @@ describe("decodeArray", () => {
 
   it("refuses an array with one bad element", () => {
     expect(refusal(() => decodeArray(["a", 2], asString, "Tags"))).toBe("not a string");
+  });
+});
+
+// Which strings are calendar dates is `isCalendarDate`'s (time.test.ts).
+describe("calendarDate", () => {
+  it("reads a calendar date as it is", () => {
+    expect(calendarDate("2024-02-29", "Visit.date")).toBe("2024-02-29");
+  });
+
+  it("refuses a string that is no calendar date, naming the field", () => {
+    expect(refusal(() => calendarDate("2025-02-30", "Visit.date"))).toBe(
+      "Visit.date is not a date",
+    );
   });
 });
 

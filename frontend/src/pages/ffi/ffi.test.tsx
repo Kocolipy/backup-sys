@@ -258,26 +258,9 @@ describe("FFI", () => {
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
   });
 
-  it("says No patient in context, and reads nothing, with no patient in context", async () => {
-    const { requests } = await renderSignedIn("/ffi", CLINICIAN);
-
-    expect({
-      note: screen.getByText("No patient in context"),
-      reads: ffiReads(requests()),
-    }).toEqual({ note: expect.anything() as unknown, reads: [] });
-  });
-
-  it("says No patient in context, and reads no FFIs, when the patient in context reads as none", async () => {
-    withPatientInContext(TAN_WEI_MING.id);
-    const { requests } = await renderSignedIn("/ffi", CLINICIAN, {
-      [FIRST_PAGE]: page(FOUR_FFIS, 1, 4),
-      [TAN_WEI_MING_READ]: bare(404),
-    });
-
-    expect(await screen.findByText("No patient in context")).toBeInTheDocument();
-    expect(ffiReads(requests())).toEqual([]);
-  });
-
+  // What the patient in context decides — none, a 404, a failed read — is
+  // `ForPatientInContext`'s (for-patient-in-context.test.tsx); held here are
+  // the history and the loading copy this page hands it.
   it("reads the FFIs only once the patient in context has been read", async () => {
     const patient = deferred();
     withPatientInContext(TAN_WEI_MING.id);
@@ -305,20 +288,6 @@ describe("FFI", () => {
       /^Loading FFIs…$/,
     );
     await patient.settle(json(TAN_WEI_MING));
-  });
-
-  it("reads no FFIs, and shows only the patient's failure, when the patient in context cannot be read", async () => {
-    withPatientInContext(TAN_WEI_MING.id);
-    const { requests } = await renderSignedIn("/ffi", CLINICIAN, {
-      [FIRST_PAGE]: page(FOUR_FFIS, 1, 4),
-      [TAN_WEI_MING_READ]: bare(502),
-    });
-
-    expect({
-      alert: (await screen.findByRole("alert")).textContent,
-      noPatient: screen.queryByText("No patient in context"),
-      reads: ffiReads(requests()),
-    }).toEqual({ alert: "Couldn't load patient", noPatient: null, reads: [] });
   });
 
   it("says No patient in context for a patient the source holds none under, and reports nothing", async () => {

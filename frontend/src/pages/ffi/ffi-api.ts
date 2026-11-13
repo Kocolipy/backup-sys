@@ -11,11 +11,11 @@
  */
 
 import type { ReadDeclaration } from "@/auth/declarations";
-import { DecodeError, jsonDecoder, readObject } from "@/lib/decode";
+import { codeParameters } from "@/lib/code-parameters";
+import { calendarDate, jsonDecoder, readObject } from "@/lib/decode";
 import { pageDecoder, pagedPath, type Page, type PageAt } from "@/lib/paging";
 import { type CheckedDateRanges, checkDateRanges } from "@/lib/date-range";
 import { sortParameters, type ColumnSort } from "@/lib/sorting";
-import { isCalendarDate } from "@/lib/time";
 
 // An FFI's five closed sets, each as the API carries it, by its codes, in the
 // order the Filter panel lists them. Each is exported for the SPA–API contract
@@ -131,12 +131,6 @@ const FFI_FIELDS = [
 /** The page size the FFI page asks for, and its pager moves by. */
 export const FFI_HISTORY_PAGE_SIZE = 5;
 
-/** A calendar date, `YYYY-MM-DD`, as the backend sends an FFI's dates. */
-function calendarDate(value: string, what: string): string {
-  if (!isCalendarDate(value)) throw new DecodeError(`${what} is not a date`);
-  return value;
-}
-
 /**
  * An FFI, read strictly: every field is required, each code must be one of
  * its set's, each date a calendar date, and a field the FFI does not have is
@@ -235,28 +229,17 @@ export function countFfiFilters(filters: FfiFilters): number {
   ].filter(Boolean).length;
 }
 
-/**
- * `parameter` once for each of `set`'s codes `chosen` holds, in the set's own
- * order, however they were chosen. It walks the closed set and asks `chosen`
- * of each code, so it reads nothing of `chosen` but whether it holds a code.
- */
-const codes = <C extends string>(
-  parameter: string,
-  set: readonly C[],
-  chosen: readonly C[],
-): string[] => set.filter((code) => chosen.includes(code)).map((code) => `${parameter}=${code}`);
-
 /** The query string `filters` and `sort` ask for, each filter only when set. */
 function historyQuery(filters: FfiFilters, sort: FfiSort | null): string {
   const dates = (["issueDateFrom", "issueDateTo", "expiryDateFrom", "expiryDateTo"] as const)
     .filter((field) => filters[field] !== "")
     .map((field) => `${field}=${filters[field]}`);
   return [
-    ...codes("type", FFI_TYPES, filters.types),
-    ...codes("outcome", FFI_OUTCOMES, filters.outcomes),
+    ...codeParameters("type", FFI_TYPES, filters.types),
+    ...codeParameters("outcome", FFI_OUTCOMES, filters.outcomes),
     ...dates,
-    ...codes("higherAuthority", FFI_HIGHER_AUTHORITIES, filters.higherAuthorities),
-    ...codes("submittingMc", FFI_SUBMITTING_MCS, filters.submittingMcs),
+    ...codeParameters("higherAuthority", FFI_HIGHER_AUTHORITIES, filters.higherAuthorities),
+    ...codeParameters("submittingMc", FFI_SUBMITTING_MCS, filters.submittingMcs),
     ...(filters.status === "all" ? [] : [`status=${filters.status}`]),
     ...sortParameters(sort),
   ].join("&");
