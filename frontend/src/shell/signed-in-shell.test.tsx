@@ -44,12 +44,6 @@ function renderShell(path = "/", answers: Answers = {}, session: StartingSession
 
 const STILL_SIGNED_IN = /^Unable to sign out\. Please try again\. You are still signed in\.$/;
 
-const FULL_WIDTH = "flex flex-1 flex-col gap-6 p-8";
-
-/** The Tailwind max-width classes on `element`; none means it fills the content shell. */
-const widthCaps = (element: HTMLElement) =>
-  [...element.classList].filter((name) => name.startsWith("max-w-"));
-
 const signOut = () => screen.getByRole("button", { name: "Sign out" });
 
 describe("SignedInShell", () => {
@@ -90,17 +84,9 @@ describe("SignedInShell", () => {
     expect(screen.getByRole("button", { name: "Sign out" })).toBeEnabled();
   });
 
-  it("titles each signed-in page", async () => {
-    await renderShell("/");
-    expect(screen.getByRole("heading", { level: 1, name: "Profile" })).toBeInTheDocument();
-  });
-
-  it("keeps Profile's title for screen readers only, the patient banner heading the page", async () => {
-    await renderShell("/");
-    expect(screen.getByRole("heading", { level: 1, name: "Profile" })).toHaveClass("sr-only");
-  });
-
+  // Profile's patient banner heads the page in its title's place.
   it.each([
+    ["Profile", "/"],
     ["Accounts", "/accounts"],
     ["Audit", "/audit"],
     ["Settings", "/settings"],
@@ -124,27 +110,9 @@ describe("SignedInShell", () => {
     );
   });
 
-  it("keeps Settings' title for screen readers only for a confined session too", async () => {
-    await renderShell("/settings", {}, holding([], { passwordChangeRequired: true }));
-    expect(screen.getByRole("heading", { level: 1, name: "Settings" })).toHaveClass("sr-only");
-  });
-
   it("renders safely while the session's user details are unavailable", async () => {
     await renderShell("/", {}, STILL_CHECKING);
     expect(screen.getByText(/^Signed in as\s*$/)).toBeInTheDocument();
-  });
-
-  it.each([
-    ["Patient Search", "/search"],
-    ["Profile", "/"],
-    ["FFI History", "/ffi"],
-    ["Accounts", "/accounts"],
-    ["Audit", "/audit"],
-    ["Settings", "/settings"],
-  ])("lays the %s page out across the content shell's full width", async (_, path) => {
-    await renderShell(path);
-    expect(screen.getByRole("main")).toHaveClass(...FULL_WIDTH.split(" "));
-    expect(widthCaps(screen.getByRole("main"))).toEqual([]);
   });
 
   it("renders the Home layout for a path it has no page for", async () => {

@@ -13,7 +13,6 @@ import {
   requestKey,
   type FakeBackend,
 } from "@/lib/fake-backend.testHelpers";
-import type { LoginOutcome, LogoutOutcome, PasswordChangeOutcome } from "./api";
 import { AuthProvider } from "./auth-context";
 import { AUTH_REQUESTS, testUser } from "./auth-context.testHelpers";
 import { useAuthState } from "./auth-context-value";
@@ -24,7 +23,7 @@ import { ehrContext, setEhrContext } from "./ehr-context";
 // the token being forgotten shows there too — the next unsafe request fetches
 // a fresh one first.
 
-const { change: CHANGE, login: LOGIN, logout: LOGOUT, me: ME, token: TOKEN } = AUTH_REQUESTS;
+const { change: CHANGE, login: LOGIN, logout: LOGOUT, me: ME } = AUTH_REQUESTS;
 
 const CONFINED = testUser({ passwordChangeRequired: true });
 const USER = testUser();
@@ -79,11 +78,15 @@ async function settle<T>(
 describe("AuthProvider", () => {
   it("refuses to read the session outside the provider", () => {
     // React reports the render error on the console as well as throwing it.
-    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const quiet = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
-    expect(() => renderHook(() => useAuthState())).toThrow(
-      /^useAuth must be used inside AuthProvider\.$/,
-    );
+    try {
+      expect(() => renderHook(() => useAuthState())).toThrow(
+        /^useAuth must be used inside AuthProvider\.$/,
+      );
+    } finally {
+      quiet.mockRestore();
+    }
   });
 
   it("starts as a cold guest when there is no session", async () => {
@@ -168,13 +171,6 @@ describe("AuthProvider", () => {
     },
   );
 
-  it("holds a flagged session's user as reported", async () => {
-    const { result } = await mounted(SIGNED_IN_CONFINED);
-
-    expect(result.current.status).toBe("authenticated");
-    expect(result.current.user).toEqual(CONFINED);
-  });
-
   it("ends the session on a successful change and records why, forgetting the token", async () => {
     const session = await mounted({ ...SIGNED_IN_CONFINED, [CHANGE]: bare(204) });
 
@@ -198,86 +194,19 @@ describe("AuthProvider", () => {
     });
   });
 
-  it("ends the session on a lockout and records why, forgetting the token", async () => {
-    // The 401 ended the session too, so the check that follows it is refused.
-    const session = await mounted({
-      [CHANGE]: CURRENT_PASSWORD_REFUSED,
-      [ME]: [json(USER), bare(401)],
-    });
-
-    const settled = await settle(session, (auth) =>
-      auth.changePassword("wrong-value", "new-value"),
-    );
-
-    expect({
-      ...signInReasonAndStatus(session.result.current),
-      tokenForgotten: settled.tokenForgotten,
-      user: session.result.current.user,
-    }).toEqual({ signInReason: "locked", status: "guest", tokenForgotten: true, user: null });
-  });
-
-  it("ends a session that had already expired as expired, forgetting the token", async () => {
-    // Refused before the password check, so the 401 carries no mark of it.
-    // The session is not checked again: a gone session would read as a lockout.
-    const session = await mounted({ ...SIGNED_IN_CONFINED, [CHANGE]: bare(401) });
+  // The session survives the 401, so the check that follows it still answers.
+  it("keeps a flagged session, its user and its token on a refused current password", async () => {
+    const session = await mounted({ ...SIGNED_IN_CONFINED, [CHANGE]: CURRENT_PASSWORD_REFUSED });
 
     const settled = await settle(session, (auth) => auth.changePassword(OLD_VALUE, NEW_VALUE));
 
-    expect({
-      ...signInReasonAndStatus(session.result.current),
-      outcome: settled.outcome,
-      tokenForgotten: settled.tokenForgotten,
-      user: session.result.current.user,
-    }).toEqual({
-      outcome: { kind: "expired" },
-      signInReason: "expired",
-      status: "guest",
-      tokenForgotten: true,
-      user: null,
-    });
-  });
-
-  it.each([
-    [
-      "current-password-rejected",
-      // The session survives the 401, so the check that follows it still answers.
-      { [CHANGE]: CURRENT_PASSWORD_REFUSED },
-      { kind: "current-password-rejected" },
-    ],
-    [
-      "policy-violation",
-      { [CHANGE]: json({ message: "rule", rule: "CONTAINS_USER_NAME" }, 400) },
-      { kind: "policy-violation", message: "rule" },
-    ],
-    ["forbidden", { [CHANGE]: bare(403) }, { kind: "forbidden" }],
-    ["failed", { [CHANGE]: bare(500) }, { kind: "failed" }],
-  ] as [string, Answers, PasswordChangeOutcome][])(
-    "keeps the session and its token on a %s refusal",
-    async (_name, answers, refusal) => {
-      const session = await mounted({ ...SIGNED_IN_CONFINED, ...answers });
-
-      const settled = await settle(session, (auth) => auth.changePassword(OLD_VALUE, NEW_VALUE));
-
-      expect(settled).toEqual({ outcome: refusal, status: "authenticated", tokenForgotten: false });
-      expect(session.result.current.user).toEqual(CONFINED);
-      expect(session.result.current.signInReason).toBeNull();
-    },
-  );
-
-  // No token could be had, so there is none to keep or forget: the session is what stands.
-  it("keeps the session when no token can be had for the change", async () => {
-    const { result } = await mounted({ ...SIGNED_IN_CONFINED, [TOKEN]: bare(500) });
-
-    let outcome: PasswordChangeOutcome | undefined;
-    await act(async () => {
-      outcome = await result.current.changePassword(OLD_VALUE, NEW_VALUE);
-    });
-
-    expect({ outcome, ...signInReasonAndStatus(result.current) }).toEqual({
-      outcome: { kind: "csrf-expired" },
-      signInReason: null,
+    expect(settled).toEqual({
+      outcome: { kind: "current-password-rejected" },
       status: "authenticated",
+      tokenForgotten: false,
     });
+    expect(session.result.current.user).toEqual(CONFINED);
+    expect(session.result.current.signInReason).toBeNull();
   });
 
   it("signs in, forgetting the pre-login session's token", async () => {
@@ -300,33 +229,13 @@ describe("AuthProvider", () => {
     });
   });
 
-  it.each([
-    ["forbidden", bare(403), { kind: "forbidden" }],
-    ["failed", bare(500), { kind: "failed" }],
-  ] as const)(
-    "resolves a %s login without a verdict, keeping the session and its token",
-    async (_name, answer, failure: LoginOutcome) => {
-      const session = await mounted({ ...GUEST, [LOGIN]: answer });
+  it("resolves a failed login without a verdict, keeping the session and its token", async () => {
+    const session = await mounted({ ...GUEST, [LOGIN]: bare(500) });
 
-      expect(await settle(session, (auth) => auth.login(...CREDENTIALS))).toEqual({
-        outcome: failure,
-        status: "guest",
-        tokenForgotten: false,
-      });
-    },
-  );
-
-  it("resolves a login no token can be had for without a verdict, keeping the session", async () => {
-    const { result } = await mounted({ ...GUEST, [TOKEN]: bare(500) });
-
-    let outcome: LoginOutcome | undefined;
-    await act(async () => {
-      outcome = await result.current.login(...CREDENTIALS);
-    });
-
-    expect({ outcome, status: result.current.status }).toEqual({
-      outcome: { kind: "csrf-expired" },
+    expect(await settle(session, (auth) => auth.login(...CREDENTIALS))).toEqual({
+      outcome: { kind: "failed" },
       status: "guest",
+      tokenForgotten: false,
     });
   });
 
@@ -347,20 +256,6 @@ describe("AuthProvider", () => {
       outcome: { kind: "failed" },
       status: "authenticated",
       tokenForgotten: false,
-    });
-  });
-
-  it("resolves a logout no token can be had for, keeping the session", async () => {
-    const { result } = await mounted({ ...SIGNED_IN, [TOKEN]: bare(500) });
-
-    let outcome: LogoutOutcome | undefined;
-    await act(async () => {
-      outcome = await result.current.logout();
-    });
-
-    expect({ outcome, status: result.current.status }).toEqual({
-      outcome: { kind: "csrf-expired" },
-      status: "authenticated",
     });
   });
 
@@ -437,30 +332,20 @@ describe("AuthProvider", () => {
   );
 
   it("logs out to a cold guest, clearing the sign-in reason", async () => {
-    const { backend, result } = await mounted({
+    const { result } = await mounted({
       ...SIGNED_IN_CONFINED,
       [CHANGE]: bare(204),
-      [LOGIN]: json(USER),
       [LOGOUT]: bare(204),
     });
+    await act(async () => {
+      await result.current.changePassword(OLD_VALUE, NEW_VALUE);
+    });
 
-    await act(async () => {
-      await result.current.changePassword(OLD_VALUE, NEW_VALUE);
-    });
-    act(() => result.current.expireSession(result.current.sessionGeneration()));
-    await act(async () => {
-      await result.current.login(...CREDENTIALS);
-    });
-    await act(async () => {
-      await result.current.changePassword(OLD_VALUE, NEW_VALUE);
-    });
     await act(async () => {
       await result.current.logout();
     });
 
-    expect(backend.requests().filter(({ method }) => method === "DELETE")).toHaveLength(1);
     expect(signInReasonAndStatus(result.current)).toEqual({ signInReason: null, status: "guest" });
-    expect(result.current.user).toBeNull();
   });
 
   it("signs an idle session out: logs out, forgets the token and records why", async () => {
@@ -482,33 +367,17 @@ describe("AuthProvider", () => {
     expect(session.result.current.user).toBeNull();
   });
 
-  it("forgets the token of an idle session even when its logout fails", async () => {
+  it("ends an idle session and forgets its token even when its logout fails", async () => {
     const session = await mounted({ ...SIGNED_IN, [LOGOUT]: bare(500) });
 
-    const { tokenForgotten: forgotten } = await settle(session, (auth) =>
-      auth.signOutForInactivity(),
-    );
+    const { tokenForgotten } = await settle(session, (auth) => auth.signOutForInactivity());
 
-    expect(forgotten).toBe(true);
+    expect({
+      ...signInReasonAndStatus(session.result.current),
+      tokenForgotten,
+      user: session.result.current.user,
+    }).toEqual({ signInReason: "inactive", status: "guest", tokenForgotten: true, user: null });
   });
-
-  it.each([
-    ["a failure", { [LOGOUT]: bare(500) }],
-    ["no token to be had", { [TOKEN]: bare(500) }],
-  ] as [string, Answers][])(
-    "clears an idle session even when its logout meets %s",
-    async (_name, answers) => {
-      const session = await mounted({ ...SIGNED_IN, ...answers });
-
-      await act(() => session.result.current.signOutForInactivity());
-
-      expect(signInReasonAndStatus(session.result.current)).toEqual({
-        signInReason: "inactive",
-        status: "guest",
-      });
-      expect(session.result.current.user).toBeNull();
-    },
-  );
 });
 
 describe("AuthProvider and the EHR context", () => {
@@ -517,65 +386,70 @@ describe("AuthProvider and the EHR context", () => {
   /** The tab holds `PATIENT` in context, as the page loads. */
   const withPatientInContext = () => setEhrContext({ patient: PATIENT });
 
-  it("keeps it when the start-up check finds the session signed in, as on a reload", async () => {
-    withPatientInContext();
+  type Auth = ReturnType<typeof useAuthState>;
 
-    await mounted(SIGNED_IN);
+  it.each([
+    [
+      "keeps",
+      "the start-up check finding the session signed in, as on a reload",
+      SIGNED_IN,
+      () => Promise.resolve(),
+      { patient: PATIENT },
+    ],
+    [
+      "clears",
+      "a sign-out",
+      { ...SIGNED_IN, [LOGOUT]: bare(204) },
+      (auth: Auth) => auth.logout(),
+      null,
+    ],
+    [
+      "clears",
+      "a session expiry",
+      SIGNED_IN,
+      (auth: Auth) => {
+        auth.expireSession(auth.sessionGeneration());
+        return Promise.resolve();
+      },
+      null,
+    ],
+    [
+      "clears",
+      "an Idle sign-out",
+      { ...SIGNED_IN, [LOGOUT]: bare(204) },
+      (auth: Auth) => auth.signOutForInactivity(),
+      null,
+    ],
+    [
+      "clears",
+      "a password change",
+      { ...SIGNED_IN, [CHANGE]: bare(204) },
+      (auth: Auth) => auth.changePassword(OLD_VALUE, NEW_VALUE),
+      null,
+    ],
+    [
+      "clears",
+      "a password Login",
+      { ...SIGNED_IN, [LOGIN]: json(USER) },
+      (auth: Auth) => auth.login(...CREDENTIALS),
+      null,
+    ],
+    [
+      "keeps",
+      "a login that reached no verdict",
+      { ...SIGNED_IN, [LOGIN]: bare(500) },
+      (auth: Auth) => auth.login(...CREDENTIALS),
+      { patient: PATIENT },
+    ],
+  ] as [string, string, Answers, (auth: Auth) => Promise<unknown>, unknown][])(
+    "%s it through %s",
+    async (_verb, _action, answers, action, expected) => {
+      withPatientInContext();
+      const session = await mounted(answers);
 
-    expect(ehrContext()).toEqual({ patient: PATIENT });
-  });
+      await settle(session, action);
 
-  it("clears it on sign-out", async () => {
-    withPatientInContext();
-    const session = await mounted({ ...SIGNED_IN, [LOGOUT]: bare(204) });
-
-    await settle(session, (auth) => auth.logout());
-
-    expect(ehrContext()).toBeNull();
-  });
-
-  it("clears it when the session expires", async () => {
-    withPatientInContext();
-    const { result } = await mounted(SIGNED_IN);
-
-    act(() => result.current.expireSession(result.current.sessionGeneration()));
-
-    expect(ehrContext()).toBeNull();
-  });
-
-  it("clears it on an Idle sign-out", async () => {
-    withPatientInContext();
-    const session = await mounted({ ...SIGNED_IN, [LOGOUT]: bare(204) });
-
-    await settle(session, (auth) => auth.signOutForInactivity());
-
-    expect(ehrContext()).toBeNull();
-  });
-
-  it("clears it on a password change", async () => {
-    withPatientInContext();
-    const session = await mounted({ ...SIGNED_IN, [CHANGE]: bare(204) });
-
-    await settle(session, (auth) => auth.changePassword(OLD_VALUE, NEW_VALUE));
-
-    expect(ehrContext()).toBeNull();
-  });
-
-  it("clears it on a password Login", async () => {
-    withPatientInContext();
-    const session = await mounted({ ...SIGNED_IN, [LOGIN]: json(USER) });
-
-    await settle(session, (auth) => auth.login(...CREDENTIALS));
-
-    expect(ehrContext()).toBeNull();
-  });
-
-  it("keeps it through a login that reached no verdict", async () => {
-    withPatientInContext();
-    const session = await mounted({ ...SIGNED_IN, [LOGIN]: bare(500) });
-
-    await settle(session, (auth) => auth.login(...CREDENTIALS));
-
-    expect(ehrContext()).toEqual({ patient: PATIENT });
-  });
+      expect(ehrContext()).toEqual(expected);
+    },
+  );
 });

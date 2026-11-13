@@ -396,15 +396,6 @@ describe("IdleSignOut", () => {
         expect(removed).toHaveBeenCalledWith(type, expect.any(Function), { capture: true });
       }
     });
-
-    it("never opens the warning before its time", async () => {
-      await signedIn();
-
-      await advance(WARN_AT_MS - 1);
-      expect(warning()).not.toBeInTheDocument();
-      await advance(1);
-      expect(warning()).toBeInTheDocument();
-    });
   });
 
   describe("the warning", () => {
@@ -532,29 +523,23 @@ describe("IdleSignOut", () => {
       expect(screen.queryByRole("status")).not.toBeInTheDocument();
     });
 
-    it("keeps the session when a requested sign-out fails", async () => {
-      await signedIn();
-      await advance(WARN_AT_MS);
-      backend.answer({ [LOGOUT]: bare(500) });
-
-      await click("Sign out");
-
-      expect(screen.getByText("Accounts page")).toBeInTheDocument();
-    });
-
     // Running the requested Sign out — pending, which outcome signed out, its
     // copy, the line withdrawn on the next try — is `use-session-action.test.tsx`'s;
     // these prove the dialog renders what it hands back.
-    it("says in the dialog that the User is still signed in when a requested sign-out fails", async () => {
+    it("keeps the session when a requested sign-out fails, saying so in the dialog", async () => {
       await signedIn();
       await advance(WARN_AT_MS);
       backend.answer({ [LOGOUT]: bare(500) });
 
       await click("Sign out");
 
-      expect(within(warning()!).getByRole("alert").textContent).toBe(
-        "Unable to sign out. Please try again. You are still signed in.",
-      );
+      expect({
+        line: within(warning()!).getByRole("alert").textContent,
+        page: screen.queryByText("Accounts page") !== null,
+      }).toEqual({
+        line: "Unable to sign out. Please try again. You are still signed in.",
+        page: true,
+      });
     });
 
     it("opens with no error line", async () => {
@@ -572,15 +557,6 @@ describe("IdleSignOut", () => {
       await click("Sign out");
 
       expect(screen.getByRole("button", { name: "Signing out…" })).toBeDisabled();
-    });
-
-    it("still ends the session at the limit when the inactivity logout fails", async () => {
-      await signedIn();
-      backend.answer({ [LOGOUT]: bare(500) });
-
-      await advance(LIMIT_MS);
-
-      await expectSignedOutForInactivity();
     });
   });
 

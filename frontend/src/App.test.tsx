@@ -26,6 +26,8 @@ const SIGNED_IN: Answers = { [ME]: json(testUser()) };
 
 /** A Medical Officer's session: unflagged, holding `patient:read` alone. */
 const MEDICAL_OFFICER = testUser({ permissions: ["patient:read"], username: "mo1" });
+/** The Medical Officer's signed-in session. */
+const PATIENT_READER: Answers = { [ME]: json(MEDICAL_OFFICER) };
 
 /** Patient Search, the landing page of a session holding `patient:read`. */
 const patientSearch = () => screen.findByRole("heading", { name: "Patient Search" });
@@ -90,6 +92,22 @@ describe("App", () => {
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 
+  // The token held died with the session, so the logout is refused 403; the
+  // transport's retry under a fresh token meets the session's absence. The User
+  // asked to be signed out and is, with nothing to report.
+  it("takes the User to login with no Sign-in reason when Sign out finds the session expired", async () => {
+    renderApp({ ...SIGNED_IN, [LOGOUT]: [bare(403), bare(401)] });
+
+    await userEvent.setup().click(await screen.findByRole("button", { name: "Sign out" }));
+
+    expect(await screen.findByRole("heading", { name: "Welcome back" })).toBeInTheDocument();
+    expect([
+      window.location.pathname,
+      screen.queryByRole("status"),
+      screen.queryByRole("alert"),
+    ]).toEqual(["/login", null, null]);
+  });
+
   it("returns to login when a page discovers an expired session", async () => {
     renderApp(
       {
@@ -126,49 +144,22 @@ describe("App", () => {
     ]);
   });
 
-  it("redirects a User holding no Accounts Permission away from account administration", async () => {
-    renderApp(SIGNED_IN, "/accounts");
+  it.each([
+    ["a User holding no Accounts Permission", "/accounts", "Profile", SIGNED_IN, "/"],
+    ["a User holding no audit:read", "/audit", "Profile", SIGNED_IN, "/"],
+    ["a User holding no patient:read", "/search", "Profile", SIGNED_IN, "/"],
+    ["a User holding no patient:read", "/ffi", "Profile", SIGNED_IN, "/"],
+    ["a session holding patient:read", "/search", "Patient Search", PATIENT_READER, "/search"],
+    ["a session holding patient:read", "/ffi", "FFI History", PATIENT_READER, "/ffi"],
+  ] as [string, string, string, Answers, string][])(
+    "routes %s visiting %s to %s",
+    async (_session, path, heading, answers, landed) => {
+      renderApp(answers, path);
 
-    expect(await screen.findByRole("heading", { name: "Profile" })).toBeInTheDocument();
-    expect(window.location.pathname).toBe("/");
-  });
-
-  it("redirects a User holding no audit:read away from the audit trail", async () => {
-    renderApp(SIGNED_IN, "/audit");
-
-    expect(await screen.findByRole("heading", { name: "Profile" })).toBeInTheDocument();
-    expect(window.location.pathname).toBe("/");
-  });
-
-  it("redirects a User holding no patient:read away from Patient Search to Home", async () => {
-    renderApp(SIGNED_IN, "/search");
-
-    expect(await screen.findByRole("heading", { name: "Profile" })).toBeInTheDocument();
-    expect(window.location.pathname).toBe("/");
-  });
-
-  it("redirects a User holding no patient:read away from FFI to Home", async () => {
-    renderApp(SIGNED_IN, "/ffi");
-
-    expect(await screen.findByRole("heading", { name: "Profile" })).toBeInTheDocument();
-    expect(window.location.pathname).toBe("/");
-  });
-
-  it("renders FFI for a session holding patient:read", async () => {
-    renderApp({ [ME]: json(MEDICAL_OFFICER) }, "/ffi");
-
-    expect(
-      await screen.findByRole("heading", { level: 1, name: "FFI History" }),
-    ).toBeInTheDocument();
-    expect(window.location.pathname).toBe("/ffi");
-  });
-
-  it("renders Patient Search for a session holding patient:read", async () => {
-    renderApp({ [ME]: json(MEDICAL_OFFICER) }, "/search");
-
-    expect(await patientSearch()).toBeInTheDocument();
-    expect(window.location.pathname).toBe("/search");
-  });
+      expect(await screen.findByRole("heading", { level: 1, name: heading })).toBeInTheDocument();
+      expect(window.location.pathname).toBe(landed);
+    },
+  );
 
   it.each(["/no-such-page", "/login", "/accounts"])(
     "lands a session holding patient:read on Patient Search from %s",
@@ -223,46 +214,20 @@ describe("App", () => {
     ).toBeInTheDocument();
   });
 
+  // What each panel reads and shows is the Accounts suite's; this proves the route.
   it("renders account administration for a Superuser", async () => {
     renderApp(
       {
-        // Every Permission, as the Superuser Group confers them; no role field.
+        // Every Permission, as the Superuser Group confers them.
         [ME]: json(testUser({ permissions: EVERY_PERMISSION, username: "grace" })),
-        "GET /api/admin/accounts?startIndex=1&count=20": json({
-          startIndex: 1,
-          totalResults: 1,
-          users: [
-            {
-              active: true,
-              admin: true,
-              bootstrapAdmin: false,
-              createdAt: "2026-01-02T03:04:05Z",
-              displayName: null,
-              groups: [],
-              hasPassword: true,
-              id: "00000000-0000-4000-8000-000000000001",
-              lastAuthenticatedAt: null,
-              locked: false,
-              lockCause: null,
-              passwordChangeRequired: false,
-              userName: "grace",
-            },
-          ],
-        }),
-        "GET /api/admin/connectors": json([]),
-        "GET /api/admin/groups?startIndex=1&count=20": json({
-          groups: [],
-          startIndex: 1,
-          totalResults: 0,
-        }),
+        "GET /api/admin/accounts*": bare(503),
+        "GET /api/admin/connectors": bare(503),
+        "GET /api/admin/groups*": bare(503),
       },
       "/accounts",
     );
 
     expect(await screen.findByRole("heading", { name: "Accounts" })).toBeInTheDocument();
-    expect(await screen.findByRole("rowheader", { name: /^grace/ })).toBeInTheDocument();
-    expect(await screen.findByText("No groups are provisioned.")).toBeInTheDocument();
-    expect(await screen.findByText("No connectors exist.")).toBeInTheDocument();
   });
 });
 

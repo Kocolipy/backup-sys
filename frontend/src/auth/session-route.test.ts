@@ -225,65 +225,44 @@ describe("resolveSessionRoute", () => {
       input({ pathname: LOGIN_PATH, requires: "guest", session: guest("expired") }),
       { kind: "render" },
     ],
+    [
+      "records the visited path, not a fixed one, as the return destination",
+      input({ pathname: "/reports/42", session: guest() }),
+      { kind: "redirect", state: { from: "/reports/42" }, to: LOGIN_PATH },
+    ],
+    [
+      "renders a Permission-guarded route for a session holding its Permission",
+      input({ pathname: "/accounts", permissions: ["user:read"], requires: ACCOUNTS }),
+      { kind: "render" },
+    ],
+    [
+      "routes a session holding none of its Permissions, and no patient:read, to Home",
+      input({
+        pathname: "/accounts",
+        // Real Permissions, just not this route's: an Auditor and a Monitoring account.
+        permissions: ["audit:read", "ops:read"],
+        requires: ACCOUNTS,
+      }),
+      toHome,
+    ],
+    [
+      "routes a session holding none of its Permissions but patient:read to Patient Search",
+      input({ pathname: "/accounts", permissions: ["patient:read"], requires: ACCOUNTS }),
+      toSearch,
+    ],
+    [
+      "routes a session without patient:read off Patient Search to Home",
+      input({ pathname: "/search", permissions: [], requires: { anyOf: ["patient:read"] } }),
+      toHome,
+    ],
+    [
+      "sends a guest on a Permission-guarded route to login with its return destination",
+      input({ pathname: "/accounts", requires: ACCOUNTS, session: guest() }),
+      { kind: "redirect", state: { from: "/accounts" }, to: LOGIN_PATH },
+    ],
   ];
 
   it.each(cases)("%s", (_name, given, expected) => {
     expect(resolveSessionRoute(given)).toEqual(expected);
-  });
-
-  it("records the visited path, not a fixed one, as the return destination", () => {
-    const route = resolveSessionRoute(input({ pathname: "/reports/42", session: guest() }));
-    expect(route).toEqual({
-      kind: "redirect",
-      state: { from: "/reports/42" },
-      to: LOGIN_PATH,
-    });
-  });
-
-  it("renders a Permission-guarded route for a session holding its Permission", () => {
-    expect(
-      resolveSessionRoute(
-        input({ pathname: "/accounts", permissions: ["user:read"], requires: ACCOUNTS }),
-      ),
-    ).toEqual({ kind: "render" });
-  });
-
-  it("routes a session holding none of its Permissions, and no patient:read, to Home", () => {
-    expect(
-      resolveSessionRoute(
-        input({
-          pathname: "/accounts",
-          // Real Permissions, just not this route's: an Auditor and a Monitoring account.
-          permissions: ["audit:read", "ops:read"],
-          requires: ACCOUNTS,
-        }),
-      ),
-    ).toEqual(toHome);
-  });
-
-  it("routes a session holding none of its Permissions but patient:read to Patient Search", () => {
-    expect(
-      resolveSessionRoute(
-        input({ pathname: "/accounts", permissions: ["patient:read"], requires: ACCOUNTS }),
-      ),
-    ).toEqual(toSearch);
-  });
-
-  it("routes a session without patient:read off Patient Search to Home", () => {
-    expect(
-      resolveSessionRoute(
-        input({ pathname: "/search", permissions: [], requires: { anyOf: ["patient:read"] } }),
-      ),
-    ).toEqual(toHome);
-  });
-
-  it("sends a guest on a Permission-guarded route to login with its return destination", () => {
-    expect(
-      resolveSessionRoute(input({ pathname: "/accounts", requires: ACCOUNTS, session: guest() })),
-    ).toEqual({
-      kind: "redirect",
-      state: { from: "/accounts" },
-      to: LOGIN_PATH,
-    });
   });
 });

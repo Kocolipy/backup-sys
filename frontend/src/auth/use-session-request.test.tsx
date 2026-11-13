@@ -34,19 +34,17 @@ describe("useSessionRequest", () => {
     vi.mocked(state.expireSession).mockReset();
   });
 
-  it("passes a successful result through untouched", async () => {
-    const { send } = request({ "GET /api/example": json(7) });
-
-    await expect(send("/api/example", {}, decode)).resolves.toEqual({ data: 7, kind: "ok" });
-    expect(state.expireSession).not.toHaveBeenCalled();
-  });
-
-  it("sends the path and request it is handed, and reads the answer with its decoder", async () => {
+  it("sends the path and request it is handed, passing the decoded success through untouched", async () => {
     const { requests, send } = request({ "POST /api/example/change": json(1) });
 
     const result = await send("/api/example/change", { method: "POST" }, decode);
 
-    expect({ requests: requests(), result }).toEqual({
+    expect({
+      expired: vi.mocked(state.expireSession).mock.calls.length,
+      requests: requests(),
+      result,
+    }).toEqual({
+      expired: 0,
       requests: [{ method: "POST", path: "/api/example/change" }],
       result: { data: 1, kind: "ok" },
     });
@@ -68,24 +66,23 @@ describe("useSessionRequest", () => {
   });
 
   it.each([
-    ["csrf-expired", { "GET /api/auth/csrf": bare(500) }, { method: "POST" }],
-    ["forbidden", { "GET /api/example": bare(403) }, {}],
-  ] as const)("leaves a %s result for the caller to report", async (kind, answers, init) => {
-    const { send } = request(answers);
+    [
+      "csrf-expired",
+      { "GET /api/auth/csrf": bare(500) },
+      { method: "POST" },
+      { kind: "csrf-expired" },
+    ],
+    ["forbidden", { "GET /api/example": bare(403) }, {}, { kind: "forbidden" }],
+    ["failed", { "GET /api/example": bare(503) }, {}, { kind: "failed", status: 503 }],
+  ] as const)(
+    "leaves a %s result for the caller to report",
+    async (_kind, answers, init, result) => {
+      const { send } = request(answers);
 
-    await expect(send("/api/example", init, decode)).resolves.toEqual({ kind });
-    expect(state.expireSession).not.toHaveBeenCalled();
-  });
-
-  it("leaves a failed result for the caller to report", async () => {
-    const { send } = request({ "GET /api/example": bare(503) });
-
-    await expect(send("/api/example", {}, decode)).resolves.toEqual({
-      kind: "failed",
-      status: 503,
-    });
-    expect(state.expireSession).not.toHaveBeenCalled();
-  });
+      await expect(send("/api/example", init, decode)).resolves.toEqual(result);
+      expect(state.expireSession).not.toHaveBeenCalled();
+    },
+  );
 });
 
 // Whose `401` it is: the hook runs inside the real provider here, over the

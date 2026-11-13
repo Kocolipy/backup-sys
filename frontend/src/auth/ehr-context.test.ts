@@ -17,7 +17,7 @@ describe("the EHR context", () => {
     expect(ehrContext()).toEqual({ patient: TAN_WEI_MING });
   });
 
-  it("is replaced by every new context, not merged with the one before", () => {
+  it("is replaced by every new context, not merged with the one before, even one naming nothing", () => {
     setEhrContext({ patient: TAN_WEI_MING });
     setEhrContext({});
 
@@ -59,12 +59,6 @@ describe("the EHR context", () => {
     clearEhrContext();
 
     expect(ehrContext()).toBeNull();
-  });
-
-  it("is present, naming nothing, once set to nothing", () => {
-    setEhrContext({});
-
-    expect(ehrContext()).toEqual({});
   });
 
   it("is the same value on every read until it changes", () => {

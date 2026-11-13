@@ -144,10 +144,10 @@ describe("the user decoder", () => {
     await expect(decodeWithCall(0, 2, confined)).resolves.toStrictEqual(confined);
   });
 
-  it("reads the change-required flag from the login response", async () => {
-    const [username, password] = TEST_LOGIN;
-    await login(username, password);
-    await expect(decodeWithCall(0, 2, confined)).resolves.toStrictEqual(confined);
+  it("reads the login response as the session check's user: flag, Superuser status and Groups", async () => {
+    const reported = { ...confined, groups: ["Auditor"], superuser: true };
+    await login(...TEST_LOGIN);
+    await expect(decodeWithCall(0, 2, reported)).resolves.toStrictEqual(reported);
   });
 
   it.each([true, false])(
@@ -159,13 +159,6 @@ describe("the user decoder", () => {
       });
     },
   );
-
-  it("reads a session's Superuser status from the login response", async () => {
-    await login(...TEST_LOGIN);
-    await expect(decodeWithCall(0, 2, { ...confined, superuser: true })).resolves.toMatchObject({
-      superuser: true,
-    });
-  });
 
   it("reads an unflagged session's Permissions, in the order reported", async () => {
     await getCurrentUser();
@@ -195,13 +188,6 @@ describe("the user decoder", () => {
     await expect(
       decodeWithCall(0, 2, { ...confined, groups: ["Helpdesk", "auditor", "Ward 7B"] }),
     ).resolves.toMatchObject({ groups: ["Helpdesk", "auditor", "Ward 7B"] });
-  });
-
-  it("reads the session's Groups from the login response", async () => {
-    await login(...TEST_LOGIN);
-    await expect(decodeWithCall(0, 2, { ...confined, groups: ["Auditor"] })).resolves.toMatchObject(
-      { groups: ["Auditor"] },
-    );
   });
 
   // That PERMISSIONS is exactly what the backend can grant a session is held

@@ -113,17 +113,7 @@ describe("useSessionAction", () => {
   });
 
   describe("an outcome that leaves the visitor on the page", () => {
-    it("is the one line of copy the page shows", async () => {
-      const { result } = await renderAction("logout", { [LOGOUT]: bare(500) });
-
-      await act(() => result.current.action.run());
-
-      expect(result.current.action.error).toBe(
-        "Unable to sign out. Please try again. You are still signed in.",
-      );
-    });
-
-    it("resolves the run as one that left the visitor on the page", async () => {
+    it("is the one line of copy the page shows, the run resolving as one that stayed", async () => {
       const { result } = await renderAction("logout", { [LOGOUT]: bare(500) });
 
       let settled: SessionActionResult | undefined;
@@ -131,7 +121,10 @@ describe("useSessionAction", () => {
         settled = await result.current.action.run();
       });
 
-      expect(settled).toBe("stayed");
+      expect({ error: result.current.action.error, settled }).toEqual({
+        error: "Unable to sign out. Please try again. You are still signed in.",
+        settled: "stayed",
+      });
     });
 
     it("is withdrawn as soon as the next run starts", async () => {
@@ -195,24 +188,27 @@ describe("useSessionAction", () => {
       ],
     ];
 
-    it.each(moving)("shows nothing for %s: the guards move the visitor on", async (_n, a, name) => {
-      const { result } = await renderAction(name, a);
+    it.each(moving)(
+      "resolves %s as one that moved the visitor on, showing nothing: the guards move them",
+      async (_n, a, name) => {
+        const { result } = await renderAction(name, a);
 
-      await act(() => runAny(result));
+        let settled: SessionActionResult | undefined;
+        await act(async () => {
+          settled = await runAny(result);
+        });
 
-      expect(result.current.action).toMatchObject({ error: null, pending: false });
-    });
-
-    it.each(moving)("resolves %s as one that moved the visitor on", async (_n, a, name) => {
-      const { result } = await renderAction(name, a);
-
-      let settled: SessionActionResult | undefined;
-      await act(async () => {
-        settled = await runAny(result);
-      });
-
-      expect(settled).toBe("moved-on");
-    });
+        expect({
+          error: result.current.action.error,
+          pending: result.current.action.pending,
+          settled,
+        }).toEqual({
+          error: null,
+          pending: false,
+          settled: "moved-on",
+        });
+      },
+    );
 
     it("withdraws an earlier refusal's line", async () => {
       const { result } = await renderAction("logout", { [LOGOUT]: [bare(500), bare(204)] });
