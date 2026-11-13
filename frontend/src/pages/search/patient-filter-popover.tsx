@@ -113,7 +113,7 @@ export function PatientFilterPopover({
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-md max-w-screen">
+      <PopoverContent align="end" className="w-64 max-w-screen">
         <PatientFilterForm
           applied={applied}
           onApply={(filters) => {
