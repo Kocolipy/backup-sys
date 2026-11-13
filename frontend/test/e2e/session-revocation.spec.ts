@@ -1,23 +1,24 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
 
-import { adminRequest, submitLogin } from "./auth.helpers";
+import { adminRequest, EXPIRED_NOTICE, submitLogin, submitPasswordChange } from "./auth.helpers";
 import {
+  deprovisionGroup,
   deprovisionUser,
   E2E_PREFIX,
   freshBrowser,
   OWN_PASSWORD,
+  provisionGroup,
   provisionUser,
   runId,
-  scimPatch,
   settlePassword,
   workerConnector,
 } from "./scim.helpers";
 
 /**
  * Sessions ended from somewhere other than the browser holding them, seen from
- * that browser: a second sign-in as the same User (one session per User),
- * a SCIM write to the User the backend revokes sessions for after commit (a
- * deactivation), and the deletion of a Group carrying Permissions.
+ * that browser: a second sign-in as the same User (one session per User), and
+ * a SCIM write the backend revokes sessions for after commit — the deletion of
+ * a Group carrying Permissions.
  *
  * The backend's integration tests prove which writes delete the sessions —
  * deactivation, deletion, a password replace, a rename and removal from a Group
@@ -26,8 +27,11 @@ import {
  * browser can show is the SPA's reaction, the same whatever ended the session:
  * the next request the page makes is refused, and the User lands on the login
  * page TOLD their session ended, rather than on a broken page or a silent
- * sign-in form. A Group's deletion is here as well because no backend
- * integration test revokes through it against the real session store.
+ * sign-in form. A Group's deletion is the SCIM write here because no backend
+ * integration test revokes through it against the real session store, and a
+ * deactivated User's next sign-in is refused, and answered as every refused
+ * sign-in is, by the backend's own suites (`LoginLockoutTests`,
+ * `AuthControllerTests`).
  *
  * Every User is provisioned here and deleted in a `finally`; the seeded
  * identities, whose sessions the other projects replay, are never touched.
@@ -36,7 +40,6 @@ import {
 const RUN = runId();
 const connector = workerConnector("revocation");
 
-const EXPIRED_NOTICE = "Your session ended. Please sign in again.";
 /** The new password a revoked session's change asks for, which is never applied. */
 const UNAPPLIED_PASSWORD = "Never-Applied-Change-4k";
 
@@ -82,10 +85,7 @@ async function park(page: Page) {
  * Signing in again returns the User to Settings, where it ended.
  */
 async function expectNextRequestEndsSession(page: Page) {
-  await page.getByLabel("Current password").fill(OWN_PASSWORD);
-  await page.getByLabel("New password", { exact: true }).fill(UNAPPLIED_PASSWORD);
-  await page.getByLabel("Confirm new password").fill(UNAPPLIED_PASSWORD);
-  await page.getByRole("button", { name: "Change password" }).click();
+  await submitPasswordChange(page, OWN_PASSWORD, UNAPPLIED_PASSWORD);
   await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
   await expect(page.getByRole("status")).toHaveText(EXPIRED_NOTICE);
   expect((await page.request.get("/api/auth/me")).status()).toBe(401);
@@ -115,35 +115,6 @@ test("a second sign-in as the same User ends the first browser's session", async
   });
 });
 
-test("a SCIM deactivation ends the User's session and refuses the next sign-in", async ({
-  browser,
-}) => {
-  test.setTimeout(90_000);
-  await withUser("deactivated", async (userName, id) => {
-    const page = await signedInBrowser(browser, userName);
-    try {
-      await park(page);
-
-      const patched = await scimPatch(connector.scim, `/scim/v2/Users/${id}`, [
-        { op: "replace", path: "active", value: false },
-      ]);
-      expect(patched.status(), "deactivating over SCIM").toBe(200);
-
-      await expectNextRequestEndsSession(page);
-
-      // Signing in again is refused with the generic message: the login page
-      // does not reveal that the account exists but is inactive.
-      await submitLogin(page, userName, OWN_PASSWORD);
-      await expect(page.getByRole("alert")).toHaveText("The username or password is incorrect.");
-      await expect(page).toHaveURL(/\/login$/);
-    } finally {
-      await page.context().close();
-    }
-  });
-});
-
-const GROUP_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:Group";
-
 test("deleting a Group carrying Permissions over SCIM signs its member's open SPA session out", async ({
   browser,
   page: adminPage,
@@ -153,11 +124,7 @@ test("deleting a Group carrying Permissions over SCIM signs its member's open SP
   await withUser("group-deleted", async (userName, id) => {
     // A Group of this test's own, carrying audit:read: the Superuser sets what it confers.
     const groupName = `${E2E_PREFIX}disposable-${RUN}`;
-    const created = await connector.scim.post("/scim/v2/Groups", {
-      data: { displayName: groupName, members: [{ value: id }], schemas: [GROUP_SCHEMA] },
-    });
-    expect(created.status(), `creating ${groupName}`).toBe(201);
-    const groupId = ((await created.json()) as { id: string }).id;
+    const groupId = await provisionGroup(connector.scim, groupName, [id]);
     const groupPath = `/scim/v2/Groups/${groupId}`;
     const granted = await adminRequest(
       adminPage,
@@ -193,8 +160,7 @@ test("deleting a Group carrying Permissions over SCIM signs its member's open SP
       expect((await page.request.get("/api/admin/audit-events")).status()).toBe(403);
     } finally {
       await page.context().close();
-      const leftover = await connector.scim.delete(groupPath);
-      expect([204, 404], `deleting ${groupName}`).toContain(leftover.status());
+      await deprovisionGroup(connector.scim, groupId);
     }
   });
 });

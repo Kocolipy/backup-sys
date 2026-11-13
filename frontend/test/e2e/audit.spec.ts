@@ -11,19 +11,13 @@ import {
   outcomeBadge,
   selectAuditOperations,
 } from "./audit.helpers";
+import { ADMIN_USERNAME, LOCKOUT_MAX_ATTEMPTS, postAdminAction, userIdOf } from "./auth.helpers";
 import {
-  ADMIN_USERNAME,
-  LOCKOUT_MAX_ATTEMPTS,
-  postAdminAction,
-  submitLoginViaApi,
-  userIdOf,
-} from "./auth.helpers";
-import {
-  anonymousApi,
   deprovisionUser,
   E2E_PREFIX,
   FIXTURE_GROUPS,
   provisionUser,
+  refuseLogins,
   rowOf,
   searchCard,
   runId,
@@ -68,14 +62,7 @@ async function withRefusedLoginUser(
   const id = await provisionUser(connector.scim, userName);
   try {
     await settlePassword(userName);
-    const guesser = await anonymousApi();
-    try {
-      for (let attempt = 0; attempt < refusals; attempt += 1) {
-        expect((await submitLoginViaApi(guesser, userName, "not-the-password")).status()).toBe(401);
-      }
-    } finally {
-      await guesser.dispose();
-    }
+    await refuseLogins(userName, refusals);
     await body(id);
   } finally {
     await deprovisionUser(connector.scim, id);

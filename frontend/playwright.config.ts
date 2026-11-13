@@ -123,7 +123,7 @@ export default defineConfig({
     {
       name: "admin",
       testMatch:
-        /(?:home|session|session-revocation|idle-sign-out|login-lockout|deleted-user-refusal|accounts-admin|token-permissions|change-password|audit|group-permissions|group-members|accounts-paging|stale-401)\.spec\.ts/,
+        /(?:home|session|session-revocation|idle-sign-out|login-lockout|accounts-admin|change-password|audit|group-permissions|group-members|accounts-paging|stale-401)\.spec\.ts/,
       // After the `user` project, not beside it: this project drives the
       // administration surface, and ordering it last keeps any future spec that
       // acts on a seeded identity from pulling a session out from under the
@@ -150,8 +150,8 @@ export default defineConfig({
     {
       name: "dormancy",
       testMatch: /dormancy\.spec\.ts/,
-      // Last and alone: it signs in as the Account admin fixture User, as
-      // `dev-roles.spec.ts` does, and consumes the `dormant`
+      // Last and alone: it signs in as the Helpdesk and Auditor fixture Users,
+      // the Auditor as `dev-roles.spec.ts` does, and consumes the `dormant`
       // fixture's locked state, which only a backend restart re-arms.
       dependencies: ["guest"],
       use: {

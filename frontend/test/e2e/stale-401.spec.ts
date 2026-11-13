@@ -1,6 +1,11 @@
 import { expect, test, type Browser, type Cookie, type Page, type Route } from "@playwright/test";
 
-import { captureSessionCookie, expireSession, SESSION_COOKIE } from "./auth.helpers";
+import {
+  captureSessionCookie,
+  EXPIRED_NOTICE,
+  expireSession,
+  SESSION_COOKIE,
+} from "./auth.helpers";
 import { ROUTE_READY } from "./route.helpers";
 import {
   deprovisionUser,
@@ -38,8 +43,6 @@ import {
 
 const RUN = runId();
 const connector = workerConnector("stale-401");
-
-const EXPIRED_NOTICE = "Your session ended. Please sign in again.";
 
 const AUDIT_READ_PATH = "/api/admin/audit-events";
 

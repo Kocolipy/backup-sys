@@ -32,7 +32,7 @@ const connector = workerConnector("idle");
 
 const INACTIVE_NOTICE = "You were signed out because you were inactive. Please sign in again.";
 
-test("warns before the idle limit, stays on Escape, and signs out at the limit", async ({
+test("warns before the idle limit, answers the keyboard, stays on Escape, and signs out at the limit", async ({
   browser,
 }) => {
   test.setTimeout(90_000);
@@ -51,13 +51,22 @@ test("warns before the idle limit, stays on Escape, and signs out at the limit",
       const { idleTimeoutSeconds } = (await me.json()) as { idleTimeoutSeconds: number };
       expect(idleTimeoutSeconds, "the backend reports its idle bound").toBeGreaterThan(120);
 
-      // A minute before the limit the warning opens, holding focus.
-      await page.clock.fastForward((idleTimeoutSeconds - 61) * 1000);
+      // The page's clock also runs at wall speed between the sign-in and each
+      // jump, so the closed check stands half a minute clear of the warning's
+      // minute: only a stall that long could open it early.
+      await page.clock.fastForward((idleTimeoutSeconds - 90) * 1000);
       await expect(page.getByRole("alertdialog")).toHaveCount(0);
-      await page.clock.fastForward(1000);
+      // Past a minute before the limit, the warning opens, holding focus.
+      await page.clock.fastForward(30_000);
       const warning = page.getByRole("alertdialog", { name: "Are you still there?" });
       await expect(warning).toBeVisible();
       await expect(warning).toBeFocused();
+
+      // Tab moves through the dialog's own buttons alone.
+      await page.keyboard.press("Tab");
+      await expect(warning.getByRole("button", { name: "Sign out" })).toBeFocused();
+      await page.keyboard.press("Tab");
+      await expect(warning.getByRole("button", { name: "Stay signed in" })).toBeFocused();
 
       // Escape stays signed in, with one real request that renews the session.
       const stayed = page.waitForResponse(
@@ -75,44 +84,6 @@ test("warns before the idle limit, stays on Escape, and signs out at the limit",
       expect((await page.request.get("/api/auth/me")).status(), "logged out on the backend").toBe(
         401,
       );
-    } finally {
-      await context.close();
-    }
-  } finally {
-    await deprovisionUser(connector.scim, id);
-  }
-});
-
-test("the warning's buttons answer the keyboard", async ({ browser }) => {
-  test.setTimeout(90_000);
-  const userName = `${E2E_PREFIX}idle-keys-${RUN}`;
-  const id = await provisionUser(connector.scim, userName);
-  try {
-    await settlePassword(userName);
-    const context = await freshBrowser(browser);
-    try {
-      const page = await context.newPage();
-      await page.clock.install();
-      await submitLogin(page, userName, OWN_PASSWORD);
-      await expect(page).toHaveURL("/");
-      const { idleTimeoutSeconds } = (await (await page.request.get("/api/auth/me")).json()) as {
-        idleTimeoutSeconds: number;
-      };
-
-      await page.clock.fastForward((idleTimeoutSeconds - 60) * 1000);
-      const warning = page.getByRole("alertdialog");
-      await expect(warning).toBeFocused();
-
-      // Tab moves through the dialog's own buttons; Enter on "Sign out" signs out.
-      await page.keyboard.press("Tab");
-      await expect(warning.getByRole("button", { name: "Sign out" })).toBeFocused();
-      await page.keyboard.press("Tab");
-      await expect(warning.getByRole("button", { name: "Stay signed in" })).toBeFocused();
-      await page.keyboard.press("Shift+Tab");
-      await page.keyboard.press("Enter");
-
-      await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
-      await expect(page.getByRole("status")).toHaveCount(0);
     } finally {
       await context.close();
     }

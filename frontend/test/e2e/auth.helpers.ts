@@ -34,49 +34,22 @@ export const FIXTURE_PASSWORD = process.env.APP_DEV_FIXTURES_PASSWORD ?? "P@ssw0
 /**
  * The development fixtures holding administrative Permissions
  * (`backend/src/main/resources/authorization.yaml`): one User per such
- * development Group, each with the Permissions it holds — what its Group
- * carries, sorted by name as `GET /api/auth/me` reports them.
- * The Group Permissions are the `local` profile's fixtures block, which `make
- * integration-test` runs under. The Superuser's User is the Bootstrap Admin, on
- * the password `auth.setup.ts` settles: a direct member of the Admin group,
- * which carries no Permission, its session holds every delegatable one,
- * `patient:read` among them, expanded in code. The Auditor holds every
- * administrative read and changes nothing; the Helpdesk holds the same reads
- * plus the helpdesk Permission `account:unlock`, so it also Unlocks a locked
- * User. Neither reads a Patient, administers connectors or sets a Group's
- * Permissions. The Medical Officers are {@link MEDICAL_OFFICERS}.
+ * development Group, and whether its session holds `patient:read`, which
+ * decides where its sign-in lands. The Group Permissions are the `local`
+ * profile's fixtures block, which `make integration-test` runs under; what each
+ * fixture holds is `DevelopmentFixturesIntegrationTests`' to prove. The
+ * Superuser's User is the Bootstrap Admin, on the password `auth.setup.ts`
+ * settles: a direct member of the Admin group, which carries no Permission, its
+ * session holds every delegatable one, `patient:read` among them, expanded in
+ * code. The Auditor holds every administrative read and changes nothing; the
+ * Helpdesk holds the same reads plus the helpdesk Permission `account:unlock`,
+ * so it also Unlocks a locked User. Neither reads a Patient. The Medical
+ * Officers are {@link MEDICAL_OFFICERS}.
  */
 export const DEV_FIXTURES = {
-  superuser: {
-    username: ADMIN_USERNAME,
-    password: ADMIN_PASSWORD,
-    permissions: [
-      "account:unlock",
-      "audit:read",
-      "connector:read",
-      "group:read",
-      "ops:read",
-      "patient:read",
-      "user:read",
-    ],
-  },
-  auditor: {
-    username: "auditor",
-    password: FIXTURE_PASSWORD,
-    permissions: ["audit:read", "connector:read", "group:read", "ops:read", "user:read"],
-  },
-  helpdesk: {
-    username: "helpdesk",
-    password: FIXTURE_PASSWORD,
-    permissions: [
-      "account:unlock",
-      "audit:read",
-      "connector:read",
-      "group:read",
-      "ops:read",
-      "user:read",
-    ],
-  },
+  superuser: { username: ADMIN_USERNAME, password: ADMIN_PASSWORD, readsPatients: true },
+  auditor: { username: "auditor", password: FIXTURE_PASSWORD, readsPatients: false },
+  helpdesk: { username: "helpdesk", password: FIXTURE_PASSWORD, readsPatients: false },
 } as const;
 
 export type DevFixture = keyof typeof DEV_FIXTURES;
@@ -141,6 +114,23 @@ export async function submitLogin(page: Page, username: string, password: string
   await page.getByRole("button", { name: "Sign in" }).click();
 }
 
+/** What the login form says of every refused sign-in, whatever was wrong. */
+export const INCORRECT_CREDENTIALS = "The username or password is incorrect.";
+
+/** What the login page says once a request found the session ended. */
+export const EXPIRED_NOTICE = "Your session ended. Please sign in again.";
+
+/**
+ * Fill and submit Settings' password change from `current` to `next`, confirmed
+ * as typed, without asserting what it answers.
+ */
+export async function submitPasswordChange(page: Page, current: string, next: string) {
+  await page.getByLabel("Current password").fill(current);
+  await page.getByLabel("New password", { exact: true }).fill(next);
+  await page.getByLabel("Confirm new password").fill(next);
+  await page.getByRole("button", { name: "Change password" }).click();
+}
+
 /**
  * Sign in as a named identity and wait for its landing page: Home unless
  * `landing` says otherwise — Patient Search for a session holding
@@ -172,8 +162,7 @@ export async function login(page: Page) {
  * `admin.json`.
  */
 export async function loginAsFixture(page: Page, fixture: DevFixture) {
-  const { username, password, permissions } = DEV_FIXTURES[fixture];
-  const readsPatients = (permissions as readonly string[]).includes("patient:read");
+  const { username, password, readsPatients } = DEV_FIXTURES[fixture];
   await loginAs(page, username, password, readsPatients ? PATIENT_SEARCH_PATH : HOME_PATH);
 }
 
@@ -229,8 +218,8 @@ export async function captureSessionCookie(context: BrowserContext) {
  * that drives the login path must not do it through the cookie jar of a browser
  * context replaying a shared session, because an accepted login rotates that
  * session's id on the backend and every spec running beside it would lose it.
- * Build the context with an empty `storageState` — see `lockAccount` in
- * `accounts-admin.spec.ts`.
+ * Build the context with an empty `storageState` — see `lockOut` in
+ * `scim.helpers.ts`.
  */
 export async function submitLoginViaApi(
   api: APIRequestContext,

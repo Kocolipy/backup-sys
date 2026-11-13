@@ -11,6 +11,7 @@ import {
   loginAs,
   submitLogin,
   submitLoginViaApi,
+  submitPasswordChange,
 } from "./auth.helpers";
 import { sweepLeftovers } from "./scim.helpers";
 import { ADMIN_SESSION, MEDICAL_OFFICER_SESSION, USER_SESSION } from "./sessions";
@@ -98,10 +99,7 @@ async function settleAdminPassword(page: Page) {
   await page.goto("/settings");
   await expect(page.getByRole("heading", { name: "Change your password" })).toBeVisible();
 
-  await page.getByLabel("Current password").fill(SEED_PASSWORD);
-  await page.getByLabel("New password", { exact: true }).fill(ADMIN_PASSWORD);
-  await page.getByLabel("Confirm new password").fill(ADMIN_PASSWORD);
-  await page.getByRole("button", { name: "Change password" }).click();
+  await submitPasswordChange(page, SEED_PASSWORD, ADMIN_PASSWORD);
 
   // A change ends every session of the User and returns the page to login. A
   // refusal (the policy, or history) shows as an alert instead; matching either

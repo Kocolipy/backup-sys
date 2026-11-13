@@ -9,12 +9,14 @@ import {
   openEventDetail,
   outcomeBadge,
 } from "./audit.helpers";
-import { loginAs, userIdOf, ADMIN_USERNAME } from "./auth.helpers";
+import { EXPIRED_NOTICE, loginAs, userIdOf, ADMIN_USERNAME } from "./auth.helpers";
 import {
+  deprovisionGroup,
   deprovisionUser,
   E2E_PREFIX,
   freshBrowser,
   OWN_PASSWORD,
+  provisionGroup,
   provisionUser,
   rowOf,
   searchCard,
@@ -37,8 +39,6 @@ import {
 
 const RUN = runId();
 const connector = workerConnector("group-permissions");
-const GROUP_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:Group";
-const EXPIRED_NOTICE = "Your session ended. Please sign in again.";
 
 /** Ticks or unticks `permission` in the Group's editor on the Accounts page, and saves. */
 async function setPermission(page: Page, group: string, permission: string, held: boolean) {
@@ -68,11 +68,7 @@ test("the Superuser grants and takes back a Group's Permission, and the trail sh
   let groupId: string | undefined;
   try {
     await settlePassword(userName);
-    const created = await connector.scim.post("/scim/v2/Groups", {
-      data: { displayName: groupName, members: [{ value: userId }], schemas: [GROUP_SCHEMA] },
-    });
-    expect(created.status(), `creating ${groupName}`).toBe(201);
-    groupId = ((await created.json()) as { id: string }).id;
+    groupId = await provisionGroup(connector.scim, groupName, [userId]);
 
     // The grant: the member's next sign-in holds it, and the Audit page opens.
     await setPermission(adminPage, groupName, "audit:read", true);
@@ -116,10 +112,7 @@ test("the Superuser grants and takes back a Group's Permission, and the trail sh
       await expect(await eventCell(row, "Actor")).toHaveText(admin);
     }
   } finally {
-    if (groupId !== undefined) {
-      const deleted = await connector.scim.delete(`/scim/v2/Groups/${groupId}`);
-      expect([204, 404], `deleting ${groupName}`).toContain(deleted.status());
-    }
+    if (groupId !== undefined) await deprovisionGroup(connector.scim, groupId);
     await deprovisionUser(connector.scim, userId);
   }
 });

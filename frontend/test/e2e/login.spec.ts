@@ -3,6 +3,7 @@ import { expect, test } from "@playwright/test";
 import {
   ADMIN_PASSWORD,
   ADMIN_USERNAME,
+  INCORRECT_CREDENTIALS,
   SESSION_COOKIE,
   captureSessionCookie,
   login,
@@ -30,7 +31,7 @@ test.describe("sessions, signed out", () => {
 
     // The backend answers 401 and deliberately does not say which half was
     // wrong, so the SPA must not invent a more specific message either.
-    await expect(page.getByRole("alert")).toHaveText("The username or password is incorrect.");
+    await expect(page.getByRole("alert")).toHaveText(INCORRECT_CREDENTIALS);
     await expect(page).toHaveURL(/\/login$/);
     await expect(page.getByRole("button", { name: "Sign in" })).toBeEnabled();
   });
@@ -55,14 +56,14 @@ test.describe("sessions, signed out", () => {
     });
   }
 
-  for (const path of ["/", "/accounts", "/audit", "/settings"]) {
-    test(`sends a guest asking for ${path} to the login page`, async ({ page }) => {
-      await page.goto(path);
+  // One path for the real router and backend's answer to a cold visit; every
+  // other path a guest is sent on from is `App.test.tsx`'s.
+  test("sends a guest asking for Home to the login page", async ({ page }) => {
+    await page.goto("/");
 
-      await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
-      await expect(page).toHaveURL(/\/login$/);
-    });
-  }
+    await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
+    await expect(page).toHaveURL(/\/login$/);
+  });
 
   // The redirect carries the page asked for as its return destination, in
   // router state, so the form is filled where the redirect left it: `login()`
@@ -77,13 +78,6 @@ test.describe("sessions, signed out", () => {
 
     await expect(page).toHaveURL(/\/audit$/);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Audit");
-  });
-
-  test("redirects an unknown path to the login page", async ({ page }) => {
-    await page.goto("/no-such-page");
-
-    await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
-    await expect(page).toHaveURL(/\/login$/);
   });
 
   test("ends the session on sign out", async ({ page }) => {
@@ -118,6 +112,9 @@ test.describe("sessions, signed out", () => {
   test("refuses a session cookie captured before sign out", async ({ page, context }) => {
     await login(page);
     const captured = await captureSessionCookie(context);
+    // The id captured answers before the sign-out, so the 401 below is the
+    // sign-out's doing and not an id the backend never honoured.
+    expect((await page.request.get("/api/auth/me")).status(), "the captured session").toBe(200);
 
     await page.getByRole("button", { name: "Sign out" }).click();
     await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();

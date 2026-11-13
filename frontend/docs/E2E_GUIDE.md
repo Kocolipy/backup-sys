@@ -47,8 +47,8 @@ User of its own runs beside them:
 - `guest` follows `routes` (and the `packaged` project below, when declared)
   because `login.spec.ts` signs in as the seeded Admin, and beside the
   `admin` project it turned that project's specs into 401s.
-- `dormancy` runs last and alone: it signs in as the Helpdesk fixture User
-  and consumes the `dormant` fixture's locked state, which only a backend
+- `dormancy` runs last and alone: it signs in as the Helpdesk and Auditor
+  fixture Users and consumes the `dormant` fixture's locked state, which only a backend
   restart re-arms.
 
 `login.spec.ts` also opts out of `fullyParallel` with
@@ -150,8 +150,9 @@ the backend on `SERVER_PORT`, `8080` when unset — SCIM is not behind the Vite
 through `POST /api/auth/change-password`, locks both with refused logins, unlocks
 one from the page, and unlocks the other behind the page's back so its Unlock
 button meets the `409` an Unlock of an unlocked User gets. It deletes the Users
-and the connector in a `finally`. It is `test.describe.serial` because its steps
-depend on each other. The refusals of an Unlock — of a User serving no lockout,
+and the connector in a `finally`. Those steps depend on each other, so they are
+one test, and each of the spec's tests issues the token it acts with, so none
+waits on another. The refusals of an Unlock — of a User serving no lockout,
 of the caller's own account, of an id no User has — and the response shapes are
 covered in the backend's `AdminAccountEndpointTests` and
 `PasswordChangeLifecycleIntegrationTests`, not here.
@@ -159,6 +160,7 @@ covered in the backend's `AdminAccountEndpointTests` and
 The fixtures for that pattern live in `test/e2e/scim.helpers.ts`: a connector
 and token (`createConnector`, or `workerConnector` for one shared by every test a
 worker runs from a file), `provisionUser` / `settlePassword` / `deprovisionUser`,
+`lockOut` (a lockout's worth of refused logins, through a jar of its own),
 and `scimPatch`, which sends the resource's current ETag as `If-Match`. Every
 User and connector a spec creates is named with the `e2e-` prefix plus a
 `runId()` suffix, and a spec deletes only what carries **its own** suffix. A

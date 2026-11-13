@@ -1,5 +1,11 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 
+/** The Audit page's read, `GET /api/admin/audit-events`. */
+const AUDIT_EVENTS_PATH = "/api/admin/audit-events";
+
+/** What the listing says, to screen readers, while a read is in flight. */
+const AUDIT_LOADING = "Loading audit events…";
+
 /** The Audit page's listing. */
 export const eventsTable = (page: Page) => page.getByRole("table", { name: "Audit events" });
 
@@ -86,23 +92,34 @@ export const operationPicker = (page: Page) => page.getByRole("button", { name: 
  */
 export async function selectAuditOperations(page: Page, labels: readonly string[]) {
   await openAuditFilters(page);
-  await operationPicker(page).click();
+  const picker = operationPicker(page);
+  // The trigger names the selection the open panel holds, so it says whether there is one to clear
+  // before the list is open.
+  const held = (await picker.textContent())?.trim() !== "Operation: Any";
+  await picker.click();
   const search = page.getByRole("combobox", { name: "Operations" });
   await expect(search).toBeFocused();
   // The picker offers Clear selection at both ends of its list; either clears the same selection.
-  const clear = page.getByRole("option", { name: "Clear selection" }).first();
-  if ((await clear.count()) > 0) await clear.click();
+  if (held) await page.getByRole("option", { name: "Clear selection" }).first().click();
   for (const label of labels) {
     await search.fill(label);
     await page.getByRole("option", { name: label, exact: true }).click();
   }
   await page.keyboard.press("Escape");
+  await expect(picker).toHaveText(
+    `Operation: ${labels.length === 0 ? "Any" : `${labels.length} selected`}`,
+  );
 }
 
 /**
  * Sets every Audit filter but the date range — an omitted one to "any", or empty — and applies
  * them; `operation` is the operation's label, as the picker shows it. A date typed into the open
  * panel beforehand is applied with them. Apply reads the whole set and closes the filter panel.
+ *
+ * Returns once the listing shows what that read answered: the read is the one asking for the
+ * first page under these ids and this many operations, so a read still in flight from before the
+ * Apply cannot stand in for it, and the listing then no longer says it is loading, so the rows a
+ * caller reads at once are the filtered ones and not the page held while it was in flight.
  */
 export async function applyAuditFilters(
   page: Page,
@@ -118,5 +135,17 @@ export async function applyAuditFilters(
   await page.getByLabel("Resource id").fill(filters.resourceId ?? "");
   await selectAuditOperations(page, filters.operation === undefined ? [] : [filters.operation]);
   await page.getByRole("radio", { name: filters.outcome ?? "Any", exact: true }).click();
+  const read = page.waitForResponse((response) => {
+    const { pathname, searchParams } = new URL(response.url());
+    return (
+      pathname === AUDIT_EVENTS_PATH &&
+      searchParams.get("startIndex") === "1" &&
+      searchParams.get("actorId") === (filters.actorId ?? null) &&
+      searchParams.get("resourceId") === (filters.resourceId ?? null) &&
+      searchParams.getAll("operation").length === (filters.operation === undefined ? 0 : 1)
+    );
+  });
   await page.getByRole("button", { name: "Apply", exact: true }).click();
+  expect((await read).status(), "the filtered audit read").toBe(200);
+  await expect(page.getByText(AUDIT_LOADING, { exact: true })).toHaveCount(0);
 }

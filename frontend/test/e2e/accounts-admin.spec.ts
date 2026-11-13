@@ -1,33 +1,30 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from "@playwright/test";
 
-import {
-  adminRequest,
-  LOCKOUT_MAX_ATTEMPTS,
-  postAdminAction,
-  submitLoginViaApi,
-} from "./auth.helpers";
+import { adminRequest, postAdminAction, submitLoginViaApi } from "./auth.helpers";
 import {
   anonymousApi,
   createConnector,
   deleteConnector,
   deprovisionUser,
   E2E_PREFIX,
+  listConnectors,
+  lockOut,
   OWN_PASSWORD,
   provisionUser,
   rowOf,
   runId,
   searchCard,
   scimApi,
-  scimPatch,
   settlePassword,
   USER_SCHEMA,
-  workerConnector,
 } from "./scim.helpers";
 
 /**
- * The Accounts page driven as an Admin uses it: both read-only projections,
- * Unlock of a locked User — and its refusal once the User is no longer locked —
- * and a connector's token lifecycle, all from the one interface.
+ * The Accounts page driven as an Admin uses it: Unlock of a locked User — and
+ * its refusal once the User is no longer locked — and a connector's token
+ * lifecycle, all from the one interface. What the read-only projections show,
+ * and that they offer no control writing what the directory owns, is
+ * `accounts.test.tsx`'s.
  *
  * Every User this spec changes is one it PROVISIONS for itself, over SCIM,
  * with a token it issued through the page. The seeded `user` is never locked or
@@ -36,13 +33,8 @@ import {
  * not be restored for the specs that sign in as it. The
  * throwaway Users and the connectors are deleted in a `finally`; whatever a
  * crashed run leaves behind is swept by `auth.setup.ts` before the next run.
- *
- * Serial because the steps depend on each other: the token issued in the
- * second step is what provisions the Users every later step acts on.
+ * Each test issues the token it acts with, so none depends on another.
  */
-
-/** The backend's lockout threshold; see `LOCKOUT_MAX_ATTEMPTS`. */
-const REFUSALS_BEFORE_LOCKOUT = LOCKOUT_MAX_ATTEMPTS;
 
 const RUN = runId();
 const CONNECTOR_NAME = `${E2E_PREFIX}connector-${RUN}`;
@@ -50,21 +42,6 @@ const READ_ONLY_CONNECTOR = `${E2E_PREFIX}connector-ro-${RUN}`;
 const LOCKED_USER = `${E2E_PREFIX}locked-${RUN}`;
 /** Locked, then unlocked behind the page's back, so the page's Unlock meets the 409. */
 const RACED_USER = `${E2E_PREFIX}raced-${RUN}`;
-
-/** For the tests outside the serial journey, whose own connector is created and deleted in it. */
-const directory = workerConnector("accounts");
-
-/** Lock `userName` the way a forgetful person does: a lockout's worth of refused logins. */
-async function lockOut(userName: string) {
-  const guesser = await anonymousApi();
-  try {
-    for (let attempt = 0; attempt < REFUSALS_BEFORE_LOCKOUT; attempt += 1) {
-      expect((await submitLoginViaApi(guesser, userName, "not-the-password")).status()).toBe(401);
-    }
-  } finally {
-    await guesser.dispose();
-  }
-}
 
 /** Whether a fresh login as this User is accepted, and whether it is confined to the change. */
 async function signInState(userName: string) {
@@ -96,9 +73,6 @@ async function deleteFromPage(page: Page, section: Locator, name: string) {
   await expect(section).toHaveCount(0);
 }
 
-/** A table's rows, without its headings — whose sortable ones are buttons that act on no row. */
-const bodyOf = (table: Locator) => table.getByRole("rowgroup").nth(1);
-
 async function openAccounts(page: Page) {
   await page.goto("/accounts");
   await expect(page.getByRole("heading", { name: "Accounts", exact: true })).toBeVisible();
@@ -122,70 +96,7 @@ async function issueFromPage(page: Page, name: string, permissions: readonly str
   return { section, value: value! };
 }
 
-test.describe.serial("ADMIN accounts page", () => {
-  test("shows both projections with no writable identity or membership control", async ({
-    page,
-  }) => {
-    await openAccounts(page);
-
-    for (const table of [usersTable(page), groupsTable(page)]) {
-      await expect(table.getByRole("textbox")).toHaveCount(0);
-      await expect(table.getByRole("checkbox")).toHaveCount(0);
-      await expect(table.getByRole("combobox")).toHaveCount(0);
-      await expect(table.getByRole("spinbutton")).toHaveCount(0);
-    }
-    // The Groups table's one write is the Superuser's Edit permissions, offered on
-    // every Group but the Admin group; its only other buttons disclose a Group's members,
-    // which writes nothing. Membership stays the directory's.
-    for (const button of await bodyOf(groupsTable(page)).getByRole("button").all()) {
-      if ((await button.getAttribute("aria-expanded")) === null) {
-        await expect(button).toHaveText(/^Edit permissions for /);
-      } else {
-        await expect(button).toHaveAccessibleName(/^Members of /);
-      }
-    }
-    await expect(
-      groupsTable(page)
-        .getByRole("row")
-        .filter({ has: page.getByRole("cell", { exact: true, name: "Superuser" }) })
-        .getByRole("button", { name: /^Edit permissions for / }),
-    ).toHaveCount(0);
-    for (const label of await bodyOf(usersTable(page)).getByRole("button").allTextContents()) {
-      expect(label).toMatch(/^Unlock /);
-    }
-    await expect(page.getByRole("button", { name: /Disable|Enable|Deactivate/ })).toHaveCount(0);
-
-    // The Admin group confers the Superuser, a fixture Group shows the Permissions it
-    // carries, and Unlock is described as the only lift.
-    await expect(
-      groupsTable(page).getByRole("cell", { exact: true, name: "Superuser" }),
-    ).toHaveCount(1);
-    // The Groups card shows a page at a time; the fixture Group is found by searching for it.
-    await searchCard(page, "Groups", "Helpdesk");
-    await expect(
-      groupsTable(page)
-        .getByRole("row", { name: /^Helpdesk/ })
-        .getByRole("cell", {
-          exact: true,
-          name: "account:unlock, audit:read, connector:read, group:read, ops:read, user:read",
-        }),
-    ).toBeVisible();
-    await expect(
-      page.getByText(/A lockout never expires: Unlock is the only way it ends/),
-    ).toBeVisible();
-
-    // The Bootstrap Admin — this project's own session — is marked in its Lockout cell as never
-    // lockable (the Users table names no access level), and offers no Unlock.
-    await searchCard(page, "Users", "admin");
-    const bootstrap = rowOf(page, usersTable(page), "admin");
-    // The marker is a tooltip, shown once its "—" has focus. The Users columns, less the rowheader:
-    // Groups, Active, Lockout, …
-    await bootstrap.getByRole("cell").nth(2).getByText("—", { exact: true }).focus();
-    await expect(page.getByRole("tooltip")).toHaveText("The Bootstrap Admin cannot be locked");
-    await expect(bootstrap.getByText(/^(Locked|Not locked)$/)).toHaveCount(0);
-    await expect(bootstrap.getByRole("button", { name: /Unlock/ })).toHaveCount(0);
-  });
-
+test.describe("ADMIN accounts page", () => {
   test("issues a read-only token, which may read but not write", async ({ page }) => {
     let client: APIRequestContext | undefined;
     try {
@@ -332,58 +243,6 @@ test.describe.serial("ADMIN accounts page", () => {
       await cleanUp(page, scim, provisioned);
     }
   });
-});
-
-/**
- * Unlocking and deactivating are separate capabilities, and neither performs the
- * other: a User the directory deactivated stays refused after an Admin unlocks
- * it, and signs in again only once the directory reactivates it — into the
- * change, since both the Unlock and the reactivation flag one.
- */
-test("an Unlock leaves a deactivated User deactivated, until the directory reactivates it", async ({
-  page,
-}) => {
-  test.setTimeout(90_000);
-  const userName = `${E2E_PREFIX}deactivated-${RUN}`;
-  const id = await provisionUser(directory.scim, userName);
-  try {
-    await settlePassword(userName);
-    const guesser = await anonymousApi();
-    try {
-      for (let attempt = 0; attempt < REFUSALS_BEFORE_LOCKOUT; attempt += 1) {
-        expect((await submitLoginViaApi(guesser, userName, "not-the-password")).status()).toBe(401);
-      }
-    } finally {
-      await guesser.dispose();
-    }
-    const deactivated = await scimPatch(directory.scim, `/scim/v2/Users/${id}`, [
-      { op: "replace", path: "active", value: false },
-    ]);
-    expect(deactivated.status(), "deactivating over SCIM").toBe(200);
-
-    await openAccounts(page);
-    await searchCard(page, "Users", userName);
-    const row = rowOf(page, usersTable(page), userName);
-    // A Deactivated User's one status badge says so.
-    const status = row.locator('[data-slot="badge"]');
-    await expect(status).toHaveText("Deactivated");
-    await expect(row.getByText("Locked: failed logins", { exact: true })).toBeVisible();
-
-    await row.getByRole("button", { name: `Unlock ${userName}` }).click();
-    await expect(row.getByText("Not locked")).toBeVisible();
-    await expect(status).toHaveText("Deactivated");
-    expect(await signInState(userName)).toEqual({ accepted: false, confined: false });
-    const read = await directory.scim.get(`/scim/v2/Users/${id}`);
-    expect(((await read.json()) as { active: boolean }).active).toBe(false);
-
-    const reactivated = await scimPatch(directory.scim, `/scim/v2/Users/${id}`, [
-      { op: "replace", path: "active", value: true },
-    ]);
-    expect(reactivated.status(), "reactivating over SCIM").toBe(200);
-    expect(await signInState(userName)).toEqual({ accepted: true, confined: true });
-  } finally {
-    await deprovisionUser(directory.scim, id);
-  }
 });
 
 /**
@@ -546,10 +405,7 @@ async function cleanUp(page: Page, scim: APIRequestContext | undefined, provisio
 }
 
 async function deleteOwnConnectors(page: Page) {
-  const connectors = (await (await page.request.get("/api/admin/connectors")).json()) as Array<{
-    displayName: string;
-    id: string;
-  }>;
+  const connectors = await listConnectors(page);
   for (const own of connectors.filter((connector) => connector.displayName.endsWith(RUN))) {
     await deleteConnector(page, own.id);
   }

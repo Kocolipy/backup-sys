@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { expireSession } from "./auth.helpers";
+import { EXPIRED_NOTICE, expireSession, submitPasswordChange } from "./auth.helpers";
 
 const CSRF_HEADER = "x-csrf-token";
 
@@ -39,10 +39,7 @@ test.describe("sessions, signed in", () => {
     // none is held, or by `apiFetch`'s re-fetch after a dead session's token is
     // refused 403 — so the backend refuses it 401 for having no signed-in
     // session: the bare 401, without the mark the password check puts on its own.
-    await page.getByLabel("Current password").fill("Not-The-Admin-Password-1");
-    await page.getByLabel("New password", { exact: true }).fill("Never-Applied-Secret-7q");
-    await page.getByLabel("Confirm new password").fill("Never-Applied-Secret-7q");
-    await page.getByRole("button", { name: "Change password" }).click();
+    await submitPasswordChange(page, "Not-The-Admin-Password-1", "Never-Applied-Secret-7q");
 
     // The 401 has to move the auth state to guest, not just show an error:
     // ProtectedRoute is what carries the user back to sign in.
@@ -50,7 +47,7 @@ test.describe("sessions, signed in", () => {
     await expect(page).toHaveURL(/\/login$/);
     // And tells them why: the expired-session state carried by the redirect is
     // the SPA's whole explanation of a 401, and a cold visit shows none.
-    await expect(page.getByRole("status")).toHaveText("Your session ended. Please sign in again.");
+    await expect(page.getByRole("status")).toHaveText(EXPIRED_NOTICE);
     // The 401 was the password change's own answer, not a later read's.
     expect(answers.at(-1)).toBe(401);
   });
@@ -79,10 +76,7 @@ test.describe("sessions, signed in", () => {
     // Refused for its token before the backend reads it, so no password
     // changes. The current password is deliberately not the admin's, so the
     // change could not succeed even if a token got through.
-    await page.getByLabel("Current password").fill("Not-The-Admin-Password-1");
-    await page.getByLabel("New password", { exact: true }).fill("Never-Applied-Secret-7q");
-    await page.getByLabel("Confirm new password").fill("Never-Applied-Secret-7q");
-    await page.getByRole("button", { name: "Change password" }).click();
+    await submitPasswordChange(page, "Not-The-Admin-Password-1", "Never-Applied-Secret-7q");
 
     await expect(page.getByRole("alert")).toHaveText("You don't have permission to do this.");
     // Exactly one retry after the re-seed, never a loop.

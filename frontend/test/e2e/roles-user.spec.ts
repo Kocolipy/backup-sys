@@ -1,7 +1,7 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
-import { expectSignedInLines } from "./auth.helpers";
 import { expectNoPatientAccess, recordPatientRequests } from "./patient.helpers";
+import { sidebar } from "./shell.helpers";
 
 // The seeded `guest`: a User in no Group, holding baseline access and no
 // Permission, so no patient access either. What it sees, and the pages the SPA
@@ -9,12 +9,10 @@ import { expectNoPatientAccess, recordPatientRequests } from "./patient.helpers"
 // the backend refusing it every administrative read, the Patient read and the
 // Patient search need no browser, and are the backend's suites' to prove
 // (`DevelopmentFixturesIntegrationTests`, `AuthorizationContractTests`); Logout
-// is `login.spec.ts`'. In the `user` project, replaying the saved session, so
+// is `login.spec.ts`', the top bar naming a User in no Group `top-bar.test.tsx`'s,
+// and every other page it is routed away from `App.test.tsx`'s. In the `user` project, replaying the saved session, so
 // its login is `auth.setup.ts`', which waits for Home; a signed-in visit to the
 // login page is routed by the same landing rule.
-
-/** The navigation sidebar, which the layout renders beside every signed-in page. */
-const sidebar = (page: Page) => page.locator('[data-slot="sidebar"]');
 
 test.describe("baseline User pages", () => {
   test("lands on Home, whose Patient card says it has no access and reads nothing", async ({
@@ -30,24 +28,16 @@ test.describe("baseline User pages", () => {
     expect(patientRequests()).toEqual([]);
   });
 
-  test("is named in the top bar by its username alone, in no Group", async ({ page }) => {
-    await page.goto("/");
-
-    await expectSignedInLines(page, ["guest"]);
-  });
-
   test("is offered no Search or FFI link, only Profile", async ({ page }) => {
     await page.goto("/");
 
     await expect(sidebar(page).getByRole("link")).toHaveText(["Profile"]);
   });
 
-  for (const path of ["/search", "/ffi", "/accounts"]) {
-    test(`is routed from ${path} to Home`, async ({ page }) => {
-      await page.goto(path);
+  test("is routed from Patient Search to Home", async ({ page }) => {
+    await page.goto("/search");
 
-      await expect(page.getByRole("heading", { name: "Profile" })).toBeVisible();
-      await expect(page).toHaveURL("/");
-    });
-  }
+    await expect(page.getByRole("heading", { name: "Profile" })).toBeVisible();
+    await expect(page).toHaveURL("/");
+  });
 });

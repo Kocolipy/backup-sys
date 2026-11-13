@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { expectOnHomeInContext, search, selectResult } from "./patient.helpers";
+import { sidebar } from "./shell.helpers";
 
 /**
  * The FFI page as a Medical Officer meets it, against the patient source's mock
@@ -11,14 +12,13 @@ import { expectOnHomeInContext, search, selectResult } from "./patient.helpers";
  * matching nothing — and the Status, and Siti Nurhaliza binte Ahmad none
  * (`/docs/domain/ffi.md`, "The patient source's FFI fixtures"). What the page
  * decides without the backend — the labels, the badges, each filter's
- * parameters, a 404 and a failure — is `ffi.test.tsx`'s; that a session
+ * parameters, an inverted range, no patient in context, a 404 and a failure —
+ * is `ffi.test.tsx`'s; that a session
  * without `patient:read` is offered no FFI link is `roles-user.spec.ts`'.
  *
  * In the `medical-officer` project, replaying the saved `mo1` session. A new
  * page starts with no EHR context: the tab's `sessionStorage` is its own.
  */
-
-const sidebar = (page: Page) => page.locator('[data-slot="sidebar"]');
 
 /** The FFI table's body rows. */
 const ffiRows = (page: Page) =>
@@ -198,28 +198,6 @@ test.describe("FFI", () => {
       await expect(ffiRows(page)).toHaveText(rowsOf(1, 3, 4));
     });
 
-    test("refuses an inverted range in the panel, and reads nothing", async ({ page }) => {
-      await filterTanHuiMin(page);
-      const reads: string[] = [];
-      page.on("request", (request) => {
-        if (new URL(request.url()).pathname.startsWith("/api/patient-ffi/"))
-          reads.push(request.url());
-      });
-
-      await dateField(page, "Expiry Date", "From").fill("2025-12-31");
-      await dateField(page, "Expiry Date", "To").fill("2025-01-01");
-      await apply(page);
-
-      await expect(
-        panel(page)
-          .getByRole("group", { name: "Expiry Date" })
-          .getByText("The Expiry Date from-date must not be after its to-date."),
-      ).toBeVisible();
-      await expect(dateField(page, "Expiry Date", "From")).toHaveAttribute("aria-invalid", "true");
-      await expect(page.getByText("Showing 6 to 7 of 7 FFIs")).toBeVisible();
-      expect(reads).toEqual([]);
-    });
-
     test("says No FFIs match the filters for a filter matching none", async ({ page }) => {
       await filterTanHuiMin(page);
 
@@ -229,21 +207,5 @@ test.describe("FFI", () => {
       await expect(page.getByText("No FFIs match the filters", { exact: true })).toBeVisible();
       await expect(page.getByRole("table", { name: "FFI History" })).toHaveCount(0);
     });
-  });
-
-  test("says No patient in context with no patient in context, and reads nothing", async ({
-    page,
-  }) => {
-    const reads: string[] = [];
-    page.on("request", (request) => {
-      if (new URL(request.url()).pathname.startsWith("/api/patient-ffi/"))
-        reads.push(request.url());
-    });
-
-    await page.goto("/ffi");
-
-    await expect(page.getByRole("heading", { level: 1 })).toHaveText("FFI History");
-    await expect(page.getByRole("main").getByText("No patient in context")).toBeVisible();
-    expect(reads).toEqual([]);
   });
 });
