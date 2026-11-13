@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -7,7 +7,6 @@ import {
   TableBody,
   TableCaption,
   TableCell,
-  TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
@@ -15,8 +14,11 @@ import { formatCalendarDateTwoDigitDay } from "@/lib/time";
 import { PagedListing } from "@/pages/paged-listing";
 import { usePagedRead } from "@/pages/paged-read";
 import { usePatientInContext } from "@/pages/patient-in-context";
+import { type ColumnSorting, PlainHeading, SortHeading } from "@/pages/sort-heading";
 
+import { FfiFilterPopover } from "./ffi-filter-popover";
 import {
+  countFfiFilters,
   FFI_HIGHER_AUTHORITY_LABELS,
   FFI_HISTORY,
   FFI_HISTORY_PAGE_SIZE,
@@ -24,8 +26,12 @@ import {
   FFI_STATUS_LABELS,
   FFI_SUBMITTING_MC_LABELS,
   FFI_TYPE_LABELS,
+  NO_FFI_FILTERS,
   type Ffi,
+  type FfiFilters,
   type FfiOutcome,
+  type FfiSort,
+  type FfiSortColumn,
   type FfiStatus,
 } from "./ffi-api";
 
@@ -44,34 +50,39 @@ const STATUS_BADGES: Readonly<
   inactive: { className: "bg-muted text-muted-foreground", variant: "secondary" },
 };
 
-const HEADINGS = [
-  "FFI Type",
-  "Outcome",
-  "Issue Date",
-  "Expiry Date",
-  "Higher Authority",
-  "Submitting MC",
-  "Status",
-] as const;
+/** How the history is sorted, by the listing that holds the sort. */
+type HistorySorting = ColumnSorting<FfiSortColumn>;
 
 /**
- * The page's FFIs, one row each, in the source's order: each closed set's code
+ * The page's FFIs, one row each, in the order read: each closed set's code
  * by its label, the Outcome and the Status as badges, and both dates as
- * `dd MMM yyyy`. Read-only, with no row action; each row is keyed by the
- * FFI's id, which is never shown. The Status is the source's, shown as sent:
- * nothing here works out whether an FFI has expired.
+ * `dd MMM yyyy`. Issue Date and Expiry Date sort, one at a time, held still
+ * while a read is `pending`; every other column does not. Read-only, with no
+ * row action; each row is keyed by the FFI's id, which is never shown. The
+ * Status is the source's, shown as sent: nothing here works out whether an FFI
+ * has expired.
  */
-function FfiTable({ ffis }: { ffis: readonly Ffi[] }) {
+function FfiTable({
+  ffis,
+  pending,
+  sorting,
+}: {
+  ffis: readonly Ffi[];
+  pending: boolean;
+  sorting: HistorySorting;
+}) {
   return (
     <Table>
       <TableCaption className="sr-only">FFI History</TableCaption>
       <TableHeader>
         <TableRow>
-          {HEADINGS.map((heading) => (
-            <TableHead className="text-muted-foreground" key={heading} scope="col">
-              {heading}
-            </TableHead>
-          ))}
+          <PlainHeading>FFI Type</PlainHeading>
+          <PlainHeading>Outcome</PlainHeading>
+          <SortHeading by="issueDate" disabled={pending} label="Issue Date" sorting={sorting} />
+          <SortHeading by="expiryDate" disabled={pending} label="Expiry Date" sorting={sorting} />
+          <PlainHeading>Higher Authority</PlainHeading>
+          <PlainHeading>Submitting MC</PlainHeading>
+          <PlainHeading>Status</PlainHeading>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -111,28 +122,48 @@ function NoPatientInContext(): ReactNode {
  * patient under the id — is "No patient in context", an answer rather than a
  * failure; any other failure is "Couldn't load FFIs" on the page's one error
  * line, with Try again.
+ *
+ * It sorts by Issue Date or Expiry Date, in the source's own order until a
+ * heading is pressed, and the Filter panel at its top right narrows it on
+ * every column. A change of either reads the history from its first page,
+ * the filters combined with AND and with the sort. Both live here alone:
+ * neither reaches the URL, and a new patient in context, a new history,
+ * starts with neither. With a filter applied, a history with no FFI says
+ * none matches, rather than that the patient has none.
  */
 function FfiHistory({ patientId }: { patientId: string }) {
+  const [filters, setFilters] = useState<FfiFilters>(NO_FFI_FILTERS);
+  const [sort, setSort] = useState<FfiSort | null>(null);
   const reading = usePagedRead(FFI_HISTORY, {
-    args: [patientId],
+    args: [patientId, filters, sort],
     failureMessage: "Couldn't load FFIs",
     pageSize: FFI_HISTORY_PAGE_SIZE,
   });
   const { view } = reading;
   if (view.kind === "absent") return <NoPatientInContext />;
+  // Rows are shown only once a page is read, so a read in flight beside them
+  // is one the listing holds them still for.
+  const pending = view.kind === "loading";
   return (
-    <PagedListing
-      copy={{
-        empty: "No FFIs",
-        loading: "Loading FFIs…",
-        noun: "FFIs",
-        pagerLabel: "FFI History pages",
-      }}
-      onePage="shown"
-      read={{ ...reading, view }}
-    >
-      {({ rows }) => <FfiTable ffis={rows} />}
-    </PagedListing>
+    <>
+      <div className="flex justify-end">
+        <FfiFilterPopover applied={filters} onApply={setFilters} />
+      </div>
+      <PagedListing
+        copy={{
+          empty: countFfiFilters(filters) === 0 ? "No FFIs" : "No FFIs match the filters",
+          loading: "Loading FFIs…",
+          noun: "FFIs",
+          pagerLabel: "FFI History pages",
+        }}
+        onePage="shown"
+        read={{ ...reading, view }}
+      >
+        {({ rows }) => (
+          <FfiTable ffis={rows} pending={pending} sorting={{ onSort: setSort, sort }} />
+        )}
+      </PagedListing>
+    </>
   );
 }
 

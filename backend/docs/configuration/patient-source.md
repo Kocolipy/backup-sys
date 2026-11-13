@@ -111,17 +111,35 @@ curl -s 'http://127.0.0.1:8104/Patient?name:contains=tan&_sort=-last-visit,_id&_
 
 The backend reads a patient's FFI History at
 `GET {base}/Patient/{id}/ffi?_offset=…&_count=…&_total=accurate`, on the same
-base URL, client and timeouts, with no `_sort` (ADR 0019; `/docs/domain/ffi.md`,
+base URL, client and timeouts, with each filter and the sort the FFI page asks
+for, and no `_sort` when it asks for none (ADR 0019; `/docs/domain/ffi.md`,
 "The source contract"). The mock answers a FHIR-shaped searchset of `FFI`
-objects, matched on `_count=5`, `_offset`, `_total=accurate` and no `_sort`:
+objects, matched on `_count=5`, `_offset`, `_total=accurate`, the `_sort` and
+every filter — `type`, `outcome`, `issue-date`, `expiry-date`,
+`higher-authority`, `submitting-mc`, `status` — each pinned to its value or to
+absent:
 
-| Stub file                | Read                                                      | Answers                                 |
-| ------------------------ | --------------------------------------------------------- | --------------------------------------- |
-| `ffi-tan-wei-ming`       | `eq081-VQEgP8drUUqCWzHfw3`                                | Tan Wei Ming's 4 FFIs, `total: 4`       |
-| `ffi-tan-hui-min-page-1` | `dev-patient-05`                                          | 5 of `total: 7`                         |
-| `ffi-tan-hui-min-page-2` | `dev-patient-05`, `_offset=5`                             | the last 2 of `total: 7`                |
-| `ffi-fallback`           | any other read of a development fixture's, lower priority | no entry, `total: 0`                    |
-| `ffi-not-found`          | any other well-formed id, lowest priority                 | `404`, as a read by id of an unknown id |
+| Stub file                                    | Read                                                           | Answers                                         |
+| -------------------------------------------- | -------------------------------------------------------------- | ----------------------------------------------- |
+| `ffi-tan-wei-ming`                           | `eq081-VQEgP8drUUqCWzHfw3`                                     | Tan Wei Ming's 4 FFIs, `total: 4`               |
+| `ffi-tan-wei-ming-by-issue-date`             | Tan Wei Ming, `_sort=issue-date,_id`                           | his 4, earliest Issue Date first                |
+| `ffi-tan-wei-ming-by-issue-date-descending`  | Tan Wei Ming, `_sort=-issue-date,_id`                          | his 4, latest Issue Date first                  |
+| `ffi-tan-wei-ming-by-expiry-date`            | Tan Wei Ming, `_sort=expiry-date,_id`                          | his 4, earliest Expiry Date first               |
+| `ffi-tan-wei-ming-by-expiry-date-descending` | Tan Wei Ming, `_sort=-expiry-date,_id`                         | his 4, latest Expiry Date first                 |
+| `ffi-tan-hui-min-page-1`                     | `dev-patient-05`                                               | 5 of `total: 7`                                 |
+| `ffi-tan-hui-min-page-2`                     | `dev-patient-05`, `_offset=5`                                  | the last 2 of `total: 7`                        |
+| `ffi-tan-hui-min-ippt-or-dental`             | Tan Hui Min, `type=ippt,dental`                                | `total: 3`                                      |
+| `ffi-tan-hui-min-fit`                        | Tan Hui Min, `outcome=fit`                                     | `total: 3`                                      |
+| `ffi-tan-hui-min-issued-2024`                | Tan Hui Min, `issue-date=ge2024-01-01&issue-date=le2024-12-31` | `total: 3`                                      |
+| `ffi-tan-hui-min-issued-from-2023-page-1`    | Tan Hui Min, `issue-date=ge2023-01-01`                         | 5 of `total: 6`                                 |
+| `ffi-tan-hui-min-issued-from-2023-page-2`    | the same, `_offset=5`                                          | the last 1 of `total: 6`                        |
+| `ffi-tan-hui-min-expiring-to-2024`           | Tan Hui Min, `expiry-date=le2024-12-31`                        | `total: 3`                                      |
+| `ffi-tan-hui-min-expiring-to-2022`           | Tan Hui Min, `expiry-date=le2022-12-31`                        | no entry, `total: 0`: a filter matching nothing |
+| `ffi-tan-hui-min-camo-or-cnmo`               | Tan Hui Min, `higher-authority=camo,cnmo`                      | `total: 4`                                      |
+| `ffi-tan-hui-min-kranji-camp`                | Tan Hui Min, `submitting-mc=kranji-camp`                       | `total: 2`                                      |
+| `ffi-tan-hui-min-active`                     | Tan Hui Min, `status=active`                                   | `total: 3`                                      |
+| `ffi-fallback`                               | any other read of a development fixture's, lower priority      | no entry, `total: 0`                            |
+| `ffi-not-found`                              | any other well-formed id, lowest priority                      | `404`, as a read by id of an unknown id         |
 
 Beside them, `fault-ffi-<failure>` answers each failure of an FFI read under a
 patient id of its own — `unreachable` (the connection reset), `slow` (after 7

@@ -15,6 +15,27 @@
       },
       "_sort": {
         "absent": true
+      },
+      "type": {
+        "absent": true
+      },
+      "outcome": {
+        "absent": true
+      },
+      "issue-date": {
+        "absent": true
+      },
+      "expiry-date": {
+        "absent": true
+      },
+      "higher-authority": {
+        "absent": true
+      },
+      "submitting-mc": {
+        "absent": true
+      },
+      "status": {
+        "absent": true
       }
     }
   },

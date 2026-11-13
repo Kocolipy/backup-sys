@@ -5,22 +5,26 @@
  * Nothing here requests anything: the FFI page sends {@link FFI_HISTORY}
  * through `usePagedRead` (behind `useSessionRequest`), so a `401` still ends
  * the session in one place. This file says what a response looks like, names
- * each code of an FFI's five closed sets, and declares the read — its path,
- * decoder and Permission — once.
+ * each code of an FFI's five closed sets, says what the Filter panel's
+ * filters and the sort are and which of them may be sent, and declares the
+ * read — its path, decoder and Permission — once.
  */
 
 import type { ReadDeclaration } from "@/auth/declarations";
 import { DecodeError, jsonDecoder, readObject } from "@/lib/decode";
 import { pageDecoder, pagedPath, type Page, type PageAt } from "@/lib/paging";
+import { type CheckedDateRanges, checkDateRanges } from "@/lib/date-range";
+import { sortParameters, type ColumnSort } from "@/lib/sorting";
 import { isCalendarDate } from "@/lib/time";
 
-// An FFI's five closed sets, each as the API carries it, by its codes. Each is
-// exported for the SPA–API contract check (`/scripts/spa-contract/`), which
-// holds it to its enum in `/backend/docs/openapi.yaml` from outside this app's
-// import graph; nothing in `src/` imports them.
+// An FFI's five closed sets, each as the API carries it, by its codes, in the
+// order the Filter panel lists them. Each is exported for the SPA–API contract
+// check (`/scripts/spa-contract/`), which holds it to its enum in
+// `/backend/docs/openapi.yaml` from outside this app's import graph; the Filter
+// panel lists the four but the Status from them, and nothing in `src/` imports
+// the Status's.
 
 /** An FFI's FFI Type. */
-// fallow-ignore-next-line unused-export
 export const FFI_TYPES = [
   "overseas-exercises",
   "cat-a-ocs-scs",
@@ -31,15 +35,12 @@ export const FFI_TYPES = [
 ] as const;
 
 /** An FFI's Outcome. */
-// fallow-ignore-next-line unused-export
 export const FFI_OUTCOMES = ["fit", "request-waiver", "unfit"] as const;
 
 /** An FFI's Higher Authority. */
-// fallow-ignore-next-line unused-export
 export const FFI_HIGHER_AUTHORITIES = ["camo", "carmo", "cnmo", "comd-mmi", "dis"] as const;
 
 /** An FFI's Submitting MC. */
-// fallow-ignore-next-line unused-export
 export const FFI_SUBMITTING_MCS = [
   "nee-soon-camp",
   "kranji-camp",
@@ -157,15 +158,126 @@ export const decodeFfi = (value: unknown): Ffi => {
   return decoded;
 };
 
+/** A column the FFI History sorts by, as the backend's `sortBy` names it. */
+export type FfiSortColumn = "issueDate" | "expiryDate";
+
+/** How the FFI History is sorted: one column, in one direction. */
+export type FfiSort = ColumnSort<FfiSortColumn>;
+
 /**
- * The FFI History of the patient `patientId`, a page at a time,
- * `GET /api/patient-ffi/{patientId}`: the patient source's FFIs, in its own
- * order. A `404` is an ordinary answer — the source holds no patient under the
- * id — so it reads as `absent`.
+ * The Filter panel's filters, each as its control holds it: the codes chosen
+ * of each closed set but the Status, none for no filter; the Status, `all` for
+ * either; and the four `<input type="date">` values, `YYYY-MM-DD` or `""` for
+ * an end left open.
  */
-export const FFI_HISTORY: ReadDeclaration<Page<Ffi>, [patientId: string, at: PageAt], true> = {
+export interface FfiFilters {
+  types: readonly FfiType[];
+  outcomes: readonly FfiOutcome[];
+  issueDateFrom: string;
+  issueDateTo: string;
+  expiryDateFrom: string;
+  expiryDateTo: string;
+  higherAuthorities: readonly FfiHigherAuthority[];
+  submittingMcs: readonly FfiSubmittingMc[];
+  status: "all" | FfiStatus;
+}
+
+/** No filter: every FFI of the patient. */
+export const NO_FFI_FILTERS: FfiFilters = {
+  expiryDateFrom: "",
+  expiryDateTo: "",
+  higherAuthorities: [],
+  issueDateFrom: "",
+  issueDateTo: "",
+  outcomes: [],
+  status: "all",
+  submittingMcs: [],
+  types: [],
+};
+
+/** A date range the panel offers, by the prefix of its two fields, and its label. */
+export const FFI_DATE_RANGES = [
+  { label: "Issue Date", range: "issueDate" },
+  { label: "Expiry Date", range: "expiryDate" },
+] as const;
+
+/** Which range a refusal is about. */
+type FfiDateRange = (typeof FFI_DATE_RANGES)[number]["range"];
+
+/** The filters either passed, or refused with the range at fault and why. */
+export type CheckedFfiFilters = CheckedDateRanges<FfiDateRange>;
+
+/**
+ * Whether `filters` may be sent: each date set is one the calendar has, and
+ * no from-date is after its to-date ({@link checkDateRanges}). The backend
+ * refuses either with a `400`, so the panel refuses it first and sends
+ * nothing. Every code the panel offers is one of its set's.
+ */
+export function checkFfiFilters(filters: FfiFilters): CheckedFfiFilters {
+  return checkDateRanges(FFI_DATE_RANGES, filters);
+}
+
+/**
+ * How many of `filters` narrow the history: each set of codes chosen, as one,
+ * the Status, and each date set.
+ */
+export function countFfiFilters(filters: FfiFilters): number {
+  return [
+    filters.types.length > 0,
+    filters.outcomes.length > 0,
+    filters.issueDateFrom !== "",
+    filters.issueDateTo !== "",
+    filters.expiryDateFrom !== "",
+    filters.expiryDateTo !== "",
+    filters.higherAuthorities.length > 0,
+    filters.submittingMcs.length > 0,
+    filters.status !== "all",
+  ].filter(Boolean).length;
+}
+
+/**
+ * `parameter` once for each of `set`'s codes `chosen` holds, in the set's own
+ * order, however they were chosen. It walks the closed set and asks `chosen`
+ * of each code, so it reads nothing of `chosen` but whether it holds a code.
+ */
+const codes = <C extends string>(
+  parameter: string,
+  set: readonly C[],
+  chosen: readonly C[],
+): string[] => set.filter((code) => chosen.includes(code)).map((code) => `${parameter}=${code}`);
+
+/** The query string `filters` and `sort` ask for, each filter only when set. */
+function historyQuery(filters: FfiFilters, sort: FfiSort | null): string {
+  const dates = (["issueDateFrom", "issueDateTo", "expiryDateFrom", "expiryDateTo"] as const)
+    .filter((field) => filters[field] !== "")
+    .map((field) => `${field}=${filters[field]}`);
+  return [
+    ...codes("type", FFI_TYPES, filters.types),
+    ...codes("outcome", FFI_OUTCOMES, filters.outcomes),
+    ...dates,
+    ...codes("higherAuthority", FFI_HIGHER_AUTHORITIES, filters.higherAuthorities),
+    ...codes("submittingMc", FFI_SUBMITTING_MCS, filters.submittingMcs),
+    ...(filters.status === "all" ? [] : [`status=${filters.status}`]),
+    ...sortParameters(sort),
+  ].join("&");
+}
+
+/**
+ * The FFI History of the patient `patientId` that `filters` narrow, a page at
+ * a time, in the order `sort` names, `GET /api/patient-ffi/{patientId}`: the
+ * patient source's FFIs, in its own order when `sort` is `null`. The source
+ * filters and sorts; the backend passes both through. A `404` is an ordinary
+ * answer — the source holds no patient under the id — so it reads as
+ * `absent`.
+ */
+export const FFI_HISTORY: ReadDeclaration<
+  Page<Ffi>,
+  [patientId: string, filters: FfiFilters, sort: FfiSort | null, at: PageAt],
+  true
+> = {
   absentOnNotFound: true,
   decode: jsonDecoder(pageDecoder("FfiHistoryPage", "ffis", decodeFfi)),
-  path: (patientId, at) => pagedPath(`/api/patient-ffi/${encodeURIComponent(patientId)}`, at),
+  path: (patientId, filters, sort, at) =>
+    pagedPath(`/api/patient-ffi/${encodeURIComponent(patientId)}`, at, historyQuery(filters, sort)),
   permission: "patient:read",
 };

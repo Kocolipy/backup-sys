@@ -16,6 +16,7 @@ import com.example.backend.patient.domain.DateRange;
 import com.example.backend.patient.domain.PatientFilter;
 import com.example.backend.patient.domain.PatientQuery;
 import com.example.backend.patient.domain.PatientSort;
+import com.example.backend.patient.domain.SortOrder;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import com.github.tomakehurst.wiremock.verification.LoggedRequest;
 import java.io.PrintWriter;
@@ -151,7 +152,7 @@ class PatientSourceSearchAdapterTests {
         "LAST_VISIT, ASCENDING, 'last-visit,_id'",
         "LAST_VISIT, DESCENDING, '-last-visit,_id'"})
     void aSortIsTheSourcesOwnOnItsSearchParameter(PatientSort.Field field,
-            PatientSort.Order order, String sorted) {
+            SortOrder order, String sorted) {
         searchingTan(PatientFilter.NONE, new PatientSort(field, order));
 
         assertThat(sentQuery()).containsEntry("_sort", sorted);
@@ -204,7 +205,7 @@ class PatientSourceSearchAdapterTests {
                 new PatientFilter(AdministrativeGender.FEMALE,
                         new DateRange(LocalDate.of(1990, 1, 1), LocalDate.of(1999, 12, 31)),
                         new DateRange(LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31))),
-                new PatientSort(PatientSort.Field.BIRTH_DATE, PatientSort.Order.DESCENDING),
+                new PatientSort(PatientSort.Field.BIRTH_DATE, SortOrder.DESCENDING),
                 new PageRequest(1, 5));
 
         assertThat(sentQueryValues()).isEqualTo(Map.of(

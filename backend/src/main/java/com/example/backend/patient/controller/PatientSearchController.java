@@ -1,18 +1,19 @@
 package com.example.backend.patient.controller;
 
+import static com.example.backend.patient.controller.QueryParameters.DATE;
+import static com.example.backend.patient.controller.QueryParameters.range;
+import static com.example.backend.patient.controller.QueryParameters.spelled;
+
 import com.example.backend.paging.domain.PageParameter;
 import com.example.backend.paging.domain.PageRequest;
 import com.example.backend.patient.application.PatientSearchService;
 import com.example.backend.patient.domain.AdministrativeGender;
-import com.example.backend.patient.domain.DateRange;
 import com.example.backend.patient.domain.PatientFilter;
 import com.example.backend.patient.domain.PatientQuery;
 import com.example.backend.patient.domain.PatientSort;
-import java.beans.PropertyEditorSupport;
+import com.example.backend.patient.domain.SortOrder;
 import java.time.LocalDate;
-import java.util.function.Function;
 import org.springframework.format.annotation.DateTimeFormat;
-import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.WebDataBinder;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -20,7 +21,6 @@ import org.springframework.web.bind.annotation.InitBinder;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Inbound HTTP adapter for a Patient search (ADR 0018): {@code GET /api/patient-search}.
@@ -40,7 +40,7 @@ import org.springframework.web.server.ResponseStatusException;
  *       ({@link PatientFilter#genderOf}), and {@code birthDateFrom}, {@code birthDateTo},
  *       {@code lastVisitFrom} and {@code lastVisitTo} to calendar dates, {@code YYYY-MM-DD}; any
  *       other value is the binder's {@code 400}. A from-date after its to-date is the same
- *       {@code 400} ({@link DateRange}), the refusal its cause.
+ *       {@code 400} ({@code DateRange}, {@link QueryParameters#range}), the refusal its cause.
  *   <li>{@code sortBy} binds to {@code birthDate} or {@code lastVisit} and {@code sortOrder} to
  *       {@code ascending} or {@code descending} ({@link PatientSort}); any other value is the
  *       binder's {@code 400}. A {@code sortOrder} with no {@code sortBy} names a direction for no
@@ -75,7 +75,7 @@ public class PatientSearchController {
     void spellings(WebDataBinder binder) {
         binder.registerCustomEditor(AdministrativeGender.class, spelled(PatientFilter::genderOf));
         binder.registerCustomEditor(PatientSort.Field.class, spelled(PatientSort.Field::of));
-        binder.registerCustomEditor(PatientSort.Order.class, spelled(PatientSort.Order::of));
+        binder.registerCustomEditor(SortOrder.class, spelled(SortOrder::of));
     }
 
     @GetMapping
@@ -88,7 +88,7 @@ public class PatientSearchController {
             @RequestParam(required = false) @DateTimeFormat(pattern = DATE) LocalDate lastVisitFrom,
             @RequestParam(required = false) @DateTimeFormat(pattern = DATE) LocalDate lastVisitTo,
             @RequestParam(required = false) PatientSort.Field sortBy,
-            @RequestParam(required = false) PatientSort.Order sortOrder,
+            @RequestParam(required = false) SortOrder sortOrder,
             @RequestParam(required = false) PageParameter startIndex,
             @RequestParam(required = false) PageParameter count) {
         PatientFilter filter = new PatientFilter(gender, range(birthDateFrom, birthDateTo),
@@ -97,40 +97,5 @@ public class PatientSearchController {
         return PatientSearchPage.of(
                 searches.search(q, filter, PatientSort.of(sortBy, sortOrder), page),
                 page.startIndex());
-    }
-
-    /** A calendar date, exactly: four digits of year, two of month and two of day. */
-    private static final String DATE = "yyyy-MM-dd";
-
-    /** The range from {@code from} to {@code to}, or this request's {@code 400} for an inverted one. */
-    private static DateRange range(LocalDate from, LocalDate to) {
-        try {
-            return new DateRange(from, to);
-        } catch (IllegalArgumentException inverted) {
-            throw new InvertedDateRangeException(inverted);
-        }
-    }
-
-    /** An editor reading a parameter's text through {@code read}, whose refusal fails the binding. */
-    private static PropertyEditorSupport spelled(Function<String, ?> read) {
-        return new PropertyEditorSupport() {
-            @Override
-            public void setAsText(String text) {
-                setValue(read.apply(text));
-            }
-        };
-    }
-
-    /**
-     * A from-date after its to-date: the caller's error, answered as a parameter that cannot be
-     * bound is — the application API's generic {@code 400}, with its one refusal record. The
-     * refusal travels as the cause, so the record names it as the reason; it carries no message of
-     * its own and nothing the caller sent.
-     */
-    static final class InvertedDateRangeException extends ResponseStatusException {
-
-        InvertedDateRangeException(IllegalArgumentException inverted) {
-            super(HttpStatus.BAD_REQUEST, null, inverted);
-        }
     }
 }

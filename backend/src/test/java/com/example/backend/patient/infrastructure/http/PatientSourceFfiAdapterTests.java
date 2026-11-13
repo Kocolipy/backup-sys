@@ -11,14 +11,26 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 import com.example.backend.observability.LogEvent.ErrorCategory;
 import com.example.backend.paging.domain.PageRequest;
 import com.example.backend.patient.PatientSourceStubs;
+import com.example.backend.patient.domain.DateRange;
+import com.example.backend.patient.domain.FfiFilter;
+import com.example.backend.patient.domain.FfiHigherAuthority;
+import com.example.backend.patient.domain.FfiOutcome;
+import com.example.backend.patient.domain.FfiSort;
+import com.example.backend.patient.domain.FfiStatus;
+import com.example.backend.patient.domain.FfiSubmittingMc;
+import com.example.backend.patient.domain.FfiType;
 import com.example.backend.patient.domain.PatientId;
+import com.example.backend.patient.domain.SortOrder;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import com.github.tomakehurst.wiremock.verification.LoggedRequest;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.time.Duration;
+import java.time.LocalDate;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
@@ -95,7 +107,8 @@ class PatientSourceFfiAdapterTests {
 
     private static Fault faultReading(PatientSourceAdapter adapter, String patient) {
         PatientSourceException fault = (PatientSourceException) catchThrowable(() ->
-                adapter.findFfiHistory(new PatientId(patient), SECOND_PAGE_OF_FIVE));
+                adapter.findFfiHistory(new PatientId(patient), FfiFilter.NONE,
+                FfiSort.SOURCE_ORDER, SECOND_PAGE_OF_FIVE));
         return new Fault(fault.getMessage(), fault.reason(), fault.category());
     }
 
@@ -109,24 +122,142 @@ class PatientSourceFfiAdapterTests {
 
     // ---- the call ------------------------------------------------------------------------
 
+    /** The one FFI History read the source received. */
+    private static LoggedRequest sent() {
+        return SOURCE.findAll(getRequestedFor(urlPathEqualTo(PROBE_PATH))).getFirst();
+    }
+
+    /** The one FFI History read the source received, every value of each query parameter. */
+    private static Map<String, List<String>> sentQuery() {
+        Map<String, List<String>> query = new TreeMap<>();
+        sent().getQueryParams().forEach((name, value) -> query.put(name, value.values()));
+        return query;
+    }
+
+    /** The second page of five of the probe patient's FFI History, filtered and sorted so. */
+    private static void reading(FfiFilter filter, FfiSort sort) {
+        answering(page());
+        adapter().findFfiHistory(new PatientId(PROBE_PATIENT), filter, sort, SECOND_PAGE_OF_FIVE);
+    }
+
     /**
      * The read asks the source for the patient's FFI History from the page's zero-based offset,
-     * for the page's count, with an accurate total — and no sort, so the order is the source's.
+     * for the page's count, with an accurate total — and, with no filter and no column to sort
+     * by, nothing else: no {@code _sort}, so the order is the source's own.
      */
     @Test
     void aReadAsksTheSourceForThePageAndItsTotalInTheSourcesOrder() {
-        answering(page());
+        reading(FfiFilter.NONE, FfiSort.SOURCE_ORDER);
 
-        adapter().findFfiHistory(new PatientId(PROBE_PATIENT), SECOND_PAGE_OF_FIVE);
-
-        LoggedRequest sent = SOURCE.findAll(getRequestedFor(urlPathEqualTo(PROBE_PATH)))
-                .getFirst();
-        Map<String, List<String>> query = new TreeMap<>();
-        sent.getQueryParams().forEach((name, value) -> query.put(name, value.values()));
-        assertThat(query).isEqualTo(Map.of(
+        assertThat(sentQuery()).isEqualTo(Map.of(
                 "_offset", List.of("5"),
                 "_count", List.of("5"),
                 "_total", List.of("accurate")));
+    }
+
+    /**
+     * Each sort is the source's {@code _sort} on its own search parameter — {@code issue-date}
+     * or {@code expiry-date}, descending with a leading {@code -} — its ties broken by id.
+     */
+    @ParameterizedTest
+    @CsvSource({
+        "ISSUE_DATE, ASCENDING, 'issue-date,_id'",
+        "ISSUE_DATE, DESCENDING, '-issue-date,_id'",
+        "EXPIRY_DATE, ASCENDING, 'expiry-date,_id'",
+        "EXPIRY_DATE, DESCENDING, '-expiry-date,_id'"})
+    void aSortIsTheSourcesOwnOnItsSearchParameter(FfiSort.Field field, SortOrder order,
+            String sorted) {
+        reading(FfiFilter.NONE, new FfiSort(field, order));
+
+        assertThat(sentQuery()).containsEntry("_sort", List.of(sorted));
+    }
+
+    /**
+     * A filter on a closed set is its search parameter once, its codes joined by commas — FHIR's
+     * OR — in the set's own order, whatever order they were asked in.
+     */
+    @Test
+    void eachSetOfCodesIsOneParameterItsCodesJoinedByCommas() {
+        reading(new FfiFilter(Set.of(FfiType.DENTAL, FfiType.IPPT),
+                Set.of(FfiOutcome.UNFIT, FfiOutcome.FIT), DateRange.ANY, DateRange.ANY,
+                Set.of(FfiHigherAuthority.DIS, FfiHigherAuthority.COMD_MMI),
+                Set.of(FfiSubmittingMc.HENDON_CAMP), null), FfiSort.SOURCE_ORDER);
+
+        assertThat(sentQuery()).isEqualTo(Map.of(
+                "type", List.of("ippt,dental"),
+                "outcome", List.of("fit,unfit"),
+                "higher-authority", List.of("comd-mmi,dis"),
+                "submitting-mc", List.of("hendon-camp"),
+                "_offset", List.of("5"),
+                "_count", List.of("5"),
+                "_total", List.of("accurate")));
+    }
+
+    /** The comma between two codes reaches the source as a comma, FHIR's OR, not escaped. */
+    @Test
+    void theCommaBetweenCodesIsSentAsItIs() {
+        reading(new FfiFilter(Set.of(FfiType.DENTAL, FfiType.IPPT), Set.of(), DateRange.ANY,
+                DateRange.ANY, Set.of(), Set.of(), null), FfiSort.SOURCE_ORDER);
+
+        assertThat(sent().getUrl().split("[?&]")).contains("type=ippt,dental");
+    }
+
+    /**
+     * A date range is its search parameter once for each end it has — {@code ge} the from-date and
+     * {@code le} the to-date, both inclusive — the Issue Date's {@code issue-date} and the Expiry
+     * Date's {@code expiry-date}.
+     */
+    @ParameterizedTest
+    @CsvSource(nullValues = "-", delimiter = '|', value = {
+        "2024-01-01 | 2024-12-31 | ge2024-01-01,le2024-12-31",
+        "2024-01-01 | -          | ge2024-01-01",
+        "-          | 2024-12-31 | le2024-12-31"})
+    void aDateRangeIsItsSearchParameterForEachEnd(LocalDate from, LocalDate to, String ends) {
+        reading(new FfiFilter(null, null, new DateRange(from, to), DateRange.ANY, null, null, null),
+                FfiSort.SOURCE_ORDER);
+        Map<String, List<String>> issued = sentQuery();
+        SOURCE.resetRequests();
+        reading(new FfiFilter(null, null, DateRange.ANY, new DateRange(from, to), null, null, null),
+                FfiSort.SOURCE_ORDER);
+        Map<String, List<String>> expiring = sentQuery();
+
+        assertThat(Arrays.asList(issued.get("issue-date"), issued.containsKey("expiry-date"),
+                expiring.get("expiry-date"), expiring.containsKey("issue-date")))
+                .containsExactly(List.of(ends.split(",")), false, List.of(ends.split(",")),
+                        false);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"ACTIVE, active", "INACTIVE, inactive"})
+    void aStatusIsTheSourcesStatusByItsCode(FfiStatus status, String code) {
+        reading(new FfiFilter(null, null, DateRange.ANY, DateRange.ANY, null, null, status),
+                FfiSort.SOURCE_ORDER);
+
+        assertThat(sentQuery()).containsEntry("status", List.of(code));
+    }
+
+    /** Every filter and a sort at once, each sent as its own. */
+    @Test
+    void everyFilterNarrowsTheReadAtOnceInTheOrderAsked() {
+        reading(new FfiFilter(Set.of(FfiType.VOCATIONAL), Set.of(FfiOutcome.REQUEST_WAIVER),
+                        new DateRange(LocalDate.of(2023, 1, 1), LocalDate.of(2023, 12, 31)),
+                        new DateRange(LocalDate.of(2024, 1, 1), null),
+                        Set.of(FfiHigherAuthority.CNMO), Set.of(FfiSubmittingMc.KRANJI_CAMP),
+                        FfiStatus.INACTIVE),
+                new FfiSort(FfiSort.Field.EXPIRY_DATE, SortOrder.DESCENDING));
+
+        assertThat(sentQuery()).isEqualTo(Map.ofEntries(
+                Map.entry("type", List.of("vocational")),
+                Map.entry("outcome", List.of("request-waiver")),
+                Map.entry("issue-date", List.of("ge2023-01-01", "le2023-12-31")),
+                Map.entry("expiry-date", List.of("ge2024-01-01")),
+                Map.entry("higher-authority", List.of("cnmo")),
+                Map.entry("submitting-mc", List.of("kranji-camp")),
+                Map.entry("status", List.of("inactive")),
+                Map.entry("_sort", List.of("-expiry-date,_id")),
+                Map.entry("_offset", List.of("5")),
+                Map.entry("_count", List.of("5")),
+                Map.entry("_total", List.of("accurate"))));
     }
 
     /** As every read of the source, it presents nothing, and asks for FHIR JSON. */
@@ -134,7 +265,8 @@ class PatientSourceFfiAdapterTests {
     void aReadPresentsNoCredentialAndAsksForFhirJson() {
         answering(page());
 
-        adapter().findFfiHistory(new PatientId(PROBE_PATIENT), SECOND_PAGE_OF_FIVE);
+        adapter().findFfiHistory(new PatientId(PROBE_PATIENT), FfiFilter.NONE,
+                FfiSort.SOURCE_ORDER, SECOND_PAGE_OF_FIVE);
 
         LoggedRequest sent = SOURCE.findAll(getRequestedFor(urlPathEqualTo(PROBE_PATH)))
                 .getFirst();
@@ -149,8 +281,10 @@ class PatientSourceFfiAdapterTests {
         answering(page());
         PatientSourceAdapter adapter = adapter();
 
-        adapter.findFfiHistory(new PatientId(PROBE_PATIENT), SECOND_PAGE_OF_FIVE);
-        adapter.findFfiHistory(new PatientId(PROBE_PATIENT), SECOND_PAGE_OF_FIVE);
+        adapter.findFfiHistory(new PatientId(PROBE_PATIENT), FfiFilter.NONE,
+                FfiSort.SOURCE_ORDER, SECOND_PAGE_OF_FIVE);
+        adapter.findFfiHistory(new PatientId(PROBE_PATIENT), FfiFilter.NONE,
+                FfiSort.SOURCE_ORDER, SECOND_PAGE_OF_FIVE);
 
         SOURCE.verify(2, getRequestedFor(urlPathEqualTo(PROBE_PATH)));
     }
@@ -308,7 +442,8 @@ class PatientSourceFfiAdapterTests {
         answering(page(ffi("status", "lapsed")));
 
         Throwable fault = catchThrowable(() ->
-                adapter().findFfiHistory(new PatientId(PROBE_PATIENT), SECOND_PAGE_OF_FIVE));
+                adapter().findFfiHistory(new PatientId(PROBE_PATIENT), FfiFilter.NONE,
+                FfiSort.SOURCE_ORDER, SECOND_PAGE_OF_FIVE));
 
         StringWriter printed = new StringWriter();
         fault.printStackTrace(new PrintWriter(printed));

@@ -14,6 +14,7 @@ import { DecodeError, jsonDecoder, readObject } from "@/lib/decode";
 import { pageDecoder, pagedPath, type Page, type PageAt } from "@/lib/paging";
 import { isCalendarDate } from "@/lib/time";
 import { PATIENT_GENDERS, type PatientGender } from "@/lib/patient-gender";
+import { type CheckedDateRanges, checkDateRanges } from "@/lib/date-range";
 import { sortParameters, type ColumnSort } from "@/lib/sorting";
 
 /**
@@ -111,32 +112,19 @@ export const PATIENT_DATE_RANGES = [
 ] as const;
 
 /** Which range a refusal is about. */
-export type PatientDateRange = (typeof PATIENT_DATE_RANGES)[number]["range"];
+type PatientDateRange = (typeof PATIENT_DATE_RANGES)[number]["range"];
 
 /** The filters either passed, or refused with the range at fault and why. */
-export type CheckedPatientFilters =
-  { ok: true } | { ok: false; range: PatientDateRange; message: string };
+export type CheckedPatientFilters = CheckedDateRanges<PatientDateRange>;
 
 /**
  * Whether `filters` may be sent: each date set is one the calendar has, and
  * no from-date is after its to-date — both ends are inclusive, so a range of
- * one day passes. The backend refuses either with a `400`, so the panel
- * refuses it first and sends nothing.
+ * one day passes ({@link checkDateRanges}). The backend refuses either with a
+ * `400`, so the panel refuses it first and sends nothing.
  */
 export function checkPatientFilters(filters: PatientFilters): CheckedPatientFilters {
-  for (const { label, range } of PATIENT_DATE_RANGES) {
-    const from = filters[`${range}From`];
-    const to = filters[`${range}To`];
-    if ([from, to].some((end) => end !== "" && !isCalendarDate(end))) {
-      return { message: `Enter the ${label} dates as real dates.`, ok: false, range };
-    }
-    // Both are `YYYY-MM-DD`, so their text orders as their days do; an open
-    // from-date, "", is before every to-date, and an open to-date bounds nothing.
-    if (to !== "" && from > to) {
-      return { message: `The ${label} from-date must not be after its to-date.`, ok: false, range };
-    }
-  }
-  return { ok: true };
+  return checkDateRanges(PATIENT_DATE_RANGES, filters);
 }
 
 /** How many of `filters` narrow the results: the gender, and each date set. */

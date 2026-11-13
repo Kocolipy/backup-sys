@@ -25,8 +25,11 @@ public interface PatientStore {
             PageRequest page);
 
     /**
-     * The page {@code page} of the FFI History of the patient held under {@code id}, in the
-     * source's own order (ADR 0019), or none when the source holds no patient under it.
+     * The page {@code page} of the FFI History of the patient held under {@code id} that
+     * {@code filter} narrows, in the order {@code sort} names — the source's own order for
+     * {@link FfiSort#SOURCE_ORDER} — as the source filters, orders and pages it, ties broken by
+     * id (ADR 0019), or none when the source holds no patient under it.
      */
-    Optional<FfiHistory> findFfiHistory(PatientId id, PageRequest page);
+    Optional<FfiHistory> findFfiHistory(PatientId id, FfiFilter filter, FfiSort sort,
+            PageRequest page);
 }

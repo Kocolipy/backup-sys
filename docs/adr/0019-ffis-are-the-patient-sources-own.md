@@ -1,7 +1,7 @@
 ---
 type: Decision Record
 title: "ADR 0019: FFIs are the patient source's own, read through a FHIR-shaped page, and not audited"
-description: A patient's FFI History is the in-house patient source's own, read through it on every request at GET {base}/Patient/{id}/ffi and held by no table or cache; the source answers a FHIR-R4-shaped searchset Bundle of custom FFI objects that is documented as not FHIR-conformant, paged by ADR 0017's startIndex and count in the source's own order; and an FFI read, like a read of one Patient by id, appends no audit row.
+description: A patient's FFI History is the in-house patient source's own, read through it on every request at GET {base}/Patient/{id}/ffi and held by no table or cache; the source answers a FHIR-R4-shaped searchset Bundle of custom FFI objects that is documented as not FHIR-conformant, paged by ADR 0017's startIndex and count, sorted by Issue Date or Expiry Date and filtered on every column by the source, in its own order when no sort is chosen; and an FFI read, like a read of one Patient by id, appends no audit row.
 tags: [patient, ffi, paging, audit, integration]
 ---
 
@@ -62,9 +62,9 @@ of `openapi.yaml` and an SPA set held set-equal; the SPA names each code with
 its label. Paging is ADR 0017's `startIndex` and `count`, read by `PageParameter`
 and `PageRequest`, with ADR 0018's D3 departure: the page is the source's to
 read, `count=0` and a page past the end included, and `totalResults` is the
-source's `total`. No `_sort` is sent, so the source's default order is the order
-shown. Our answer is plain JSON outside `/api/patient`, so its errors are the
-application API's `ApiError`.
+source's `total`. With no sort chosen, no `_sort` is sent, so the source's
+default order is the order shown (D4). Our answer is plain JSON outside
+`/api/patient`, so its errors are the application API's `ApiError`.
 
 **D3. FFI reads are not audited.** A read of a patient's FFI History appends no
 audit row, as a read of one Patient by id appends none: it reads one patient's
@@ -72,24 +72,42 @@ records by the id the EHR context gave, the ordinary unit of care, not a sweep
 across patients. A refused read is audited as `ACCESS_DENIED`, as every
 authorization refusal is. `patient:read` gates it, in the handler's
 `@PreAuthorize`, the chain's backstop and the document's `security` (ADR 0015).
+A sorted or filtered read is no different: it is still one patient's records.
+
+**D4. The sort and the filters are the source's, and the source's order is the
+default.** As for a Patient search (ADR 0018, D7), the source sorts, filters,
+pages and counts, and the service passes the sort and the filters through and
+does none of it itself: the Issue Date or the Expiry Date, one at a time, as
+`_sort=±issue-date|±expiry-date,_id`, ties broken by id; and a filter on every
+column — any of the codes of each closed set but the Status, sent once with its
+codes joined by commas (FHIR's OR), one Status, and a range for each date, as
+`ge` and `le` on its search parameter — combined with AND. Every value is
+checked as the request is read in, so a code outside its set, a date that is no
+calendar date or an inverted range is our `400` before the source is called.
+**With no sort chosen, no `_sort` is sent**: unlike a Patient search, whose
+matches have no order of their own and so take newest Last visit first, an FFI
+History has the order the source keeps it in, and that is the order shown until
+a heading is pressed. The domain's `FfiSort` and `FfiFilter` hold the rules
+(`/docs/domain/ffi.md`, "Sort and filters").
 
 ## Consequences
 
 - **The FFI page depends on the source's availability.** A slow or failing
   source is "Couldn't load FFIs" with Try again, never an empty history.
 - **A real source must answer this contract**, or the adapter changes with it.
-  It must page, count accurately, keep its own stable order and send every field
-  of every FFI; a source that cannot is no FFI History source until its adapter
-  changes.
+  It must filter, sort, page, count accurately, keep its own stable order and
+  send every field of every FFI; a source that cannot is no FFI History source
+  until its adapter changes.
 - **A new code in any closed set is a contract change.** The source sending a
   code the service does not know is a `502`, not a row shown with a blank cell,
   until the enum, the document and the SPA set gain it together.
 - **No trail records who read whose FFIs.** A deployment whose policy requires
   every read of patient data to be recorded must revisit D3 together with the
   unaudited read by id (`/docs/domain/patient.md`).
-- **The local mock answers canned pages only**: Tan Wei Ming's four FFIs, Tan
-  Hui Min's seven over two pages, none for every other fixture, and a `404` for
-  any other id (`backend/docs/configuration/patient-source.md`).
+- **The local mock answers canned pages only**: Tan Wei Ming's four FFIs and
+  each sort of them, Tan Hui Min's seven over two pages and one canned read of
+  each filter, none for every other fixture or read, and a `404` for any other
+  id (`backend/docs/configuration/patient-source.md`).
 
 ## Alternatives considered
 
@@ -105,3 +123,9 @@ authorization refusal is. `patient:read` gates it, in the handler's
 - **Audit every FFI read, as a Patient search is.** Rejected: a read by the id
   in context is not the bulk read that makes a search audited, and auditing it
   alone would leave the read of the Patient itself unaudited beside it.
+- **A default sort, as a Patient search has** — newest Issue Date first.
+  Rejected: the source keeps an FFI History in an order of its own, which a
+  default sort would hide behind one the service chose.
+- **Sort and filter the page in the service.** Rejected: the service holds only
+  the page the source answered, so its order and its count would be wrong across
+  pages, as a Patient search's would (ADR 0018, D7).

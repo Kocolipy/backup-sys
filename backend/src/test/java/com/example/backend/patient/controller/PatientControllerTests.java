@@ -16,7 +16,9 @@ import com.example.backend.observability.LogEvent;
 import com.example.backend.patient.PatientSourceStubs;
 import com.example.backend.patient.application.PatientReadService;
 import com.example.backend.paging.domain.PageRequest;
+import com.example.backend.patient.domain.FfiFilter;
 import com.example.backend.patient.domain.FfiHistory;
+import com.example.backend.patient.domain.FfiSort;
 import com.example.backend.patient.domain.Patient;
 import com.example.backend.patient.domain.PatientId;
 import com.example.backend.patient.domain.PatientMatches;
@@ -81,7 +83,8 @@ class PatientControllerTests {
         }
 
         @Override
-        public Optional<FfiHistory> findFfiHistory(PatientId id, PageRequest page) {
+        public Optional<FfiHistory> findFfiHistory(PatientId id, FfiFilter filter, FfiSort sort,
+                PageRequest page) {
             throw new UnsupportedOperationException("a read by id is all this store is asked");
         }
     };

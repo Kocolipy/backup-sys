@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 import org.junit.jupiter.api.Test;
@@ -357,9 +358,25 @@ class PatientSourceFixturesTests {
                 .toList();
     }
 
-    /** The FFIs of every page of {@code patient}'s FFI History, page after page. */
+    /** The filters an FFI History read sends the source, each as its own search parameter. */
+    private static final List<String> FFI_FILTER_PARAMETERS = List.of("type", "outcome",
+            "issue-date", "expiry-date", "higher-authority", "submitting-mc", "status");
+
+    /** Whether {@code stub} is a fixture's own stub rather than the fallback answering several. */
+    private static boolean canned(PatientSourceStubs.FfiStub stub) {
+        return !stub.path().contains("(");
+    }
+
+    /** Whether {@code stub} reads its history unfiltered, in the source's own order. */
+    private static boolean inTheSourcesOrder(PatientSourceStubs.FfiStub stub) {
+        return canned(stub) && Stream.concat(Stream.of("_sort"), FFI_FILTER_PARAMETERS.stream())
+                .allMatch(parameter -> stub.query().at("/" + parameter + "/absent").asBoolean());
+    }
+
+    /** The FFIs of every page of {@code patient}'s FFI History, page after page, as the source orders it. */
     private static List<JsonNode> ffisOf(String patient) {
         return PatientSourceStubs.ffiHistories().stream()
+                .filter(PatientSourceFixturesTests::inTheSourcesOrder)
                 .filter(stub -> stub.path().equals("/Patient/" + patient + "/ffi"))
                 .sorted(Comparator.comparing(stub -> stub.query().at("/_offset/equalTo")
                         .asInt()))
@@ -374,7 +391,7 @@ class PatientSourceFixturesTests {
     @Test
     void twoFixturesHaveAnFfiHistoryAndTheFallbackServesEveryFixture() {
         List<String> exact = PatientSourceStubs.ffiHistories().stream()
-                .filter(stub -> !stub.path().contains("("))
+                .filter(PatientSourceFixturesTests::inTheSourcesOrder)
                 .map(stub -> stub.path() + " " + stub.query().at("/_offset/equalTo").asString()
                         + " of " + stub.bundle().at("/total").asInt())
                 .toList();
@@ -442,12 +459,126 @@ class PatientSourceFixturesTests {
     @Test
     void everyFfiIdIsAFhirIdOfItsOwn() {
         List<String> ids = PatientSourceStubs.ffiHistories().stream()
+                .filter(PatientSourceFixturesTests::inTheSourcesOrder)
                 .flatMap(stub -> ffisOf(stub).stream())
                 .map(ffi -> ffi.get("id").asString())
                 .toList();
 
         assertThat(ids).hasSize(11).doesNotHaveDuplicates()
                 .allSatisfy(id -> assertThat(id).matches("[A-Za-z0-9\\-.]{1,64}"));
+    }
+
+    // ---- the FFI sort and filter stubs ----------------------------------------------------
+
+    /**
+     * Every canned FFI History read pins the sort and each filter it does not use as absent, and
+     * each it uses to its exact values, so a read with a filter or sort no stub names falls to the
+     * fallback rather than to an unfiltered page.
+     */
+    @Test
+    void everyCannedFfiReadPinsItsSortAndEveryFilterItUsesOrNot() {
+        assertThat(PatientSourceStubs.ffiHistories()).filteredOn(PatientSourceFixturesTests::canned)
+                .hasSize(17)
+                .allSatisfy(stub -> assertThat(Stream.concat(Stream.of("_sort"),
+                        FFI_FILTER_PARAMETERS.stream()))
+                        .as("each matcher, absent or pinned")
+                        .allMatch(parameter -> pinsOrAbsent(stub.query().path(parameter))));
+    }
+
+    /** The values a stub's matcher pins {@code parameter} to: none when it is absent. */
+    private static List<String> pinned(PatientSourceStubs.FfiStub stub, String parameter) {
+        JsonNode matcher = stub.query().path(parameter);
+        if (matcher.has("equalTo")) {
+            return List.of(matcher.get("equalTo").asString());
+        }
+        return StreamSupport.stream(matcher.path("hasExactly").spliterator(), false)
+                .map(value -> value.get("equalTo").asString())
+                .toList();
+    }
+
+    /** Whether {@code ffi}'s {@code field} is one of the comma-joined codes {@code pinned} names. */
+    private static boolean anyOf(JsonNode ffi, String field, List<String> pinned) {
+        return pinned.isEmpty()
+                || List.of(pinned.getFirst().split(",")).contains(ffi.get(field).asString());
+    }
+
+    /**
+     * Every sorted or filtered FFI read answers exactly the FFIs its filters select from the
+     * patient's history in the source's own order, sorted as its {@code _sort} names — ties by
+     * id — or left in that order with none, paged by its offset, five to a page, with the total it
+     * selects: the source's behaviour, as /docs/domain/ffi.md documents it. A set of codes is any
+     * of them, and a date range keeps both ends.
+     */
+    @Test
+    void everySortedOrFilteredFfiReadAnswersTheFfisItsFiltersAndSortSelect() {
+        List<PatientSourceStubs.FfiStub> narrowed = PatientSourceStubs.ffiHistories().stream()
+                .filter(PatientSourceFixturesTests::canned)
+                .filter(stub -> !inTheSourcesOrder(stub))
+                .toList();
+
+        assertThat(narrowed).hasSize(14).allSatisfy(stub -> {
+            String patient = stub.path().replaceFirst("^/Patient/", "").replaceFirst("/ffi$", "");
+            List<JsonNode> selected = ffisOf(patient).stream()
+                    .filter(ffi -> anyOf(ffi, "type", pinned(stub, "type")))
+                    .filter(ffi -> anyOf(ffi, "outcome", pinned(stub, "outcome")))
+                    .filter(ffi -> inRange(ffi.get("issueDate").asString(),
+                            pinned(stub, "issue-date")))
+                    .filter(ffi -> inRange(ffi.get("expiryDate").asString(),
+                            pinned(stub, "expiry-date")))
+                    .filter(ffi -> anyOf(ffi, "higherAuthority", pinned(stub, "higher-authority")))
+                    .filter(ffi -> anyOf(ffi, "submittingMc", pinned(stub, "submitting-mc")))
+                    .filter(ffi -> anyOf(ffi, "status", pinned(stub, "status")))
+                    .toList();
+            List<String> sorts = pinned(stub, "_sort");
+            if (!sorts.isEmpty()) {
+                String sort = sorts.getFirst();
+                String field = sort.startsWith("-issue-date") || sort.startsWith("issue-date")
+                        ? "issueDate" : "expiryDate";
+                Comparator<String> direction = sort.startsWith("-")
+                        ? Comparator.<String>reverseOrder()
+                        : Comparator.<String>naturalOrder();
+                selected = selected.stream()
+                        .sorted(Comparator.comparing((JsonNode ffi) -> ffi.get(field).asString(),
+                                        direction)
+                                .thenComparing(ffi -> ffi.get("id").asString()))
+                        .toList();
+            }
+            List<String> ids = selected.stream().map(ffi -> ffi.get("id").asString()).toList();
+            int offset = stub.query().at("/_offset/equalTo").asInt();
+
+            assertThat(List.of(stub.bundle().at("/total").asInt(),
+                    ffisOf(stub).stream().map(ffi -> ffi.get("id").asString()).toList()))
+                    .containsExactly(ids.size(),
+                            ids.subList(offset, Math.min(offset + 5, ids.size())));
+        });
+    }
+
+    /**
+     * The sort and filter stubs cover each direction of each sortable column, every filter, a
+     * filtered history spanning two pages and one that matches nothing.
+     */
+    @Test
+    void theFfiSortAndFilterStubsCoverEverySortAndFilter() {
+        List<PatientSourceStubs.FfiStub> canned = PatientSourceStubs.ffiHistories().stream()
+                .filter(PatientSourceFixturesTests::canned)
+                .toList();
+
+        assertThat(List.of(
+                canned.stream().flatMap(stub -> pinned(stub, "_sort").stream())
+                        .collect(Collectors.toSet()),
+                FFI_FILTER_PARAMETERS.stream()
+                        .filter(parameter -> canned.stream()
+                                .anyMatch(stub -> !pinned(stub, parameter).isEmpty()))
+                        .toList(),
+                canned.stream().filter(stub -> !inTheSourcesOrder(stub))
+                        .map(stub -> stub.bundle().at("/total").asInt())
+                        .anyMatch(total -> total > 5),
+                canned.stream().filter(stub -> !inTheSourcesOrder(stub))
+                        .anyMatch(stub -> stub.bundle().at("/total").asInt() == 0)))
+                .containsExactly(
+                        Set.of("issue-date,_id", "-issue-date,_id", "expiry-date,_id",
+                                "-expiry-date,_id"),
+                        FFI_FILTER_PARAMETERS, true, true);
     }
 
     /**

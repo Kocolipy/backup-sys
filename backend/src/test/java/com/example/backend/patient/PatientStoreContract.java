@@ -7,7 +7,9 @@ import com.example.backend.patient.domain.AdministrativeGender;
 import com.example.backend.patient.domain.DateRange;
 import com.example.backend.patient.domain.Ffi;
 import com.example.backend.patient.domain.FfiHigherAuthority;
+import com.example.backend.patient.domain.FfiFilter;
 import com.example.backend.patient.domain.FfiHistory;
+import com.example.backend.patient.domain.FfiSort;
 import com.example.backend.patient.domain.FfiOutcome;
 import com.example.backend.patient.domain.FfiStatus;
 import com.example.backend.patient.domain.FfiSubmittingMc;
@@ -21,6 +23,7 @@ import com.example.backend.patient.domain.PatientFilter;
 import com.example.backend.patient.domain.PatientQuery;
 import com.example.backend.patient.domain.PatientSort;
 import com.example.backend.patient.domain.PatientStore;
+import com.example.backend.patient.domain.SortOrder;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.stream.Stream;
@@ -217,7 +220,7 @@ public abstract class PatientStoreContract {
                 to == null ? null : LocalDate.parse(to));
     }
 
-    private static PatientSort sortedBy(PatientSort.Field field, PatientSort.Order order) {
+    private static PatientSort sortedBy(PatientSort.Field field, SortOrder order) {
         return new PatientSort(field, order);
     }
 
@@ -254,23 +257,23 @@ public abstract class PatientStoreContract {
                         visited("2026-08-01", "2026-10-20"), newest, FIRST_FIVE, 3,
                         List.of("eq081-VQEgP8drUUqCWzHfw3", "dev-patient-07", "dev-patient-08")),
                 Arguments.of("oldest first", none,
-                        sortedBy(PatientSort.Field.BIRTH_DATE, PatientSort.Order.ASCENDING),
+                        sortedBy(PatientSort.Field.BIRTH_DATE, SortOrder.ASCENDING),
                         FIRST_FIVE, 7, List.of("dev-patient-10", "dev-patient-07",
                                 "dev-patient-06", "eq081-VQEgP8drUUqCWzHfw3", "dev-patient-05")),
                 Arguments.of("youngest first", none,
-                        sortedBy(PatientSort.Field.BIRTH_DATE, PatientSort.Order.DESCENDING),
+                        sortedBy(PatientSort.Field.BIRTH_DATE, SortOrder.DESCENDING),
                         FIRST_FIVE, 7, List.of("dev-patient-08", "dev-patient-09",
                                 "dev-patient-05", "eq081-VQEgP8drUUqCWzHfw3", "dev-patient-06")),
                 Arguments.of("oldest Last visit first", none,
-                        sortedBy(PatientSort.Field.LAST_VISIT, PatientSort.Order.ASCENDING),
+                        sortedBy(PatientSort.Field.LAST_VISIT, SortOrder.ASCENDING),
                         FIRST_FIVE, 7, List.of("dev-patient-09", "dev-patient-08",
                                 "dev-patient-07", "eq081-VQEgP8drUUqCWzHfw3", "dev-patient-06")),
                 // The one Patient with no Last visit is last ascending, as it is descending.
                 Arguments.of("oldest Last visit first, page 2", none,
-                        sortedBy(PatientSort.Field.LAST_VISIT, PatientSort.Order.ASCENDING),
+                        sortedBy(PatientSort.Field.LAST_VISIT, SortOrder.ASCENDING),
                         NEXT_FIVE, 7, List.of("dev-patient-05", "dev-patient-10")),
                 Arguments.of("newest Last visit first, asked for", none,
-                        sortedBy(PatientSort.Field.LAST_VISIT, PatientSort.Order.DESCENDING),
+                        sortedBy(PatientSort.Field.LAST_VISIT, SortOrder.DESCENDING),
                         FIRST_FIVE, 7, List.of("dev-patient-05", "dev-patient-06",
                                 "eq081-VQEgP8drUUqCWzHfw3", "dev-patient-07", "dev-patient-08")));
     }
@@ -292,7 +295,7 @@ public abstract class PatientStoreContract {
     void a_filtered_search_no_stub_names_reads_no_patients() {
         assertThat(patients().search(new PatientQuery.ByName("tan"),
                 gender(AdministrativeGender.MALE),
-                sortedBy(PatientSort.Field.BIRTH_DATE, PatientSort.Order.ASCENDING), FIRST_FIVE))
+                sortedBy(PatientSort.Field.BIRTH_DATE, SortOrder.ASCENDING), FIRST_FIVE))
                 .isEqualTo(new PatientMatches(0, List.of()));
     }
 
@@ -314,7 +317,7 @@ public abstract class PatientStoreContract {
     /** Tan Wei Ming's four FFIs, in the source's own order. */
     @Test
     void tan_wei_mings_ffi_history_is_his_four_ffis_in_the_sources_order() {
-        assertThat(patients().findFfiHistory(new PatientId("eq081-VQEgP8drUUqCWzHfw3"),
+        assertThat(patients().findFfiHistory(new PatientId("eq081-VQEgP8drUUqCWzHfw3"), FfiFilter.NONE, FfiSort.SOURCE_ORDER,
                 FIRST_FIVE)).contains(new FfiHistory(4, List.of(
                         ffi("ffi-tan-wei-ming-1", FfiType.OVERSEAS_EXERCISES, FfiOutcome.FIT,
                                 "2023-10-14", "2024-10-13", FfiHigherAuthority.CAMO,
@@ -333,7 +336,7 @@ public abstract class PatientStoreContract {
     /** Tan Hui Min's seven FFIs over two pages of five: the first page. */
     @Test
     void tan_hui_mins_ffi_history_reads_its_first_page_of_five_of_seven() {
-        assertThat(patients().findFfiHistory(new PatientId("dev-patient-05"), FIRST_FIVE))
+        assertThat(patients().findFfiHistory(new PatientId("dev-patient-05"), FfiFilter.NONE, FfiSort.SOURCE_ORDER, FIRST_FIVE))
                 .contains(new FfiHistory(7, List.of(
                         ffi("ffi-tan-hui-min-1", FfiType.ORD_RELEASE_FROM_SERVICE,
                                 FfiOutcome.FIT, "2025-03-03", "2026-03-02",
@@ -355,7 +358,7 @@ public abstract class PatientStoreContract {
 
     @Test
     void tan_hui_mins_ffi_history_reads_its_last_two_on_the_second_page() {
-        assertThat(patients().findFfiHistory(new PatientId("dev-patient-05"), NEXT_FIVE))
+        assertThat(patients().findFfiHistory(new PatientId("dev-patient-05"), FfiFilter.NONE, FfiSort.SOURCE_ORDER, NEXT_FIVE))
                 .contains(new FfiHistory(7, List.of(
                         ffi("ffi-tan-hui-min-6", FfiType.VOCATIONAL, FfiOutcome.REQUEST_WAIVER,
                                 "2023-04-17", "2024-04-16", FfiHigherAuthority.CNMO,
@@ -368,13 +371,13 @@ public abstract class PatientStoreContract {
     /** Siti Nurhaliza binte Ahmad, as every fixture but those two, has no FFI. */
     @Test
     void a_patient_with_no_ffis_reads_an_empty_history_of_none() {
-        assertThat(patients().findFfiHistory(new PatientId("erXuFYUfucBZaryVksYEcMg3"),
+        assertThat(patients().findFfiHistory(new PatientId("erXuFYUfucBZaryVksYEcMg3"), FfiFilter.NONE, FfiSort.SOURCE_ORDER,
                 FIRST_FIVE)).contains(new FfiHistory(0, List.of()));
     }
 
     /** {@code not-a-uuid} is a well-formed id the source holds no patient under. */
     @Test
     void a_well_formed_id_no_patient_is_held_under_has_no_ffi_history() {
-        assertThat(patients().findFfiHistory(new PatientId("not-a-uuid"), FIRST_FIVE)).isEmpty();
+        assertThat(patients().findFfiHistory(new PatientId("not-a-uuid"), FfiFilter.NONE, FfiSort.SOURCE_ORDER, FIRST_FIVE)).isEmpty();
     }
 }

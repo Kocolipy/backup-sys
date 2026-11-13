@@ -9,7 +9,9 @@ import com.example.backend.audit.domain.AuditOperation;
 import com.example.backend.paging.domain.PageRequest;
 import com.example.backend.patient.domain.AdministrativeGender;
 import com.example.backend.patient.domain.DateRange;
+import com.example.backend.patient.domain.FfiFilter;
 import com.example.backend.patient.domain.FfiHistory;
+import com.example.backend.patient.domain.FfiSort;
 import com.example.backend.patient.domain.Patient;
 import com.example.backend.patient.domain.PatientId;
 import com.example.backend.patient.domain.PatientMatch;
@@ -19,6 +21,7 @@ import com.example.backend.patient.domain.PatientFilter;
 import com.example.backend.patient.domain.PatientQuery;
 import com.example.backend.patient.domain.PatientSort;
 import com.example.backend.patient.domain.PatientStore;
+import com.example.backend.patient.domain.SortOrder;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -78,7 +81,8 @@ class PatientSearchServiceTests {
         }
 
         @Override
-        public Optional<FfiHistory> findFfiHistory(PatientId id, PageRequest page) {
+        public Optional<FfiHistory> findFfiHistory(PatientId id, FfiFilter filter, FfiSort sort,
+                PageRequest page) {
             throw new UnsupportedOperationException("a search reads no FFI History");
         }
     }
@@ -108,7 +112,7 @@ class PatientSearchServiceTests {
         AnsweringStore store = new AnsweringStore(TWO_OF_SEVEN, null);
         PatientFilter filter = new PatientFilter(AdministrativeGender.MALE,
                 new DateRange(LocalDate.of(1960, 1, 1), null), DateRange.ANY);
-        PatientSort sort = new PatientSort(PatientSort.Field.BIRTH_DATE, PatientSort.Order.ASCENDING);
+        PatientSort sort = new PatientSort(PatientSort.Field.BIRTH_DATE, SortOrder.ASCENDING);
 
         searching(store).search(new PatientQuery.ByName("tan"), filter, sort, new PageRequest(1, 5));
 
@@ -145,7 +149,7 @@ class PatientSearchServiceTests {
     void aSortedSearchRecordsNoFilter() {
         searching(new AnsweringStore(TWO_OF_SEVEN, null)).search(new PatientQuery.ByName("tan"),
                 PatientFilter.NONE,
-                new PatientSort(PatientSort.Field.BIRTH_DATE, PatientSort.Order.DESCENDING),
+                new PatientSort(PatientSort.Field.BIRTH_DATE, SortOrder.DESCENDING),
                 new PageRequest(1, 5));
 
         assertThat(trail.recorded()).extracting(Recorded::detail).containsExactly("2 NAME");

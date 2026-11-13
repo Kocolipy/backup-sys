@@ -462,9 +462,11 @@ and not audited.
 _Avoid_: fitness record, medical clearance, certificate
 
 **FFI History**:
-Every FFI of one patient, in the Patient source's own order, read five to a
-page on the FFI page (`/ffi`) for the patient in context, by a session
-holding `patient:read`.
+Every FFI of one patient, in the Patient source's own order unless sorted by
+its Issue Date or Expiry Date, narrowed by any filter on its columns, read five
+to a page on the FFI page (`/ffi`) for the patient in context, by a session
+holding `patient:read`. The source sorts and filters it, as it does a Patient
+search.
 _Avoid_: FFI list, FFI log
 
 **FFI Type**:
