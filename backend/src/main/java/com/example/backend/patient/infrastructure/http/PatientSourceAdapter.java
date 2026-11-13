@@ -3,13 +3,11 @@ package com.example.backend.patient.infrastructure.http;
 import com.example.backend.observability.OutboundCallFailure;
 import com.example.backend.observability.RedactedFaultException;
 import com.example.backend.paging.domain.PageRequest;
-import com.example.backend.patient.domain.DateRange;
 import com.example.backend.patient.domain.Patient;
 import com.example.backend.patient.domain.PatientId;
 import com.example.backend.patient.domain.PatientMatches;
 import com.example.backend.patient.domain.PatientFilter;
 import com.example.backend.patient.domain.PatientQuery;
-import com.example.backend.patient.domain.PatientSort;
 import com.example.backend.patient.domain.PatientStore;
 import com.example.backend.patient.infrastructure.http.PatientSourceException.Failure;
 import java.net.URI;
@@ -72,21 +70,14 @@ class PatientSourceAdapter implements PatientStore {
 
     private static final Set<String> SCHEMES = Set.of("http", "https");
 
-    /** The sort's tie-break and the source's paging, which every search asks for alike. */
-    private static final String SEARCH_PAGE =
-            ",_id&_count={count}&_offset={offset}&_total=accurate";
+    /** The source's paging, which every search asks for alike. */
+    private static final String SEARCH_PAGE = "&_count={count}&_offset={offset}&_total=accurate";
 
     /** A name search: FHIR's {@code name:contains}, matched as the source decides. */
     static final String SEARCH_BY_NAME = "/Patient?name:contains={name}";
 
     /** An NRIC search: the identifier under the NRIC NamingSystem, exactly. */
     static final String SEARCH_BY_NRIC = "/Patient?identifier={identifier}";
-
-    /** The source's search parameter for the date of birth. */
-    private static final String BIRTH_DATE = "birthdate";
-
-    /** The source's search parameter for the Last visit (ADR 0018). */
-    private static final String LAST_VISIT = "last-visit";
 
     private final RestClient source;
 
@@ -139,20 +130,17 @@ class PatientSourceAdapter implements PatientStore {
     }
 
     /**
-     * {@code GET {base}/Patient?…}: the source's own search, matched, filtered, sorted, paged and
-     * counted by the source (ADR 0018) — {@code gender} by its FHIR code, each end of a date
-     * range as its search parameter, {@code birthdate} or {@code last-visit}, {@code ge} the
-     * from-date and {@code le} the to-date, the sort as {@code _sort} on the same parameters,
-     * {@code -} first for descending, ties broken by id, from {@code startIndex - 1},
-     * {@code count} of them, with an accurate total. Its one answer is a {@code 200} searchset
+     * {@code GET {base}/Patient?…}: the source's own search, matched, filtered, paged and counted
+     * by the source (ADR 0018) — {@code gender} by its FHIR code, from {@code startIndex - 1},
+     * {@code count} of them, with an accurate total — and no {@code _sort}: the source's own
+     * order is stable, so its pages are consistent. Its one answer is a {@code 200} searchset
      * Bundle; anything else — a {@code 404} included — is a fault, as is a Bundle with no total
-     * or holding a Patient with no id. The query's text and the filters' values are URI
+     * or holding a Patient with no id. The query's text and the filter's value are URI
      * variables, never part of the template, so the call is observed under the template alone:
-     * which filters were asked for and the sort, and none of their values.
+     * whether the gender filter was asked for, and none of the values.
      */
     @Override
-    public PatientMatches search(PatientQuery query, PatientFilter filter, PatientSort sort,
-            PageRequest page) {
+    public PatientMatches search(PatientQuery query, PatientFilter filter, PageRequest page) {
         Map<String, Object> variables = new HashMap<>();
         variables.put("count", page.count());
         variables.put("offset", page.offset());
@@ -170,9 +158,7 @@ class PatientSourceAdapter implements PatientStore {
             template.append("&gender={gender}");
             variables.put("gender", filter.gender().code());
         }
-        narrowing(template, variables, BIRTH_DATE, "birthDate", filter.birthDate());
-        narrowing(template, variables, LAST_VISIT, "lastVisit", filter.lastVisit());
-        template.append("&_sort=").append(sorted(sort)).append(SEARCH_PAGE);
+        template.append(SEARCH_PAGE);
         String uri = template.toString();
         return called(() -> source.get()
                 .uri(uri, variables)
@@ -183,36 +169,6 @@ class PatientSourceAdapter implements PatientStore {
                     }
                     return response.bodyTo(R4SearchBundle.class).toMatches();
                 }));
-    }
-
-    /**
-     * {@code range} narrowing the search by {@code parameter}: the parameter once for each end
-     * the range has, {@code ge} its from-date and {@code le} its to-date, each date the URI
-     * variable {@code variable} named for its end.
-     */
-    private static void narrowing(StringBuilder template, Map<String, Object> variables,
-            String parameter, String variable, DateRange range) {
-        if (range.from() != null) {
-            template.append('&').append(parameter).append("=ge{").append(variable)
-                    .append("From}");
-            variables.put(variable + "From", range.from().toString());
-        }
-        if (range.to() != null) {
-            template.append('&').append(parameter).append("=le{").append(variable)
-                    .append("To}");
-            variables.put(variable + "To", range.to().toString());
-        }
-    }
-
-    /** The source's search parameter each column sorts on. */
-    private static final Map<PatientSort.Field, String> SORTED_ON = Map.of(
-            PatientSort.Field.BIRTH_DATE, BIRTH_DATE,
-            PatientSort.Field.LAST_VISIT, LAST_VISIT);
-
-    /** The {@code _sort} {@code sort} asks for, before its tie-break: {@code -} first descending. */
-    private static String sorted(PatientSort sort) {
-        String parameter = SORTED_ON.get(sort.field());
-        return sort.order() == PatientSort.Order.DESCENDING ? "-" + parameter : parameter;
     }
 
     /**

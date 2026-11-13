@@ -44,7 +44,7 @@ patient source" and "Patient search"). The SPA never reaches it.
 ## Local mock
 
 The behaviour any source or mock must have — how a search matches, filters,
-sorts, pages and counts, and which answers the backend holds to be failures — is
+orders, pages and counts, and which answers the backend holds to be failures — is
 `../data-source.openapi.yaml`. The WireMock mock below answers a canned
 subset of it.
 
@@ -66,43 +66,31 @@ curl -s http://127.0.0.1:8104/Patient/eq081-VQEgP8drUUqCWzHfw3   # Tan Wei Ming
 
 ### The search set
 
-Each canned search answers a searchset Bundle of the fixtures themselves,
-matched on the whole query the backend sends — the search, its `_sort`,
-`_count=5`, `_offset`, `_total=accurate`, and each filter (`gender`,
-`birthdate`, `last-visit`) pinned to its exact values or, where the search uses
-none, to absent — so it answers the SPA's five-a-page reads. Unless the table
-names a `_sort`, it is `-last-visit,_id`, newest Last visit first; every `tan`
-search is `name:contains=tan`, any case, and `_offset=0` unless named.
+Each canned search answers a searchset Bundle of the fixtures themselves, in
+the mock's one stable order — newest Last visit first, ties by id, the Patient
+with none last — matched on the query the backend sends — the search,
+`_count=5`, `_offset`, `_total=accurate`, and the `gender` filter pinned to its
+exact value or, where the search uses none, to absent — so it answers the
+SPA's five-a-page reads. Every `tan` search is `name:contains=tan`, any case,
+and `_offset=0` unless named.
 
-| Stub file                                    | Search                                                            | Answers                                                       |
-| -------------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------- |
-| `search-name-tan-page-1`                     | `tan`                                                             | 5 of `total: 7`, newest Last visit first                      |
-| `search-name-tan-page-2`                     | `tan`, `_offset=5`                                                | the last 2 of `total: 7`, the Patient with no Last visit last |
-| `search-name-tan-by-birth-date`              | `tan`, `_sort=birthdate,_id`                                      | 5 of `total: 7`, oldest first                                 |
-| `search-name-tan-by-birth-date-descending`   | `tan`, `_sort=-birthdate,_id`                                     | 5 of `total: 7`, youngest first                               |
-| `search-name-tan-by-last-visit-page-1`       | `tan`, `_sort=last-visit,_id`                                     | 5 of `total: 7`, oldest Last visit first                      |
-| `search-name-tan-by-last-visit-page-2`       | `tan`, `_sort=last-visit,_id`, `_offset=5`                        | the last 2 of `total: 7`, the Patient with no Last visit last |
-| `search-name-tan-male`                       | `tan`, `gender=male`                                              | `total: 3`                                                    |
-| `search-name-tan-female`                     | `tan`, `gender=female`                                            | `total: 4`                                                    |
-| `search-name-tan-born-from-1960-page-1`      | `tan`, `birthdate=ge1960-01-01`                                   | 5 of `total: 6`                                               |
-| `search-name-tan-born-from-1960-page-2`      | `tan`, `birthdate=ge1960-01-01`, `_offset=5`                      | the last 1 of `total: 6`                                      |
-| `search-name-tan-born-to-1979`               | `tan`, `birthdate=le1979-12-31`                                   | `total: 3`                                                    |
-| `search-name-tan-born-1980-to-1999`          | `tan`, `birthdate=ge1980-01-01&birthdate=le1999-12-31`            | `total: 3`                                                    |
-| `search-name-tan-visited-from-2026-10`       | `tan`, `last-visit=ge2026-10-01`                                  | `total: 3`                                                    |
-| `search-name-tan-visited-to-2026-06`         | `tan`, `last-visit=le2026-06-30`                                  | `total: 1`                                                    |
-| `search-name-tan-visited-2026-08-to-2026-10` | `tan`, `last-visit=ge2026-08-01&last-visit=le2026-10-20`          | `total: 3`                                                    |
-| `search-nric`                                | `identifier=https://fhir.synapxe.sg/NamingSystem/nric\|S9212345A` | Siti Nurhaliza binte Ahmad, `total: 1`                        |
-| `search-no-match`                            | `name:contains=nobody`                                            | no entry, `total: 0`                                          |
-| `search-fallback`                            | any other `/Patient` search, at a lower priority                  | no entry, `total: 0`                                          |
+| Stub file                | Search                                                            | Answers                                                       |
+| ------------------------ | ----------------------------------------------------------------- | ------------------------------------------------------------- |
+| `search-name-tan-page-1` | `tan`                                                             | 5 of `total: 7`                                               |
+| `search-name-tan-page-2` | `tan`, `_offset=5`                                                | the last 2 of `total: 7`, the Patient with no Last visit last |
+| `search-name-tan-male`   | `tan`, `gender=male`                                              | `total: 3`                                                    |
+| `search-name-tan-female` | `tan`, `gender=female`                                            | `total: 4`                                                    |
+| `search-nric`            | `identifier=https://fhir.synapxe.sg/NamingSystem/nric\|S9212345A` | Siti Nurhaliza binte Ahmad, `total: 1`                        |
+| `search-no-match`        | `name:contains=nobody`                                            | no entry, `total: 0`                                          |
+| `search-fallback`        | any other `/Patient` search, at a lower priority                  | no entry, `total: 0`                                          |
 
-A sort and a filter together, a filter on any other search, and any page of a
-sorted search but the ones named fall to `search-fallback`.
+A gender filter on any other search or page falls to `search-fallback`.
 
 Each Patient carries its Last visit as the `last-visit` extension, a
 `valueDate`, as the source does (ADR 0018).
 
 ```bash
-curl -s 'http://127.0.0.1:8104/Patient?name:contains=tan&_sort=-last-visit,_id&_count=5&_offset=0&_total=accurate'
+curl -s 'http://127.0.0.1:8104/Patient?name:contains=tan&_count=5&_offset=0&_total=accurate'
 ```
 
 A change to a stub file changes the backend's patient tests' fixtures too: they

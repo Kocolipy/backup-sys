@@ -27,7 +27,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.http.HttpMethod;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -169,51 +168,28 @@ class PatientSearchControllerTests {
         return query;
     }
 
-    /**
-     * Each filter and the sort reach the source as its own search parameters: one case for each
-     * request parameter, beside the parameter the source is sent for it.
-     */
+    /** The gender filter reaches the source as its own {@code gender}, by its FHIR code. */
     @ParameterizedTest
-    @CsvSource(delimiter = '|', textBlock = """
-        gender        | male       | gender     | male
-        gender        | female     | gender     | female
-        birthDateFrom | 1980-01-01 | birthdate  | ge1980-01-01
-        birthDateTo   | 1989-12-31 | birthdate  | le1989-12-31
-        lastVisitFrom | 2026-09-01 | last-visit | ge2026-09-01
-        lastVisitTo   | 2026-10-31 | last-visit | le2026-10-31
-        """)
-    void eachFilterIsForwardedToTheSource(String parameter, String value, String forwarded,
-            String sent) throws Exception {
-        assertThat(searching(search("tan").param(parameter, value)).getStatus()).isEqualTo(200);
+    @ValueSource(strings = {"male", "female"})
+    void theGenderFilterIsForwardedToTheSource(String gender) throws Exception {
+        assertThat(searching(search("tan").param("gender", gender)).getStatus()).isEqualTo(200);
 
-        assertThat(sentToTheSource()).containsEntry(forwarded, List.of(sent));
+        assertThat(sentToTheSource()).containsEntry("gender", List.of(gender));
     }
 
     /**
-     * The sort reaches the source as its {@code _sort}: a column with no direction ascending, and a
-     * direction with no column the default order, which it names a direction for.
+     * A query parameter the search does not take changes nothing: the search is answered as it
+     * is without it.
      */
-    @ParameterizedTest
-    @CsvSource(nullValues = "-", value = {
-        "birthDate, ascending, 'birthdate,_id'",
-        "birthDate, descending, '-birthdate,_id'",
-        "lastVisit, ascending, 'last-visit,_id'",
-        "lastVisit, descending, '-last-visit,_id'",
-        "birthDate, -, 'birthdate,_id'",
-        "-, ascending, '-last-visit,_id'",
-        "-, -, '-last-visit,_id'"})
-    void theSortIsForwardedToTheSource(String sortBy, String sortOrder, String sent)
-            throws Exception {
-        MockHttpServletRequestBuilder sorted = search("tan");
-        if (sortBy != null) {
-            sorted.param("sortBy", sortBy);
-        }
-        if (sortOrder != null) {
-            sorted.param("sortOrder", sortOrder);
-        }
+    @Test
+    void aQueryParameterTheSearchDoesNotTakeIsIgnored() throws Exception {
+        String unknown = "p" + UUID.randomUUID().toString().replace("-", "");
 
-        assertThat(searching(sorted).getStatus()).isEqualTo(200);
-        assertThat(sentToTheSource()).containsEntry("_sort", List.of(sent));
+        MockHttpServletResponse response =
+                searching(search("tan").param(unknown, "anything"));
+
+        assertThat(List.of(response.getStatus(), body(response).at("/patients").size(),
+                body(response).at("/totalResults").asInt())).containsExactly(200, 5, 7);
     }
 
     /** A canned filtered search, answered in full: the source's matches for it, in its order. */
@@ -225,58 +201,18 @@ class PatientSearchControllerTests {
     }
 
     /**
-     * A filter or sort the search cannot take is the application API's {@code 400}, refused
-     * before the source is called and recording nothing: a gender but male or female, a column but
-     * the two dates, a direction but ascending or descending, a date that is no calendar date
-     * {@code YYYY-MM-DD}, and a from-date after its to-date.
+     * A gender but male or female is the application API's {@code 400}, refused before the source
+     * is called and recording nothing.
      */
     @ParameterizedTest
-    @CsvSource(delimiter = '|', textBlock = """
-        gender        | other
-        gender        | unknown
-        gender        | Male
-        sortBy        | name
-        sortBy        | birthdate
-        sortOrder     | desc
-        birthDateFrom | 2026-02-30
-        birthDateTo   | 01/02/1980
-        lastVisitFrom | 2026-1-1
-        lastVisitTo   | 2026-10-31T00:00:00
-        lastVisitTo   | yesterday
-        """)
-    void aFilterOrSortTheSearchCannotTakeIsRefused(String parameter, String value)
-            throws Exception {
-        MockHttpServletResponse response = searching(search("tan").param(parameter, value));
+    @ValueSource(strings = {"other", "unknown", "Male"})
+    void aGenderTheSearchCannotTakeIsRefused(String gender) throws Exception {
+        MockHttpServletResponse response = searching(search("tan").param("gender", gender));
 
         assertThat(body(response)).isEqualTo(apiError(400, "invalid-request",
                 "The request could not be read or did not pass validation."));
         SOURCE.verify(0, anyRequestedFor(anyUrl()));
         assertThat(trail.recorded()).isEmpty();
-    }
-
-    @ParameterizedTest
-    @CsvSource({
-        "birthDateFrom, birthDateTo, 1990-01-02, 1990-01-01",
-        "lastVisitFrom, lastVisitTo, 2026-10-31, 2026-09-01"})
-    void aFromDateAfterItsToDateIsRefused(String fromParameter, String toParameter, String from,
-            String to) throws Exception {
-        MockHttpServletResponse response = searching(search("tan")
-                .param(fromParameter, from).param(toParameter, to));
-
-        assertThat(body(response)).isEqualTo(apiError(400, "invalid-request",
-                "The request could not be read or did not pass validation."));
-        SOURCE.verify(0, anyRequestedFor(anyUrl()));
-        assertThat(trail.recorded()).isEmpty();
-    }
-
-    /** A range one day long is a from-date equal to its to-date, and is no refusal. */
-    @Test
-    void aRangeOfOneDayIsSearched() throws Exception {
-        assertThat(searching(search("tan")
-                .param("birthDateFrom", "1990-02-04").param("birthDateTo", "1990-02-04"))
-                .getStatus()).isEqualTo(200);
-        assertThat(sentToTheSource())
-                .containsEntry("birthdate", List.of("ge1990-02-04", "le1990-02-04"));
     }
 
     @Test

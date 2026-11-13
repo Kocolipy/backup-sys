@@ -30,7 +30,7 @@ tags:
   - name: patient-source
     description: |
       The in-house patient source (ADR 0014, ADR 0018), called by
-      `PatientSourceAdapter`. A mock of it matches, filters, sorts, pages and
+      `PatientSourceAdapter`. A mock of it matches, filters, orders, pages and
       counts over its own Patients.
 
       - **Two reads.** `GET /Patient/{id}` for one Patient (Home's Patient card)
@@ -116,7 +116,7 @@ paths:
     get:
       tags: [patient-source]
       operationId: searchPatients
-      summary: Search the Patients — matched, filtered, sorted, paged and counted by the source
+      summary: Search the Patients — matched, filtered, ordered, paged and counted by the source
       description: |
         The backend does none of this work itself: it forwards the search and
         shows the page and the total the source answers. A mock must therefore
@@ -126,19 +126,23 @@ paths:
         1. **Match** by exactly one of `name:contains` or `identifier`. The
            backend always sends one and never both; there is no search that
            lists every Patient.
-        2. **Filter** by every `gender`, `birthdate` and `last-visit` sent,
-           combined with AND.
+        2. **Filter** by `gender`, when it is sent.
         3. **Count** what is left: that number is the Bundle's `total`, whatever
            the page.
-        4. **Sort** by `_sort`.
+        4. **Order** the matches in the source's own **stable order**: the
+           same search answers its matches in the same order on every call, so
+           its pages never repeat or skip a Patient. The backend sends no
+           `_sort` and relies on this order alone. The local mock's order is
+           newest Last visit first, ties by id, a Patient with no Last visit
+           last.
         5. **Page**: skip `_offset` matches, then return up to `_count` of them
-           as the Bundle's entries, in sort order.
+           as the Bundle's entries, in that order.
 
         **Worked example** over the fixtures: `name:contains=tan` matches seven
-        Patients, so `total` is 7; with `_sort=-last-visit,_id&_count=5&_offset=5`
-        the entries are Kavitha Tanabalan then Tan Boon Huat, who has no Last
-        visit and comes last. Adding `gender=male` leaves Tan Wei Ming, Stanley
-        Goh Kok Wee and Tan Boon Huat, `total: 3`.
+        Patients, so `total` is 7; with `_count=5&_offset=5` the mock's entries
+        are Kavitha Tanabalan then Tan Boon Huat, who has no Last visit and
+        comes last. Adding `gender=male` leaves Tan Wei Ming, Stanley Goh Kok
+        Wee and Tan Boon Huat, `total: 3`.
 
         The backend sends parameters in no guaranteed order; read them by name.
       parameters:
@@ -174,59 +178,6 @@ paths:
           schema:
             type: string
             enum: [male, female]
-        - name: birthdate
-          in: query
-          description: |
-            A date-of-birth range, inclusive: `ge<date>` keeps a `birthDate` on
-            or after the date, `le<date>` one on or before it. Sent once for each
-            end the range has, so zero, one or two times; both apply together.
-            The backend guarantees the from-date is not after the to-date.
-          style: form
-          explode: true
-          schema:
-            type: array
-            maxItems: 2
-            items:
-              type: string
-              pattern: '^(ge|le)\d{4}-\d{2}-\d{2}$'
-          example: [ge1980-01-01, le1999-12-31]
-        - name: last-visit
-          in: query
-          description: |
-            A Last visit range, read as `birthdate` is but against the
-            `last-visit` extension. A Patient with no Last visit is outside
-            every range, so any `last-visit` value leaves it out.
-          style: form
-          explode: true
-          schema:
-            type: array
-            maxItems: 2
-            items:
-              type: string
-              pattern: '^(ge|le)\d{4}-\d{2}-\d{2}$'
-          example: [ge2026-08-01, le2026-10-20]
-        - name: _sort
-          in: query
-          required: true
-          description: |
-            One date column, then the id. `-` first is descending; `_id` is
-            always ascending and breaks every tie, so the order is total and a
-            page never repeats or skips a Patient.
-
-            - `birthdate`: by `birthDate`, which every Patient has.
-            - `last-visit`: by the `last-visit` extension. A Patient with **no
-              Last visit is last in both directions**, ordered among the others
-              like it by id.
-
-            With no sort chosen on the Search page, the backend sends
-            `-last-visit,_id`: newest Last visit first.
-          schema:
-            type: string
-            enum:
-              - "-last-visit,_id"
-              - "last-visit,_id"
-              - "birthdate,_id"
-              - "-birthdate,_id"
         - name: _count
           in: query
           required: true
@@ -243,7 +194,7 @@ paths:
           in: query
           required: true
           description: |
-            How many sorted matches to skip: the page's `startIndex - 1`. An
+            How many ordered matches to skip: the page's `startIndex - 1`. An
             offset at or past `total` returns no entries and still the full
             `total`, never an error.
           schema:
@@ -260,10 +211,10 @@ paths:
       responses:
         "200":
           description: |
-            A searchset Bundle: the page's matches as entries, in sort order, and
-            the `total` of every match. A search matching nothing is this answer
-            with `total: 0`, not a `404`, which the backend reads as the source
-            failing.
+            A searchset Bundle: the page's matches as entries, in the source's
+            order, and the `total` of every match. A search matching nothing is
+            this answer with `total: 0`, not a `404`, which the backend reads as
+            the source failing.
           content:
             application/fhir+json:
               schema:
@@ -374,8 +325,7 @@ components:
     LastVisitExtension:
       description: |
         A Patient's Last visit, the date of their latest visit, which base FHIR
-        has no element for. At most one; absent for a Patient with none. The
-        `last-visit` search parameter sorts and filters on it.
+        has no element for. At most one; absent for a Patient with none.
       type: object
       required: [url, valueDate]
       properties:

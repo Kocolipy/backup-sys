@@ -128,19 +128,15 @@ class PatientSearchIntegrationTests {
                 .containsEntry("filter_shape", "NRIC").containsEntry("result_count", 1);
     }
 
-    /**
-     * A filtered, sorted search's row names the filters it used after its kind, and none of their
-     * values; the sort is no filter.
-     */
+    /** A filtered search's row names the filter it used after its kind, and never its value. */
     @Test
-    void aFilteredSearchIsRecordedWithTheFiltersItUsed() throws Exception {
+    void aFilteredSearchIsRecordedWithTheFilterItUsed() throws Exception {
         HttpClient session = signedIn();
 
-        send(session, request("/api/patient-search?q=tan&count=5&gender=male"
-                + "&lastVisitTo=2026-10-31&sortBy=birthDate&sortOrder=descending"));
+        send(session, request("/api/patient-search?q=tan&count=5&gender=male"));
 
         assertThat(searchesRecorded().getLast())
-                .containsEntry("filter_shape", "NAME and gender eq ? and lastVisit le ?");
+                .containsEntry("filter_shape", "NAME and gender eq ?");
     }
 
     /** A search refused before the source, and a read by id, read nothing to record. */
@@ -152,11 +148,11 @@ class PatientSearchIntegrationTests {
                 "SELECT COUNT(*) FROM audit_events WHERE actor_id = ?", Long.class, searcher);
 
         int refused = send(session, search("ta", 5)).statusCode();
-        int inverted = send(session, request("/api/patient-search?q=tan"
-                + "&birthDateFrom=1990-01-02&birthDateTo=1990-01-01")).statusCode();
+        int badGender = send(session, request("/api/patient-search?q=tan&gender=other"))
+                .statusCode();
         int read = send(session, request("/api/patient/eq081-VQEgP8drUUqCWzHfw3")).statusCode();
 
-        assertThat(List.of(refused, inverted, read, searchesRecorded().size() - before,
+        assertThat(List.of(refused, badGender, read, searchesRecorded().size() - before,
                 jdbc.queryForObject("SELECT COUNT(*) FROM audit_events WHERE actor_id = ?",
                         Long.class, searcher) - everyRow))
                 .containsExactly(400, 400, 200, 0, 0L);
@@ -174,15 +170,14 @@ class PatientSearchIntegrationTests {
 
         assertThat(send(session, search("Kavitha", 5)).statusCode()).isEqualTo(200);
         assertThat(send(session, search("s9212345a", 5)).statusCode()).isEqualTo(200);
-        assertThat(send(session, request("/api/patient-search?q=Kavitha&gender=female"
-                + "&birthDateFrom=1971-03-14&lastVisitTo=2026-04-17")).statusCode())
-                .isEqualTo(200);
+        assertThat(send(session, request("/api/patient-search?q=Kavitha&gender=female"))
+                .statusCode()).isEqualTo(200);
         logs.awaitRequestRecords(3);
 
         assertThat(logs.lines())
                 .contains("/api/patient-search")
                 .doesNotContain("Kavitha", "s9212345a", "S9212345A", "Siti Nurhaliza",
-                        "1992-08-21", "1971-03-14", "2026-04-17");
+                        "1992-08-21");
     }
 
     // ---- harness -------------------------------------------------------------------------

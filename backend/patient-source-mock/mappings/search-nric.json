@@ -4,9 +4,6 @@
     "method": "GET",
     "urlPath": "/Patient",
     "queryParameters": {
-      "_sort": {
-        "equalTo": "-last-visit,_id"
-      },
       "_count": {
         "equalTo": "5"
       },
@@ -20,12 +17,6 @@
         "equalTo": "https://fhir.synapxe.sg/NamingSystem/nric|S9212345A"
       },
       "gender": {
-        "absent": true
-      },
-      "birthdate": {
-        "absent": true
-      },
-      "last-visit": {
         "absent": true
       }
     }

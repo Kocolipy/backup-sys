@@ -21,7 +21,6 @@ import com.example.backend.patient.domain.PatientId;
 import com.example.backend.patient.domain.PatientMatches;
 import com.example.backend.patient.domain.PatientFilter;
 import com.example.backend.patient.domain.PatientQuery;
-import com.example.backend.patient.domain.PatientSort;
 import com.example.backend.patient.domain.PatientStore;
 import com.example.backend.patient.infrastructure.http.PatientSourceAdapters;
 import com.example.backend.web.ApiExceptionHandler;
@@ -74,8 +73,7 @@ class PatientControllerTests {
         }
 
         @Override
-        public PatientMatches search(PatientQuery query, PatientFilter filter, PatientSort sort,
-                PageRequest page) {
+        public PatientMatches search(PatientQuery query, PatientFilter filter, PageRequest page) {
             throw new UnsupportedOperationException("a read by id is all this store is asked");
         }
     };
