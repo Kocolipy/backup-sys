@@ -188,22 +188,18 @@ class AuditTrailServiceTests {
 
     /**
      * A filtered Patient search's shape is its query kind and then each filter it used, as
-     * {@code and}-joined comparisons in one fixed order whatever order they were named in — the
-     * field, the operator, {@code ?} for the value — and never a value.
+     * {@code and}-joined comparisons — the field, the operator, {@code ?} for the value — and
+     * never a value.
      */
     @Test
     void aFilteredPatientSearchRecordsWhichFiltersItUsedAndNoValue() {
         trail.append(new Audited.PatientsSearched(ACTOR, AuditPatientQueryKind.NAME,
-                new LinkedHashSet<>(List.of(AuditPatientSearchFilter.LAST_VISIT_TO,
-                        AuditPatientSearchFilter.GENDER,
-                        AuditPatientSearchFilter.BIRTH_DATE_FROM)), 3));
+                Set.of(AuditPatientSearchFilter.GENDER), 3));
         trail.append(new Audited.PatientsSearched(ACTOR, AuditPatientQueryKind.NRIC,
-                EnumSet.allOf(AuditPatientSearchFilter.class), 0));
+                Set.of(AuditPatientSearchFilter.GENDER), 0));
 
         assertThat(events.appended).extracting(AuditEvent::filterShape).containsExactly(
-                "NAME and gender eq ? and birthDate ge ? and lastVisit le ?",
-                "NRIC and gender eq ? and birthDate ge ? and birthDate le ? and lastVisit ge ?"
-                        + " and lastVisit le ?");
+                "NAME and gender eq ?", "NRIC and gender eq ?");
     }
 
     @Test

@@ -4,9 +4,6 @@
     "method": "GET",
     "urlPath": "/Patient",
     "queryParameters": {
-      "_sort": {
-        "equalTo": "-last-visit,_id"
-      },
       "_count": {
         "equalTo": "5"
       },
@@ -22,12 +19,6 @@
       },
       "gender": {
         "equalTo": "male"
-      },
-      "birthdate": {
-        "absent": true
-      },
-      "last-visit": {
-        "absent": true
       }
     }
   },

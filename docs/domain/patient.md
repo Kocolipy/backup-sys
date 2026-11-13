@@ -105,10 +105,10 @@ default (`backend/docs/configuration/patient-source.md`).
 ## Patient search
 
 A signed-in User finds Patients by typing a name or a full NRIC into the Search
-page's one box, and may sort the results and narrow them with filters.
-`GET /api/patient-search?q=…&startIndex=…&count=…`, with any filters and sort,
+page's one box, and may narrow the results by gender.
+`GET /api/patient-search?q=…&startIndex=…&count=…`, with any gender filter,
 passes the search to the patient source, which matches, filters, orders, pages
-and counts it (ADR 0018); the service filters, sorts and pages nothing of its
+and counts it (ADR 0018); the service filters, orders and pages nothing of its
 own, and holds and caches nothing.
 
 - **One box, two searches.** The query is trimmed. A full NRIC — `S`, `T`, `F`,
@@ -122,30 +122,17 @@ own, and holds and caches nothing.
   a query too short, or none, is `400` before the source is called.
 - **The source's page.** `startIndex` and `count` are read by ADR 0017's rules
   (`PageParameter`, `PageRequest`: coerced, never refused; a non-integer is
-  `400`), and sent as `_offset` (`startIndex - 1`) and `_count`, with the sort's
-  `_sort` and `_total=accurate`. `totalResults` is the source's `total`. The SPA
-  asks for 5.
-- **The sort.** One column at a time, by `sortBy` — `birthDate` or `lastVisit` —
-  and `sortOrder` — `ascending` (the default with a `sortBy`) or `descending`.
-  It is sent as `_sort` on the source's own search parameters, `birthdate` or
-  `last-visit`, `-` first for descending, ties broken by id:
-  `_sort=-birthdate,_id`. With no `sortBy` — whatever `sortOrder` says — the
-  order is newest Last visit first, `_sort=-last-visit,_id`. The order is the
-  source's: a Patient with no Last visit comes last in either direction. The
-  domain's `PatientSort` holds it.
-- **The filters** narrow the query they are sent with, combined with AND, each
-  optional, and the source applies them (`PatientFilter`):
-  - `gender`, `male` or `female`, sent as `gender`. A Patient whose gender is
-    `other` or `unknown` is found only with no gender filter.
-  - a date range for the date of birth, `birthDateFrom` and `birthDateTo`, sent
-    as `birthdate=ge<from>` and `birthdate=le<to>`, and one for the Last visit,
-    `lastVisitFrom` and `lastVisitTo`, sent as `last-visit=ge<from>` and
-    `last-visit=le<to>`. Each end is a calendar date, `YYYY-MM-DD`, optional
-    and inclusive; a from-date may not be after its to-date (`DateRange`). A
-    Patient with no Last visit is outside every Last visit range.
-- **Checked as the request is read in.** A gender, column or direction spelled
-  any other way, a date that is no calendar date and a from-date after its
-  to-date are each `400`, before the source is called.
+  `400`), and sent as `_offset` (`startIndex - 1`) and `_count`, with
+  `_total=accurate`. `totalResults` is the source's `total`. The SPA asks for 5.
+- **The source's order.** No `_sort` is sent: the in-house patient source
+  answers every search in a stable order of its own, so the pages of one
+  search are consistent, and the results appear in that order.
+- **The filter** narrows the query it is sent with, is optional, and the source
+  applies it (`PatientFilter`): `gender`, `male` or `female`, sent as `gender`.
+  A Patient whose gender is `other` or `unknown` is found only with no gender
+  filter.
+- **Checked as the request is read in.** A gender spelled any other way is
+  `400`, before the source is called. Any other parameter is ignored.
 - **The answer** is plain JSON, `{totalResults, startIndex, patients: [{id,
 name, nric, gender, birthDate, lastVisit}]}`: the Patient's id (the EHR's FHIR
   id, which `GET /api/patient/{id}` reads it by), the official name's text, the
@@ -153,8 +140,8 @@ name, nric, gender, birthDate, lastVisit}]}`: the Patient's id (the EHR's FHIR
   Patient with none. Each match is copied as a read by id copies a Patient,
   under the same rules.
 - **Errors are the application API's `ApiError`**, not an `OperationOutcome`:
-  the search is outside `/api/patient`. `400` for a query too short, a filter or
-  sort the search cannot take, or a paging value that is no integer, `401` and
+  the search is outside `/api/patient`. `400` for a query too short, a gender
+  the search cannot take, or a paging value that is no integer, `401` and
   `403` as everywhere (`patient:read`), and
   `502` for the source failing as a read by id's `502` — no connection, no answer
   within 2 seconds to connect and 5 to answer, any status but a `200` (a `404`
@@ -169,8 +156,7 @@ name, nric, gender, birthDate, lastVisit}]}`: the Patient's id (the EHR's FHIR
 **Last visit** is the date of a Patient's latest visit. FHIR's base `Patient`
 has no element for it, so the source carries it as an extension on each Patient
 in a search's answer, `https://fhir.synapxe.sg/StructureDefinition/last-visit`,
-a `valueDate` to the day, absent for a Patient with none, and defines
-`last-visit` as a search parameter to sort and filter by. A read by id ignores
+a `valueDate` to the day, absent for a Patient with none. A read by id ignores
 it, and the R5 `Patient` does not carry it.
 
 ### The Search page
@@ -198,30 +184,20 @@ NRIC", searched only on submit (Enter or the Search button).
   with no confirmation; selecting the patient already in context only goes to
   Home, the context unchanged and the patient not read again. No row marks the
   patient in context. Coming back to Search starts afresh: only the box, with
-  no query, page, sort or filters kept.
-- **Sort.** Only the Date of Birth and Last Visit headings sort, one at a time,
-  each a sortable column heading stating its direction with `aria-sort`, as the
-  accounts listing's do. The results open in the default order, newest Last
-  visit first, which neither heading shows as sorted. The first press on a
-  heading sorts it ascending, and each later press toggles it descending and
-  ascending, never back to the default order; another heading replaces the
-  sort, starting ascending.
+  no query, page or filter kept.
+- **Order.** The results appear in the patient source's own order; no column
+  heading sorts.
 - **Filter.** A Filter button beside "Search Results" opens a panel of the
-  filters, the button counting those applied ("Filter, 2 set", a badge of 2):
-  Gender — All (the default), Male or Female — and a from–to range of
-  `<input type="date">` for Date of Birth and for Last Visit, each end optional
-  and inclusive. Nothing in the panel is sent until Apply; Reset clears every
-  filter and applies none. A from-date after its to-date is refused beside its
-  range — "The Date of Birth from-date must not be after its to-date." — the
-  panel stays open and nothing is read.
-- **Filters and sort narrow the search submitted.** They keep across a new
-  search. Any change of sort or filter reads the results from their first
-  page.
+  filter, the button counting it when applied ("Filter, 1 set", a badge of 1):
+  Gender — All (the default), Male or Female. Nothing in the panel is sent
+  until Apply; Reset clears the filter and applies none.
+- **The filter narrows the search submitted.** It keeps across a new search.
+  Any change of filter reads the results from their first page.
 - **No matches** shows "No patients match your search", with no table and no
   range. **The source failing** shows "Unable to search for patients. Please try
   again." on the page's error line, and a Retry button that reads the same page
   of the same search again.
-- **The search lives on the page alone.** No query, name, NRIC, filter or sort
+- **The search lives on the page alone.** No query, name, NRIC or filter
   reaches the URL or the browser history; leaving the page forgets them.
   Submitting the same query again reads its first page afresh.
 
@@ -363,11 +339,11 @@ Restricted data, the shape enumeration takes. Each search the source answers
 appends one `PATIENT_SEARCH`, fail-closed as a SCIM bulk read is (ADR 0004):
 the signed-in User as actor, resource type `Patient` with no subject or
 resource, how many Patients the answered page held as `resultCount`, and as
-`filterShape` the query's kind — `NRIC` or `NAME` — then each filter it used, in
-a fixed order and with `?` for its value: `NAME and gender eq ? and birthDate
-ge ? and birthDate le ? and lastVisit ge ? and lastVisit le ?` for a name search
-using all five (`AuditPatientSearchFilter`). It never holds the query, a name,
-an NRIC or a filter's value, and the sort is not recorded. A search refused with
+`filterShape` the query's kind — `NRIC` or `NAME` — then the gender filter
+when it was used, with `?` for its value: `NAME and gender eq ?` for a name
+search filtered by gender (`AuditPatientSearchFilter`). It never holds the
+query, a name, an NRIC or the filter's value. A row stored with another shape
+is kept as stored, and the Audit page shows it verbatim. A search refused with
 `400`, or that the source failed, read nothing and records nothing.
 `PatientSearchIntegrationTests` holds the row, and that neither the query, a
 filter's value nor a match reaches the log stream.
@@ -436,37 +412,25 @@ reaches a deployed environment. The backend holds no fixture of its own.
   dummy as a fixture's, and the tests hold it to the same check.
 - **Search stubs.** Each documented search has a canned stub answering a
   searchset Bundle whose entries are the fixtures themselves, exactly as their
-  own stubs serve them, matched on the whole query the backend sends — the
-  search, its `_sort`, `_count=5`, `_offset`, `_total=accurate`, and each filter
-  pinned to its exact values or, where the search uses none, to absent, so a
-  filtered search never falls to an unfiltered stub:
+  own stubs serve them, in the mock's one stable order — newest Last visit
+  first, ties by id, Tan Boon Huat, with none, last — matched on the query the
+  backend sends — the search, `_count=5`, `_offset`, `_total=accurate`, and the
+  `gender` filter pinned to its exact value or, where the search uses none, to
+  absent, so a filtered search never falls to an unfiltered stub:
   - `search-name-tan-page-1` and `-page-2`, the name search `tan` (any case)
-    over its two pages of the seven fixtures with a name containing it, newest
-    Last visit first, `total: 7`; `search-nric`, the NRIC `S9212345A`,
-    `total: 1`; and `search-no-match`, the name search `nobody`, `total: 0`.
-  - **The sorts** of the name search `tan`, the first page of each:
-    `search-name-tan-by-birth-date` (`_sort=birthdate,_id`, oldest first),
-    `-by-birth-date-descending` (`-birthdate`, youngest first), and
-    `-by-last-visit-page-1` and `-page-2` (`last-visit`, oldest Last visit
-    first, Tan Boon Huat, with none, last). Newest Last visit first is
-    `-page-1` and `-page-2` above.
-  - **The filters** on the name search `tan`, newest Last visit first:
-    `search-name-tan-male` (`total: 3`) and `-female` (`total: 4`);
-    `-born-from-1960-page-1` and `-page-2` (`birthdate=ge1960-01-01`, the
-    filtered search spanning two pages, `total: 6`); `-born-to-1979`
-    (`birthdate=le1979-12-31`, `total: 3`); `-born-1980-to-1999` (both ends,
-    `total: 3`); `-visited-from-2026-10` (`last-visit=ge2026-10-01`,
-    `total: 3`); `-visited-to-2026-06` (`last-visit=le2026-06-30`, `total: 1`);
-    and `-visited-2026-08-to-2026-10` (both ends, `last-visit=ge2026-08-01`
-    and `le2026-10-20`, `total: 3`).
+    over its two pages of the seven fixtures with a name containing it,
+    `total: 7`; `search-nric`, the NRIC `S9212345A`, `total: 1`; and
+    `search-no-match`, the name search `nobody`, `total: 0`.
+  - **The gender filters** on the name search `tan`: `search-name-tan-male`
+    (`total: 3`) and `-female` (`total: 4`).
 
   A low-priority fallback, `search-fallback`, answers any other `/Patient`
-  search — a sort and a filter together, or a filter on any other search,
-  included — with an empty searchset, `total: 0`. `PatientSourceFixturesTests`
-  holds each search's entries to the fixtures, the `tan` pages to every fixture
-  whose name contains it, and each sorted or filtered `tan` stub to the fixtures
-  its filters select in the order its sort names; `PatientStoreContract` holds
-  what each canned search reads, written out.
+  search — a gender filter on any other search or page included — with an
+  empty searchset, `total: 0`. `PatientSourceFixturesTests` holds each search's
+  entries to the fixtures, the `tan` pages to every fixture whose name contains
+  it, and each `tan` stub to the fixtures its gender filter selects in the
+  mock's order; `PatientStoreContract` holds what each canned search reads,
+  written out.
 
 - **A Last visit on every fixture but one.** Each fixture carries the `lastVisit`
   extension (["Last visit"](#last-visit)) but Tan Boon Huat, who has none.
@@ -514,7 +478,7 @@ fixture's own. The other eight carry development ids of the mock's own,
 | `dev-patient-11`                             | `Ahmad bin Ismail`           | —           | —                    | `male`    | `S8312345B` (`A`)   | Matches no canned search                                                                        |
 | `dev-patient-12`                             | `Rajesh Kumar`               | `Kumar`     | `Rajesh`             | `male`    | `S9912345B` (`A`)   | Matches no canned search                                                                        |
 
-Their Last visits, as the search orders them: Tan Hui Min `2026-11-02`, Stanley
+Their Last visits, in the mock's order: Tan Hui Min `2026-11-02`, Stanley
 Goh Kok Wee `2026-10-28`, Tan Wei Ming `2026-10-15`, Lee Mei Ling `2026-09-30`,
 Nur Intan binte Yusof `2026-08-19` (the name search's first page), Kavitha
 Tanabalan `2026-05-07` and Tan Boon Huat, none (its second); and beside them

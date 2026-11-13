@@ -11,14 +11,13 @@ import {
 /**
  * Patient Search as a Medical Officer meets it, against the patient source's
  * mock (`backend/patient-source-mock`): its canned name search spanning two
- * pages, sorted by each column both ways and filtered by gender and by each
- * date range, a filtered search spanning two pages, its NRIC search, and its
- * search that matches nothing. Nothing about a search, its filters or its sort
- * reaches the URL. Selecting a result puts its Patient into the tab's EHR
+ * pages in the mock's own order, filtered by gender, its NRIC search, and its
+ * search that matches nothing. Nothing about a search or its filter reaches
+ * the URL. Selecting a result puts its Patient into the tab's EHR
  * context, shown on Home's Patient card and the top bar; that signing out and
  * back in leaves none is `patient-sign-out.spec.ts`'. What the page decides
- * without the backend — a query too short to send, a date range refused in the
- * Filter panel, keyboard selection, a second selection, Search after one — is
+ * without the backend — a query too short to send, keyboard selection, a
+ * second selection, Search after one — is
  * `search.test.tsx`'s; the sidebar's links are `roles-medical-officer.spec.ts`'.
  *
  * In the `medical-officer` project, replaying the saved `mo1` session: a member
@@ -43,12 +42,19 @@ test.describe("Patient Search", () => {
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Patient Search");
   });
 
-  test("pages a name search to its second page, newest Last visit first", async ({ page }) => {
+  test("pages a name search to its second page, in the patient source's order", async ({
+    page,
+  }) => {
     await search(page, "tan");
 
     await expect(page.getByText("Showing 1 to 5 of 7 patients")).toBeVisible();
-    await expect(resultRows(page).getByRole("cell").first()).toHaveText("Tan Hui Min");
-    await expect(resultRows(page)).toHaveCount(5);
+    await expectNames(page, [
+      "Tan Hui Min",
+      "Stanley Goh Kok Wee",
+      "Tan Wei Ming",
+      "Lee Mei Ling",
+      "Nur Intan binte Yusof",
+    ]);
 
     await page.getByRole("button", { name: "Page 2" }).click();
 
@@ -78,84 +84,10 @@ test.describe("Patient Search", () => {
     await expect(page.getByText(/^Showing/)).toHaveCount(0);
   });
 
-  test.describe("sorted", () => {
-    const sortBy = (page: Page, heading: string) =>
-      searchResults(page).getByRole("columnheader", { name: heading }).getByRole("button").click();
-
-    for (const { heading, ascending, descending } of [
-      {
-        heading: "Date of Birth",
-        ascending: [
-          "Tan Boon Huat",
-          "Lee Mei Ling",
-          "Stanley Goh Kok Wee",
-          "Tan Wei Ming",
-          "Tan Hui Min",
-        ],
-        descending: [
-          "Nur Intan binte Yusof",
-          "Kavitha Tanabalan",
-          "Tan Hui Min",
-          "Tan Wei Ming",
-          "Stanley Goh Kok Wee",
-        ],
-      },
-      {
-        heading: "Last Visit",
-        ascending: [
-          "Kavitha Tanabalan",
-          "Nur Intan binte Yusof",
-          "Lee Mei Ling",
-          "Tan Wei Ming",
-          "Stanley Goh Kok Wee",
-        ],
-        descending: [
-          "Tan Hui Min",
-          "Stanley Goh Kok Wee",
-          "Tan Wei Ming",
-          "Lee Mei Ling",
-          "Nur Intan binte Yusof",
-        ],
-      },
-    ]) {
-      test(`sorts by ${heading}, ascending then descending`, async ({ page }) => {
-        await search(page, "tan");
-        await expect(page.getByText("Showing 1 to 5 of 7 patients")).toBeVisible();
-        const header = searchResults(page).getByRole("columnheader", { name: heading });
-
-        await sortBy(page, heading);
-        await expect(header).toHaveAttribute("aria-sort", "ascending");
-        await expectNames(page, ascending);
-
-        await sortBy(page, heading);
-        await expect(header).toHaveAttribute("aria-sort", "descending");
-        await expectNames(page, descending);
-        await expect(page.getByText("Showing 1 to 5 of 7 patients")).toBeVisible();
-        await expect(page).toHaveURL("/search");
-      });
-    }
-
-    test("puts the Patient with no Last visit last, oldest Last visit first", async ({ page }) => {
-      await search(page, "tan");
-      await sortBy(page, "Last Visit");
-      await expect(resultRows(page).first()).toHaveText(/^Kavitha Tanabalan/);
-
-      await page.getByRole("button", { name: "Page 2" }).click();
-
-      await expect(resultRows(page)).toHaveText([
-        "Tan Hui MinS9012345AFemale04 Feb 199002 Nov 2026",
-        "Tan Boon HuatS5512345AMale23 Jan 1955—",
-      ]);
-    });
-  });
-
   test.describe("filtered", () => {
     const filterButton = (page: Page) => page.getByRole("button", { name: /^Filter/ });
 
     const panel = (page: Page) => page.getByRole("form", { name: "Patient filters" });
-
-    const dateField = (page: Page, range: string, end: "From" | "To") =>
-      panel(page).getByRole("group", { name: range }).getByLabel(end);
 
     test("filters by gender, and counts the filter", async ({ page }) => {
       await search(page, "tan");
@@ -168,50 +100,6 @@ test.describe("Patient Search", () => {
       await expectNames(page, ["Stanley Goh Kok Wee", "Tan Wei Ming", "Tan Boon Huat"]);
       await expect(filterButton(page)).toHaveAccessibleName("Filter, 1 set");
       await expect(page).toHaveURL("/search");
-    });
-
-    for (const { range, from, to, matched } of [
-      {
-        range: "Date of Birth",
-        from: "1980-01-01",
-        to: "1999-12-31",
-        matched: ["Tan Hui Min", "Tan Wei Ming", "Kavitha Tanabalan"],
-      },
-      {
-        range: "Last Visit",
-        from: "2026-08-01",
-        to: "2026-10-20",
-        matched: ["Tan Wei Ming", "Lee Mei Ling", "Nur Intan binte Yusof"],
-      },
-    ]) {
-      test(`filters by a ${range} range`, async ({ page }) => {
-        await search(page, "tan");
-        await filterButton(page).click();
-
-        await dateField(page, range, "From").fill(from);
-        await dateField(page, range, "To").fill(to);
-        await panel(page).getByRole("button", { name: "Apply" }).click();
-
-        await expect(page.getByText("Showing 1 to 3 of 3 patients")).toBeVisible();
-        await expectNames(page, matched);
-        await expect(filterButton(page)).toHaveAccessibleName("Filter, 2 set");
-        await expect(page).toHaveURL("/search");
-      });
-    }
-
-    test("pages a filtered search to its second page", async ({ page }) => {
-      await search(page, "tan");
-      await filterButton(page).click();
-      await dateField(page, "Date of Birth", "From").fill("1960-01-01");
-      await panel(page).getByRole("button", { name: "Apply" }).click();
-      await expect(page.getByText("Showing 1 to 5 of 6 patients")).toBeVisible();
-
-      await page.getByRole("button", { name: "Page 2" }).click();
-
-      await expect(page.getByText("Showing 6 to 6 of 6 patients")).toBeVisible();
-      await expect(resultRows(page)).toHaveText([
-        "Kavitha TanabalanS9512345AFemale09 Sep 199507 May 2026",
-      ]);
     });
   });
 

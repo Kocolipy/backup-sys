@@ -6,7 +6,6 @@ import static org.assertj.core.api.Assertions.tuple;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
-import java.util.function.Function;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 import org.junit.jupiter.api.Test;
@@ -112,7 +111,7 @@ class PatientSourceFixturesTests {
                 .map(entry -> entry.get("resource"))
                 .toList();
 
-        assertThat(matches).hasSize(51).allSatisfy(match -> assertThat(FIXTURES)
+        assertThat(matches).hasSize(15).allSatisfy(match -> assertThat(FIXTURES)
                 .filteredOn(fixture -> fixture.get("id").equals(match.get("id")))
                 .containsExactly(match));
     }
@@ -131,10 +130,9 @@ class PatientSourceFixturesTests {
                 .map(JsonNode::asString);
     }
 
-    /** The {@code tan} searches with no filter, newest Last visit first: its two pages. */
+    /** The {@code tan} searches with no filter: its two pages. */
     private static boolean unfilteredTan(PatientSourceStubs.SearchStub stub) {
         return asked(stub, "name:contains").equals(Optional.of("tan"))
-                && asked(stub, "_sort").equals(Optional.of("-last-visit,_id"))
                 && FILTER_PARAMETERS.stream().allMatch(
                         parameter -> stub.query().at("/" + parameter + "/absent").asBoolean());
     }
@@ -177,25 +175,13 @@ class PatientSourceFixturesTests {
                         tuple("Bundle", "searchset", 7),
                         tuple("Bundle", "searchset", 7),
                         tuple("Bundle", "searchset", 3),
-                        tuple("Bundle", "searchset", 4),
-                        tuple("Bundle", "searchset", 6),
-                        tuple("Bundle", "searchset", 6),
-                        tuple("Bundle", "searchset", 3),
-                        tuple("Bundle", "searchset", 3),
-                        tuple("Bundle", "searchset", 3),
-                        tuple("Bundle", "searchset", 1),
-                        tuple("Bundle", "searchset", 3),
-                        tuple("Bundle", "searchset", 7),
-                        tuple("Bundle", "searchset", 7),
-                        tuple("Bundle", "searchset", 7),
-                        tuple("Bundle", "searchset", 7));
+                        tuple("Bundle", "searchset", 4));
     }
 
     // ---- the sort and filter stubs -------------------------------------------------------
 
     /** The filters a search sends the source, each as its own search parameter. */
-    private static final List<String> FILTER_PARAMETERS =
-            List.of("gender", "birthdate", "last-visit");
+    private static final List<String> FILTER_PARAMETERS = List.of("gender");
 
     /**
      * Every canned search pins each filter it does not use as absent, and each it uses to its
@@ -205,7 +191,7 @@ class PatientSourceFixturesTests {
     @Test
     void everyCannedSearchPinsEveryFilterItUsesOrNot() {
         assertThat(PatientSourceStubs.searchStubs()).filteredOn(stub -> !stub.fallback())
-                .hasSize(17)
+                .hasSize(6)
                 .allSatisfy(stub -> assertThat(FILTER_PARAMETERS)
                         .as("each filter's matcher, absent or pinned")
                         .allMatch(parameter -> pinsOrAbsent(stub.query().path(parameter))));
@@ -227,48 +213,26 @@ class PatientSourceFixturesTests {
                 .toList();
     }
 
-    /** Whether {@code date} — {@code null} for none — lies in the range {@code ends} pins. */
-    private static boolean inRange(String date, List<String> ends) {
-        if (ends.isEmpty()) {
-            return true;
-        }
-        return date != null && ends.stream().allMatch(end -> end.startsWith("ge")
-                ? date.compareTo(end.substring(2)) >= 0
-                : end.startsWith("le") && date.compareTo(end.substring(2)) <= 0);
-    }
-
     /**
-     * Every canned {@code tan} search answers exactly the fixtures its filters select from the
-     * seven with a name containing {@code tan}, in the order its sort names — ties by id, a
-     * fixture with no value for the sort last in either direction — paged by its offset, five to
-     * a page, with the total it selects: the source's behaviour, as /docs/domain/patient.md
-     * documents it. A date range keeps both ends, and leaves out a fixture with no date.
+     * Every canned {@code tan} search answers exactly the fixtures its gender filter selects from
+     * the seven with a name containing {@code tan}, in the mock's one stable order — newest Last
+     * visit first, ties by id, the fixture with none last — paged by its offset, five to a page,
+     * with the total it selects: the source's behaviour, as /docs/domain/patient.md documents it.
      */
     @Test
-    void everyCannedTanSearchAnswersTheFixturesItsFiltersAndSortSelect() {
+    void everyCannedTanSearchAnswersTheFixturesItsFilterSelectsInTheMocksOrder() {
         List<PatientSourceStubs.SearchStub> canned = PatientSourceStubs.searchStubs().stream()
                 .filter(stub -> asked(stub, "name:contains").equals(Optional.of("tan")))
                 .toList();
 
-        assertThat(canned).hasSize(15).allSatisfy(stub -> {
+        assertThat(canned).hasSize(4).allSatisfy(stub -> {
             List<String> gender = pinned(stub, "gender");
-            String sort = asked(stub, "_sort").orElseThrow();
-            String field = sort.replaceFirst("^-", "").replace(",_id", "");
-            Function<JsonNode, String> key = field.equals("birthdate")
-                    ? fixture -> fixture.get("birthDate").asString()
-                    : fixture -> lastVisit(fixture).orElse(null);
-            Comparator<String> direction = sort.startsWith("-")
-                    ? Comparator.<String>reverseOrder()
-                    : Comparator.<String>naturalOrder();
             List<String> selected = namedTan().stream()
                     .filter(fixture -> gender.isEmpty()
                             || gender.contains(fixture.get("gender").asString()))
-                    .filter(fixture -> inRange(fixture.get("birthDate").asString(),
-                            pinned(stub, "birthdate")))
-                    .filter(fixture -> inRange(lastVisit(fixture).orElse(null),
-                            pinned(stub, "last-visit")))
-                    .sorted(Comparator.comparing(key,
-                                    Comparator.nullsLast(direction))
+                    .sorted(Comparator.comparing(
+                                    (JsonNode fixture) -> lastVisit(fixture).orElse(null),
+                                    Comparator.nullsLast(Comparator.<String>reverseOrder()))
                             .thenComparing(fixture -> fixture.get("id").asString()))
                     .map(fixture -> fixture.get("id").asString())
                     .toList();

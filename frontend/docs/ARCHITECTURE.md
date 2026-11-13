@@ -242,18 +242,17 @@ two pages share moves up to `src/pages/` itself, and imports no page folder
   component state alone, never the URL, and read only on submit: each submit
   remounts the results, which read `GET /api/patient-search` five at a time
   through `PATIENT_SEARCH` and the shared paged listing, naming the range
-  whenever there is a match. Date of Birth and Last Visit sort through the
-  shared `SortHeading`, and `patient-filter-popover.tsx` holds the Filter panel,
-  whose `checkPatientFilters` refuses a from-date after its to-date before
-  anything is sent; the filters and the sort are component state too, and a
-  change of either reads from the first page. A failure is reported on the
+  whenever there is a match, in the patient source's own order: every heading
+  is a `PlainHeading`. `patient-filter-popover.tsx` holds the Filter panel, its
+  one filter the gender; the filter is component state too, and a change of it
+  reads from the first page. A failure is reported on the
   page's line, with a Retry that reads the same page again. Each row keeps the
   Patient's id, which it never shows.
-- `sort-heading.tsx` — the sortable column heading the accounts listing and
-  the Search page share: `aria-sort`, a direction icon, and a press that
-  sorts its column ascending first, then toggles descending → ascending → …,
-  never returning a sorted column to the listing's default order — and
-  `PlainHeading`, the heading of a column that does not sort. The sort it
+- `sort-heading.tsx` — the sortable column heading of the accounts listing:
+  `aria-sort`, a direction icon, and a press that sorts its column ascending
+  first, then toggles descending → ascending → …, never returning a sorted
+  column to the listing's default order — and `PlainHeading`, the heading of a
+  column that does not sort, every column of the Search page's. The sort it
   sets, `ColumnSort`, lives in `src/lib/sorting.ts` beside `sortParameters`,
   the one encoding of a sort as its `sortBy` and `sortOrder` query
   parameters, so each listing's `*-api.ts` names its sort by it and sends it
