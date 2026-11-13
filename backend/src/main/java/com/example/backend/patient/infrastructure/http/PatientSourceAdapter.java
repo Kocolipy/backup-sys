@@ -5,7 +5,6 @@ import com.example.backend.observability.RedactedFaultException;
 import com.example.backend.paging.domain.PageRequest;
 import com.example.backend.patient.domain.DateRange;
 import com.example.backend.patient.domain.Ffi;
-import com.example.backend.patient.domain.FfiCode;
 import com.example.backend.patient.domain.FfiFilter;
 import com.example.backend.patient.domain.FfiHistory;
 import com.example.backend.patient.domain.FfiSort;
@@ -17,6 +16,7 @@ import com.example.backend.patient.domain.PatientFilter;
 import com.example.backend.patient.domain.PatientQuery;
 import com.example.backend.patient.domain.SortOrder;
 import com.example.backend.patient.domain.PatientStore;
+import com.example.backend.patient.domain.SourceCode;
 import com.example.backend.patient.infrastructure.http.PatientSourceException.Failure;
 import java.io.IOException;
 import java.net.URI;
@@ -425,13 +425,13 @@ class PatientSourceAdapter implements PatientStore {
          * and reach the source as commas: a value's own comma would be encoded, and read as part of
          * a code.
          */
-        void anyOf(String parameter, String variable, Set<? extends FfiCode> codes) {
+        void anyOf(String parameter, String variable, Set<? extends SourceCode> codes) {
             if (codes.isEmpty()) {
                 return;
             }
             template.append('&').append(parameter).append('=');
             int place = 0;
-            for (FfiCode code : codes) {
+            for (SourceCode code : codes) {
                 String name = variable + place;
                 template.append(place == 0 ? "" : ",").append('{').append(name).append('}');
                 variables.put(name, code.code());

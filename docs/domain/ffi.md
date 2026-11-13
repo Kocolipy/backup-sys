@@ -46,7 +46,7 @@ sets. Each value travels as its **code** — from the source, and to the SPA —
 and the SPA alone names it with its **label**. A code is matched exactly: a
 label, another case or another spelling is outside the set. Each set is one
 Java enum (`FfiType`, `FfiOutcome`, `FfiHigherAuthority`, `FfiSubmittingMc`,
-`FfiStatus`, codes through `FfiCode`), one enum in `backend/docs/openapi.yaml`
+`FfiStatus`, codes through `SourceCode`), one enum in `backend/docs/openapi.yaml`
 and one SPA set (`src/pages/ffi/ffi-api.ts`), held set-equal by
 `VocabularyContractTests` and by `make verify-contract`
 (`/scripts/spa-contract/README.md`).

@@ -4,12 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.backend.audit.domain.AuditOperation;
 import com.example.backend.authorization.domain.Permission;
-import com.example.backend.patient.domain.FfiCode;
 import com.example.backend.patient.domain.FfiHigherAuthority;
 import com.example.backend.patient.domain.FfiOutcome;
 import com.example.backend.patient.domain.FfiStatus;
 import com.example.backend.patient.domain.FfiSubmittingMc;
 import com.example.backend.patient.domain.FfiType;
+import com.example.backend.patient.domain.SourceCode;
 import com.example.backend.scim.domain.LockCause;
 import java.util.Arrays;
 import java.util.List;
@@ -136,9 +136,9 @@ class VocabularyContractTests {
                 .isEmpty();
     }
 
-    /** An FFI's closed set's members as the wire spells them: by their code. */
-    private static List<String> codes(FfiCode[] values) {
-        return Arrays.stream(values).map(FfiCode::code).toList();
+    /** A closed set's members as the wire spells them: by their code. */
+    private static List<String> codes(SourceCode[] values) {
+        return Arrays.stream(values).map(SourceCode::code).toList();
     }
 
     /** The Permissions the filter admits, as the wire spells them. */

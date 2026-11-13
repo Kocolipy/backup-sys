@@ -18,6 +18,7 @@ import com.example.backend.patient.domain.FfiSubmittingMc;
 import com.example.backend.patient.domain.FfiType;
 import com.example.backend.patient.domain.PatientId;
 import com.example.backend.patient.domain.SortOrder;
+import com.example.backend.patient.domain.SourceCode;
 import java.time.LocalDate;
 import java.util.List;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -47,7 +48,7 @@ import org.springframework.web.bind.annotation.RestController;
  *       binder's {@code 400}.
  *   <li>The filters bind to typed values: {@code type}, {@code outcome}, {@code higherAuthority}
  *       and {@code submittingMc}, each repeated for any of its codes, and {@code status}, to the
- *       members of their closed sets, matched exactly by code ({@link FfiFilter#codeOf}); and
+ *       members of their closed sets, matched exactly by code ({@link SourceCode#ofParameter}); and
  *       {@code issueDateFrom}, {@code issueDateTo}, {@code expiryDateFrom} and
  *       {@code expiryDateTo} to calendar dates, {@code YYYY-MM-DD}. Any other value is the
  *       binder's {@code 400}, as a from-date after its to-date is.
@@ -86,7 +87,7 @@ public class PatientFfiController {
     @InitBinder
     void spellings(WebDataBinder binder) {
         binder.registerCustomEditor(FfiStatus.class,
-                spelled(code -> FfiFilter.codeOf(FfiStatus.class, code)));
+                spelled(code -> SourceCode.ofParameter(FfiStatus.class, code)));
         binder.registerCustomEditor(FfiSort.Field.class, spelled(FfiSort.Field::of));
         binder.registerCustomEditor(SortOrder.class, spelled(SortOrder::of));
     }

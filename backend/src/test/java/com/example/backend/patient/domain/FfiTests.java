@@ -7,7 +7,6 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Optional;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -17,8 +16,8 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 /**
  * An FFI as the domain holds it (/docs/domain/ffi.md): every field required, its id in FHIR's id
- * grammar, printed by its id alone; a page of FFI History counting no fewer than none; and each
- * closed set's member found by its exact code.
+ * grammar, printed by its id alone; and a page of FFI History counting no fewer than none. How a
+ * closed set's member is found by its code is {@code SourceCodeTests}'.
  */
 class FfiTests {
 
@@ -108,17 +107,5 @@ class FfiTests {
     @Test
     void aPageOfHistoryHoldsItsFfis() {
         assertThatThrownBy(() -> new FfiHistory(0, null)).isInstanceOf(NullPointerException.class);
-    }
-
-    /** A code finds its member exactly: another case, a label or nothing finds none. */
-    @Test
-    void aCodeFindsItsMemberExactly() {
-        assertThat(Arrays.asList(
-                FfiCode.of(FfiHigherAuthority.class, "comd-mmi"),
-                FfiCode.of(FfiHigherAuthority.class, "COMD-MMI"),
-                FfiCode.of(FfiHigherAuthority.class, "Comd MMI"),
-                FfiCode.of(FfiHigherAuthority.class, null)))
-                .containsExactly(Optional.of(FfiHigherAuthority.COMD_MMI), Optional.empty(),
-                        Optional.empty(), Optional.empty());
     }
 }

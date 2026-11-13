@@ -155,6 +155,7 @@ FAST_GATE=(
   com/example/backend/patient/domain/PatientQueryTests
   com/example/backend/patient/domain/PatientTests
   com/example/backend/patient/domain/SortOrderTests
+  com/example/backend/patient/domain/SourceCodeTests
   com/example/backend/patient/infrastructure/http/PatientSourceAdapterContractTests
   com/example/backend/patient/infrastructure/http/PatientSourceFfiAdapterTests
   com/example/backend/patient/infrastructure/http/PatientSourceSearchAdapterTests

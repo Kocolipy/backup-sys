@@ -5,8 +5,8 @@ import java.util.function.Function;
 
 /**
  * Reads a request parameter's text as the member of a closed set it spells, exactly: a sort's
- * column or direction, or an FFI filter's code. A blank text names none, and any other spelling is
- * refused.
+ * column or direction, or a filter's code ({@link SourceCode#ofParameter}). A blank text names
+ * none, and any other spelling is refused.
  */
 final class Spelling {
 

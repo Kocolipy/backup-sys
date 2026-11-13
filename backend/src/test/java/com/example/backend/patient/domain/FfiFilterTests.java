@@ -9,15 +9,12 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
-import org.junit.jupiter.params.provider.NullSource;
-import org.junit.jupiter.params.provider.ValueSource;
 
 /**
  * The filters narrowing an FFI History: any of the codes of each closed set but the Status, one
  * Status, and a date range for the Issue Date and for the Expiry Date — each optional, combined
- * with AND. A date range's own rules are {@code PatientFilterTests}'.
+ * with AND. A date range's own rules are {@code PatientFilterTests}', and how a code is read
+ * {@code SourceCodeTests}'.
  */
 class FfiFilterTests {
 
@@ -87,29 +84,5 @@ class FfiFilterTests {
                 .isInstanceOf(NullPointerException.class).hasMessage("issueDate");
         assertThatThrownBy(() -> new FfiFilter(null, null, DateRange.ANY, null, null, null, null))
                 .isInstanceOf(NullPointerException.class).hasMessage("expiryDate");
-    }
-
-    @ParameterizedTest
-    @CsvSource({
-        "ord-release-from-service, ORD_RELEASE_FROM_SERVICE",
-        "cat-a-ocs-scs, CAT_A_OCS_SCS"})
-    void aCodeIsReadAsTheMemberItSpells(String code, FfiType type) {
-        assertThat(FfiFilter.codeOf(FfiType.class, code)).isEqualTo(type);
-    }
-
-    /** A code is matched exactly: a label, another case or another spelling is outside its set. */
-    @ParameterizedTest
-    @ValueSource(strings = {"IPPT FFI", "IPPT", "ippt-ffi", "swimming"})
-    void aCodeOutsideItsClosedSetIsRefused(String code) {
-        assertThatThrownBy(() -> FfiFilter.codeOf(FfiType.class, code))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("An FFI filter's code is outside its closed set");
-    }
-
-    @ParameterizedTest
-    @NullSource
-    @ValueSource(strings = {"", "  "})
-    void noCodeOrABlankOneIsNone(String code) {
-        assertThat(FfiFilter.codeOf(FfiStatus.class, code)).isNull();
     }
 }

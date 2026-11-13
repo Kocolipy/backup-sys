@@ -1,7 +1,7 @@
 package com.example.backend.patient.domain;
 
 /** An FFI's FFI Type: what the Fit for Instruction is for. */
-public enum FfiType implements FfiCode {
+public enum FfiType implements SourceCode {
     OVERSEAS_EXERCISES("overseas-exercises"),
     CAT_A_OCS_SCS("cat-a-ocs-scs"),
     IPPT("ippt"),

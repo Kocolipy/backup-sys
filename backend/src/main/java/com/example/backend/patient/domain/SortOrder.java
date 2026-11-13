@@ -1,8 +1,8 @@
 package com.example.backend.patient.domain;
 
 /**
- * A sort's direction, spelled in full: the one an FFI History ({@link FfiSort}) is ordered in by
- * its one column.
+ * A sort's direction, spelled in full: the one a history read through the patient source is
+ * ordered in by its one sorted column.
  */
 public enum SortOrder {
     ASCENDING("ascending"),

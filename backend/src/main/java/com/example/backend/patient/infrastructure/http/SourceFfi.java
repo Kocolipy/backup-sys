@@ -1,12 +1,12 @@
 package com.example.backend.patient.infrastructure.http;
 
 import com.example.backend.patient.domain.Ffi;
-import com.example.backend.patient.domain.FfiCode;
 import com.example.backend.patient.domain.FfiHigherAuthority;
 import com.example.backend.patient.domain.FfiOutcome;
 import com.example.backend.patient.domain.FfiStatus;
 import com.example.backend.patient.domain.FfiSubmittingMc;
 import com.example.backend.patient.domain.FfiType;
+import com.example.backend.patient.domain.SourceCode;
 import com.example.backend.patient.infrastructure.http.PatientSourceException.Failure;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.time.LocalDate;
@@ -56,12 +56,12 @@ record SourceFfi(String resourceType, String id, String type, String outcome, St
     }
 
     /** The member of {@code set} {@code code} spells: {@code none} without one, {@code unknown} for another. */
-    private static <E extends Enum<E> & FfiCode> E coded(Class<E> set, String code, Failure none,
+    private static <E extends Enum<E> & SourceCode> E coded(Class<E> set, String code, Failure none,
             Failure unknown) {
         if (code == null) {
             throw PatientSourceException.failed(none);
         }
-        return FfiCode.of(set, code).orElseThrow(() -> PatientSourceException.failed(unknown));
+        return SourceCode.of(set, code).orElseThrow(() -> PatientSourceException.failed(unknown));
     }
 
     /** The calendar date {@code date} is, which must be there and to the day. */
