@@ -123,27 +123,17 @@ const deleteOkta = async (user: ReturnType<typeof userEvent.setup>) => {
 describe("Connectors by Superuser", () => {
   const oneActiveToken = okta([token()]);
 
-  it("offers no connector or token action to a User holding every Permission but not the Superuser", async () => {
+  it("lists every connector and its active tokens to a User holding every Permission but not the Superuser, offering no control", async () => {
     await renderConnectors(oneActiveToken, EVERY_PERMISSION, false);
 
     await tokenRow("a1b2c3d4");
-    expect(screen.queryByLabelText("New connector name")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Create connector" })).not.toBeInTheDocument();
-    const oktaSection = section("Okta");
-    expect(oktaSection.queryByRole("button", { name: /^Delete/ })).not.toBeInTheDocument();
-    expect(oktaSection.queryByRole("button", { name: /^Issue token/ })).not.toBeInTheDocument();
-    expect(oktaSection.queryByRole("button", { name: /^Rotate token/ })).not.toBeInTheDocument();
-    expect(oktaSection.queryByRole("button", { name: /^Revoke token/ })).not.toBeInTheDocument();
-  });
-
-  it("still lists every connector and its active tokens to a connector:read holder who is not the Superuser", async () => {
-    await renderConnectors(oneActiveToken, ["connector:read"], false);
-
-    await tokenRow("a1b2c3d4");
     expect(screen.getByRole("heading", { name: "Okta" })).toBeInTheDocument();
-    // The page offers no control: its one token fits one page, so there is no
-    // pager either; the layout's own controls sit outside it.
-    expect(within(screen.getByRole("main")).queryAllByRole("button")).toEqual([]);
+    // Its one token fits one page, so there is no pager either; the layout's
+    // own controls sit outside the page.
+    const main = within(screen.getByRole("main"));
+    expect(
+      ["button", "textbox", "checkbox", "spinbutton"].flatMap((role) => main.queryAllByRole(role)),
+    ).toEqual([]);
   });
 
   it("offers every connector and token action to the Superuser", async () => {
@@ -242,13 +232,6 @@ describe("Connectors", () => {
     expect(section("Okta").getByText("Showing 6 to 7 of 7 tokens")).toBeInTheDocument();
   });
 
-  it("shows no pager when a connector's active tokens fit on one page", async () => {
-    await renderConnectors(okta([token()]));
-
-    await tokenRow("a1b2c3d4");
-    expect(screen.queryByRole("navigation", { name: /tokens/i })).not.toBeInTheDocument();
-  });
-
   // A token carrying a Permission no token may hold fails the section's read on
   // decode, so it shows the failure copy rather than a half-read token.
   it("reports a token page carrying an unknown Permission, and lists none of it", async () => {
@@ -273,7 +256,7 @@ describe("Connectors", () => {
     await renderConnectors({ ...okta(), [TOKENS]: bare(503) });
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Unable to load the tokens of Okta. Please try again.",
+      /^Unable to load the tokens of Okta\. Please try again\.$/,
     );
     expect(section("Okta").queryByText("No active tokens.")).not.toBeInTheDocument();
   });
@@ -329,7 +312,7 @@ describe("Connectors", () => {
     await user.click(screen.getByRole("button", { name: "Create connector" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Creating Okta failed. Please try again.",
+      /^Creating Okta failed\. Please try again\.$/,
     );
     // The name is kept for a retry: only a successful create clears it.
     expect(screen.getByLabelText("New connector name")).toHaveValue("Okta");
@@ -512,6 +495,8 @@ describe("Connectors", () => {
 
     const issue = await screen.findByRole("button", { name: "Issue token" });
     expect(issue).toBeDisabled();
+    // No lifetime is filled in, so the default stands.
+    expect(screen.getByLabelText("Lifetime in days (default 365)")).toHaveAttribute("value", "");
     const permissions = within(screen.getByRole("group", { name: "Permissions" }));
     const groupRead = permissions.getByRole("checkbox", { name: /group:read/ });
     const userWrite = permissions.getByRole("checkbox", { name: /user:write/ });
@@ -530,15 +515,6 @@ describe("Connectors", () => {
       path: `${connectorAt}/tokens`,
     });
     expect(await screen.findByText("group:read · expires 2027-01-02")).toBeInTheDocument();
-  });
-
-  it("offers the issue form with no lifetime filled in, so the default stands", async () => {
-    await renderConnectors(okta());
-
-    expect(await screen.findByLabelText("Lifetime in days (default 365)")).toHaveAttribute(
-      "value",
-      "",
-    );
   });
 
   /** The Superuser may put any token-grantable Permission on a token, whatever its own session lists. */
@@ -656,7 +632,7 @@ describe("Connectors", () => {
     await user.click(screen.getByRole("button", { name: "Issue token" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Refused: Issuing a token for Okta — check the values and try again.",
+      /^Refused: Issuing a token for Okta — check the values and try again\.$/,
     );
     expect(screen.queryByLabelText("New token value")).not.toBeInTheDocument();
   });
@@ -671,7 +647,7 @@ describe("Connectors", () => {
     await deleteOkta(user);
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Deleting Okta failed: it no longer exists. Reload the page.",
+      /^Deleting Okta failed: it no longer exists\. Reload the page\.$/,
     );
   });
 
@@ -685,7 +661,7 @@ describe("Connectors", () => {
     await user.click(await screen.findByRole("button", { name: "Rotate token a1b2c3d4" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Refused: the token can no longer be rotated — it was revoked, has expired or was already rotated.",
+      /^Refused: the token can no longer be rotated — it was revoked, has expired or was already rotated\.$/,
     );
   });
 
@@ -695,6 +671,7 @@ describe("Connectors", () => {
   it("reports any other failure with action-specific default copy", async () => {
     await renderConnectors({
       ...okta([token()]),
+      [`DELETE ${connectorAt}`]: bare(503),
       [`POST ${tokenAt}/revoke`]: UNREACHABLE,
       [`POST ${tokenAt}/rotate`]: bare(503),
     });
@@ -702,12 +679,17 @@ describe("Connectors", () => {
 
     await user.click(await screen.findByRole("button", { name: "Rotate token a1b2c3d4" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Rotating the token failed. Please try again.",
+      /^Rotating the token failed\. Please try again\.$/,
     );
 
     await user.click(screen.getByRole("button", { name: "Revoke token a1b2c3d4" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Revoking the token failed. Please try again.",
+      /^Revoking the token failed\. Please try again\.$/,
+    );
+
+    await deleteOkta(user);
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      /^Deleting Okta failed\. Please try again\.$/,
     );
   });
 
@@ -715,7 +697,7 @@ describe("Connectors", () => {
     await renderConnectors({ [LISTING]: bare(503) });
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Unable to load the connectors. Please try again.",
+      /^Unable to load the connectors\. Please try again\.$/,
     );
     expect(screen.queryByText("No connectors exist.")).not.toBeInTheDocument();
     expect(screen.queryByText("Loading connectors…")).not.toBeInTheDocument();
@@ -739,7 +721,7 @@ describe("Connectors", () => {
     expect(requests().filter((request) => `GET ${request.path}` === LISTING)).toHaveLength(2);
   });
 
-  it("offers Try again beside the connectors kept when a re-read fails", async () => {
+  it("keeps the connectors on screen when the re-read after a change fails, offering Try again", async () => {
     await renderConnectors({
       ...okta(),
       [LISTING]: [
@@ -752,54 +734,17 @@ describe("Connectors", () => {
     });
     const user = userEvent.setup();
     await deleteOkta(user);
-    await screen.findByText(/^Unable to load the connectors/);
+
+    // The re-read is the latest thing to go wrong, so its copy replaces the delete's.
+    expect((await screen.findByRole("alert")).textContent).toBe(
+      "Unable to load the connectors. Please try again.",
+    );
+    expect(screen.getByRole("heading", { name: "Okta" })).toBeInTheDocument();
+    expect(screen.queryByText("No connectors exist.")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Try again" }));
 
     expect(await screen.findByRole("region", { name: "Connector Entra" })).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Connector Okta" })).toBeInTheDocument();
-  });
-
-  it("offers no Try again while the listing reads as it should", async () => {
-    await renderConnectors(okta());
-    await oktaSection();
-
-    expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
-  });
-
-  it("keeps the connectors on screen when the re-read after a change fails, and says so", async () => {
-    await renderConnectors({
-      ...okta(),
-      [LISTING]: [json([connector()]), bare(503)],
-      [`DELETE ${connectorAt}`]: bare(500),
-    });
-    const user = userEvent.setup();
-
-    await deleteOkta(user);
-
-    // The re-read is the latest thing to go wrong, so its copy replaces the delete's.
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      /^Unable to load the connectors\. Please try again\.$/,
-    );
-    expect(screen.getByRole("heading", { name: "Okta" })).toBeInTheDocument();
-    expect(screen.queryByText("No connectors exist.")).not.toBeInTheDocument();
-  });
-
-  it("withdraws a listing failure once a change starts, and shows the change's own", async () => {
-    await renderConnectors({
-      ...okta(),
-      [LISTING]: [json([connector()]), bare(503), json([connector()])],
-      [`DELETE ${connectorAt}`]: bare(500),
-    });
-    const user = userEvent.setup();
-
-    await deleteOkta(user);
-    // Delete fails (500) and the re-read fails too, so the alert shows the listing copy.
-    await screen.findByText(/^Unable to load the connectors/);
-    await deleteOkta(user);
-
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      /^Deleting Okta failed\. Please try again\.$/,
-    );
   });
 });

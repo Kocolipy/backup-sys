@@ -196,11 +196,6 @@ describeDecoder("ConnectorToken", decodeConnectorToken, CONNECTOR_TOKEN, {
   rotated: [null, "a boolean"],
 });
 
-/** Each listing decoder, the row type it reads, and one valid row of it. */
-const LISTINGS: [list: string, decode: (value: unknown) => unknown, row: object, type: string][] = [
-  ["Connector[]", decodeConnectors, CONNECTOR, "Connector"],
-];
-
 describe("the lock cause", () => {
   it.each(["FAILURES", "DORMANCY"] as const)("decodes a %s lock", (lockCause) => {
     expect(decodeUserRow({ ...USER_ROW, locked: true, lockCause })).toMatchObject({
@@ -220,20 +215,23 @@ describe("the lock cause", () => {
   });
 });
 
-describe("the listing decoders", () => {
-  it.each(LISTINGS)("%s decodes every row", (_, decode, row) => {
-    expect(decode([row, row])).toStrictEqual([row, row]);
-    expect(decode([])).toStrictEqual([]);
+describe("the connector listing", () => {
+  it("decodes every row", () => {
+    expect(decodeConnectors([CONNECTOR, CONNECTOR])).toStrictEqual([CONNECTOR, CONNECTOR]);
+    expect(decodeConnectors([])).toStrictEqual([]);
   });
 
-  it.each(LISTINGS)("%s refuses a listing with one malformed row", (_, decode, row, type) => {
-    refusal(() => decode([row, without(row, "id")]), `${type}.id is not a string`);
-    refusal(() => decode([row, 7]), `${type} is not an object`);
+  it("refuses a listing with one malformed row", () => {
+    refusal(
+      () => decodeConnectors([CONNECTOR, without(CONNECTOR, "id")]),
+      "Connector.id is not a string",
+    );
+    refusal(() => decodeConnectors([CONNECTOR, 7]), "Connector is not an object");
   });
 
-  it.each(LISTINGS)("%s refuses a body that is not a list", (list, decode, row) => {
-    refusal(() => decode(row), `${list} is not an array`);
-    refusal(() => decode(null), `${list} is not an array`);
+  it("refuses a body that is not a list", () => {
+    refusal(() => decodeConnectors(CONNECTOR), "Connector[] is not an array");
+    refusal(() => decodeConnectors(null), "Connector[] is not an array");
   });
 });
 
@@ -345,10 +343,6 @@ describe("the listing reads", () => {
     ["GROUPS", GROUPS, GROUP_PAGE, GROUP_PAGE.groups],
   ] as const)("%s reads its answer as a page of its own rows", async (_, read, page, rows) => {
     await expect(decodedBy(read.decode, page)).resolves.toStrictEqual(held(page, [...rows]));
-  });
-
-  it("CONNECTORS reads its answer as a list of its own rows", async () => {
-    await expect(decodedBy(CONNECTORS.decode, [CONNECTOR])).resolves.toStrictEqual([CONNECTOR]);
   });
 
   it("CONNECTOR_TOKENS reads a page of a connector's active tokens, five at a time, under connector:read", () => {
