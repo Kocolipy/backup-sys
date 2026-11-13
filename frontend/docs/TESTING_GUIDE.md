@@ -225,6 +225,12 @@ the exemption is for.
 `import.meta.url`: under vitest the latter is a served URL, not a `file:` one,
 and `fileURLToPath` throws on it.
 
+A rule that scans lines takes its two helpers from `sources.ts` too:
+`blankComments`, which blanks every comment while keeping line numbers true, so
+a comment may name a forbidden construct, and `violationsIn`, which lists each
+line matching the rule's pattern as `path:line: code`. Its planted case runs
+them on the planted lines, one per spelling the pattern names.
+
 ### Prove a new rule fails
 
 An architecture test that cannot fail is worse than none — it reads as
