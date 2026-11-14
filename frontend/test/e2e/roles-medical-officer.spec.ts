@@ -5,7 +5,7 @@ import { sidebar } from "./shell.helpers";
 /**
  * The Medical Officer's role: a member of the Medical Officer fixture Group,
  * which carries `patient:read` alone. Its landing page is Patient Search, and
- * its sidebar links Search, Profile, FFI, NUMC and ARMC with no Admin group. What it holds, and
+ * its sidebar links Search, Profile, Medication, FFI, NUMC and ARMC with no Admin group. What it holds, and
  * the backend refusing it every administrative read, need no browser
  * (`DevelopmentFixturesIntegrationTests`, `AuthorizationContractTests`).
  *
@@ -14,7 +14,7 @@ import { sidebar } from "./shell.helpers";
  * to the login page is routed by the same landing rule.
  */
 test.describe("Medical Officer pages", () => {
-  test("lands on Patient Search, linked to Search, Profile, FFI, NUMC and ARMC, with no Admin group", async ({
+  test("lands on Patient Search, linked to Search, Profile, Medication, FFI, NUMC and ARMC, with no Admin group", async ({
     page,
   }) => {
     await page.goto("/login");
@@ -24,6 +24,7 @@ test.describe("Medical Officer pages", () => {
     await expect(sidebar(page).getByRole("link")).toHaveText([
       "Search",
       "Profile",
+      "Medication",
       "FFI",
       "NUMC",
       "ARMC",

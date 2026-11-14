@@ -15,8 +15,8 @@ import com.example.backend.patient.domain.FfiHigherAuthority;
 import com.example.backend.patient.domain.FfiOutcome;
 import com.example.backend.patient.domain.HistorySort;
 import com.example.backend.patient.domain.FfiStatus;
-import com.example.backend.patient.domain.FfiSubmittingMc;
 import com.example.backend.patient.domain.FfiType;
+import com.example.backend.patient.domain.MedicalCentre;
 import com.example.backend.patient.domain.PatientId;
 import com.example.backend.patient.domain.SortOrder;
 import com.example.backend.patient.domain.SourceCode;
@@ -114,7 +114,7 @@ public class PatientFfiController {
                 codes(FfiOutcome.class, outcome), range(issueDateFrom, issueDateTo),
                 range(expiryDateFrom, expiryDateTo),
                 codes(FfiHigherAuthority.class, higherAuthority),
-                codes(FfiSubmittingMc.class, submittingMc), status);
+                codes(MedicalCentre.class, submittingMc), status);
         PageRequest page = PageRequest.of(startIndex, count);
         return ffis.find(patientId, filter, HistorySort.of(sortBy, sortOrder), page)
                 .map(history -> FfiHistoryPage.of(history, page.startIndex()))

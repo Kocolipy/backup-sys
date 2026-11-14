@@ -769,9 +769,9 @@ paths:
         `expiry-date=ge…` and `expiry-date=le…`, and the sort as
         `_sort=±issue-date|±expiry-date,_id`.
 
-        Each FFI's FFI Type, Outcome, Higher Authority, Submitting MC and
-        Status are closed sets, carried as their codes; the SPA names each code
-        with its label. **Status is the source's own** and is never derived from
+        Each FFI's FFI Type, Outcome, Higher Authority, Submitting MC (a
+        Medical Centre) and Status are closed sets, carried as their codes; the
+        SPA names each code with its label. **Status is the source's own** and is never derived from
         the Expiry Date: an FFI past its Expiry Date may still be `active`.
 
         Paging follows ADR 0017's parameter rules: `startIndex` one-based,
@@ -891,7 +891,7 @@ paths:
           schema:
             type: array
             items:
-              $ref: "#/components/schemas/FfiSubmittingMc"
+              $ref: "#/components/schemas/MedicalCentre"
         - name: status
           in: query
           required: false
@@ -1403,6 +1403,125 @@ paths:
             Start Date. The generic `server-error` `ApiError`, saying nothing
             about the failure; the fault's one record names its reason. The SPA
             shows it as "Couldn't load ARMC records", with Try again.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/patient-medication/{patientId}:
+    get:
+      tags: [Patient]
+      summary: Read a patient's Medication History, a page at a time
+      description: |
+        The Medication Records of the patient held under `patientId`, one page
+        at a time, in the in-house patient source's own order, as the source
+        pages and counts them (ADR 0019, D7): the service reads them from the
+        source on every call and orders, pages, holds and caches nothing of its
+        own. No sort and no filter is asked of the source. Read-only.
+
+        Each Medication Record is one prescription, with how it was dispensed
+        and who prescribed it. Its Dispense Status and its Dispensary, a Medical
+        Centre, are closed sets, carried as their codes, and the SPA names each
+        code with its label. Its Medication and Prescribing Doctor are required
+        free text; its Dosage, Route, Frequency, Step, Quantity and Duration are
+        optional free text, left out when the source has none. Its Start Date
+        and End Date are date-times with an offset, the End Date never before
+        the Start Date. The Prescribing Doctor is a name, as the source gives
+        it, linked to no User or account.
+
+        Paging follows ADR 0017's parameter rules: `startIndex` one-based,
+        `count` defaulting to 100 and capped at 200, an out-of-range value
+        coerced rather than refused. The page they resolve to is the source's
+        to read — `count=0` and a page past the end included — and
+        `totalResults` is the source's count of every Medication Record the
+        patient has.
+
+        Requires `patient:read`, a delegatable Permission a User holds through a
+        Group that carries it, or as the Superuser. Outside `/api/patient`, so
+        the answer is plain JSON and every refusal and fault the application
+        API's `ApiError`, not a FHIR `OperationOutcome`.
+
+        **Not audited**, as a read of one Patient by id is not: a read appends
+        no audit row. The request's own log record names the route template,
+        never the patient id; a `502` adds the fault's one `ERROR` record,
+        naming the source's failure or the rule its answer broke under a
+        Medication reason, and never the patient id or anything of the answer
+        (`docs/domain/medication.md`, "Logging").
+      operationId: getPatientMedicationHistory
+      security:
+        - sessionCookie: [patient:read]
+      parameters:
+        - name: patientId
+          in: path
+          required: true
+          description: |
+            The patient's id, its EHR's FHIR id, as `GET /api/patient/{id}`
+            reads the Patient by. Any value in FHIR's id grammar is well-formed.
+          schema:
+            type: string
+            pattern: "^[A-Za-z0-9\\-.]{1,64}$"
+        - name: startIndex
+          in: query
+          required: false
+          description: |
+            One-based index of the first Medication Record to return. Defaults
+            to 1; anything below 1 is coerced to 1 rather than refused, and an
+            integer of any size is coerced (one beyond 2147483647 is read as
+            2147483647). Sent to the source as the zero-based `_offset`.
+          schema:
+            type: integer
+        - name: count
+          in: query
+          required: false
+          description: |
+            Medication Records per page. Defaults to 100; a negative value is
+            coerced to 0 and anything above 200 to 200, rather than refused,
+            however large. Sent to the source as `_count`. The SPA asks for 5.
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: One page of the patient's Medication History.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MedicationHistoryPage"
+        "400":
+          description: |
+            `patientId` is outside FHIR's id grammar, or `startIndex` or
+            `count` is not an integer. Refused before the patient source is
+            called, with the generic `invalid-request` `ApiError`, which quotes
+            nothing of the request.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/PermissionRequired"
+        "404":
+          description: |
+            `patientId` is well-formed but the patient source holds no patient
+            under it (its `404`): the generic `request-refused` `ApiError`. An
+            ordinary answer, not a fault — the SPA shows it as "No patient in
+            context".
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "502":
+          description: |
+            The patient source failed: it could not be reached, gave no answer
+            within 2 seconds to connect and 5 to answer, answered any status but
+            a `200` or a `404`, or answered a `200` that is no searchset
+            `Bundle`, has no `total`, or holds an entry that is no Medication
+            Record the service can hold — no `id` or one outside FHIR's id
+            grammar, a required element missing or a Medication or Prescribing
+            Doctor blank, a code outside its closed set, a date that is no
+            date-time with an offset, or an End Date before its Start Date. The
+            generic `server-error` `ApiError`, saying nothing about the failure;
+            the fault's one record names its reason. The SPA shows it as
+            "Couldn't load medication records", with Try again.
           content:
             application/json:
               schema:
@@ -4742,7 +4861,7 @@ components:
         higherAuthority:
           $ref: "#/components/schemas/FfiHigherAuthority"
         submittingMc:
-          $ref: "#/components/schemas/FfiSubmittingMc"
+          $ref: "#/components/schemas/MedicalCentre"
         status:
           $ref: "#/components/schemas/FfiStatus"
     FfiType:
@@ -4765,12 +4884,15 @@ components:
       type: string
       description: An FFI's Higher Authority, by its code — CAMO, CARMO, CNMO, Comd MMI, DIS.
       enum: [camo, carmo, cnmo, comd-mmi, dis]
-    FfiSubmittingMc:
+    MedicalCentre:
       type: string
       description: |
-        An FFI's Submitting MC, by its code: Nee Soon Camp MC, Kranji Camp MC,
-        Hendon Camp MC, Mandai Hill Camp MC.
-      enum: [nee-soon-camp, kranji-camp, hendon-camp, mandai-hill-camp]
+        A Medical Centre, a camp medical centre, by its code: Nee Soon Camp MC,
+        Kranji Camp MC, Hendon Camp MC, Mandai Hill Camp MC, Khatib Camp MC.
+        An FFI's Submitting MC and a Medication Record's Dispensary each name
+        one.
+      enum:
+        [nee-soon-camp, kranji-camp, hendon-camp, mandai-hill-camp, khatib-camp]
     FfiStatus:
       type: string
       description: |
@@ -4905,6 +5027,100 @@ components:
         An ARMC Board's ARMC Outcome, by its code — FIT, UNFIT. A set of its own,
         apart from an FFI's Outcome and a NUMC Record's NUMC Outcome.
       enum: [fit, unfit]
+    MedicationHistoryPage:
+      type: object
+      required: [totalResults, startIndex, records]
+      additionalProperties: false
+      properties:
+        totalResults:
+          type: integer
+          description: The patient's Medication Records, across every page, as the patient source counted them.
+        startIndex:
+          type: integer
+          description: One-based index of this page's first Medication Record, as coerced.
+        records:
+          type: array
+          description: This page's Medication Records, in the source's own order.
+          items:
+            $ref: "#/components/schemas/MedicationRecord"
+    MedicationRecord:
+      type: object
+      required:
+        [
+          id,
+          medication,
+          dispenseStatus,
+          startDate,
+          endDate,
+          dispensary,
+          prescribingDoctor,
+        ]
+      additionalProperties: false
+      description: |
+        One Medication Record in a patient's Medication History: one
+        prescription, with how it was dispensed and who prescribed it. Six
+        elements are required; the Dosage, Route, Frequency, Step, Quantity and
+        Duration are optional, each absent — never `null` — when the source has
+        none. Every free-text element is as the source gives it. Restricted,
+        Sensitive Normal, as the patient's data is.
+      properties:
+        id:
+          type: string
+          pattern: "^[A-Za-z0-9\\-.]{1,64}$"
+          description: The Medication Record's own id at the patient source.
+        medication:
+          type: string
+          minLength: 1
+          description: The Medication, free text as the source gives it.
+        dosage:
+          type: string
+          description: The Dosage, free text. Absent when the source has none.
+        route:
+          type: string
+          description: The Route, free text. Absent when the source has none.
+        frequency:
+          type: string
+          description: The Frequency, free text. Absent when the source has none.
+        step:
+          type: string
+          description: The Step, free text. Absent when the source has none.
+        quantity:
+          type: string
+          description: The Quantity, free text. Absent when the source has none.
+        dispenseStatus:
+          $ref: "#/components/schemas/DispenseStatus"
+        duration:
+          type: string
+          description: |
+            The Duration, free text ("5 days"). Nothing works it out from the
+            dates. Absent when the source has none.
+        startDate:
+          type: string
+          format: date-time
+          description: |
+            The Start Date, a date-time ISO-8601 with the offset the source gave
+            it. The SPA shows it in Singapore time, to the minute.
+        endDate:
+          type: string
+          format: date-time
+          description: |
+            The End Date, a date-time ISO-8601 with the offset the source gave
+            it, never before the Start Date. The SPA shows it in Singapore time,
+            to the minute.
+        dispensary:
+          $ref: "#/components/schemas/MedicalCentre"
+        prescribingDoctor:
+          type: string
+          minLength: 1
+          description: |
+            The Prescribing Doctor, a name as the patient source gives it,
+            linked to no User or account.
+    DispenseStatus:
+      type: string
+      description: |
+        A Medication Record's Dispense Status, by its code — PENDING, DISPENSED,
+        UNCOLLECTED.
+      enum: [pending, dispensed, uncollected]
     HealthResponse:
       type: object
       required: [status]

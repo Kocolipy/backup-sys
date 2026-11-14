@@ -27,7 +27,7 @@ class FfiTests {
 
     private static Ffi ippt(String id) {
         return new Ffi(id, FfiType.IPPT, FfiOutcome.REQUEST_WAIVER, ISSUED, EXPIRES,
-                FfiHigherAuthority.CNMO, FfiSubmittingMc.KRANJI_CAMP, FfiStatus.ACTIVE);
+                FfiHigherAuthority.CNMO, MedicalCentre.KRANJI_CAMP, FfiStatus.ACTIVE);
     }
 
     @Test
@@ -37,7 +37,7 @@ class FfiTests {
         assertThat(Arrays.<Object>asList(ffi.id(), ffi.type(), ffi.outcome(), ffi.issueDate(),
                 ffi.expiryDate(), ffi.higherAuthority(), ffi.submittingMc(), ffi.status()))
                 .containsExactly("ffi-tan-wei-ming-2", FfiType.IPPT, FfiOutcome.REQUEST_WAIVER,
-                        ISSUED, EXPIRES, FfiHigherAuthority.CNMO, FfiSubmittingMc.KRANJI_CAMP,
+                        ISSUED, EXPIRES, FfiHigherAuthority.CNMO, MedicalCentre.KRANJI_CAMP,
                         FfiStatus.ACTIVE);
     }
 
@@ -59,7 +59,7 @@ class FfiTests {
     /** Every field is required: each one left out is refused, naming it. */
     static Stream<Arguments> eachFieldLeftOut() {
         Object[] whole = {FfiType.IPPT, FfiOutcome.FIT, ISSUED, EXPIRES, FfiHigherAuthority.CAMO,
-            FfiSubmittingMc.HENDON_CAMP, FfiStatus.INACTIVE};
+            MedicalCentre.HENDON_CAMP, FfiStatus.INACTIVE};
         String[] names = {"type", "outcome", "issueDate", "expiryDate", "higherAuthority",
             "submittingMc", "status"};
         List<Arguments> cases = new ArrayList<>();
@@ -76,7 +76,7 @@ class FfiTests {
     void anFfiMissingAFieldIsRefused(String field, Object[] fields) {
         assertThatThrownBy(() -> new Ffi("ffi-1", (FfiType) fields[0], (FfiOutcome) fields[1],
                 (LocalDate) fields[2], (LocalDate) fields[3], (FfiHigherAuthority) fields[4],
-                (FfiSubmittingMc) fields[5], (FfiStatus) fields[6]))
+                (MedicalCentre) fields[5], (FfiStatus) fields[6]))
                 .isInstanceOf(NullPointerException.class)
                 .hasMessage(field);
     }

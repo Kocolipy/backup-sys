@@ -9,6 +9,7 @@ import com.example.backend.patient.domain.DateRange;
 import com.example.backend.patient.domain.FfiFilter;
 import com.example.backend.patient.domain.FfiHistory;
 import com.example.backend.patient.domain.HistorySort;
+import com.example.backend.patient.domain.MedicationHistory;
 import com.example.backend.patient.domain.NumcFilter;
 import com.example.backend.patient.domain.NumcHistory;
 import com.example.backend.patient.domain.Patient;
@@ -52,8 +53,9 @@ import org.springframework.web.client.RestClient;
  * Patient search ({@link #search}, ADR 0018), {@code GET {base}/Patient/{id}/ffi?…} for a
  * patient's FFI History ({@link #findFfiHistory}, ADR 0019), and
  * {@code GET {base}/Patient/{id}/numc?…} for a patient's NUMC History ({@link #findNumcHistory},
- * ADR 0019, D5), and {@code GET {base}/Patient/{id}/armc?…} for a patient's ARMC History
- * ({@link #findArmcHistory}, ADR 0019, D6). The source is assumed to answer FHIR R4 and to need
+ * ADR 0019, D5), {@code GET {base}/Patient/{id}/armc?…} for a patient's ARMC History
+ * ({@link #findArmcHistory}, ADR 0019, D6), and {@code GET {base}/Patient/{id}/medication?…} for
+ * a patient's Medication History ({@link #findMedicationHistory}, ADR 0019, D7). The source is assumed to answer FHIR R4 and to need
  * no authorisation, so the call carries no credential of any kind. The patient's id is its EHR's
  * FHIR id, sent unchanged.
  *
@@ -161,6 +163,15 @@ class PatientSourceAdapter implements PatientStore {
     /** A searchset of ARMC Boards, an ARMC History's answer. */
     private static final ParameterizedTypeReference<SourceSearchset<SourceArmc>> ARMC_BOARDS =
             new ParameterizedTypeReference<>() {
+            };
+
+    /** A patient's Medication History, a page at a time, in the source's own order (ADR 0019, D7). */
+    static final String MEDICATION_HISTORY = "/Patient/{id}/medication?"
+            + SourceSearchset.PAGE_QUERY;
+
+    /** A searchset of Medication Records, a Medication History's answer. */
+    private static final ParameterizedTypeReference<SourceSearchset<SourceMedication>>
+            MEDICATION_RECORDS = new ParameterizedTypeReference<>() {
             };
 
     /** A name search: FHIR's {@code name:contains}, matched as the source decides. */
@@ -337,6 +348,22 @@ class PatientSourceAdapter implements PatientStore {
         query.narrowing(END_DATE, "endDate", filter.endDate());
         query.sorted(sort, Ties.THE_SOURCES);
         return history(query, ARMC_BOARDS, SourceArmc::toBoard, ArmcHistory::new);
+    }
+
+    /**
+     * {@code GET {base}/Patient/{id}/medication?…}: the patient's Medication History, paged and
+     * counted by the source, in its own order (ADR 0019, D7) — the page alone, with no sort and
+     * no filter. A {@code 404} is no patient under the id; the one other good answer is a
+     * {@code 200} searchset of Medication Records, and anything else is a fault, as is a
+     * searchset with no total or an entry that is no Medication Record the service can hold. The
+     * id is a URI variable, so the call is observed under the template alone.
+     */
+    @Override
+    public Optional<MedicationHistory> findMedicationHistory(PatientId id, PageRequest page) {
+        SourceQuery query = new SourceQuery(MEDICATION_HISTORY).variable("id", id.value());
+        query.paged(page);
+        return history(query, MEDICATION_RECORDS, SourceMedication::toRecord,
+                MedicationHistory::new);
     }
 
     /**

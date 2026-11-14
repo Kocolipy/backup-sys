@@ -10,6 +10,7 @@ import com.example.backend.patient.domain.ArmcFilter;
 import com.example.backend.patient.domain.ArmcHistory;
 import com.example.backend.patient.domain.ArmcOutcome;
 import com.example.backend.patient.domain.DateRange;
+import com.example.backend.patient.domain.DispenseStatus;
 import com.example.backend.patient.domain.Ffi;
 import com.example.backend.patient.domain.FfiHigherAuthority;
 import com.example.backend.patient.domain.FfiFilter;
@@ -18,8 +19,10 @@ import com.example.backend.patient.domain.HistorySort;
 import com.example.backend.patient.domain.HistorySort.IssueOrExpiry;
 import com.example.backend.patient.domain.FfiOutcome;
 import com.example.backend.patient.domain.FfiStatus;
-import com.example.backend.patient.domain.FfiSubmittingMc;
 import com.example.backend.patient.domain.FfiType;
+import com.example.backend.patient.domain.MedicalCentre;
+import com.example.backend.patient.domain.MedicationHistory;
+import com.example.backend.patient.domain.MedicationRecord;
 import com.example.backend.patient.domain.NumcFilter;
 import com.example.backend.patient.domain.NumcHistory;
 import com.example.backend.patient.domain.NumcOutcome;
@@ -35,6 +38,7 @@ import com.example.backend.patient.domain.PatientQuery;
 import com.example.backend.patient.domain.PatientStore;
 import com.example.backend.patient.domain.SortOrder;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -49,10 +53,11 @@ import org.junit.jupiter.params.provider.MethodSource;
  * development fixtures and its canned searches ({@code patient-source-mock/mappings},
  * /docs/domain/patient.md): each fixture by its id, exactly as the domain holds it, nothing under
  * an id no fixture holds, each documented search's page of matches with its Last visits and
- * its total, in the source's own order, and each FFI History, NUMC History and ARMC History the
- * mock serves (/docs/domain/ffi.md, "The patient source's FFI fixtures"; /docs/domain/numc.md,
- * "The patient source's NUMC fixtures"; /docs/domain/armc.md, "The patient source's ARMC
- * fixtures"), page by page.
+ * its total, in the source's own order, and each FFI History, NUMC History, ARMC History and
+ * Medication History the mock serves (/docs/domain/ffi.md, "The patient source's FFI
+ * fixtures"; /docs/domain/numc.md, "The patient source's NUMC fixtures"; /docs/domain/armc.md,
+ * "The patient source's ARMC fixtures"; /docs/domain/medication.md, "The patient source's
+ * Medication fixtures"), page by page.
  *
  * <p>The expected Patients are written out here, not derived from the stub files, so a stub that
  * drifted from the fixture table in /docs/domain/patient.md fails here.
@@ -268,7 +273,7 @@ public abstract class PatientStoreContract {
     // ---- the FFI Histories -----------------------------------------------------------------
 
     private static Ffi ffi(String id, FfiType type, FfiOutcome outcome, String issueDate,
-            String expiryDate, FfiHigherAuthority higherAuthority, FfiSubmittingMc submittingMc,
+            String expiryDate, FfiHigherAuthority higherAuthority, MedicalCentre submittingMc,
             FfiStatus status) {
         return new Ffi(id, type, outcome, LocalDate.parse(issueDate), LocalDate.parse(expiryDate),
                 higherAuthority, submittingMc, status);
@@ -281,16 +286,16 @@ public abstract class PatientStoreContract {
                 FIRST_FIVE)).contains(new FfiHistory(4, List.of(
                         ffi("ffi-tan-wei-ming-1", FfiType.OVERSEAS_EXERCISES, FfiOutcome.FIT,
                                 "2023-10-14", "2024-10-13", FfiHigherAuthority.CAMO,
-                                FfiSubmittingMc.NEE_SOON_CAMP, FfiStatus.INACTIVE),
+                                MedicalCentre.NEE_SOON_CAMP, FfiStatus.INACTIVE),
                         ffi("ffi-tan-wei-ming-2", FfiType.IPPT, FfiOutcome.REQUEST_WAIVER,
                                 "2024-01-10", "2025-01-09", FfiHigherAuthority.CNMO,
-                                FfiSubmittingMc.KRANJI_CAMP, FfiStatus.ACTIVE),
+                                MedicalCentre.KRANJI_CAMP, FfiStatus.ACTIVE),
                         ffi("ffi-tan-wei-ming-3", FfiType.DENTAL, FfiOutcome.FIT,
                                 "2023-11-22", "2024-11-21", FfiHigherAuthority.CARMO,
-                                FfiSubmittingMc.HENDON_CAMP, FfiStatus.ACTIVE),
+                                MedicalCentre.HENDON_CAMP, FfiStatus.ACTIVE),
                         ffi("ffi-tan-wei-ming-4", FfiType.VOCATIONAL, FfiOutcome.UNFIT,
                                 "2023-08-05", "2024-08-04", FfiHigherAuthority.CAMO,
-                                FfiSubmittingMc.MANDAI_HILL_CAMP, FfiStatus.INACTIVE))));
+                                MedicalCentre.MANDAI_HILL_CAMP, FfiStatus.INACTIVE))));
     }
 
     /** Tan Hui Min's seven FFIs over two pages of five: the first page. */
@@ -300,20 +305,20 @@ public abstract class PatientStoreContract {
                 .contains(new FfiHistory(7, List.of(
                         ffi("ffi-tan-hui-min-1", FfiType.ORD_RELEASE_FROM_SERVICE,
                                 FfiOutcome.FIT, "2025-03-03", "2026-03-02",
-                                FfiHigherAuthority.DIS, FfiSubmittingMc.NEE_SOON_CAMP,
+                                FfiHigherAuthority.DIS, MedicalCentre.NEE_SOON_CAMP,
                                 FfiStatus.ACTIVE),
                         ffi("ffi-tan-hui-min-2", FfiType.CAT_A_OCS_SCS, FfiOutcome.UNFIT,
                                 "2024-11-18", "2025-11-17", FfiHigherAuthority.COMD_MMI,
-                                FfiSubmittingMc.KRANJI_CAMP, FfiStatus.INACTIVE),
+                                MedicalCentre.KRANJI_CAMP, FfiStatus.INACTIVE),
                         ffi("ffi-tan-hui-min-3", FfiType.IPPT, FfiOutcome.REQUEST_WAIVER,
                                 "2024-06-10", "2025-06-09", FfiHigherAuthority.CNMO,
-                                FfiSubmittingMc.HENDON_CAMP, FfiStatus.ACTIVE),
+                                MedicalCentre.HENDON_CAMP, FfiStatus.ACTIVE),
                         ffi("ffi-tan-hui-min-4", FfiType.OVERSEAS_EXERCISES, FfiOutcome.FIT,
                                 "2024-02-26", "2025-02-25", FfiHigherAuthority.CARMO,
-                                FfiSubmittingMc.MANDAI_HILL_CAMP, FfiStatus.ACTIVE),
+                                MedicalCentre.MANDAI_HILL_CAMP, FfiStatus.ACTIVE),
                         ffi("ffi-tan-hui-min-5", FfiType.DENTAL, FfiOutcome.FIT, "2023-09-04",
                                 "2024-09-03", FfiHigherAuthority.CAMO,
-                                FfiSubmittingMc.NEE_SOON_CAMP, FfiStatus.INACTIVE))));
+                                MedicalCentre.NEE_SOON_CAMP, FfiStatus.INACTIVE))));
     }
 
     @Test
@@ -322,10 +327,10 @@ public abstract class PatientStoreContract {
                 .contains(new FfiHistory(7, List.of(
                         ffi("ffi-tan-hui-min-6", FfiType.VOCATIONAL, FfiOutcome.REQUEST_WAIVER,
                                 "2023-04-17", "2024-04-16", FfiHigherAuthority.CNMO,
-                                FfiSubmittingMc.KRANJI_CAMP, FfiStatus.INACTIVE),
+                                MedicalCentre.KRANJI_CAMP, FfiStatus.INACTIVE),
                         ffi("ffi-tan-hui-min-7", FfiType.IPPT, FfiOutcome.UNFIT, "2022-12-05",
                                 "2023-12-04", FfiHigherAuthority.CAMO,
-                                FfiSubmittingMc.HENDON_CAMP, FfiStatus.INACTIVE))));
+                                MedicalCentre.KHATIB_CAMP, FfiStatus.INACTIVE))));
     }
 
     /** Siti Nurhaliza binte Ahmad, as every fixture but those two, has no FFI. */
@@ -613,5 +618,105 @@ public abstract class PatientStoreContract {
     @Test
     void a_well_formed_id_no_patient_is_held_under_has_no_armc_history() {
         assertThat(armcHistory(new PatientId("not-a-uuid"), FIRST_FIVE)).isEmpty();
+    }
+
+    // ---- the Medication Histories ----------------------------------------------------------
+
+    /**
+     * A Medication Record with every optional element there but its Step — as each of Tan Wei
+     * Ming's first five is — its dates ISO-8601 with an offset.
+     */
+    private static MedicationRecord medication(String id, String medication, String dosage,
+            String frequency, String quantity, DispenseStatus dispenseStatus, String duration,
+            String startDate, String endDate, MedicalCentre dispensary,
+            String prescribingDoctor) {
+        return new MedicationRecord(id, medication, dosage, "PO", frequency, null, quantity,
+                dispenseStatus, duration, OffsetDateTime.parse(startDate),
+                OffsetDateTime.parse(endDate), dispensary, prescribingDoctor);
+    }
+
+    /** Tan Wei Ming's first five Medication Records of six, in the source's own order. */
+    @Test
+    void tan_wei_mings_medication_history_reads_its_first_page_of_five_of_six() {
+        assertThat(patients().findMedicationHistory(new PatientId("eq081-VQEgP8drUUqCWzHfw3"),
+                FIRST_FIVE)).contains(new MedicationHistory(6, List.of(
+                        medication("medication-tan-wei-ming-1", "Paracetamol", "750 mg", "QDS",
+                                "30 tablets", DispenseStatus.PENDING, "5 days",
+                                "2026-10-18T17:30:00+08:00", "2026-10-22T17:30:00+08:00",
+                                MedicalCentre.NEE_SOON_CAMP, "Dr Lim Wei Jie"),
+                        medication("medication-tan-wei-ming-2", "Amoxicillin", "300 mg", "TDS",
+                                "20 tablets", DispenseStatus.PENDING, "5 days",
+                                "2026-10-18T17:31:00+08:00", "2026-10-22T17:31:00+08:00",
+                                MedicalCentre.KHATIB_CAMP, "Dr Lim Wei Jie"),
+                        medication("medication-tan-wei-ming-3", "Paracetamol", "750 mg", "QDS",
+                                "30 tablets", DispenseStatus.PENDING, "5 days",
+                                "2026-10-18T17:30:00+08:00", "2026-10-22T17:30:00+08:00",
+                                MedicalCentre.NEE_SOON_CAMP, "Dr Chen Mei Ling"),
+                        medication("medication-tan-wei-ming-4", "Paracetamol", "500 mg", "QDS",
+                                "20 tablets", DispenseStatus.DISPENSED, "3 days",
+                                "2026-10-13T14:30:00+08:00", "2026-10-15T14:30:00+08:00",
+                                MedicalCentre.KHATIB_CAMP, "Dr Rajesh Kumar"),
+                        medication("medication-tan-wei-ming-5", "Amoxicillin", "300 mg", "TDS",
+                                "20 tablets", DispenseStatus.UNCOLLECTED, "3 days",
+                                "2025-04-22T10:00:00+08:00", "2025-04-24T10:00:00+08:00",
+                                MedicalCentre.KRANJI_CAMP, "Dr Nur Aisyah binte Rahman"))));
+    }
+
+    /** Tan Wei Ming's sixth Medication Record, the one with a Step, on the second page. */
+    @Test
+    void tan_wei_mings_medication_history_reads_its_sixth_on_the_second_page() {
+        assertThat(patients().findMedicationHistory(new PatientId("eq081-VQEgP8drUUqCWzHfw3"),
+                NEXT_FIVE)).contains(new MedicationHistory(6, List.of(new MedicationRecord(
+                        "medication-tan-wei-ming-6", "Prednisolone", "30 mg", "PO", "OM", "1",
+                        "14 tablets", DispenseStatus.DISPENSED, "7 days",
+                        OffsetDateTime.parse("2024-12-02T09:15:00+08:00"),
+                        OffsetDateTime.parse("2024-12-09T09:15:00+08:00"),
+                        MedicalCentre.HENDON_CAMP, "Dr Chen Mei Ling"))));
+    }
+
+    /**
+     * Tan Hui Min's four Medication Records on one page: every Dispense Status, dates in UTC
+     * and in Singapore's offset, and some optional elements absent — the last record has none.
+     */
+    @Test
+    void tan_hui_mins_medication_history_reads_her_four_records() {
+        assertThat(patients().findMedicationHistory(new PatientId("dev-patient-05"), FIRST_FIVE))
+                .contains(new MedicationHistory(4, List.of(
+                        new MedicationRecord("medication-tan-hui-min-1", "Ibuprofen", "400 mg",
+                                "PO", "TDS", null, "15 tablets", DispenseStatus.DISPENSED,
+                                "5 days", OffsetDateTime.parse("2026-03-01T02:00:00Z"),
+                                OffsetDateTime.parse("2026-03-06T02:00:00Z"),
+                                MedicalCentre.HENDON_CAMP, "Dr Rajesh Kumar"),
+                        new MedicationRecord("medication-tan-hui-min-2", "Lignocaine 2% gel",
+                                null, "Topical", null, null, "1 tube",
+                                DispenseStatus.UNCOLLECTED, null,
+                                OffsetDateTime.parse("2025-07-14T16:20:00+08:00"),
+                                OffsetDateTime.parse("2025-07-21T16:20:00+08:00"),
+                                MedicalCentre.MANDAI_HILL_CAMP, "Dr Nur Aisyah binte Rahman"),
+                        new MedicationRecord("medication-tan-hui-min-3", "Prednisolone",
+                                "20 mg", "PO", "OM", "2", "7 tablets", DispenseStatus.PENDING,
+                                "7 days", OffsetDateTime.parse("2025-02-10T08:45:00+08:00"),
+                                OffsetDateTime.parse("2025-02-17T08:45:00+08:00"),
+                                MedicalCentre.MANDAI_HILL_CAMP, "Dr Chen Mei Ling"),
+                        new MedicationRecord("medication-tan-hui-min-4",
+                                "Oral rehydration salts", null, null, null, null, null,
+                                DispenseStatus.DISPENSED, null,
+                                OffsetDateTime.parse("2024-08-05T11:05:00+08:00"),
+                                OffsetDateTime.parse("2024-08-05T11:05:00+08:00"),
+                                MedicalCentre.KRANJI_CAMP, "Dr Lim Wei Jie"))));
+    }
+
+    /** Siti Nurhaliza binte Ahmad, as every fixture but those two, has no Medication Record. */
+    @Test
+    void a_patient_with_no_medication_records_reads_an_empty_history_of_none() {
+        assertThat(patients().findMedicationHistory(new PatientId("erXuFYUfucBZaryVksYEcMg3"),
+                FIRST_FIVE)).contains(new MedicationHistory(0, List.of()));
+    }
+
+    /** {@code not-a-uuid} is a well-formed id the source holds no patient under. */
+    @Test
+    void a_well_formed_id_no_patient_is_held_under_has_no_medication_history() {
+        assertThat(patients().findMedicationHistory(new PatientId("not-a-uuid"), FIRST_FIVE))
+                .isEmpty();
     }
 }

@@ -1,7 +1,7 @@
 ---
 type: Configuration Reference
 title: Patient source
-description: APP_PATIENT_SOURCE_BASE_URL and APP_PATIENT_SOURCE_READ_TIMEOUT — the in-house patient source the backend reads every Patient, FFI History, NUMC History and ARMC History from and passes every Patient search to, its required base URL, its timeouts, and the local WireMock mock compose runs on 127.0.0.1:8104, with its fixtures, its search set, its FFI Histories, its NUMC Histories and its ARMC Histories.
+description: APP_PATIENT_SOURCE_BASE_URL and APP_PATIENT_SOURCE_READ_TIMEOUT — the in-house patient source the backend reads every Patient, FFI History, NUMC History, ARMC History and Medication History from and passes every Patient search to, its required base URL, its timeouts, and the local WireMock mock compose runs on 127.0.0.1:8104, with its fixtures, its search set, its FFI Histories, its NUMC Histories, its ARMC Histories and its Medication Histories.
 tags: [patient, configuration]
 ---
 
@@ -16,11 +16,13 @@ The backend reads every Patient from the in-house patient source at
 `GET {base}/Patient/{id}`, passes every Patient search to it at
 `GET {base}/Patient?…`, as FHIR R4, and reads every patient's FFI History at
 `GET {base}/Patient/{id}/ffi?…`, NUMC History at
-`GET {base}/Patient/{id}/numc?…` and ARMC History at
-`GET {base}/Patient/{id}/armc?…`, on every read, with no cache and **no
+`GET {base}/Patient/{id}/numc?…`, ARMC History at
+`GET {base}/Patient/{id}/armc?…` and Medication History at
+`GET {base}/Patient/{id}/medication?…`, on every read, with no cache and **no
 credential** (ADR 0014, ADR 0018, ADR 0019; `/docs/domain/patient.md`, "The
 in-house patient source" and "Patient search"; `/docs/domain/ffi.md`;
-`/docs/domain/numc.md`; `/docs/domain/armc.md`). The SPA never reaches it.
+`/docs/domain/numc.md`; `/docs/domain/armc.md`; `/docs/domain/medication.md`).
+The SPA never reaches it.
 
 - **Required, with no default.** `application.yaml` names
   `app.patient-source.base-url` as `${APP_PATIENT_SOURCE_BASE_URL}` with no
@@ -218,6 +220,34 @@ seconds), `server-error` (`503`), `unexpected-status` (`400`),
 ```bash
 curl -s 'http://127.0.0.1:8104/Patient/eq081-VQEgP8drUUqCWzHfw3/armc?_offset=0&_count=5&_total=accurate'
 curl -s 'http://127.0.0.1:8104/Patient/dev-patient-05/armc?end-date=ge2023-01-01&_offset=0&_count=5&_total=accurate'
+```
+
+### The Medication Histories
+
+The backend reads a patient's Medication History at
+`GET {base}/Patient/{id}/medication?_offset=…&_count=…&_total=accurate`, on the
+same base URL, client and timeouts, with no sort and no filter (ADR 0019, D7;
+`/docs/domain/medication.md`, "The source contract"). The mock answers a
+FHIR-shaped searchset of `Medication` objects, matched on `_count=5`, `_offset`
+and `_total=accurate`:
+
+| Stub file                        | Read                                                      | Answers                                                                         |
+| -------------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `medication-tan-wei-ming-page-1` | `eq081-VQEgP8drUUqCWzHfw3`                                | 5 of `total: 6`                                                                 |
+| `medication-tan-wei-ming-page-2` | `eq081-VQEgP8drUUqCWzHfw3`, `_offset=5`                   | the last 1 of `total: 6`, the one with a `step`                                 |
+| `medication-tan-hui-min`         | `dev-patient-05`                                          | Tan Hui Min's 4, `total: 4`, every Dispense Status, some optional fields absent |
+| `medication-fallback`            | any other read of a development fixture's, lower priority | no entry, `total: 0`                                                            |
+| `medication-not-found`           | any other well-formed id, lowest priority                 | `404`, as a read by id of an unknown id                                         |
+
+Beside them, `fault-medication-<failure>` answers each failure of a Medication
+read under a patient id of its own — `unreachable` (the connection reset),
+`slow` (after 7 seconds), `server-error` (`503`), `unexpected-status` (`400`),
+`not-a-searchset`, `no-total`, `no-id`, `invalid-id`, `no-dispense-status`,
+`no-prescribing-doctor`, `unknown-dispense-status`, `unknown-dispensary`,
+`start-date-not-a-date-time` and `end-before-start`.
+
+```bash
+curl -s 'http://127.0.0.1:8104/Patient/eq081-VQEgP8drUUqCWzHfw3/medication?_offset=0&_count=5&_total=accurate'
 ```
 
 A change to a stub file changes the backend's patient tests' fixtures too: they

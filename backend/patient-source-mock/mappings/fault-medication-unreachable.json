@@ -1,0 +1,13 @@
+{
+  "name": "Fault, Medication History: the connection reset before any answer",
+  "metadata": {
+    "fault": "unreachable"
+  },
+  "request": {
+    "method": "GET",
+    "urlPath": "/Patient/fault-medication-unreachable/medication"
+  },
+  "response": {
+    "fault": "CONNECTION_RESET_BY_PEER"
+  }
+}

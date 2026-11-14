@@ -25,6 +25,9 @@ export const ROUTE_READY: Record<string, (page: Page) => Promise<void>> = {
   "/ffi": async (page) => {
     await expect(page.getByRole("main").getByText("No patient in context")).toBeVisible();
   },
+  "/medication": async (page) => {
+    await expect(page.getByRole("main").getByText("No patient in context")).toBeVisible();
+  },
   "/numc": async (page) => {
     await expect(page.getByRole("main").getByText("No patient in context")).toBeVisible();
   },

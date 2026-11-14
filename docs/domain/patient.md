@@ -376,7 +376,7 @@ patient. Home is open to every signed-in session; Patient Search, the Landing
 page of a session holding `patient:read`, is guarded by it, so a session
 without it is offered no Search link and is routed to Home. The top bar names
 the same patient by name and NRIC.
-Both, and the FFI, NUMC and ARMC pages ([ffi](ffi.md), [numc](numc.md), [armc](armc.md)), render from **one reader** of the patient in context, which the signed-in
+Both, and the FFI, NUMC, ARMC and Medication pages ([ffi](ffi.md), [numc](numc.md), [armc](armc.md), [medication](medication.md)), render from **one reader** of the patient in context, which the signed-in
 layout renders (`frontend/src/pages/patient-in-context.ts`): each change
 of the patient in context is one `GET /api/patient/{id}` — one read of the
 uncached patient source — on Home as on every other signed-in page, and a
@@ -428,7 +428,9 @@ reaches a deployed environment. The backend holds no fixture of its own.
   [ffi](ffi.md)'s ("The patient source's FFI fixtures"); their NUMC Histories,
   and the NUMC fault stubs, [numc](numc.md)'s ("The patient source's NUMC
   fixtures"); their ARMC Histories, and the ARMC fault stubs, [armc](armc.md)'s
-  ("The patient source's ARMC fixtures").
+  ("The patient source's ARMC fixtures"); their Medication Histories, and the
+  Medication fault stubs, [medication](medication.md)'s ("The patient source's
+  Medication fixtures").
 
   A low-priority fallback, `search-fallback`, answers any other `/Patient`
   search — a gender filter on any other search or page included — with an

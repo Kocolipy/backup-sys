@@ -202,6 +202,7 @@ class ApiContractFixtureTests {
         patientFfi(all);
         patientNumc(all);
         patientArmc(all);
+        patientMedication(all);
         administration(all);
         connectors(all);
         deadlockedWrites(all);
@@ -474,6 +475,36 @@ class ApiContractFixtureTests {
                     .cookie(user), 400);
             // The patient source failing: the mock's ARMC fault stub answering 503.
             t.expect(t.get("/api/patient-armc/fault-armc-server-error").cookie(user), 502);
+            t.expect(t.get(path).cookie(inNoGroup), 403);
+            t.expect(t.get(path).cookie(confined), 403);
+            t.expect(t.get(path), 401);
+        });
+    }
+
+    // ---- /api/patient-medication/{patientId} --------------------------------------------
+
+    private static void patientMedication(List<Fixture> all) {
+        add(all, "patient Medication History: a page of Medication Records, one with no optional"
+                + " element, a patient with none, an unknown patient, a malformed id, a paging"
+                + " value that is no integer, a failing source, and the refusals", t -> {
+            // patient:read is a Group's to confer, as for an FFI History. The histories are the
+            // patient source's mock's (PatientSourceStubs): Tan Wei Ming has six Medication
+            // Records, Tan Hui Min four, the last with no optional element, Siti Nurhaliza binte
+            // Ahmad none.
+            Cookie user = t.medicalOfficer(t.logIn(ADMIN, ADMIN_PASSWORD));
+            Cookie inNoGroup = t.settle(t.provision(true));
+            Cookie confined = t.logIn(t.provision(true), CONNECTOR_PASSWORD);
+            String path = "/api/patient-medication/eq081-VQEgP8drUUqCWzHfw3";
+            t.expect(t.get(path + "?count=5").cookie(user), 200);
+            t.expect(t.get("/api/patient-medication/dev-patient-05?count=5").cookie(user), 200);
+            t.expect(t.get("/api/patient-medication/erXuFYUfucBZaryVksYEcMg3?count=5")
+                    .cookie(user), 200);
+            t.expect(t.get("/api/patient-medication/not-a-uuid").cookie(user), 404);
+            t.expect(t.get("/api/patient-medication/" + "x".repeat(65)).cookie(user), 400);
+            t.expect(t.get(path + "?count=five").cookie(user), 400);
+            // The patient source failing: the mock's Medication fault stub answering 503.
+            t.expect(t.get("/api/patient-medication/fault-medication-server-error").cookie(user),
+                    502);
             t.expect(t.get(path).cookie(inNoGroup), 403);
             t.expect(t.get(path).cookie(confined), 403);
             t.expect(t.get(path), 401);

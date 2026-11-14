@@ -33,7 +33,17 @@ const IDENTITIES: readonly {
 }[] = [
   {
     role: "admin",
-    routes: ["/search", "/", "/ffi", "/numc", "/armc", "/accounts", "/audit", "/settings"],
+    routes: [
+      "/search",
+      "/",
+      "/medication",
+      "/ffi",
+      "/numc",
+      "/armc",
+      "/accounts",
+      "/audit",
+      "/settings",
+    ],
   },
   {
     role: "user",

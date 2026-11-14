@@ -39,14 +39,14 @@ class FfiFilterTests {
     void everyFilterIsKept() {
         FfiFilter filter = new FfiFilter(Set.of(FfiType.IPPT), Set.of(FfiOutcome.UNFIT), OF_2024,
                 DateRange.ANY, Set.of(FfiHigherAuthority.DIS),
-                Set.of(FfiSubmittingMc.KRANJI_CAMP), FfiStatus.ACTIVE);
+                Set.of(MedicalCentre.KRANJI_CAMP), FfiStatus.ACTIVE);
 
         assertThat(List.of(filter.types(), filter.outcomes(), filter.issueDate(),
                 filter.expiryDate(), filter.higherAuthorities(), filter.submittingMcs(),
                 filter.status()))
                 .containsExactly(Set.of(FfiType.IPPT), Set.of(FfiOutcome.UNFIT), OF_2024,
                         DateRange.ANY, Set.of(FfiHigherAuthority.DIS),
-                        Set.of(FfiSubmittingMc.KRANJI_CAMP), FfiStatus.ACTIVE);
+                        Set.of(MedicalCentre.KRANJI_CAMP), FfiStatus.ACTIVE);
     }
 
     /** The codes of a set are held in their closed set's own order, however they were given. */

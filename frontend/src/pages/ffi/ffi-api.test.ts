@@ -51,7 +51,7 @@ describeDecoder(
     higherAuthority: ["comd_mmi", "camo | carmo | cnmo | comd-mmi | dis", "a string"],
     submittingMc: [
       "Nee Soon Camp MC",
-      "nee-soon-camp | kranji-camp | hendon-camp | mandai-hill-camp",
+      "nee-soon-camp | kranji-camp | hendon-camp | mandai-hill-camp | khatib-camp",
       "a string",
     ],
     status: ["expired", "active | inactive", "a string"],

@@ -1,6 +1,7 @@
 import { ChoiceToggle } from "@/pages/choice-toggle";
 import { ISSUE_AND_EXPIRY_DATES } from "@/pages/history-api";
 import { HistoryFilterPopover, pickerCopy } from "@/pages/history-filter-popover";
+import { MEDICAL_CENTRE_LABELS, MEDICAL_CENTRES } from "@/pages/medical-centre-api";
 import { MultiSelectPicker } from "@/pages/multi-select-picker";
 
 import {
@@ -10,8 +11,6 @@ import {
   FFI_OUTCOME_LABELS,
   FFI_OUTCOMES,
   FFI_STATUS_LABELS,
-  FFI_SUBMITTING_MC_LABELS,
-  FFI_SUBMITTING_MCS,
   FFI_TYPE_LABELS,
   FFI_TYPES,
   NO_FFI_FILTERS,
@@ -72,9 +71,9 @@ export function FfiFilterPopover({
           />
           <MultiSelectPicker
             copy={pickerCopy("Submitting MC", "Submitting MCs")}
-            labels={FFI_SUBMITTING_MC_LABELS}
+            labels={MEDICAL_CENTRE_LABELS}
             onChange={(submittingMcs) => edit({ submittingMcs })}
-            options={FFI_SUBMITTING_MCS}
+            options={MEDICAL_CENTRES}
             selected={draft.submittingMcs}
           />
           <ChoiceToggle

@@ -5,7 +5,9 @@
  * Nothing here requests anything: the FFI page sends {@link FFI_HISTORY}
  * through `usePagedRead` (behind `useSessionRequest`), so a `401` still ends
  * the session in one place. This file says what a response looks like, names
- * each code of an FFI's five closed sets, says what the Filter panel's
+ * each code of the four closed sets an FFI has of its own — its Submitting MC
+ * draws on the shared Medical Centre (`@/pages/medical-centre-api`) — says what the
+ * Filter panel's
  * filters and the sort are and which of them may be sent, and declares the
  * read — its path, decoder and Permission — once.
  */
@@ -23,13 +25,14 @@ import {
   type IssueOrExpirySort,
   type IssueAndExpiryDates,
 } from "@/pages/history-api";
+import { MEDICAL_CENTRES, type MedicalCentre } from "@/pages/medical-centre-api";
 
-// An FFI's five closed sets, each as the API carries it, by its codes, in the
-// order the Filter panel lists them. Each is exported for the SPA–API contract
-// check (`/scripts/spa-contract/`), which holds it to its enum in
-// `/backend/docs/openapi.yaml` from outside this app's import graph; the Filter
-// panel lists the four but the Status from them, and nothing in `src/` imports
-// the Status's.
+// The four closed sets an FFI has of its own, each as the API carries it, by
+// its codes, in the order the Filter panel lists them. Each is exported for the
+// SPA–API contract check (`/scripts/spa-contract/`), which holds it to its enum
+// in `/backend/docs/openapi.yaml` from outside this app's import graph; the
+// Filter panel lists the three but the Status from them, beside the Medical
+// Centres, and nothing in `src/` imports the Status's.
 
 /** An FFI's FFI Type. */
 export const FFI_TYPES = [
@@ -47,14 +50,6 @@ export const FFI_OUTCOMES = ["fit", "request-waiver", "unfit"] as const;
 /** An FFI's Higher Authority. */
 export const FFI_HIGHER_AUTHORITIES = ["camo", "carmo", "cnmo", "comd-mmi", "dis"] as const;
 
-/** An FFI's Submitting MC. */
-export const FFI_SUBMITTING_MCS = [
-  "nee-soon-camp",
-  "kranji-camp",
-  "hendon-camp",
-  "mandai-hill-camp",
-] as const;
-
 /**
  * An FFI's Status: the patient source's own, never derived from the Expiry
  * Date, so an FFI past it may still be `active`.
@@ -65,7 +60,6 @@ export const FFI_STATUSES = ["active", "inactive"] as const;
 export type FfiType = (typeof FFI_TYPES)[number];
 export type FfiOutcome = (typeof FFI_OUTCOMES)[number];
 export type FfiHigherAuthority = (typeof FFI_HIGHER_AUTHORITIES)[number];
-export type FfiSubmittingMc = (typeof FFI_SUBMITTING_MCS)[number];
 export type FfiStatus = (typeof FFI_STATUSES)[number];
 
 /** What the page calls each FFI Type. */
@@ -94,14 +88,6 @@ export const FFI_HIGHER_AUTHORITY_LABELS: Readonly<Record<FfiHigherAuthority, st
   dis: "DIS",
 };
 
-/** What the page calls each Submitting MC. */
-export const FFI_SUBMITTING_MC_LABELS: Readonly<Record<FfiSubmittingMc, string>> = {
-  "hendon-camp": "Hendon Camp MC",
-  "kranji-camp": "Kranji Camp MC",
-  "mandai-hill-camp": "Mandai Hill Camp MC",
-  "nee-soon-camp": "Nee Soon Camp MC",
-};
-
 /** What the page calls each Status. */
 export const FFI_STATUS_LABELS: Readonly<Record<FfiStatus, string>> = {
   active: "Active",
@@ -120,7 +106,7 @@ export interface Ffi {
   issueDate: string;
   expiryDate: string;
   higherAuthority: FfiHigherAuthority;
-  submittingMc: FfiSubmittingMc;
+  submittingMc: MedicalCentre;
   status: FfiStatus;
 }
 
@@ -152,7 +138,7 @@ export const decodeFfi = (value: unknown): Ffi => {
     issueDate: calendarDate(ffi.string("issueDate"), "Ffi.issueDate"),
     expiryDate: calendarDate(ffi.string("expiryDate"), "Ffi.expiryDate"),
     higherAuthority: ffi.oneOf("higherAuthority", FFI_HIGHER_AUTHORITIES),
-    submittingMc: ffi.oneOf("submittingMc", FFI_SUBMITTING_MCS),
+    submittingMc: ffi.oneOf("submittingMc", MEDICAL_CENTRES),
     status: ffi.oneOf("status", FFI_STATUSES),
   };
   ffi.onlyFields(FFI_FIELDS);
@@ -170,7 +156,7 @@ export interface FfiFilters extends IssueAndExpiryDates {
   types: readonly FfiType[];
   outcomes: readonly FfiOutcome[];
   higherAuthorities: readonly FfiHigherAuthority[];
-  submittingMcs: readonly FfiSubmittingMc[];
+  submittingMcs: readonly MedicalCentre[];
   status: "all" | FfiStatus;
 }
 
@@ -206,7 +192,7 @@ function historyQuery(filters: FfiFilters, sort: IssueOrExpirySort | null): stri
     ...codeParameters("outcome", FFI_OUTCOMES, filters.outcomes),
     ...historyDateParameters(ISSUE_AND_EXPIRY_DATES, filters),
     ...codeParameters("higherAuthority", FFI_HIGHER_AUTHORITIES, filters.higherAuthorities),
-    ...codeParameters("submittingMc", FFI_SUBMITTING_MCS, filters.submittingMcs),
+    ...codeParameters("submittingMc", MEDICAL_CENTRES, filters.submittingMcs),
     ...(filters.status === "all" ? [] : [`status=${filters.status}`]),
     ...sortParameters(sort),
   ].join("&");

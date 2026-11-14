@@ -132,6 +132,7 @@ describe("SignedInShell's navigation sidebar", () => {
   it.each([
     ["Search", "/search", ["patient:read"]],
     ["Profile", "/", []],
+    ["Medication", "/medication", ["patient:read"]],
     ["FFI", "/ffi", ["patient:read"]],
     ["NUMC", "/numc", ["patient:read"]],
     ["ARMC", "/armc", ["patient:read"]],
@@ -167,14 +168,14 @@ describe("SignedInShell's navigation sidebar", () => {
     ).toEqual(["Profile"]);
   });
 
-  it("links Search first, then Profile, FFI, NUMC and ARMC, for a session holding patient:read alone", async () => {
+  it("links Search first, then Profile, Medication, FFI, NUMC and ARMC, for a session holding patient:read alone", async () => {
     await renderSignedIn("/search", holding(["patient:read"]));
 
     expect(
       within(screen.getAllByRole("list")[0])
         .getAllByRole("link")
         .map((link) => link.textContent),
-    ).toEqual(["Search", "Profile", "FFI", "NUMC", "ARMC"]);
+    ).toEqual(["Search", "Profile", "Medication", "FFI", "NUMC", "ARMC"]);
   });
 
   it("links Search first, ahead of every page a Superuser may open", async () => {
@@ -184,12 +185,13 @@ describe("SignedInShell's navigation sidebar", () => {
       within(screen.getAllByRole("list")[0])
         .getAllByRole("link")
         .map((link) => link.textContent),
-    ).toEqual(["Search", "Profile", "FFI", "NUMC", "ARMC", "Accounts", "Audit logs"]);
+    ).toEqual(["Search", "Profile", "Medication", "FFI", "NUMC", "ARMC", "Accounts", "Audit logs"]);
   });
 
   it.each([
     ["/search", "Search"],
     ["/", "Profile"],
+    ["/medication", "Medication"],
     ["/ffi", "FFI"],
     ["/numc", "NUMC"],
     ["/armc", "ARMC"],
@@ -197,7 +199,16 @@ describe("SignedInShell's navigation sidebar", () => {
   ])("on %s highlights %s's link, and no other", async (path, current) => {
     await renderShell(path, {}, holding(EVERY_PERMISSION));
 
-    const links = ["Search", "Profile", "FFI", "NUMC", "ARMC", "Accounts", "Audit logs"];
+    const links = [
+      "Search",
+      "Profile",
+      "Medication",
+      "FFI",
+      "NUMC",
+      "ARMC",
+      "Accounts",
+      "Audit logs",
+    ];
     expect(
       links.map((name) => screen.getByRole("link", { name }).getAttribute("data-active")),
     ).toEqual(links.map((name) => String(name === current)));

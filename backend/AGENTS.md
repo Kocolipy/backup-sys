@@ -115,17 +115,20 @@ fixtures, a failure of the source for each fault stub (`metadata.fault`),
 search, with an empty searchset for any other, `Patient/{id}/ffi?…` for
 each fixture's FFI History, with a failure for each `fault-ffi-*` stub, and
 `Patient/{id}/numc?…` for each fixture's NUMC History, with a failure for each
-`fault-numc-*` stub, and `Patient/{id}/armc?…` for each fixture's ARMC History,
-with a failure for each `fault-armc-*` stub. Compose
+`fault-numc-*` stub, `Patient/{id}/armc?…` for each fixture's ARMC History,
+with a failure for each `fault-armc-*` stub, and `Patient/{id}/medication?…`
+for each fixture's Medication History, with a failure for each
+`fault-medication-*` stub. Compose
 runs it beside SQL
 Server and Redis (`patient-source`, no profile), so `make infra-up` and `make
 integration-test` start it; nothing under `/infra/` builds or deploys it. The
 backend's patient tests serve the same files in process, so a change to a stub
 is a change to the tests' fixtures: `/docs/domain/patient.md` ("The patient
 source's fixtures"), `/docs/domain/ffi.md` ("The patient source's FFI
-fixtures"), `/docs/domain/numc.md` ("The patient source's NUMC fixtures") and
-`/docs/domain/armc.md` ("The patient source's ARMC fixtures") have the rules
-they hold, and
+fixtures"), `/docs/domain/numc.md` ("The patient source's NUMC fixtures"),
+`/docs/domain/armc.md` ("The patient source's ARMC fixtures") and
+`/docs/domain/medication.md` ("The patient source's Medication fixtures") have
+the rules they hold, and
 `docs/configuration/patient-source.md` the setting and the port.
 
 ## Architecture constraints
@@ -199,10 +202,12 @@ needs both its documentation and a fixture that produces it
 (`docs/api-contract-check.md`).
 
 The SPA mirrors the Permission, token-Permission, `AuditOperation` and
-`lockCause` enums, an FFI's five closed sets (`FfiType`, `FfiOutcome`,
-`FfiHigherAuthority`, `FfiSubmittingMc`, `FfiStatus`), a NUMC Record's two
+`lockCause` enums, an FFI's four closed sets of its own (`FfiType`,
+`FfiOutcome`, `FfiHigherAuthority`, `FfiStatus`), a NUMC Record's two
 (`NumcType`, `NumcOutcome`), an ARMC Board's two (`ArmcBoardType`,
-`ArmcOutcome`) and each called operation's `security`; `VOCABULARIES` in
+`ArmcOutcome`), a Medication Record's `DispenseStatus`, `MedicalCentre` — the
+set an FFI's Submitting MC and a Medication Record's Dispensary share — and
+each called operation's `security`; `VOCABULARIES` in
 `/scripts/spa-contract/check.mjs` lists exactly what the root's contract check
 compares.
 

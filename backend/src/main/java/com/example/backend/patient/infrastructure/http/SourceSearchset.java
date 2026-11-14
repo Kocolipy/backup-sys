@@ -14,7 +14,8 @@ import java.util.function.Function;
  * {@code resource}, of type {@code R}. Every other element ({@code link}, {@code search},
  * {@code fullUrl}) is never bound. A Patient search's page is one, of Patients (ADR 0018), and so
  * are a patient's FFI History, of the source's own FFIs (ADR 0019), NUMC History, of its own
- * NUMC Records (ADR 0019, D5), and ARMC History, of its own ARMC Boards (ADR 0019, D6).
+ * NUMC Records (ADR 0019, D5), ARMC History, of its own ARMC Boards (ADR 0019, D6), and
+ * Medication History, of its own Medication Records (ADR 0019, D7).
  *
  * <p>Every such read asks for its page alike ({@link #PAGE_QUERY}, {@link #pageVariables}): from
  * the zero-based {@code _offset} {@code startIndex - 1}, {@code _count} entries, with an accurate

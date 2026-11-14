@@ -6,6 +6,7 @@ import com.example.backend.patient.domain.ArmcHistory;
 import com.example.backend.patient.domain.FfiFilter;
 import com.example.backend.patient.domain.FfiHistory;
 import com.example.backend.patient.domain.HistorySort;
+import com.example.backend.patient.domain.MedicationHistory;
 import com.example.backend.patient.domain.NumcFilter;
 import com.example.backend.patient.domain.NumcHistory;
 import com.example.backend.patient.domain.Patient;
@@ -49,6 +50,11 @@ public abstract class RefusingPatientStore implements PatientStore {
     public Optional<ArmcHistory> findArmcHistory(PatientId id, ArmcFilter filter,
             HistorySort sort, PageRequest page) {
         throw refused("an ARMC History");
+    }
+
+    @Override
+    public Optional<MedicationHistory> findMedicationHistory(PatientId id, PageRequest page) {
+        throw refused("a Medication History");
     }
 
     private static UnsupportedOperationException refused(String read) {

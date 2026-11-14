@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { calendarDate, DecodeError, decodeArray, jsonDecoder, readObject } from "./decode";
+import {
+  calendarDate,
+  dateTime,
+  DecodeError,
+  decodeArray,
+  jsonDecoder,
+  readObject,
+} from "./decode";
 
 const BODY = {
   name: "ada",
@@ -198,6 +205,20 @@ describe("calendarDate", () => {
   it("refuses a string that is no calendar date, naming the field", () => {
     expect(refusal(() => calendarDate("2025-02-30", "Visit.date"))).toBe(
       "Visit.date is not a date",
+    );
+  });
+});
+
+// Which strings are date-times with an offset is `isOffsetDateTime`'s
+// (time.test.ts).
+describe("dateTime", () => {
+  it("reads a date-time with an offset as it is", () => {
+    expect(dateTime("2026-10-18T17:30:00+08:00", "Dose.at")).toBe("2026-10-18T17:30:00+08:00");
+  });
+
+  it("refuses a string that is no date-time with an offset, naming the field", () => {
+    expect(refusal(() => dateTime("2026-10-18T17:30:00", "Dose.at"))).toBe(
+      "Dose.at is not a date-time",
     );
   });
 });

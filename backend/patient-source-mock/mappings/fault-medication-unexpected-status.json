@@ -1,0 +1,26 @@
+{
+  "name": "Fault, Medication History: the source answers 400",
+  "metadata": {
+    "fault": "unexpected-status"
+  },
+  "request": {
+    "method": "GET",
+    "urlPath": "/Patient/fault-medication-unexpected-status/medication"
+  },
+  "response": {
+    "status": 400,
+    "headers": {
+      "Content-Type": "application/fhir+json"
+    },
+    "jsonBody": {
+      "resourceType": "OperationOutcome",
+      "issue": [
+        {
+          "severity": "error",
+          "code": "invalid",
+          "diagnostics": "Bad Medication page: medication-fault-9 Dr Fault Nine"
+        }
+      ]
+    }
+  }
+}

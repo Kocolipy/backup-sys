@@ -23,7 +23,7 @@ import java.util.Set;
  */
 public record FfiFilter(Set<FfiType> types, Set<FfiOutcome> outcomes, DateRange issueDate,
         DateRange expiryDate, Set<FfiHigherAuthority> higherAuthorities,
-        Set<FfiSubmittingMc> submittingMcs, FfiStatus status) {
+        Set<MedicalCentre> submittingMcs, FfiStatus status) {
 
     /** No filter: every FFI of the patient. */
     public static final FfiFilter NONE = new FfiFilter(Set.of(), Set.of(), DateRange.ANY,

@@ -252,7 +252,30 @@ two pages share moves up to `src/pages/` itself, and imports no page folder
   and a change of it reads from the first page. A failure is reported on the
   page's line, with a Retry that reads the same page again. Each row keeps the
   Patient's id, which it never shows.
-- `ffi.tsx` / `ffi-api.ts` — FFI, `/ffi`, linked after Profile for a session
+- `medication.tsx` / `medication-api.ts` — Medication, `/medication`, linked
+  after Profile and directly above FFI for a session holding `patient:read` and
+  guarded by it. It renders through the shared `ForPatientInContext` as NUMC
+  does — "No patient in context" with none in context or a `404` for the id
+  there, "Loading medication records…" while the patient is read — and, once
+  the patient is read, that patient's Medication History,
+  `GET /api/patient-medication/{patientId}`, five at a time through
+  `MEDICATION_HISTORY` and the shared paged listing, naming the range on a
+  single page too. `MEDICATION_HISTORY` reads a `404` as `absent`; a failure
+  is "Couldn't load medication records" on the page's line, with Try again; an
+  empty history is "No medication records". `decodeMedicationRecord` is
+  strict: each date read through `dateTime` (`src/lib/decode.ts`), a
+  date-time with an offset, each of the six optional elements through
+  `optionalString` — absent when the source lacks it, shown as `—` — the
+  Dispense Status a `Record` of labels keyed by its codes, and the Dispensary
+  one of `MEDICAL_CENTRES` (`medical-centre-api.ts`). Read-only, in the
+  source's own order: no row action, and every column a `PlainHeading`, with
+  no sort and no filter. The Medication is bold, every free-text element is
+  shown as sent, both dates through `formatDateTime` (`src/lib/time.ts`) in
+  Singapore time, and the Dispense Status is a badge: PENDING `muted`,
+  DISPENSED `success`, UNCOLLECTED `danger`. Its twelve columns are wider than
+  the card: the table primitive keeps each cell to one line and scrolls
+  sideways in its own container.
+- `ffi.tsx` / `ffi-api.ts` — FFI, `/ffi`, linked after Medication for a session
   holding `patient:read` and guarded by it. It renders through the shared
   `ForPatientInContext` — with none in context, or a `404` for the id there,
   it says "No patient in context" and reads nothing; while the patient is read
@@ -263,8 +286,9 @@ two pages share moves up to `src/pages/` itself, and imports no page folder
   "No patient in context"; a failure is "Couldn't load FFIs" on the page's
   line, with Try again. `decodeFfi` is strict, each date read through
   `calendarDate` (`src/lib/decode.ts`), and each of an FFI's five
-  closed sets is a `Record` of labels keyed by its codes, so a code added
-  fails typecheck until it has one. Read-only: no row action. Issue Date and
+  closed sets is a `Record` of labels keyed by its codes — the Submitting MC's
+  the shared `MEDICAL_CENTRE_LABELS` (`medical-centre-api.ts`) — so a code
+  added fails typecheck until it has one. Read-only: no row action. Issue Date and
   Expiry Date sort through the shared `SortHeading`, disabled while a read is
   pending, and every other column is a `PlainHeading`; with no column sorted,
   `FFI_HISTORY` sends no `sortBy` and the source's own order applies.
@@ -303,6 +327,12 @@ two pages share moves up to `src/pages/` itself, and imports no page folder
   either reads from the first page, and a new patient in context starts with
   neither. With a filter applied, an empty history says "No NUMC records match
   the filters" rather than "No NUMC records".
+- `medical-centre-api.ts` — Medical Centre, the closed set the FFI's
+  Submitting MC and the Medication Record's Dispensary share: `MEDICAL_CENTRES`,
+  its codes, which the SPA–API contract check holds to `openapi.yaml`'s
+  `MedicalCentre`, and `MEDICAL_CENTRE_LABELS`. An API module of data alone,
+  in `src/pages/` because two pages' API modules read it
+  (`lb-api-modules-are-data` lets one API module import another).
 - `history-api.ts` / `history-filter-popover.tsx` — what the FFI, NUMC and
   ARMC histories share. `history-api.ts`, an API module of data alone, names
   the sort the FFI and NUMC Histories take (`IssueOrExpirySort`, by
@@ -377,17 +407,20 @@ two pages share moves up to `src/pages/` itself, and imports no page folder
   inside its page status, reads `GET /api/patient/{id}` through `PATIENT`
   (opting in to `absent`, a `403` reported as failure) for the EHR context's
   patient, decoding the R5 `Patient` (typed by `@types/fhir`'s `fhir5`) down to
-  the fields shown and the id the FFI, NUMC and ARMC pages read by; with
+  the fields shown and the id the Medication, FFI, NUMC and ARMC pages read
+  by; with
   none in context it reads nothing. A new id is a new path, so a new first read,
   and a late answer for the id before never lands. A failure is reported to the
   page's error line once, by this read. `usePatientInContext()` hands its view —
-  `none`, or the gated read's — to the top bar, the Patient card and the FFI,
-  NUMC and ARMC pages, which only render it, so each patient change sends one request on every
+  `none`, or the gated read's — to the top bar, the Patient card and the
+  Medication, FFI, NUMC and ARMC pages, which only render it, so each patient
+  change sends one request on every
   page. The read is
   a sibling of the layout's children, never their parent, so a patient coming
   into context or leaving it never remounts the page. It lives in `src/pages/`
   itself, a part the pages share, because that is the lowest layer the Shell,
-  the Patient card and the FFI, NUMC and ARMC pages may all import:
+  the Patient card and the Medication, FFI, NUMC and ARMC pages may all
+  import:
   `mb-pages-do-not-import-the-shell` rules out `src/shell/`, and
   `mb-pages-do-not-import-another-page` a page folder.
 - `for-patient-in-context.tsx` — the part of a page the patient in context

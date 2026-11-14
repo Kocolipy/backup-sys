@@ -58,18 +58,26 @@ export const VOCABULARIES = [
       },
     ],
   },
-  // An FFI's five closed sets, each carried as its code.
+  // An FFI's four closed sets of its own, each carried as its code.
   ...[
     ["FFI_TYPES", "FfiType"],
     ["FFI_OUTCOMES", "FfiOutcome"],
     ["FFI_HIGHER_AUTHORITIES", "FfiHigherAuthority"],
-    ["FFI_SUBMITTING_MCS", "FfiSubmittingMc"],
     ["FFI_STATUSES", "FfiStatus"],
   ].map(([set, schema]) => ({
     set,
     module: "src/pages/ffi/ffi-api.ts",
     mirrors: [{ pointer: `#/components/schemas/${schema}`, relation: "equal" }],
   })),
+  // Medical Centre, carried as its code: the set an FFI's Submitting MC and a
+  // Medication Record's Dispensary share.
+  {
+    set: "MEDICAL_CENTRES",
+    module: "src/pages/medical-centre-api.ts",
+    mirrors: [
+      { pointer: "#/components/schemas/MedicalCentre", relation: "equal" },
+    ],
+  },
   // A NUMC Record's two closed sets, each carried as its code.
   ...[
     ["NUMC_TYPES", "NumcType"],
@@ -88,6 +96,14 @@ export const VOCABULARIES = [
     module: "src/pages/armc/armc-api.ts",
     mirrors: [{ pointer: `#/components/schemas/${schema}`, relation: "equal" }],
   })),
+  // A Medication Record's Dispense Status, carried as its code.
+  {
+    set: "DISPENSE_STATUSES",
+    module: "src/pages/medication/medication-api.ts",
+    mirrors: [
+      { pointer: "#/components/schemas/DispenseStatus", relation: "equal" },
+    ],
+  },
 ];
 
 /** The node a `#/a/b` JSON pointer names in `doc`, or `undefined`. */
