@@ -163,13 +163,14 @@ class PatientSourceNumcAdapterTests {
      */
     @ParameterizedTest
     @CsvSource({
-        "ISSUE_DATE, ASCENDING, 'issue-date,_id'",
-        "ISSUE_DATE, DESCENDING, '-issue-date,_id'",
-        "EXPIRY_DATE, ASCENDING, 'expiry-date,_id'",
-        "EXPIRY_DATE, DESCENDING, '-expiry-date,_id'"})
-    void aSortIsTheSourcesOwnOnItsSearchParameter(HistorySort.IssueOrExpiry field, SortOrder order,
+        "issueDate, ASCENDING, 'issue-date,_id'",
+        "issueDate, DESCENDING, '-issue-date,_id'",
+        "expiryDate, ASCENDING, 'expiry-date,_id'",
+        "expiryDate, DESCENDING, '-expiry-date,_id'"})
+    void aSortIsTheSourcesOwnOnItsSearchParameter(String field, SortOrder order,
             String sorted) {
-        reading(NumcFilter.NONE, new HistorySort(field, order));
+        reading(NumcFilter.NONE,
+                new HistorySort(HistorySort.column(NumcHistory.DATE_COLUMNS, field), order));
 
         assertThat(sentQuery()).containsEntry("_sort", List.of(sorted));
     }
@@ -182,7 +183,7 @@ class PatientSourceNumcAdapterTests {
     void eachSetOfCodesIsOneParameterItsCodesJoinedByCommas() {
         reading(new NumcFilter(Set.of(NumcType.DIVING, NumcType.SUBMARINER),
                 Set.of(NumcOutcome.WAIVER_REJECTED, NumcOutcome.FIT, NumcOutcome.UNFIT),
-                DateRange.ANY, DateRange.ANY), HistorySort.SOURCE_ORDER);
+                DateRange.any(), DateRange.any()), HistorySort.SOURCE_ORDER);
 
         assertThat(sentQuery()).isEqualTo(Map.of(
                 "type", List.of("submariner,diving"),
@@ -196,7 +197,7 @@ class PatientSourceNumcAdapterTests {
     @Test
     void theCommaBetweenCodesIsSentAsItIs() {
         reading(new NumcFilter(Set.of(), Set.of(NumcOutcome.WAIVER_GRANTED, NumcOutcome.FIT),
-                DateRange.ANY, DateRange.ANY), HistorySort.SOURCE_ORDER);
+                DateRange.any(), DateRange.any()), HistorySort.SOURCE_ORDER);
 
         assertThat(sent().getUrl().split("[?&]")).contains("outcome=fit,waiver-granted");
     }
@@ -212,11 +213,11 @@ class PatientSourceNumcAdapterTests {
         "2024-01-01 | -          | ge2024-01-01",
         "-          | 2024-12-31 | le2024-12-31"})
     void aDateRangeIsItsSearchParameterForEachEnd(LocalDate from, LocalDate to, String ends) {
-        reading(new NumcFilter(null, null, new DateRange(from, to), DateRange.ANY),
+        reading(new NumcFilter(null, null, new DateRange<>(from, to), DateRange.any()),
                 HistorySort.SOURCE_ORDER);
         Map<String, List<String>> issued = sentQuery();
         SOURCE.resetRequests();
-        reading(new NumcFilter(null, null, DateRange.ANY, new DateRange(from, to)),
+        reading(new NumcFilter(null, null, DateRange.any(), new DateRange<>(from, to)),
                 HistorySort.SOURCE_ORDER);
         Map<String, List<String>> expiring = sentQuery();
 
@@ -231,9 +232,9 @@ class PatientSourceNumcAdapterTests {
     void everyFilterNarrowsTheReadAtOnceWithTheSort() {
         reading(new NumcFilter(Set.of(NumcType.HYPERBARIC_CHAMBER),
                         Set.of(NumcOutcome.WAIVER_GRANTED),
-                        new DateRange(LocalDate.of(2023, 1, 1), LocalDate.of(2023, 12, 31)),
-                        new DateRange(LocalDate.of(2024, 1, 1), null)),
-                new HistorySort(HistorySort.IssueOrExpiry.ISSUE_DATE, SortOrder.DESCENDING));
+                        new DateRange<>(LocalDate.of(2023, 1, 1), LocalDate.of(2023, 12, 31)),
+                        new DateRange<>(LocalDate.of(2024, 1, 1), null)),
+                new HistorySort(NumcHistory.ISSUE_DATE, SortOrder.DESCENDING));
 
         assertThat(sentQuery()).isEqualTo(Map.ofEntries(
                 Map.entry("type", List.of("hyperbaric-chamber")),

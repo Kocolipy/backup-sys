@@ -5,7 +5,7 @@ import { DecodeError } from "@/lib/decode";
 import { describeDecoder, STRING, without } from "@/lib/decode.testHelpers";
 
 import {
-  ARMC_DATE_RANGES,
+  ARMC_DATE_COLUMNS,
   ARMC_HISTORY,
   type ArmcFilters,
   countArmcFilters,
@@ -56,20 +56,27 @@ describeDecoder(
 // How a date range is checked is `checkDateRanges`' (lib/date-range.test.ts):
 // here, that the ARMC History's two ranges are the ones checked, by name.
 describe("the ARMC History's date ranges", () => {
+  it("declares the Start Date and the End Date, both calendar dates, in that order", () => {
+    expect(ARMC_DATE_COLUMNS).toEqual([
+      { column: "startDate", label: "Start Date", precision: "date" },
+      { column: "endDate", label: "End Date", precision: "date" },
+    ]);
+  });
+
   it.each([
     ["startDate", "Start Date"],
     ["endDate", "End Date"],
-  ] as const)("refuses a %s from-date after its to-date, naming the range", (range, label) => {
+  ] as const)("refuses a %s from-date after its to-date, naming the range", (column, label) => {
     expect(
-      checkDateRanges(ARMC_DATE_RANGES, {
+      checkDateRanges(ARMC_DATE_COLUMNS, {
         ...NO_ARMC_FILTERS,
-        [`${range}From`]: "2024-01-02",
-        [`${range}To`]: "2024-01-01",
+        [`${column}From`]: "2024-01-02",
+        [`${column}To`]: "2024-01-01",
       }),
     ).toEqual({
+      column,
       message: `The ${label} from-date must not be after its to-date.`,
       ok: false,
-      range,
     });
   });
 });

@@ -16,7 +16,7 @@ import com.example.backend.patient.domain.FfiHigherAuthority;
 import com.example.backend.patient.domain.FfiFilter;
 import com.example.backend.patient.domain.FfiHistory;
 import com.example.backend.patient.domain.HistorySort;
-import com.example.backend.patient.domain.HistorySort.IssueOrExpiry;
+import com.example.backend.patient.domain.HistoryColumn;
 import com.example.backend.patient.domain.FfiOutcome;
 import com.example.backend.patient.domain.FfiStatus;
 import com.example.backend.patient.domain.FfiType;
@@ -416,15 +416,15 @@ public abstract class PatientStoreContract {
         List<String> latestFirst = List.of("numc-tan-wei-ming-2", "numc-tan-wei-ming-3",
                 "numc-tan-wei-ming-1", "numc-tan-wei-ming-4");
         return Stream.of(
-                Arguments.of(IssueOrExpiry.ISSUE_DATE, SortOrder.ASCENDING, earliestFirst),
-                Arguments.of(IssueOrExpiry.ISSUE_DATE, SortOrder.DESCENDING, latestFirst),
-                Arguments.of(IssueOrExpiry.EXPIRY_DATE, SortOrder.ASCENDING, earliestFirst),
-                Arguments.of(IssueOrExpiry.EXPIRY_DATE, SortOrder.DESCENDING, latestFirst));
+                Arguments.of(NumcHistory.ISSUE_DATE, SortOrder.ASCENDING, earliestFirst),
+                Arguments.of(NumcHistory.ISSUE_DATE, SortOrder.DESCENDING, latestFirst),
+                Arguments.of(NumcHistory.EXPIRY_DATE, SortOrder.ASCENDING, earliestFirst),
+                Arguments.of(NumcHistory.EXPIRY_DATE, SortOrder.DESCENDING, latestFirst));
     }
 
     @ParameterizedTest(name = "{0} {1}")
     @MethodSource("cannedNumcSorts")
-    void tan_wei_mings_numc_history_reads_in_each_canned_sort(IssueOrExpiry field,
+    void tan_wei_mings_numc_history_reads_in_each_canned_sort(HistoryColumn<?> field,
             SortOrder order, List<String> ids) {
         assertThat(idsAndTotal(patients().findNumcHistory(
                 new PatientId("eq081-VQEgP8drUUqCWzHfw3"), NumcFilter.NONE,
@@ -441,27 +441,27 @@ public abstract class PatientStoreContract {
         return Stream.of(
                 Arguments.of("hyperbaric-chamber or submariner", new NumcFilter(
                         Set.of(NumcType.SUBMARINER, NumcType.HYPERBARIC_CHAMBER), Set.of(),
-                        DateRange.ANY, DateRange.ANY),
+                        DateRange.any(), DateRange.any()),
                         List.of("numc-tan-hui-min-2", "numc-tan-hui-min-3",
                                 "numc-tan-hui-min-5", "numc-tan-hui-min-6")),
                 Arguments.of("waiver granted or rejected", new NumcFilter(Set.of(),
                         Set.of(NumcOutcome.WAIVER_REJECTED, NumcOutcome.WAIVER_GRANTED),
-                        DateRange.ANY, DateRange.ANY),
+                        DateRange.any(), DateRange.any()),
                         List.of("numc-tan-hui-min-3", "numc-tan-hui-min-4",
                                 "numc-tan-hui-min-7")),
                 Arguments.of("issued in 2024", new NumcFilter(Set.of(), Set.of(),
-                        new DateRange(START_OF_2024, END_OF_2024), DateRange.ANY),
+                        new DateRange<>(START_OF_2024, END_OF_2024), DateRange.any()),
                         List.of("numc-tan-hui-min-2", "numc-tan-hui-min-3",
                                 "numc-tan-hui-min-4")),
                 Arguments.of("expiring to 2024", new NumcFilter(Set.of(), Set.of(),
-                        DateRange.ANY, new DateRange(null, END_OF_2024)),
+                        DateRange.any(), new DateRange<>(null, END_OF_2024)),
                         List.of("numc-tan-hui-min-5", "numc-tan-hui-min-6",
                                 "numc-tan-hui-min-7")),
                 Arguments.of("diving issued from 2024", new NumcFilter(Set.of(NumcType.DIVING),
-                        Set.of(), new DateRange(START_OF_2024, null), DateRange.ANY),
+                        Set.of(), new DateRange<>(START_OF_2024, null), DateRange.any()),
                         List.of("numc-tan-hui-min-1", "numc-tan-hui-min-4")),
                 Arguments.of("expiring to 2022", new NumcFilter(Set.of(), Set.of(),
-                        DateRange.ANY, new DateRange(null, LocalDate.of(2022, 12, 31))),
+                        DateRange.any(), new DateRange<>(null, LocalDate.of(2022, 12, 31))),
                         List.of()));
     }
 
@@ -551,15 +551,15 @@ public abstract class PatientStoreContract {
         List<String> earliestFirst = List.of("armc-tan-wei-ming-2", "armc-tan-wei-ming-1");
         List<String> latestFirst = List.of("armc-tan-wei-ming-1", "armc-tan-wei-ming-2");
         return Stream.of(
-                Arguments.of(HistorySort.StartOrEnd.START_DATE, SortOrder.ASCENDING, earliestFirst),
-                Arguments.of(HistorySort.StartOrEnd.START_DATE, SortOrder.DESCENDING, latestFirst),
-                Arguments.of(HistorySort.StartOrEnd.END_DATE, SortOrder.ASCENDING, earliestFirst),
-                Arguments.of(HistorySort.StartOrEnd.END_DATE, SortOrder.DESCENDING, latestFirst));
+                Arguments.of(ArmcHistory.START_DATE, SortOrder.ASCENDING, earliestFirst),
+                Arguments.of(ArmcHistory.START_DATE, SortOrder.DESCENDING, latestFirst),
+                Arguments.of(ArmcHistory.END_DATE, SortOrder.ASCENDING, earliestFirst),
+                Arguments.of(ArmcHistory.END_DATE, SortOrder.DESCENDING, latestFirst));
     }
 
     @ParameterizedTest(name = "{0} {1}")
     @MethodSource("cannedArmcSorts")
-    void tan_wei_mings_armc_history_reads_in_each_canned_sort(HistorySort.StartOrEnd field,
+    void tan_wei_mings_armc_history_reads_in_each_canned_sort(HistoryColumn<?> field,
             SortOrder order, List<String> ids) {
         assertThat(boardIdsAndTotal(patients().findArmcHistory(
                 new PatientId("eq081-VQEgP8drUUqCWzHfw3"), ArmcFilter.NONE,
@@ -575,26 +575,26 @@ public abstract class PatientStoreContract {
      */
     static Stream<Arguments> cannedArmcFilters() {
         return Stream.of(
-                Arguments.of("fit", new ArmcFilter(ArmcOutcome.FIT, DateRange.ANY, DateRange.ANY),
+                Arguments.of("fit", new ArmcFilter(ArmcOutcome.FIT, DateRange.any(), DateRange.any()),
                         List.of("armc-tan-hui-min-1", "armc-tan-hui-min-3",
                                 "armc-tan-hui-min-4", "armc-tan-hui-min-6")),
-                Arguments.of("unfit", new ArmcFilter(ArmcOutcome.UNFIT, DateRange.ANY,
-                        DateRange.ANY),
+                Arguments.of("unfit", new ArmcFilter(ArmcOutcome.UNFIT, DateRange.any(),
+                        DateRange.any()),
                         List.of("armc-tan-hui-min-2", "armc-tan-hui-min-5",
                                 "armc-tan-hui-min-7")),
                 Arguments.of("started in 2023", new ArmcFilter(null,
-                        new DateRange(START_OF_2023, LocalDate.of(2023, 12, 31)), DateRange.ANY),
+                        new DateRange<>(START_OF_2023, LocalDate.of(2023, 12, 31)), DateRange.any()),
                         List.of("armc-tan-hui-min-3", "armc-tan-hui-min-4")),
                 Arguments.of("ended from 2023, the open board left out", new ArmcFilter(null,
-                        DateRange.ANY, new DateRange(START_OF_2023, null)),
+                        DateRange.any(), new DateRange<>(START_OF_2023, null)),
                         List.of("armc-tan-hui-min-2", "armc-tan-hui-min-3",
                                 "armc-tan-hui-min-4")),
                 Arguments.of("fit started from 2023", new ArmcFilter(ArmcOutcome.FIT,
-                        new DateRange(START_OF_2023, null), DateRange.ANY),
+                        new DateRange<>(START_OF_2023, null), DateRange.any()),
                         List.of("armc-tan-hui-min-1", "armc-tan-hui-min-3",
                                 "armc-tan-hui-min-4")),
                 Arguments.of("started to 2019", new ArmcFilter(null,
-                        new DateRange(null, LocalDate.of(2019, 12, 31)), DateRange.ANY),
+                        new DateRange<>(null, LocalDate.of(2019, 12, 31)), DateRange.any()),
                         List.of()));
     }
 

@@ -13,6 +13,7 @@ import com.example.backend.paging.domain.PageRequest;
 import com.example.backend.patient.PatientSourceStubs;
 import com.example.backend.patient.domain.DateRange;
 import com.example.backend.patient.domain.FfiFilter;
+import com.example.backend.patient.domain.FfiHistory;
 import com.example.backend.patient.domain.FfiHigherAuthority;
 import com.example.backend.patient.domain.FfiOutcome;
 import com.example.backend.patient.domain.HistorySort;
@@ -161,13 +162,14 @@ class PatientSourceFfiAdapterTests {
      */
     @ParameterizedTest
     @CsvSource({
-        "ISSUE_DATE, ASCENDING, 'issue-date,_id'",
-        "ISSUE_DATE, DESCENDING, '-issue-date,_id'",
-        "EXPIRY_DATE, ASCENDING, 'expiry-date,_id'",
-        "EXPIRY_DATE, DESCENDING, '-expiry-date,_id'"})
-    void aSortIsTheSourcesOwnOnItsSearchParameter(HistorySort.IssueOrExpiry field, SortOrder order,
+        "issueDate, ASCENDING, 'issue-date,_id'",
+        "issueDate, DESCENDING, '-issue-date,_id'",
+        "expiryDate, ASCENDING, 'expiry-date,_id'",
+        "expiryDate, DESCENDING, '-expiry-date,_id'"})
+    void aSortIsTheSourcesOwnOnItsSearchParameter(String field, SortOrder order,
             String sorted) {
-        reading(FfiFilter.NONE, new HistorySort(field, order));
+        reading(FfiFilter.NONE,
+                new HistorySort(HistorySort.column(FfiHistory.DATE_COLUMNS, field), order));
 
         assertThat(sentQuery()).containsEntry("_sort", List.of(sorted));
     }
@@ -179,7 +181,7 @@ class PatientSourceFfiAdapterTests {
     @Test
     void eachSetOfCodesIsOneParameterItsCodesJoinedByCommas() {
         reading(new FfiFilter(Set.of(FfiType.DENTAL, FfiType.IPPT),
-                Set.of(FfiOutcome.UNFIT, FfiOutcome.FIT), DateRange.ANY, DateRange.ANY,
+                Set.of(FfiOutcome.UNFIT, FfiOutcome.FIT), DateRange.any(), DateRange.any(),
                 Set.of(FfiHigherAuthority.DIS, FfiHigherAuthority.COMD_MMI),
                 Set.of(MedicalCentre.HENDON_CAMP), null), HistorySort.SOURCE_ORDER);
 
@@ -196,8 +198,8 @@ class PatientSourceFfiAdapterTests {
     /** The comma between two codes reaches the source as a comma, FHIR's OR, not escaped. */
     @Test
     void theCommaBetweenCodesIsSentAsItIs() {
-        reading(new FfiFilter(Set.of(FfiType.DENTAL, FfiType.IPPT), Set.of(), DateRange.ANY,
-                DateRange.ANY, Set.of(), Set.of(), null), HistorySort.SOURCE_ORDER);
+        reading(new FfiFilter(Set.of(FfiType.DENTAL, FfiType.IPPT), Set.of(), DateRange.any(),
+                DateRange.any(), Set.of(), Set.of(), null), HistorySort.SOURCE_ORDER);
 
         assertThat(sent().getUrl().split("[?&]")).contains("type=ippt,dental");
     }
@@ -213,11 +215,11 @@ class PatientSourceFfiAdapterTests {
         "2024-01-01 | -          | ge2024-01-01",
         "-          | 2024-12-31 | le2024-12-31"})
     void aDateRangeIsItsSearchParameterForEachEnd(LocalDate from, LocalDate to, String ends) {
-        reading(new FfiFilter(null, null, new DateRange(from, to), DateRange.ANY, null, null, null),
+        reading(new FfiFilter(null, null, new DateRange<>(from, to), DateRange.any(), null, null, null),
                 HistorySort.SOURCE_ORDER);
         Map<String, List<String>> issued = sentQuery();
         SOURCE.resetRequests();
-        reading(new FfiFilter(null, null, DateRange.ANY, new DateRange(from, to), null, null, null),
+        reading(new FfiFilter(null, null, DateRange.any(), new DateRange<>(from, to), null, null, null),
                 HistorySort.SOURCE_ORDER);
         Map<String, List<String>> expiring = sentQuery();
 
@@ -230,7 +232,7 @@ class PatientSourceFfiAdapterTests {
     @ParameterizedTest
     @CsvSource({"ACTIVE, active", "INACTIVE, inactive"})
     void aStatusIsTheSourcesStatusByItsCode(FfiStatus status, String code) {
-        reading(new FfiFilter(null, null, DateRange.ANY, DateRange.ANY, null, null, status),
+        reading(new FfiFilter(null, null, DateRange.any(), DateRange.any(), null, null, status),
                 HistorySort.SOURCE_ORDER);
 
         assertThat(sentQuery()).containsEntry("status", List.of(code));
@@ -240,11 +242,11 @@ class PatientSourceFfiAdapterTests {
     @Test
     void everyFilterNarrowsTheReadAtOnceInTheOrderAsked() {
         reading(new FfiFilter(Set.of(FfiType.VOCATIONAL), Set.of(FfiOutcome.REQUEST_WAIVER),
-                        new DateRange(LocalDate.of(2023, 1, 1), LocalDate.of(2023, 12, 31)),
-                        new DateRange(LocalDate.of(2024, 1, 1), null),
+                        new DateRange<>(LocalDate.of(2023, 1, 1), LocalDate.of(2023, 12, 31)),
+                        new DateRange<>(LocalDate.of(2024, 1, 1), null),
                         Set.of(FfiHigherAuthority.CNMO), Set.of(MedicalCentre.KRANJI_CAMP),
                         FfiStatus.INACTIVE),
-                new HistorySort(HistorySort.IssueOrExpiry.EXPIRY_DATE, SortOrder.DESCENDING));
+                new HistorySort(FfiHistory.EXPIRY_DATE, SortOrder.DESCENDING));
 
         assertThat(sentQuery()).isEqualTo(Map.ofEntries(
                 Map.entry("type", List.of("vocational")),

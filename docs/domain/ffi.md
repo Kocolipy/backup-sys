@@ -101,13 +101,34 @@ The patient source sorts, filters, pages and counts an FFI History; the
 service passes the sort and the filters through and does none of it itself, as
 for a Patient search ([patient](patient.md), "Patient search"; ADR 0018, D7).
 
+- **Each history declares its date columns.** The sort and the date ranges
+  are shared by every history that has them, and name no history's column:
+  each history declares its own, each with its name on our API — its range is
+  `<name>From` and `<name>To`, and a sort by it `sortBy=<name>` — its label in
+  the SPA, the source's search parameter it is sent as, and its **precision**:
+
+  | Precision     | Each end on our API                           | Its control                     | Sent to the source                                                                  |
+  | ------------- | --------------------------------------------- | ------------------------------- | ----------------------------------------------------------------------------------- |
+  | calendar date | `YYYY-MM-DD`                                  | `<input type="date">`           | `<param>=ge<from>`, `<param>=le<to>`                                                |
+  | date-time     | `YYYY-MM-DDTHH:mm`, Singapore time, no offset | `<input type="datetime-local">` | each as its instant in UTC: `<param>=ge<from>:00Z`, `<param>=lt<to + 1 minute>:00Z` |
+
+  Either way both ends are inclusive — `lt` the minute after a date-time's
+  to-minute keeps all of that minute in — and either is optional, an end written
+  otherwise — for a date-time, with seconds, an offset, or a date alone — is
+  `400`, and so is a from-end after its to-end, which the SPA refuses before
+  sending. A date-time's control holds no value until a time is chosen beside
+  the date. A sort by a date-time column orders by the whole date-time. The
+  FFI History's two columns, the Issue Date and the Expiry Date, are calendar
+  dates (`FfiHistory.DATE_COLUMNS`, `FFI_DATE_COLUMNS`).
+
 - **The sort.** One column at a time, by `sortBy` — `issueDate` or
   `expiryDate` — and `sortOrder` — `ascending` (the default with a `sortBy`)
   or `descending`. It is sent as `_sort` on the source's own search
   parameters, `issue-date` or `expiry-date`, `-` first for descending, ties
   broken by id: `_sort=-issue-date,_id`. **With no `sortBy`** — whatever
   `sortOrder` says — **no `_sort` is sent**, and the source's default order is
-  the order shown. The domain's `HistorySort` holds it, for the NUMC History too.
+  the order shown. The domain's `HistorySort` holds it, over the columns the
+  history declares, for the NUMC and ARMC Histories too.
 - **The filters** narrow the history, combined with AND, each optional
   (`FfiFilter`):
 
@@ -126,7 +147,7 @@ for a Patient search ([patient](patient.md), "Patient search"; ADR 0018, D7).
   each comma sent as it is. Each code is one of its [closed
   set](#the-closed-sets)'s, matched exactly. Each end of a date range is a
   calendar date, `YYYY-MM-DD`, optional and inclusive; a from-date may not be
-  after its to-date (`DateRange`).
+  after its to-date (`DateRange`), as for every declared column above.
 
 - **Checked as the request is read in.** A column or direction spelled any
   other way, a code outside its closed set — a label, another case, a Java

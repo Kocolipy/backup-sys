@@ -469,6 +469,19 @@ holding `patient:read`. The source sorts and filters it, as it does a Patient
 search.
 _Avoid_: FFI list, FFI log
 
+**Date Column**:
+A date a history declares it sorts by and narrows by a from–to range: its
+name, its label, the Patient source's search parameter, and its Precision. The
+FFI and NUMC Histories' are the Issue Date and Expiry Date, the ARMC History's
+the Start Date and End Date.
+_Avoid_: date field, sortable date
+
+**Precision**:
+How finely a Date Column is written: a calendar date, `YYYY-MM-DD`, or a
+date-time to the minute in Singapore time, `YYYY-MM-DDTHH:mm`. Both ends of a
+range are inclusive at either.
+_Avoid_: granularity, date type
+
 **FFI Type**:
 What an FFI is for, one of a closed set: Overseas Exercises, CAT A - OCS/SCS,
 IPPT FFI, Dental FFI, ORD / Release from Service, Vocational FFI.

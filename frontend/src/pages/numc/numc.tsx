@@ -12,7 +12,6 @@ import {
 } from "@/components/ui/table";
 import { formatCalendarDateTwoDigitDay } from "@/lib/time";
 import { ForPatientInContext, NoPatientInContext } from "@/pages/for-patient-in-context";
-import type { IssueOrExpirySort, IssueOrExpiryColumn } from "@/pages/history-api";
 import { PagedListing } from "@/pages/paged-listing";
 import { usePagedRead } from "@/pages/paged-read";
 import { type ColumnSorting, PlainHeading, SortHeading } from "@/pages/sort-heading";
@@ -28,6 +27,8 @@ import {
   type NumcFilters,
   type NumcOutcome,
   type NumcRecord,
+  type NumcSort,
+  type NumcSortColumn,
 } from "./numc-api";
 
 /**
@@ -56,7 +57,7 @@ function NumcTable({
 }: {
   pending: boolean;
   records: readonly NumcRecord[];
-  sorting: ColumnSorting<IssueOrExpiryColumn>;
+  sorting: ColumnSorting<NumcSortColumn>;
 }) {
   return (
     <Table>
@@ -109,7 +110,7 @@ function NumcTable({
  */
 function NumcHistory({ patientId }: { patientId: string }) {
   const [filters, setFilters] = useState<NumcFilters>(NO_NUMC_FILTERS);
-  const [sort, setSort] = useState<IssueOrExpirySort | null>(null);
+  const [sort, setSort] = useState<NumcSort | null>(null);
   const reading = usePagedRead(NUMC_HISTORY, {
     args: [patientId, filters, sort],
     failureMessage: "Couldn't load NUMC records",

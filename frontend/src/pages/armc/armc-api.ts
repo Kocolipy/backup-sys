@@ -13,8 +13,15 @@
 import type { ReadDeclaration } from "@/auth/declarations";
 import { calendarDate, jsonDecoder, readObject } from "@/lib/decode";
 import { pageDecoder, pagedPath, type Page, type PageAt } from "@/lib/paging";
-import { type ColumnSort, sortParameters } from "@/lib/sorting";
-import { countHistoryDates, historyDateParameters, type HistoryDates } from "@/pages/history-api";
+import { sortParameters, type ColumnSort } from "@/lib/sorting";
+import {
+  countHistoryDates,
+  type DateColumnOf,
+  historyDateParameters,
+  type HistoryDateColumns,
+  type HistoryDates,
+  noHistoryDates,
+} from "@/pages/history-api";
 
 // An ARMC Board's two closed sets, each as the API carries it, by its codes,
 // in the order the Filter panel lists the Outcome's. Each is exported for the
@@ -96,48 +103,49 @@ export const decodeArmcBoard = (value: unknown): ArmcBoard => {
   return decoded;
 };
 
+/**
+ * The ARMC History's date columns, both calendar dates, in the order the
+ * Filter panel lists their ranges: each its own range filter and a column the
+ * history sorts by.
+ */
+export const ARMC_DATE_COLUMNS = [
+  { column: "startDate", label: "Start Date", precision: "date" },
+  { column: "endDate", label: "End Date", precision: "date" },
+] as const satisfies HistoryDateColumns<string>;
+
 /** A column the ARMC History sorts by, as the backend's `sortBy` names it. */
-export type ArmcSortColumn = "startDate" | "endDate";
+export type ArmcSortColumn = DateColumnOf<typeof ARMC_DATE_COLUMNS>;
 
 /** How the ARMC History is sorted: one date, in one direction. */
 export type ArmcSort = ColumnSort<ArmcSortColumn>;
 
-/** The ARMC History's two date ranges, in the order the Filter panel lists them. */
-export const ARMC_DATE_RANGES = [
-  { label: "Start Date", range: "startDate" },
-  { label: "End Date", range: "endDate" },
-] as const;
-
 /**
  * The Filter panel's filters, each as its control holds it: the ARMC Outcome,
- * `all` for either, and the two date ranges ({@link HistoryDates}). Every
+ * `all` for either, and a range over each of {@link ARMC_DATE_COLUMNS}. Every
  * Outcome the panel offers is one of its set's, so only the dates are checked
  * before sending (`checkDateRanges`). The ARMC Board Type takes no filter
  * while ACES is its one code.
  */
-export interface ArmcFilters extends HistoryDates<(typeof ARMC_DATE_RANGES)[number]["range"]> {
+export interface ArmcFilters extends HistoryDates<ArmcSortColumn> {
   outcome: "all" | ArmcOutcome;
 }
 
 /** No filter: every ARMC Board of the patient. */
 export const NO_ARMC_FILTERS: ArmcFilters = {
-  endDateFrom: "",
-  endDateTo: "",
+  ...noHistoryDates(ARMC_DATE_COLUMNS),
   outcome: "all",
-  startDateFrom: "",
-  startDateTo: "",
 };
 
 /** How many of `filters` narrow the history: the Outcome, when one is chosen, and each date set. */
 export function countArmcFilters(filters: ArmcFilters): number {
-  return (filters.outcome === "all" ? 0 : 1) + countHistoryDates(ARMC_DATE_RANGES, filters);
+  return (filters.outcome === "all" ? 0 : 1) + countHistoryDates(ARMC_DATE_COLUMNS, filters);
 }
 
 /** The query string `filters` and `sort` ask for, each filter only when set. */
 function historyQuery(filters: ArmcFilters, sort: ArmcSort | null): string {
   return [
     ...(filters.outcome === "all" ? [] : [`outcome=${filters.outcome}`]),
-    ...historyDateParameters(ARMC_DATE_RANGES, filters),
+    ...historyDateParameters(ARMC_DATE_COLUMNS, filters),
     ...sortParameters(sort),
   ].join("&");
 }

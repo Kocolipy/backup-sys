@@ -96,6 +96,22 @@ export function isCalendarDate(text: string): boolean {
   return CALENDAR_DATE.test(text) && isRealDay(...partsOf(text));
 }
 
+/** A date-time to the minute's shape: a calendar date, `T`, and a two-digit hour and minute. */
+const MINUTE_DATE_TIME = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})$/;
+
+/**
+ * Whether `text` is a date-time to the minute with no offset — Singapore's
+ * wall clock, as a `datetime-local` control at its default step delivers it —
+ * written `YYYY-MM-DDTHH:mm`, on a day the calendar has, at a minute the clock
+ * has. Seconds, an offset or a date alone are refused.
+ */
+export function isMinuteDateTime(text: string): boolean {
+  const match = MINUTE_DATE_TIME.exec(text);
+  return (
+    match !== null && isCalendarDate(match[1]) && Number(match[2]) <= 23 && Number(match[3]) <= 59
+  );
+}
+
 /**
  * A date-time with an offset's shape, as ISO-8601 writes it: a date, `T`, an
  * hour and minute, seconds and a fraction where given, and `Z` or `±hh:mm`.

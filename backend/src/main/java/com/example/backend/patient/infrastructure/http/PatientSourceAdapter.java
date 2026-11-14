@@ -5,7 +5,6 @@ import com.example.backend.observability.RedactedFaultException;
 import com.example.backend.paging.domain.PageRequest;
 import com.example.backend.patient.domain.ArmcFilter;
 import com.example.backend.patient.domain.ArmcHistory;
-import com.example.backend.patient.domain.DateRange;
 import com.example.backend.patient.domain.FfiFilter;
 import com.example.backend.patient.domain.FfiHistory;
 import com.example.backend.patient.domain.HistorySort;
@@ -18,17 +17,15 @@ import com.example.backend.patient.domain.PatientMatch;
 import com.example.backend.patient.domain.PatientMatches;
 import com.example.backend.patient.domain.PatientFilter;
 import com.example.backend.patient.domain.PatientQuery;
-import com.example.backend.patient.domain.SortOrder;
 import com.example.backend.patient.domain.PatientStore;
-import com.example.backend.patient.domain.SourceCode;
 import com.example.backend.patient.infrastructure.http.PatientSourceException.Failure;
+import com.example.backend.patient.infrastructure.http.SourceQuery.Ties;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.http.HttpClient;
 import java.net.http.HttpTimeoutException;
 import java.time.Duration;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -106,37 +103,6 @@ class PatientSourceAdapter implements PatientStore {
      * adds to it.
      */
     static final String FFI_HISTORY = "/Patient/{id}/ffi?" + SourceSearchset.PAGE_QUERY;
-
-    /** The source's search parameter for an FFI's or a NUMC Record's Issue Date. */
-    private static final String ISSUE_DATE = "issue-date";
-
-    /** The source's search parameter for an FFI's or a NUMC Record's Expiry Date. */
-    private static final String EXPIRY_DATE = "expiry-date";
-
-    /** The source's search parameter for an ARMC Board's Start Date. */
-    private static final String START_DATE = "start-date";
-
-    /** The source's search parameter for an ARMC Board's End Date. */
-    private static final String END_DATE = "end-date";
-
-    /** The source's search parameter each column of a history sorts on. */
-    private static final Map<HistorySort.Column, String> SORTED_ON = Map.of(
-            HistorySort.IssueOrExpiry.ISSUE_DATE, ISSUE_DATE,
-            HistorySort.IssueOrExpiry.EXPIRY_DATE, EXPIRY_DATE,
-            HistorySort.StartOrEnd.START_DATE, START_DATE,
-            HistorySort.StartOrEnd.END_DATE, END_DATE);
-
-    /** How a sorted history's ties are broken: by id, sent after the column, or as the source decides. */
-    private enum Ties {
-        BY_ID(",_id"),
-        THE_SOURCES("");
-
-        private final String sent;
-
-        Ties(String sent) {
-            this.sent = sent;
-        }
-    }
 
     /** A searchset of FFIs, an FFI History's answer. */
     private static final ParameterizedTypeReference<SourceSearchset<SourceFfi>> FFIS =
@@ -284,8 +250,8 @@ class PatientSourceAdapter implements PatientStore {
         query.paged(page);
         query.anyOf("type", "type", filter.types());
         query.anyOf("outcome", "outcome", filter.outcomes());
-        query.narrowing(ISSUE_DATE, "issueDate", filter.issueDate());
-        query.narrowing(EXPIRY_DATE, "expiryDate", filter.expiryDate());
+        query.narrowing(FfiHistory.ISSUE_DATE, filter.issueDate());
+        query.narrowing(FfiHistory.EXPIRY_DATE, filter.expiryDate());
         query.anyOf("higher-authority", "higherAuthority", filter.higherAuthorities());
         query.anyOf("submitting-mc", "submittingMc", filter.submittingMcs());
         if (filter.status() != null) {
@@ -316,8 +282,8 @@ class PatientSourceAdapter implements PatientStore {
         query.paged(page);
         query.anyOf("type", "type", filter.types());
         query.anyOf("outcome", "outcome", filter.outcomes());
-        query.narrowing(ISSUE_DATE, "issueDate", filter.issueDate());
-        query.narrowing(EXPIRY_DATE, "expiryDate", filter.expiryDate());
+        query.narrowing(NumcHistory.ISSUE_DATE, filter.issueDate());
+        query.narrowing(NumcHistory.EXPIRY_DATE, filter.expiryDate());
         query.sorted(sort, Ties.BY_ID);
         return history(query, NUMC_RECORDS, SourceNumc::toRecord, NumcHistory::new);
     }
@@ -344,8 +310,8 @@ class PatientSourceAdapter implements PatientStore {
         if (filter.outcome() != null) {
             query.parameter("outcome", "outcome", filter.outcome().code());
         }
-        query.narrowing(START_DATE, "startDate", filter.startDate());
-        query.narrowing(END_DATE, "endDate", filter.endDate());
+        query.narrowing(ArmcHistory.START_DATE, filter.startDate());
+        query.narrowing(ArmcHistory.END_DATE, filter.endDate());
         query.sorted(sort, Ties.THE_SOURCES);
         return history(query, ARMC_BOARDS, SourceArmc::toBoard, ArmcHistory::new);
     }
@@ -495,109 +461,6 @@ class PatientSourceAdapter implements PatientStore {
             return new URI(configured);
         } catch (URISyntaxException unparseable) {
             return null;
-        }
-    }
-
-    /**
-     * A read of the source as it is built: its URI template, and the URI variables the template
-     * names. Every value the read sends is a variable, never part of the template, so the call is
-     * observed under the template alone.
-     */
-    private static final class SourceQuery {
-
-        private final StringBuilder template;
-
-        private final Map<String, Object> variables = new HashMap<>();
-
-        /** A read whose template starts {@code start}. */
-        SourceQuery(String start) {
-            this.template = new StringBuilder(start);
-        }
-
-        /** {@code value} as the URI variable {@code name}, which the template names already. */
-        SourceQuery variable(String name, Object value) {
-            variables.put(name, value);
-            return this;
-        }
-
-        /** The variables of the source's paging for {@code page} ({@link SourceSearchset}). */
-        void paged(PageRequest page) {
-            SourceSearchset.pageVariables(variables, page);
-        }
-
-        /** {@code text} added to the template as it is. */
-        void append(String text) {
-            template.append(text);
-        }
-
-        /** {@code parameter} once, its value {@code value} the URI variable {@code variable}. */
-        void parameter(String parameter, String variable, Object value) {
-            template.append('&').append(parameter).append("={").append(variable).append('}');
-            variables.put(variable, value);
-        }
-
-        /**
-         * {@code range} narrowing the read by {@code parameter}: the parameter once for each end the
-         * range has, {@code ge} its from-date and {@code le} its to-date, each date the URI variable
-         * {@code variable} named for its end.
-         */
-        void narrowing(String parameter, String variable, DateRange range) {
-            if (range.from() != null) {
-                template.append('&').append(parameter).append("=ge{").append(variable)
-                        .append("From}");
-                variables.put(variable + "From", range.from().toString());
-            }
-            if (range.to() != null) {
-                template.append('&').append(parameter).append("=le{").append(variable)
-                        .append("To}");
-                variables.put(variable + "To", range.to().toString());
-            }
-        }
-
-        /**
-         * {@code codes} narrowing the read by {@code parameter}: the parameter once, its codes joined
-         * by commas — FHIR's OR — in their set's order; nothing for no codes. Each code is a URI
-         * variable of its own, {@code variable} and its place, so the commas stay in the template
-         * and reach the source as commas: a value's own comma would be encoded, and read as part of
-         * a code.
-         */
-        void anyOf(String parameter, String variable, Set<? extends SourceCode> codes) {
-            if (codes.isEmpty()) {
-                return;
-            }
-            template.append('&').append(parameter).append('=');
-            int place = 0;
-            for (SourceCode code : codes) {
-                String name = variable + place;
-                template.append(place == 0 ? "" : ",").append('{').append(name).append('}');
-                variables.put(name, code.code());
-                place++;
-            }
-        }
-
-        /**
-         * {@code sort} ordering the read: {@code _sort} on its column's search parameter,
-         * {@code -} first for descending, then its {@code ties}' tie-break, if any; nothing for
-         * the source's own order, whose sort names no column.
-         */
-        void sorted(HistorySort sort, Ties ties) {
-            if (sort.field() == null) {
-                return;
-            }
-            String parameter = SORTED_ON.get(sort.field());
-            template.append("&_sort=")
-                    .append(sort.order() == SortOrder.DESCENDING ? "-" + parameter : parameter)
-                    .append(ties.sent);
-        }
-
-        /** The template as built so far. */
-        String template() {
-            return template.toString();
-        }
-
-        /** The URI variables the template names. */
-        Map<String, Object> variables() {
-            return variables;
         }
     }
 }

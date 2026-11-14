@@ -115,7 +115,11 @@ calendar date or an inverted range is our `400` before the source is called.
 matches have no order of their own and so take newest Last visit first, an FFI
 History has the order the source keeps it in, and that is the order shown until
 a heading is pressed. The domain's `HistorySort` and `FfiFilter` hold the rules
-(`/docs/domain/ffi.md`, "Sort and filters").
+(`/docs/domain/ffi.md`, "Sort and filters"). The sort and the date ranges are
+shared by every history, and each history declares its own date columns — name,
+the source's search parameter, and precision, a calendar date or a date-time to
+the minute — so the shared code names none, and how a date-time bound is sent
+to the source is decided once there.
 
 **D5. NUMC Records are read on the same terms as FFIs.** A patient's NUMC
 History is the source's own, read through it on every read, held and cached by
@@ -164,8 +168,8 @@ shown; a filter on the ARMC Outcome (`outcome`, one code) and a range for each
 date, as `ge` and `le` on `start-date` and `end-date`, combined with AND; and
 every value checked as the request is read in, a bad code, a non-calendar date
 or an inverted range our `400` before the source is called. The domain's
-`HistorySort` is the FFI History's, with the ARMC History's own two columns,
-and `ArmcFilter` holds the filters (`/docs/domain/armc.md`, "Sort and
+`HistorySort` is the FFI History's, over the ARMC History's own two declared
+columns, and `ArmcFilter` holds the filters (`/docs/domain/armc.md`, "Sort and
 filters"). It differs in five things alone:
 
 - **The endpoint.** The source's `GET {base}/Patient/{id}/armc`, answering the

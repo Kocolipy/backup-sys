@@ -19,18 +19,18 @@ import org.junit.jupiter.api.Test;
 class NumcFilterTests {
 
     private static final DateRange OF_2024 =
-            new DateRange(LocalDate.of(2024, 1, 1), LocalDate.of(2024, 12, 31));
+            new DateRange<>(LocalDate.of(2024, 1, 1), LocalDate.of(2024, 12, 31));
 
     @Test
     void noFilterNarrowsNothing() {
         assertThat(NumcFilter.NONE)
-                .isEqualTo(new NumcFilter(Set.of(), Set.of(), DateRange.ANY, DateRange.ANY));
+                .isEqualTo(new NumcFilter(Set.of(), Set.of(), DateRange.any(), DateRange.any()));
     }
 
     /** A set of codes that is absent is no filter on its column, as an empty one is. */
     @Test
     void anAbsentSetOfCodesIsNoFilter() {
-        assertThat(new NumcFilter(null, null, DateRange.ANY, DateRange.ANY))
+        assertThat(new NumcFilter(null, null, DateRange.any(), DateRange.any()))
                 .isEqualTo(NumcFilter.NONE);
     }
 
@@ -38,12 +38,12 @@ class NumcFilterTests {
     @Test
     void everyFilterIsKept() {
         NumcFilter filter = new NumcFilter(Set.of(NumcType.SUBMARINER),
-                Set.of(NumcOutcome.WAIVER_GRANTED), DateRange.ANY, OF_2024);
+                Set.of(NumcOutcome.WAIVER_GRANTED), DateRange.any(), OF_2024);
 
         assertThat(List.of(filter.types(), filter.outcomes(), filter.issueDate(),
                 filter.expiryDate()))
                 .containsExactly(Set.of(NumcType.SUBMARINER), Set.of(NumcOutcome.WAIVER_GRANTED),
-                        DateRange.ANY, OF_2024);
+                        DateRange.any(), OF_2024);
     }
 
     /** The codes of a set are held in their closed set's own order, however they were given. */
@@ -53,7 +53,7 @@ class NumcFilterTests {
                 new LinkedHashSet<>(List.of(NumcType.DIVING, NumcType.HYPERBARIC_CHAMBER)),
                 new LinkedHashSet<>(List.of(NumcOutcome.WAIVER_REJECTED, NumcOutcome.UNFIT,
                         NumcOutcome.FIT)),
-                DateRange.ANY, DateRange.ANY);
+                DateRange.any(), DateRange.any());
 
         assertThat(List.of(List.copyOf(filter.types()), List.copyOf(filter.outcomes())))
                 .containsExactly(List.of(NumcType.HYPERBARIC_CHAMBER, NumcType.DIVING),
@@ -65,7 +65,7 @@ class NumcFilterTests {
     @Test
     void aFilterIsUnchangedByItsSetChangingLater() {
         Set<NumcType> given = new HashSet<>(Set.of(NumcType.DIVING));
-        NumcFilter filter = new NumcFilter(given, Set.of(), DateRange.ANY, DateRange.ANY);
+        NumcFilter filter = new NumcFilter(given, Set.of(), DateRange.any(), DateRange.any());
 
         given.add(NumcType.SUBMARINER);
 
@@ -74,9 +74,9 @@ class NumcFilterTests {
 
     @Test
     void eachRangeIsRequiredItsAbsenceBeingAny() {
-        assertThatThrownBy(() -> new NumcFilter(null, null, null, DateRange.ANY))
+        assertThatThrownBy(() -> new NumcFilter(null, null, null, DateRange.any()))
                 .isInstanceOf(NullPointerException.class).hasMessage("issueDate");
-        assertThatThrownBy(() -> new NumcFilter(null, null, DateRange.ANY, null))
+        assertThatThrownBy(() -> new NumcFilter(null, null, DateRange.any(), null))
                 .isInstanceOf(NullPointerException.class).hasMessage("expiryDate");
     }
 }

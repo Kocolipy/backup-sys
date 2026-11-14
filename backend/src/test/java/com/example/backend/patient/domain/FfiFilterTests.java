@@ -19,18 +19,18 @@ import org.junit.jupiter.api.Test;
 class FfiFilterTests {
 
     private static final DateRange OF_2024 =
-            new DateRange(LocalDate.of(2024, 1, 1), LocalDate.of(2024, 12, 31));
+            new DateRange<>(LocalDate.of(2024, 1, 1), LocalDate.of(2024, 12, 31));
 
     @Test
     void noFilterNarrowsNothing() {
-        assertThat(FfiFilter.NONE).isEqualTo(new FfiFilter(Set.of(), Set.of(), DateRange.ANY,
-                DateRange.ANY, Set.of(), Set.of(), null));
+        assertThat(FfiFilter.NONE).isEqualTo(new FfiFilter(Set.of(), Set.of(), DateRange.any(),
+                DateRange.any(), Set.of(), Set.of(), null));
     }
 
     /** A set of codes that is absent is no filter on its column, as an empty one is. */
     @Test
     void anAbsentSetOfCodesIsNoFilter() {
-        assertThat(new FfiFilter(null, null, DateRange.ANY, DateRange.ANY, null, null, null))
+        assertThat(new FfiFilter(null, null, DateRange.any(), DateRange.any(), null, null, null))
                 .isEqualTo(FfiFilter.NONE);
     }
 
@@ -38,14 +38,14 @@ class FfiFilterTests {
     @Test
     void everyFilterIsKept() {
         FfiFilter filter = new FfiFilter(Set.of(FfiType.IPPT), Set.of(FfiOutcome.UNFIT), OF_2024,
-                DateRange.ANY, Set.of(FfiHigherAuthority.DIS),
+                DateRange.any(), Set.of(FfiHigherAuthority.DIS),
                 Set.of(MedicalCentre.KRANJI_CAMP), FfiStatus.ACTIVE);
 
         assertThat(List.of(filter.types(), filter.outcomes(), filter.issueDate(),
                 filter.expiryDate(), filter.higherAuthorities(), filter.submittingMcs(),
                 filter.status()))
                 .containsExactly(Set.of(FfiType.IPPT), Set.of(FfiOutcome.UNFIT), OF_2024,
-                        DateRange.ANY, Set.of(FfiHigherAuthority.DIS),
+                        DateRange.any(), Set.of(FfiHigherAuthority.DIS),
                         Set.of(MedicalCentre.KRANJI_CAMP), FfiStatus.ACTIVE);
     }
 
@@ -55,7 +55,7 @@ class FfiFilterTests {
         FfiFilter filter = new FfiFilter(
                 new LinkedHashSet<>(List.of(FfiType.VOCATIONAL, FfiType.IPPT,
                         FfiType.OVERSEAS_EXERCISES)),
-                Set.of(), DateRange.ANY, DateRange.ANY,
+                Set.of(), DateRange.any(), DateRange.any(),
                 new LinkedHashSet<>(List.of(FfiHigherAuthority.DIS,
                         FfiHigherAuthority.CAMO)),
                 Set.of(), null);
@@ -70,7 +70,7 @@ class FfiFilterTests {
     @Test
     void aFilterIsUnchangedByItsSetChangingLater() {
         Set<FfiOutcome> given = new HashSet<>(Set.of(FfiOutcome.FIT));
-        FfiFilter filter = new FfiFilter(Set.of(), given, DateRange.ANY, DateRange.ANY, Set.of(),
+        FfiFilter filter = new FfiFilter(Set.of(), given, DateRange.any(), DateRange.any(), Set.of(),
                 Set.of(), null);
 
         given.add(FfiOutcome.UNFIT);
@@ -80,9 +80,9 @@ class FfiFilterTests {
 
     @Test
     void eachRangeIsRequiredItsAbsenceBeingAny() {
-        assertThatThrownBy(() -> new FfiFilter(null, null, null, DateRange.ANY, null, null, null))
+        assertThatThrownBy(() -> new FfiFilter(null, null, null, DateRange.any(), null, null, null))
                 .isInstanceOf(NullPointerException.class).hasMessage("issueDate");
-        assertThatThrownBy(() -> new FfiFilter(null, null, DateRange.ANY, null, null, null, null))
+        assertThatThrownBy(() -> new FfiFilter(null, null, DateRange.any(), null, null, null, null))
                 .isInstanceOf(NullPointerException.class).hasMessage("expiryDate");
     }
 }

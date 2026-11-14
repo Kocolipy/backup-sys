@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { type CheckedDateRanges, checkDateRanges } from "@/lib/date-range";
 import { DateRangeFields } from "@/pages/date-range-fields";
 import { FilterPopover } from "@/pages/filter-popover";
-import type { HistoryDateRanges, HistoryDates } from "@/pages/history-api";
+import type { HistoryDateColumns, HistoryDates } from "@/pages/history-api";
 
 /** A picker's copy for a history's column, all of it the column's name. */
 export const pickerCopy = (name: string, plural: string) => ({
@@ -15,7 +15,7 @@ export const pickerCopy = (name: string, plural: string) => ({
 });
 
 /** A range Apply refused, and why. */
-type Refusal<R extends string> = Extract<CheckedDateRanges<R>, { ok: false }>;
+type Refusal<C extends string> = Extract<CheckedDateRanges<C>, { ok: false }>;
 
 /** What a history's form lays out: its draft, a change to it, and its date ranges. */
 interface HistoryFilterFields<F> {
@@ -25,46 +25,47 @@ interface HistoryFilterFields<F> {
   edit: (change: Partial<F>) => void;
 }
 
-/** `range`'s two fields, named by its prefix, as their draft holds them. */
-function datesOf<R extends string>(range: R, from: string, to: string): Partial<HistoryDates<R>> {
+/** The two fields of the range over `column`, named by it, as their draft holds them. */
+function datesOf<C extends string>(column: C, from: string, to: string): Partial<HistoryDates<C>> {
   // A computed key over a generic prefix widens to `string`; these two are
   // exactly the range's own fields.
-  return { [`${range}From`]: from, [`${range}To`]: to } as Partial<HistoryDates<R>>;
+  return { [`${column}From`]: from, [`${column}To`]: to } as Partial<HistoryDates<C>>;
 }
 
 /**
  * The panel's form, mounted each time the panel opens, so it starts from the
  * filters applied and with no refusal, and an edit never applied is forgotten
  * when it closes. Apply — which Enter in a date also asks for — first checks
- * the dates of `ranges` as the backend would ({@link checkDateRanges}): a
- * refused range is marked beneath it and nothing is applied. Reset applies
- * `none`.
+ * the range over each of `columns` at its precision, as the backend would
+ * ({@link checkDateRanges}): a refused range is marked beneath it and nothing
+ * is applied. Reset applies `none`.
  */
-function HistoryFilterForm<R extends string, F extends HistoryDates<R>>({
+function HistoryFilterForm<C extends string, F extends HistoryDates<C>>({
   applied,
   children,
+  columns,
   label,
   none,
   onApply,
-  ranges,
 }: {
   applied: F;
   children: (fields: HistoryFilterFields<F>) => ReactNode;
+  columns: HistoryDateColumns<C>;
   label: string;
   none: F;
   onApply: (filters: F) => void;
-  ranges: HistoryDateRanges<R>;
 }) {
   const [draft, setDraft] = useState(applied);
-  const [refusal, setRefusal] = useState<Refusal<R> | null>(null);
-  const dateRanges = ranges.map(({ label: rangeLabel, range }) => (
+  const [refusal, setRefusal] = useState<Refusal<C> | null>(null);
+  const dateRanges = columns.map(({ column, label: columnLabel, precision }) => (
     <DateRangeFields
-      from={draft[`${range}From`]}
-      key={range}
-      label={rangeLabel}
-      onChange={({ from, to }) => setDraft({ ...draft, ...datesOf(range, from, to) })}
-      refusal={refusal?.range === range ? refusal.message : null}
-      to={draft[`${range}To`]}
+      from={draft[`${column}From`]}
+      key={column}
+      label={columnLabel}
+      onChange={({ from, to }) => setDraft({ ...draft, ...datesOf(column, from, to) })}
+      precision={precision}
+      refusal={refusal?.column === column ? refusal.message : null}
+      to={draft[`${column}To`]}
     />
   ));
   return (
@@ -73,7 +74,7 @@ function HistoryFilterForm<R extends string, F extends HistoryDates<R>>({
       className="flex flex-col gap-4"
       onSubmit={(event) => {
         event.preventDefault();
-        const checked = checkDateRanges(ranges, draft);
+        const checked = checkDateRanges(columns, draft);
         if (checked.ok) onApply(draft);
         else setRefusal(checked);
       }}
@@ -92,44 +93,45 @@ function HistoryFilterForm<R extends string, F extends HistoryDates<R>>({
 }
 
 /**
- * A history's filters — the FFI, NUMC or ARMC page's — behind a Filter button
- * that says how many of the filters applied narrow it (`count`). The form,
- * named `label`, lays out its own fields through `children`, the date ranges
- * of `ranges` among them, above Reset and Apply. Nothing in the panel reaches
- * a request until Apply; an Apply or Reset that applies closes it, and a
- * refused Apply leaves it open on the range to correct.
+ * A history's filters behind a Filter button that says how many of the
+ * filters applied narrow it (`count`). The form, named `label`, lays out its
+ * own fields through `children`, among them a range over each of the
+ * history's date `columns`, each end typed in its column's precision's control
+ * ({@link DateRangeFields}), above Reset and Apply. Nothing in the panel
+ * reaches a request until Apply; an Apply or Reset that applies closes it, and
+ * a refused Apply leaves it open on the range to correct.
  */
-export function HistoryFilterPopover<R extends string, F extends HistoryDates<R>>({
+export function HistoryFilterPopover<C extends string, F extends HistoryDates<C>>({
   applied,
   children,
+  columns,
   count,
   label,
   none,
   onApply,
-  ranges,
 }: {
   applied: F;
   children: (fields: HistoryFilterFields<F>) => ReactNode;
+  /** The history's date columns, in the order the form lists their ranges. */
+  columns: HistoryDateColumns<C>;
   count: (filters: F) => number;
   label: string;
   /** No filter, which Reset applies. */
   none: F;
   onApply: (filters: F) => void;
-  /** The history's date ranges, in the order the form lists them. */
-  ranges: HistoryDateRanges<R>;
 }) {
   return (
     <FilterPopover className="w-md max-w-screen" setCount={count(applied)}>
       {(close) => (
         <HistoryFilterForm
           applied={applied}
+          columns={columns}
           label={label}
           none={none}
           onApply={(filters) => {
             onApply(filters);
             close();
           }}
-          ranges={ranges}
         >
           {children}
         </HistoryFilterForm>

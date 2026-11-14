@@ -14,14 +14,14 @@ import type { ReadDeclaration } from "@/auth/declarations";
 import { codeParameters } from "@/lib/code-parameters";
 import { calendarDate, jsonDecoder, readObject } from "@/lib/decode";
 import { pageDecoder, pagedPath, type Page, type PageAt } from "@/lib/paging";
-import { sortParameters } from "@/lib/sorting";
+import { sortParameters, type ColumnSort } from "@/lib/sorting";
 import {
   countHistoryDates,
+  type DateColumnOf,
   historyDateParameters,
-  ISSUE_AND_EXPIRY_DATES,
-  NO_ISSUE_AND_EXPIRY_DATES,
-  type IssueOrExpirySort,
-  type IssueAndExpiryDates,
+  type HistoryDateColumns,
+  type HistoryDates,
+  noHistoryDates,
 } from "@/pages/history-api";
 
 // A NUMC Record's two closed sets, each as the API carries it, by its codes,
@@ -97,19 +97,35 @@ export const decodeNumcRecord = (value: unknown): NumcRecord => {
 };
 
 /**
- * The Filter panel's filters, each as its control holds it: the codes chosen
- * of each closed set, none for no filter, and the two date ranges
- * ({@link IssueAndExpiryDates}). Every code the panel offers is one of its set's, so
- * only the dates are checked before sending (`checkDateRanges`).
+ * The NUMC History's date columns, both calendar dates, in the order the
+ * Filter panel lists their ranges: each its own range filter and a column the
+ * history sorts by.
  */
-export interface NumcFilters extends IssueAndExpiryDates {
+export const NUMC_DATE_COLUMNS = [
+  { column: "issueDate", label: "Issue Date", precision: "date" },
+  { column: "expiryDate", label: "Expiry Date", precision: "date" },
+] as const satisfies HistoryDateColumns<string>;
+
+/** A column the NUMC History sorts by, as the backend's `sortBy` names it. */
+export type NumcSortColumn = DateColumnOf<typeof NUMC_DATE_COLUMNS>;
+
+/** How the NUMC History is sorted: one date, in one direction. */
+export type NumcSort = ColumnSort<NumcSortColumn>;
+
+/**
+ * The Filter panel's filters, each as its control holds it: the codes chosen
+ * of each closed set, none for no filter, and a range over each of
+ * {@link NUMC_DATE_COLUMNS}. Every code the panel offers is one of its set's,
+ * so only the dates are checked before sending (`checkDateRanges`).
+ */
+export interface NumcFilters extends HistoryDates<NumcSortColumn> {
   types: readonly NumcType[];
   outcomes: readonly NumcOutcome[];
 }
 
 /** No filter: every NUMC Record of the patient. */
 export const NO_NUMC_FILTERS: NumcFilters = {
-  ...NO_ISSUE_AND_EXPIRY_DATES,
+  ...noHistoryDates(NUMC_DATE_COLUMNS),
   outcomes: [],
   types: [],
 };
@@ -117,15 +133,15 @@ export const NO_NUMC_FILTERS: NumcFilters = {
 /** How many of `filters` narrow the history: each set of codes chosen, as one, and each date set. */
 export function countNumcFilters(filters: NumcFilters): number {
   const chosen = [filters.types.length > 0, filters.outcomes.length > 0].filter(Boolean).length;
-  return chosen + countHistoryDates(ISSUE_AND_EXPIRY_DATES, filters);
+  return chosen + countHistoryDates(NUMC_DATE_COLUMNS, filters);
 }
 
 /** The query string `filters` and `sort` ask for, each filter only when set. */
-function historyQuery(filters: NumcFilters, sort: IssueOrExpirySort | null): string {
+function historyQuery(filters: NumcFilters, sort: NumcSort | null): string {
   return [
     ...codeParameters("type", NUMC_TYPES, filters.types),
     ...codeParameters("outcome", NUMC_OUTCOMES, filters.outcomes),
-    ...historyDateParameters(ISSUE_AND_EXPIRY_DATES, filters),
+    ...historyDateParameters(NUMC_DATE_COLUMNS, filters),
     ...sortParameters(sort),
   ].join("&");
 }
@@ -140,7 +156,7 @@ function historyQuery(filters: NumcFilters, sort: IssueOrExpirySort | null): str
  */
 export const NUMC_HISTORY: ReadDeclaration<
   Page<NumcRecord>,
-  [patientId: string, filters: NumcFilters, sort: IssueOrExpirySort | null, at: PageAt],
+  [patientId: string, filters: NumcFilters, sort: NumcSort | null, at: PageAt],
   true
 > = {
   absentOnNotFound: true,

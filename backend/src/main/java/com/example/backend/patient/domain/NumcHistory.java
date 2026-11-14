@@ -1,5 +1,6 @@
 package com.example.backend.patient.domain;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Objects;
 
@@ -12,6 +13,17 @@ import java.util.Objects;
  * @param records      the page's NUMC Records, in the source's order
  */
 public record NumcHistory(int totalResults, List<NumcRecord> records) {
+
+    /** A NUMC Record's Issue Date: a calendar date, the source's {@code issue-date}. */
+    public static final HistoryColumn<LocalDate> ISSUE_DATE =
+            new HistoryColumn<>("issueDate", "issue-date", DatePrecision.CALENDAR_DATE);
+
+    /** A NUMC Record's Expiry Date: a calendar date, the source's {@code expiry-date}. */
+    public static final HistoryColumn<LocalDate> EXPIRY_DATE =
+            new HistoryColumn<>("expiryDate", "expiry-date", DatePrecision.CALENDAR_DATE);
+
+    /** The date columns a NUMC History filters and sorts by ({@link HistoryColumn}). */
+    public static final List<HistoryColumn<?>> DATE_COLUMNS = List.of(ISSUE_DATE, EXPIRY_DATE);
 
     public NumcHistory {
         if (totalResults < 0) {

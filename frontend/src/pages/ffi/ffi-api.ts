@@ -16,14 +16,14 @@ import type { ReadDeclaration } from "@/auth/declarations";
 import { codeParameters } from "@/lib/code-parameters";
 import { calendarDate, jsonDecoder, readObject } from "@/lib/decode";
 import { pageDecoder, pagedPath, type Page, type PageAt } from "@/lib/paging";
-import { sortParameters } from "@/lib/sorting";
+import { sortParameters, type ColumnSort } from "@/lib/sorting";
 import {
   countHistoryDates,
+  type DateColumnOf,
   historyDateParameters,
-  ISSUE_AND_EXPIRY_DATES,
-  NO_ISSUE_AND_EXPIRY_DATES,
-  type IssueOrExpirySort,
-  type IssueAndExpiryDates,
+  type HistoryDateColumns,
+  type HistoryDates,
+  noHistoryDates,
 } from "@/pages/history-api";
 import { MEDICAL_CENTRES, type MedicalCentre } from "@/pages/medical-centre-api";
 
@@ -146,13 +146,29 @@ export const decodeFfi = (value: unknown): Ffi => {
 };
 
 /**
+ * The FFI History's date columns, both calendar dates, in the order the Filter
+ * panel lists their ranges: each its own range filter and a column the
+ * history sorts by.
+ */
+export const FFI_DATE_COLUMNS = [
+  { column: "issueDate", label: "Issue Date", precision: "date" },
+  { column: "expiryDate", label: "Expiry Date", precision: "date" },
+] as const satisfies HistoryDateColumns<string>;
+
+/** A column the FFI History sorts by, as the backend's `sortBy` names it. */
+export type FfiSortColumn = DateColumnOf<typeof FFI_DATE_COLUMNS>;
+
+/** How the FFI History is sorted: one date, in one direction. */
+export type FfiSort = ColumnSort<FfiSortColumn>;
+
+/**
  * The Filter panel's filters, each as its control holds it: the codes chosen
  * of each closed set but the Status, none for no filter; the Status, `all` for
- * either; and the two date ranges ({@link IssueAndExpiryDates}). Every code the panel
- * offers is one of its set's, so only the dates are checked before sending
- * (`checkDateRanges`).
+ * either; and a range over each of {@link FFI_DATE_COLUMNS}. Every code the
+ * panel offers is one of its set's, so only the dates are checked before
+ * sending (`checkDateRanges`).
  */
-export interface FfiFilters extends IssueAndExpiryDates {
+export interface FfiFilters extends HistoryDates<FfiSortColumn> {
   types: readonly FfiType[];
   outcomes: readonly FfiOutcome[];
   higherAuthorities: readonly FfiHigherAuthority[];
@@ -162,7 +178,7 @@ export interface FfiFilters extends IssueAndExpiryDates {
 
 /** No filter: every FFI of the patient. */
 export const NO_FFI_FILTERS: FfiFilters = {
-  ...NO_ISSUE_AND_EXPIRY_DATES,
+  ...noHistoryDates(FFI_DATE_COLUMNS),
   higherAuthorities: [],
   outcomes: [],
   status: "all",
@@ -182,15 +198,15 @@ export function countFfiFilters(filters: FfiFilters): number {
     filters.submittingMcs.length > 0,
     filters.status !== "all",
   ].filter(Boolean).length;
-  return chosen + countHistoryDates(ISSUE_AND_EXPIRY_DATES, filters);
+  return chosen + countHistoryDates(FFI_DATE_COLUMNS, filters);
 }
 
 /** The query string `filters` and `sort` ask for, each filter only when set. */
-function historyQuery(filters: FfiFilters, sort: IssueOrExpirySort | null): string {
+function historyQuery(filters: FfiFilters, sort: FfiSort | null): string {
   return [
     ...codeParameters("type", FFI_TYPES, filters.types),
     ...codeParameters("outcome", FFI_OUTCOMES, filters.outcomes),
-    ...historyDateParameters(ISSUE_AND_EXPIRY_DATES, filters),
+    ...historyDateParameters(FFI_DATE_COLUMNS, filters),
     ...codeParameters("higherAuthority", FFI_HIGHER_AUTHORITIES, filters.higherAuthorities),
     ...codeParameters("submittingMc", MEDICAL_CENTRES, filters.submittingMcs),
     ...(filters.status === "all" ? [] : [`status=${filters.status}`]),
@@ -208,7 +224,7 @@ function historyQuery(filters: FfiFilters, sort: IssueOrExpirySort | null): stri
  */
 export const FFI_HISTORY: ReadDeclaration<
   Page<Ffi>,
-  [patientId: string, filters: FfiFilters, sort: IssueOrExpirySort | null, at: PageAt],
+  [patientId: string, filters: FfiFilters, sort: FfiSort | null, at: PageAt],
   true
 > = {
   absentOnNotFound: true,
