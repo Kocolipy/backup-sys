@@ -167,7 +167,7 @@ class PatientSourceNumcAdapterTests {
         "ISSUE_DATE, DESCENDING, '-issue-date,_id'",
         "EXPIRY_DATE, ASCENDING, 'expiry-date,_id'",
         "EXPIRY_DATE, DESCENDING, '-expiry-date,_id'"})
-    void aSortIsTheSourcesOwnOnItsSearchParameter(HistorySort.Field field, SortOrder order,
+    void aSortIsTheSourcesOwnOnItsSearchParameter(HistorySort.IssueOrExpiry field, SortOrder order,
             String sorted) {
         reading(NumcFilter.NONE, new HistorySort(field, order));
 
@@ -233,7 +233,7 @@ class PatientSourceNumcAdapterTests {
                         Set.of(NumcOutcome.WAIVER_GRANTED),
                         new DateRange(LocalDate.of(2023, 1, 1), LocalDate.of(2023, 12, 31)),
                         new DateRange(LocalDate.of(2024, 1, 1), null)),
-                new HistorySort(HistorySort.Field.ISSUE_DATE, SortOrder.DESCENDING));
+                new HistorySort(HistorySort.IssueOrExpiry.ISSUE_DATE, SortOrder.DESCENDING));
 
         assertThat(sentQuery()).isEqualTo(Map.ofEntries(
                 Map.entry("type", List.of("hyperbaric-chamber")),

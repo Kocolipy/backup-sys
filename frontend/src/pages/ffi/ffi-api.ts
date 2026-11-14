@@ -20,9 +20,10 @@ import { sortParameters } from "@/lib/sorting";
 import {
   countHistoryDates,
   historyDateParameters,
-  NO_HISTORY_DATES,
-  type HistoryDates,
-  type HistorySort,
+  ISSUE_AND_EXPIRY_DATES,
+  NO_ISSUE_AND_EXPIRY_DATES,
+  type IssueOrExpirySort,
+  type IssueAndExpiryDates,
 } from "@/pages/history-api";
 import { MEDICAL_CENTRES, type MedicalCentre } from "@/pages/medical-centre-api";
 
@@ -147,11 +148,11 @@ export const decodeFfi = (value: unknown): Ffi => {
 /**
  * The Filter panel's filters, each as its control holds it: the codes chosen
  * of each closed set but the Status, none for no filter; the Status, `all` for
- * either; and the two date ranges ({@link HistoryDates}). Every code the panel
+ * either; and the two date ranges ({@link IssueAndExpiryDates}). Every code the panel
  * offers is one of its set's, so only the dates are checked before sending
- * (`checkHistoryDates`).
+ * (`checkDateRanges`).
  */
-export interface FfiFilters extends HistoryDates {
+export interface FfiFilters extends IssueAndExpiryDates {
   types: readonly FfiType[];
   outcomes: readonly FfiOutcome[];
   higherAuthorities: readonly FfiHigherAuthority[];
@@ -161,7 +162,7 @@ export interface FfiFilters extends HistoryDates {
 
 /** No filter: every FFI of the patient. */
 export const NO_FFI_FILTERS: FfiFilters = {
-  ...NO_HISTORY_DATES,
+  ...NO_ISSUE_AND_EXPIRY_DATES,
   higherAuthorities: [],
   outcomes: [],
   status: "all",
@@ -181,15 +182,15 @@ export function countFfiFilters(filters: FfiFilters): number {
     filters.submittingMcs.length > 0,
     filters.status !== "all",
   ].filter(Boolean).length;
-  return chosen + countHistoryDates(filters);
+  return chosen + countHistoryDates(ISSUE_AND_EXPIRY_DATES, filters);
 }
 
 /** The query string `filters` and `sort` ask for, each filter only when set. */
-function historyQuery(filters: FfiFilters, sort: HistorySort | null): string {
+function historyQuery(filters: FfiFilters, sort: IssueOrExpirySort | null): string {
   return [
     ...codeParameters("type", FFI_TYPES, filters.types),
     ...codeParameters("outcome", FFI_OUTCOMES, filters.outcomes),
-    ...historyDateParameters(filters),
+    ...historyDateParameters(ISSUE_AND_EXPIRY_DATES, filters),
     ...codeParameters("higherAuthority", FFI_HIGHER_AUTHORITIES, filters.higherAuthorities),
     ...codeParameters("submittingMc", MEDICAL_CENTRES, filters.submittingMcs),
     ...(filters.status === "all" ? [] : [`status=${filters.status}`]),
@@ -207,7 +208,7 @@ function historyQuery(filters: FfiFilters, sort: HistorySort | null): string {
  */
 export const FFI_HISTORY: ReadDeclaration<
   Page<Ffi>,
-  [patientId: string, filters: FfiFilters, sort: HistorySort | null, at: PageAt],
+  [patientId: string, filters: FfiFilters, sort: IssueOrExpirySort | null, at: PageAt],
   true
 > = {
   absentOnNotFound: true,

@@ -3,6 +3,7 @@ package com.example.backend.patient.infrastructure.http;
 import com.example.backend.observability.OutboundCallFailure;
 import com.example.backend.observability.RedactedFaultException;
 import com.example.backend.paging.domain.PageRequest;
+import com.example.backend.patient.domain.ArmcFilter;
 import com.example.backend.patient.domain.ArmcHistory;
 import com.example.backend.patient.domain.DateRange;
 import com.example.backend.patient.domain.FfiFilter;
@@ -112,10 +113,30 @@ class PatientSourceAdapter implements PatientStore {
     /** The source's search parameter for an FFI's or a NUMC Record's Expiry Date. */
     private static final String EXPIRY_DATE = "expiry-date";
 
+    /** The source's search parameter for an ARMC Board's Start Date. */
+    private static final String START_DATE = "start-date";
+
+    /** The source's search parameter for an ARMC Board's End Date. */
+    private static final String END_DATE = "end-date";
+
     /** The source's search parameter each column of a history sorts on. */
-    private static final Map<HistorySort.Field, String> SORTED_ON = Map.of(
-            HistorySort.Field.ISSUE_DATE, ISSUE_DATE,
-            HistorySort.Field.EXPIRY_DATE, EXPIRY_DATE);
+    private static final Map<HistorySort.Column, String> SORTED_ON = Map.of(
+            HistorySort.IssueOrExpiry.ISSUE_DATE, ISSUE_DATE,
+            HistorySort.IssueOrExpiry.EXPIRY_DATE, EXPIRY_DATE,
+            HistorySort.StartOrEnd.START_DATE, START_DATE,
+            HistorySort.StartOrEnd.END_DATE, END_DATE);
+
+    /** How a sorted history's ties are broken: by id, sent after the column, or as the source decides. */
+    private enum Ties {
+        BY_ID(",_id"),
+        THE_SOURCES("");
+
+        private final String sent;
+
+        Ties(String sent) {
+            this.sent = sent;
+        }
+    }
 
     /** A searchset of FFIs, an FFI History's answer. */
     private static final ParameterizedTypeReference<SourceSearchset<SourceFfi>> FFIS =
@@ -133,7 +154,10 @@ class PatientSourceAdapter implements PatientStore {
             new ParameterizedTypeReference<>() {
             };
 
-    /** A patient's ARMC History, a page at a time, in the source's own order (ADR 0019, D6). */
+    /**
+     * A patient's ARMC History, a page at a time (ADR 0019, D6), before the filters and the sort a
+     * read adds to it.
+     */
     static final String ARMC_HISTORY = "/Patient/{id}/armc?" + SourceSearchset.PAGE_QUERY;
 
     /** A searchset of ARMC Boards, an ARMC History's answer. */
@@ -267,7 +291,7 @@ class PatientSourceAdapter implements PatientStore {
         if (filter.status() != null) {
             query.parameter("status", "status", filter.status().code());
         }
-        query.sorted(sort);
+        query.sorted(sort, Ties.BY_ID);
         return history(query, FFIS, SourceFfi::toFfi, FfiHistory::new);
     }
 
@@ -294,22 +318,35 @@ class PatientSourceAdapter implements PatientStore {
         query.anyOf("outcome", "outcome", filter.outcomes());
         query.narrowing(ISSUE_DATE, "issueDate", filter.issueDate());
         query.narrowing(EXPIRY_DATE, "expiryDate", filter.expiryDate());
-        query.sorted(sort);
+        query.sorted(sort, Ties.BY_ID);
         return history(query, NUMC_RECORDS, SourceNumc::toRecord, NumcHistory::new);
     }
 
     /**
-     * {@code GET {base}/Patient/{id}/armc?…}: the patient's ARMC History, paged and counted by the
-     * source, in its own order (ADR 0019, D6) — the page alone, with no sort and no filter. A
+     * {@code GET {base}/Patient/{id}/armc?…}: the patient's ARMC History, filtered, sorted, paged
+     * and counted by the source (ADR 0019, D6) — the ARMC Outcome as {@code outcome}, its one
+     * code; each end of a date range as its search parameter, {@code start-date} or
+     * {@code end-date}, {@code ge} the from-date and {@code le} the to-date, the source leaving a
+     * board with no End Date out of any End Date range; and a sort as {@code _sort} on the same
+     * date parameters, {@code -} first for descending, the column alone: the source breaks ties.
+     * With no column to sort by, no {@code _sort} is sent, and the order is the source's own. A
      * {@code 404} is no patient under the id; the one other good answer is a {@code 200}
-     * searchset of ARMC Boards, and anything else is a fault, as is a searchset with no total
-     * or an entry that is no ARMC Board the service can hold. The id is a URI variable, so the
-     * call is observed under the template alone.
+     * searchset of ARMC Boards, and anything else is a fault, as is a searchset with no total or
+     * an entry that is no ARMC Board the service can hold. The id and the filters' values are URI
+     * variables, so the call is observed under the template alone: which filters were asked for
+     * and the sort, and none of their values.
      */
     @Override
-    public Optional<ArmcHistory> findArmcHistory(PatientId id, PageRequest page) {
+    public Optional<ArmcHistory> findArmcHistory(PatientId id, ArmcFilter filter,
+            HistorySort sort, PageRequest page) {
         SourceQuery query = new SourceQuery(ARMC_HISTORY).variable("id", id.value());
         query.paged(page);
+        if (filter.outcome() != null) {
+            query.parameter("outcome", "outcome", filter.outcome().code());
+        }
+        query.narrowing(START_DATE, "startDate", filter.startDate());
+        query.narrowing(END_DATE, "endDate", filter.endDate());
+        query.sorted(sort, Ties.THE_SOURCES);
         return history(query, ARMC_BOARDS, SourceArmc::toBoard, ArmcHistory::new);
     }
 
@@ -540,17 +577,17 @@ class PatientSourceAdapter implements PatientStore {
 
         /**
          * {@code sort} ordering the read: {@code _sort} on its column's search parameter,
-         * {@code -} first for descending, then {@code _id}, the tie-break; nothing for the
-         * source's own order, whose sort names no column.
+         * {@code -} first for descending, then its {@code ties}' tie-break, if any; nothing for
+         * the source's own order, whose sort names no column.
          */
-        void sorted(HistorySort sort) {
+        void sorted(HistorySort sort, Ties ties) {
             if (sort.field() == null) {
                 return;
             }
             String parameter = SORTED_ON.get(sort.field());
             template.append("&_sort=")
                     .append(sort.order() == SortOrder.DESCENDING ? "-" + parameter : parameter)
-                    .append(",_id");
+                    .append(ties.sent);
         }
 
         /** The template as built so far. */

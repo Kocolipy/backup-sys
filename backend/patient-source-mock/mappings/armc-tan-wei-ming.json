@@ -12,6 +12,18 @@
       },
       "_total": {
         "equalTo": "accurate"
+      },
+      "_sort": {
+        "absent": true
+      },
+      "outcome": {
+        "absent": true
+      },
+      "start-date": {
+        "absent": true
+      },
+      "end-date": {
+        "absent": true
       }
     }
   },

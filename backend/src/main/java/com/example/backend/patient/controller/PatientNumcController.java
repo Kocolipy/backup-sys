@@ -96,7 +96,7 @@ public class PatientNumcController {
             @RequestParam(required = false) @DateTimeFormat(pattern = DATE)
             LocalDate expiryDateFrom,
             @RequestParam(required = false) @DateTimeFormat(pattern = DATE) LocalDate expiryDateTo,
-            @RequestParam(required = false) HistorySort.Field sortBy,
+            @RequestParam(required = false) HistorySort.IssueOrExpiry sortBy,
             @RequestParam(required = false) SortOrder sortOrder,
             @RequestParam(required = false) PageParameter startIndex,
             @RequestParam(required = false) PageParameter count) {

@@ -106,7 +106,7 @@ public class PatientFfiController {
             @RequestParam(required = false) List<String> higherAuthority,
             @RequestParam(required = false) List<String> submittingMc,
             @RequestParam(required = false) FfiStatus status,
-            @RequestParam(required = false) HistorySort.Field sortBy,
+            @RequestParam(required = false) HistorySort.IssueOrExpiry sortBy,
             @RequestParam(required = false) SortOrder sortOrder,
             @RequestParam(required = false) PageParameter startIndex,
             @RequestParam(required = false) PageParameter count) {

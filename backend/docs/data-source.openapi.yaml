@@ -612,22 +612,33 @@ paths:
     get:
       tags: [patient-source]
       operationId: readArmcHistory
-      summary: Read one page of a patient's ARMC History — paged and counted by the source
+      summary: Read one page of a patient's ARMC History — filtered, sorted, paged and counted by the source
       description: |
         The patient's ARMC Boards (Aeromedical Centre), each one aeromedical
-        fitness board the patient sat. The backend sends no sort and no
-        filter: it shows the page and the total the source answers, in the
-        source's own order. A mock must therefore:
+        fitness board the patient sat. The backend does none of this work
+        itself: it forwards the filters and the sort and shows the page and
+        the total the source answers. A mock must therefore compute every step
+        below over all the patient's ARMC Boards, for any combination of
+        parameters.
 
-        1. **Count** every ARMC Board the patient has: that number is the
-           Bundle's `total`, whatever the page.
-        2. **Order** them in the source's own stable default order.
-        3. **Page**: skip `_offset` boards, then return up to `_count` of
+        1. **Filter** by every `outcome`, `start-date` and `end-date` sent,
+           combined with AND. A board still open, with no `endDate`, matches
+           no `end-date` range: any `end-date` sent leaves it out.
+        2. **Count** what is left: that number is the Bundle's `total`,
+           whatever the page.
+        3. **Sort** by `_sort` when it is sent, breaking ties — and placing a
+           board with no `endDate` in an `end-date` sort — by the source's own
+           rule, the same on every page; with none, keep the source's own
+           stable default order.
+        4. **Page**: skip `_offset` boards, then return up to `_count` of
            them as the Bundle's entries, in that order.
 
         **Worked example** over the fixtures: Tan Hui Min (`dev-patient-05`)
         has seven ARMC Boards, so `total` is 7 on both of her pages of five,
-        the first board still open; Tan Wei Ming has two, on one page.
+        the first board still open; `outcome=fit` leaves four, the open board
+        among them, and `end-date=ge2023-01-01` three, the open board left out
+        though it starts in 2025. Tan Wei Ming has two, on one page, the latest
+        first; with `_sort=start-date` the earlier is first.
 
         **FHIR-shaped paging only, not FHIR-conformant**: the answer borrows a
         searchset `Bundle`'s shape, and its entries are a custom `ARMC` object
@@ -662,6 +673,65 @@ paths:
             type: string
             pattern: '^[A-Za-z0-9\-.]{1,64}$'
           example: eq081-VQEgP8drUUqCWzHfw3
+        - name: outcome
+          in: query
+          description: |
+            Keeps only ARMC Boards whose `outcome` is this ARMC Outcome code.
+            Sent once at most, one code.
+          schema:
+            type: string
+            enum: [fit, unfit]
+          example: fit
+        - name: start-date
+          in: query
+          description: |
+            A Start Date range, inclusive: `ge<date>` keeps a `startDate` on or
+            after the date, `le<date>` one on or before it. Sent once for each
+            end the range has, so zero, one or two times; both apply together.
+            The backend guarantees the from-date is not after the to-date.
+          style: form
+          explode: true
+          schema:
+            type: array
+            maxItems: 2
+            items:
+              type: string
+              pattern: '^(ge|le)\d{4}-\d{2}-\d{2}$'
+          example: [ge2023-01-01, le2023-12-31]
+        - name: end-date
+          in: query
+          description: |
+            An End Date range, read as `start-date` is but against `endDate`.
+            A board with no `endDate`, still open, is in no End Date range, so
+            either end sent leaves it out.
+          style: form
+          explode: true
+          schema:
+            type: array
+            maxItems: 2
+            items:
+              type: string
+              pattern: '^(ge|le)\d{4}-\d{2}-\d{2}$'
+          example: [ge2023-01-01]
+        - name: _sort
+          in: query
+          description: |
+            One date column alone, `-` first for descending, with no `_id`
+            after it: the source breaks ties, and places a board with no
+            `endDate` in an `end-date` sort, by its own rule, the same on every
+            page, so a page never repeats or skips an ARMC Board. **Absent**
+            when no sort is chosen on the ARMC page: the source's own default
+            order applies.
+
+            - `start-date`: by `startDate`.
+            - `end-date`: by `endDate`.
+          schema:
+            type: string
+            enum:
+              - start-date
+              - -start-date
+              - end-date
+              - -end-date
         - name: _count
           in: query
           required: true
@@ -678,7 +748,7 @@ paths:
           in: query
           required: true
           description: |
-            How many ARMC Boards to skip, in the source's order: the page's
+            How many ARMC Boards to skip, filtered and in sort order: the page's
             `startIndex - 1`. An offset at or past `total` returns no entries
             and still the full `total`, never an error.
           schema:
@@ -695,9 +765,9 @@ paths:
       responses:
         "200":
           description: |
-            One page of the patient's ARMC Boards, in the source's order, and
-            the `total` of every one. A patient with none is this answer with
-            `total: 0`.
+            One page of the patient's ARMC Boards the filters keep, in sort
+            order, and the `total` of every one they keep. A patient with none,
+            or a filter keeping none, is this answer with `total: 0`.
           content:
             application/fhir+json:
               schema:

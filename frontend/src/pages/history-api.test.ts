@@ -1,15 +1,24 @@
 import { describe, expect, it } from "vitest";
 
+import { checkDateRanges } from "@/lib/date-range";
+
 import {
-  checkHistoryDates,
   countHistoryDates,
   historyDateParameters,
-  NO_HISTORY_DATES,
+  ISSUE_AND_EXPIRY_DATES,
+  NO_ISSUE_AND_EXPIRY_DATES,
 } from "./history-api";
 
-describe("checkHistoryDates", () => {
+// Each is read over the FFI and NUMC Histories' two ranges; the ARMC History's
+// are its own (armc-api.test.ts).
+
+// How a range is checked is `checkDateRanges`' (lib/date-range.test.ts):
+// here, that the FFI and NUMC Histories' two ranges are the ones checked, by name.
+describe("the FFI and NUMC Histories' date ranges", () => {
   it("passes no date at all", () => {
-    expect(checkHistoryDates(NO_HISTORY_DATES)).toEqual({ ok: true });
+    expect(checkDateRanges(ISSUE_AND_EXPIRY_DATES, NO_ISSUE_AND_EXPIRY_DATES)).toEqual({
+      ok: true,
+    });
   });
 
   it.each([
@@ -17,8 +26,8 @@ describe("checkHistoryDates", () => {
     ["expiryDate", "Expiry Date"],
   ] as const)("refuses a %s from-date after its to-date, naming the range", (range, label) => {
     expect(
-      checkHistoryDates({
-        ...NO_HISTORY_DATES,
+      checkDateRanges(ISSUE_AND_EXPIRY_DATES, {
+        ...NO_ISSUE_AND_EXPIRY_DATES,
         [`${range}From`]: "2024-01-02",
         [`${range}To`]: "2024-01-01",
       }),
@@ -35,7 +44,12 @@ describe("checkHistoryDates", () => {
   ] as const)(
     "refuses a %s the calendar does not have, naming the range",
     (field, range, label) => {
-      expect(checkHistoryDates({ ...NO_HISTORY_DATES, [field]: "2024-02-30" })).toEqual({
+      expect(
+        checkDateRanges(ISSUE_AND_EXPIRY_DATES, {
+          ...NO_ISSUE_AND_EXPIRY_DATES,
+          [field]: "2024-02-30",
+        }),
+      ).toEqual({
         message: `Enter the ${label} dates as real dates.`,
         ok: false,
         range,
@@ -45,7 +59,7 @@ describe("checkHistoryDates", () => {
 
   it("passes a range of one day on each date", () => {
     expect(
-      checkHistoryDates({
+      checkDateRanges(ISSUE_AND_EXPIRY_DATES, {
         expiryDateFrom: "2025-01-09",
         expiryDateTo: "2025-01-09",
         issueDateFrom: "2024-01-10",
@@ -57,7 +71,7 @@ describe("checkHistoryDates", () => {
 
 describe("countHistoryDates", () => {
   it("counts none for no date", () => {
-    expect(countHistoryDates(NO_HISTORY_DATES)).toBe(0);
+    expect(countHistoryDates(ISSUE_AND_EXPIRY_DATES, NO_ISSUE_AND_EXPIRY_DATES)).toBe(0);
   });
 
   it.each([
@@ -66,12 +80,14 @@ describe("countHistoryDates", () => {
     ["an Expiry Date from-date", { expiryDateFrom: "2025-01-01" }],
     ["an Expiry Date to-date", { expiryDateTo: "2025-12-31" }],
   ] as const)("counts %s as one", (_, set) => {
-    expect(countHistoryDates({ ...NO_HISTORY_DATES, ...set })).toBe(1);
+    expect(
+      countHistoryDates(ISSUE_AND_EXPIRY_DATES, { ...NO_ISSUE_AND_EXPIRY_DATES, ...set }),
+    ).toBe(1);
   });
 
   it("counts each end of both ranges", () => {
     expect(
-      countHistoryDates({
+      countHistoryDates(ISSUE_AND_EXPIRY_DATES, {
         expiryDateFrom: "2025-01-01",
         expiryDateTo: "2025-12-31",
         issueDateFrom: "2024-01-01",
@@ -83,12 +99,12 @@ describe("countHistoryDates", () => {
 
 describe("historyDateParameters", () => {
   it("sends no parameter for no date", () => {
-    expect(historyDateParameters(NO_HISTORY_DATES)).toEqual([]);
+    expect(historyDateParameters(ISSUE_AND_EXPIRY_DATES, NO_ISSUE_AND_EXPIRY_DATES)).toEqual([]);
   });
 
   it("sends each end set as its own parameter, the Issue Date's first", () => {
     expect(
-      historyDateParameters({
+      historyDateParameters(ISSUE_AND_EXPIRY_DATES, {
         expiryDateFrom: "",
         expiryDateTo: "2025-12-31",
         issueDateFrom: "2024-01-01",

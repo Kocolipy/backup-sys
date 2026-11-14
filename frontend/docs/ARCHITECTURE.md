@@ -333,17 +333,19 @@ two pages share moves up to `src/pages/` itself, and imports no page folder
   `MedicalCentre`, and `MEDICAL_CENTRE_LABELS`. An API module of data alone,
   in `src/pages/` because two pages' API modules read it
   (`lb-api-modules-are-data` lets one API module import another).
-- `history-api.ts` / `history-filter-popover.tsx` — what the FFI and NUMC
-  histories share. `history-api.ts`, an API module of data alone, names the
-  sort both take (`HistorySort`, by `issueDate` or `expiryDate`) and their two
-  date ranges (`HistoryDates`, `HISTORY_DATE_RANGES`): `checkHistoryDates`
-  refuses an inverted or impossible range through `checkDateRanges`,
+- `history-api.ts` / `history-filter-popover.tsx` — what the FFI, NUMC and
+  ARMC histories share. `history-api.ts`, an API module of data alone, names
+  the sort the FFI and NUMC Histories take (`IssueOrExpirySort`, by
+  `issueDate` or `expiryDate`) and their two date ranges
+  (`ISSUE_AND_EXPIRY_DATES`, `IssueAndExpiryDates`), and reads any history's
+  date ranges (`HistoryDateRanges`, `HistoryDates`), which `checkDateRanges`
+  (`lib/date-range.ts`) checks for an inverted or impossible range:
   `countHistoryDates` counts each end set as one filter, and
-  `historyDateParameters` sends each end set as its own parameter.
-  `HistoryFilterPopover` is the panel both pages open: the shared
-  `FilterPopover` counting the filters applied, and a form — named by the page,
-  its fields laid out by the page around the two `DateRangeFields` it renders —
-  that keeps its own draft, applies only on Apply or Enter in a date, refuses a
+  `historyDateParameters` sends each end set as its own parameter, each of the
+  ranges it is handed. `HistoryFilterPopover` is the panel the three pages
+  open: the shared `FilterPopover` counting the filters applied, and a form —
+  named by the page, its fields laid out by the page around a `DateRangeFields`
+  it renders for each of the page's ranges — that keeps its own draft, applies only on Apply or Enter in a date, refuses a
   bad range beneath its field with nothing sent, and resets to the page's own
   no-filter value. `pickerCopy` names a picker's parts from its column.
 - `armc.tsx` / `armc-api.ts` — ARMC, `/armc`, linked after NUMC for a session
@@ -358,12 +360,23 @@ two pages share moves up to `src/pages/` itself, and imports no page folder
   "No ARMC records". `decodeArmcBoard` is strict, each date read through
   `calendarDate`, the End Date through `optionalString` — absent for a board
   still open, shown as `—` — and each of an ARMC Board's two closed sets is a
-  `Record` of labels keyed by its codes. Read-only, in the source's own order:
-  no row action, and every column a `PlainHeading`, with no sort and no
-  filter. The Board Type is bold, both Medical Officers are shown as sent, and
-  the ARMC Outcome is a badge: FIT `success`, UNFIT `danger`.
+  `Record` of labels keyed by its codes. Read-only: no row action. The Board
+  Type is bold, both Medical Officers are shown as sent, and the ARMC Outcome
+  is a badge: FIT `success`, UNFIT `danger`. It sorts and filters as NUMC
+  does: Start Date and End Date sort through the shared `SortHeading`
+  (`ArmcSort`), disabled while a read is pending, the other four columns are
+  `PlainHeading`s, and with no column sorted `ARMC_HISTORY` sends no `sortBy`.
+  `armc-filter-popover.tsx` holds the Filter panel at the history's top right,
+  the shared `HistoryFilterPopover` laying out a `ChoiceToggle` for the
+  Outcome — All, FIT, UNFIT, as the Search page's Gender filter — and the two
+  date ranges, `ARMC_DATE_RANGES`. `ARMC_HISTORY` sends each filter only when
+  set, the Outcome as one `outcome`, none for All. The filters and the sort are
+  component state alone, never the URL; a change of either reads from the
+  first page, and a new patient in context starts with neither. With a filter
+  applied, an empty history says "No ARMC records match the filters" rather
+  than "No ARMC records".
 - `sort-heading.tsx` — the sortable column heading the accounts listing and
-  the FFI and NUMC pages share: `aria-sort`, a direction icon, and a press that sorts
+  the FFI, NUMC and ARMC pages share: `aria-sort`, a direction icon, and a press that sorts
   its column ascending first, then toggles descending → ascending → …, never
   returning a sorted column to the listing's default order — and
   `PlainHeading`, the heading of a column that does not sort, every column of
