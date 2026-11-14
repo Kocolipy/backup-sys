@@ -11,8 +11,7 @@
  */
 
 import type { ReadDeclaration } from "@/auth/declarations";
-import { DecodeError, jsonDecoder, readObject } from "@/lib/decode";
-import { isCalendarDate } from "@/lib/time";
+import { calendarDate, DecodeError, jsonDecoder, readObject } from "@/lib/decode";
 import { PATIENT_GENDERS, type PatientGender } from "@/lib/patient-gender";
 
 /** Synapxe's NRIC NamingSystem, the `system` of the identifier that holds a patient's NRIC. */
@@ -54,9 +53,8 @@ const decodePatient = jsonDecoder((body: unknown): PatientSummary => {
   if (patient.string("resourceType") !== "Patient") {
     throw new DecodeError("Patient.resourceType is not Patient");
   }
-  const birthDate = patient.string("birthDate");
   // A FHIR `date` to the day, the precision the backend serves a birth date at.
-  if (!isCalendarDate(birthDate)) throw new DecodeError("Patient.birthDate is not a date");
+  const birthDate = calendarDate(patient.string("birthDate"), "Patient.birthDate");
   return {
     birthDate,
     id: patient.string("id"),

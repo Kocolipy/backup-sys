@@ -1,8 +1,7 @@
 package com.example.backend.patient.controller;
 
 import com.example.backend.patient.domain.DateRange;
-import com.example.backend.patient.domain.FfiCode;
-import com.example.backend.patient.domain.FfiFilter;
+import com.example.backend.patient.domain.SourceCode;
 import java.beans.PropertyEditorSupport;
 import java.time.LocalDate;
 import java.util.List;
@@ -14,12 +13,12 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
- * How an FFI History reads its filters and sort from the query string, and a Patient search its
- * gender, so both refuse alike, before the patient source is called and quoting nothing the
- * caller sent: a
- * value no member of its set spells fails the binding ({@link #spelled}), as a date that is no
- * calendar date ({@link #DATE}) does, and a from-date after its to-date, or a repeated code
- * outside its closed set, is the same {@code 400} ({@link #range}, {@link #codes}).
+ * How a history read through the patient source reads its filters and sort from the query
+ * string, and a Patient search its gender, so each refuses alike, before the patient source is
+ * called and quoting nothing the caller sent: a value no member of its set spells fails the
+ * binding ({@link #spelled}), as a date that is no calendar date ({@link #DATE}) does, and a
+ * from-date after its to-date, or a repeated code outside its closed set, is the same {@code 400}
+ * ({@link #range}, {@link #codes}).
  */
 final class QueryParameters {
 
@@ -53,16 +52,16 @@ final class QueryParameters {
 
     /**
      * The members of {@code set} that each of {@code codes} spells, exactly
-     * ({@link FfiFilter#codeOf}), none for no codes, or this request's {@code 400} for a code
-     * outside the set. A repeated parameter is read here rather than bound to the enum: binding a
-     * collection of enums would accept a constant's name, which is no code.
+     * ({@link SourceCode#ofParameter}), none for no codes, or this request's {@code 400} for a
+     * code outside the set. A repeated parameter is read here rather than bound to the enum:
+     * binding a collection of enums would accept a constant's name, which is no code.
      */
-    static <E extends Enum<E> & FfiCode> Set<E> codes(Class<E> set, List<String> codes) {
+    static <E extends Enum<E> & SourceCode> Set<E> codes(Class<E> set, List<String> codes) {
         if (codes == null) {
             return Set.of();
         }
         try {
-            return codes.stream().map(code -> FfiFilter.codeOf(set, code))
+            return codes.stream().map(code -> SourceCode.ofParameter(set, code))
                     .filter(Objects::nonNull)
                     .collect(Collectors.toSet());
         } catch (IllegalArgumentException outside) {

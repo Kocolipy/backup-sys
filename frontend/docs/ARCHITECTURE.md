@@ -253,15 +253,16 @@ two pages share moves up to `src/pages/` itself, and imports no page folder
   page's line, with a Retry that reads the same page again. Each row keeps the
   Patient's id, which it never shows.
 - `ffi.tsx` / `ffi-api.ts` — FFI, `/ffi`, linked after Profile for a session
-  holding `patient:read` and guarded by it. It renders from
-  `usePatientInContext()` — with none in context, or a `404` for the id there,
+  holding `patient:read` and guarded by it. It renders through the shared
+  `ForPatientInContext` — with none in context, or a `404` for the id there,
   it says "No patient in context" and reads nothing; while the patient is read
   it says "Loading FFIs…"; a failed patient read leaves it empty — and, once
   the patient is read, that patient's FFI History, `GET /api/patient-ffi/{patientId}`,
   five at a time through `FFI_HISTORY` and the shared paged listing, naming the
   range on a single page too. `FFI_HISTORY` reads a `404` as `absent`, the same
   "No patient in context"; a failure is "Couldn't load FFIs" on the page's
-  line, with Try again. `decodeFfi` is strict, and each of an FFI's five
+  line, with Try again. `decodeFfi` is strict, each date read through
+  `calendarDate` (`src/lib/decode.ts`), and each of an FFI's five
   closed sets is a `Record` of labels keyed by its codes, so a code added
   fails typecheck until it has one. Read-only: no row action. Issue Date and
   Expiry Date sort through the shared `SortHeading`, disabled while a read is
@@ -274,7 +275,8 @@ two pages share moves up to `src/pages/` itself, and imports no page folder
   `checkFfiFilters` refuses an inverted or impossible range beneath its field,
   through `checkDateRanges`, with nothing sent. `FFI_HISTORY` sends each filter
   only when set, each code set as its parameter repeated in the set's own
-  order, then the sort through `sortParameters`. The filters
+  order through `codeParameters` (`src/lib/code-parameters.ts`), then the
+  sort through `sortParameters`. The filters
   and the sort are component state alone, never the URL; a change of either
   reads from the first page, and a new patient in context starts with
   neither. With a filter applied, an empty history says "No FFIs match the
@@ -324,6 +326,16 @@ two pages share moves up to `src/pages/` itself, and imports no page folder
   the Patient card and the FFI page may all import:
   `mb-pages-do-not-import-the-shell` rules out `src/shell/`, and
   `mb-pages-do-not-import-another-page` a page folder.
+- `for-patient-in-context.tsx` — the part of a page the patient in context
+  decides, for a page showing a history of that patient, rendered from
+  `usePatientInContext()`. `ForPatientInContext` is handed the page's history
+  and its loading copy: with none in context, a `404` for the id there, or a
+  session without `patient:read`, `NoPatientInContext` ("No patient in
+  context") and no history; while the patient is read, the loading copy in a
+  `status`; a failed read, nothing, its copy on the error line; and once read,
+  the history of that patient, by its id, keyed by it. A history whose own
+  read answers `absent` renders `NoPatientInContext` too. It sits beside
+  `patient-in-context.ts` for the reason that does.
 - `patient-card.tsx` — the Patient card, rendered from `usePatientInContext()`:
   "No patient in context" for none or a `404`, "Loading the patient…", an empty
   card for a failure (its copy is on the error line), or the banner. Every

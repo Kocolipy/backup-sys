@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from "react";
+import { useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -11,9 +11,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatCalendarDateTwoDigitDay } from "@/lib/time";
+import { ForPatientInContext, NoPatientInContext } from "@/pages/for-patient-in-context";
 import { PagedListing } from "@/pages/paged-listing";
 import { usePagedRead } from "@/pages/paged-read";
-import { usePatientInContext } from "@/pages/patient-in-context";
 import { type ColumnSorting, PlainHeading, SortHeading } from "@/pages/sort-heading";
 
 import { FfiFilterPopover } from "./ffi-filter-popover";
@@ -110,11 +110,6 @@ function FfiTable({
   );
 }
 
-/** What the page says with no patient whose FFIs it could show. */
-function NoPatientInContext(): ReactNode {
-  return <p className="text-sm text-muted-foreground">No patient in context</p>;
-}
-
 /**
  * The FFI History of the patient `patientId`, five FFIs a page, through the
  * shared paged listing: the numbered pager and "Showing x to y of N FFIs",
@@ -167,48 +162,17 @@ function FfiHistory({ patientId }: { patientId: string }) {
   );
 }
 
-/** What the page says while the patient in context is still being read. */
-function LoadingPatient(): ReactNode {
-  return (
-    <p className="text-sm text-muted-foreground" role="status">
-      Loading FFIs…
-    </p>
-  );
-}
-
-/**
- * The part of the page the patient in context decides, from the signed-in
- * layout's one read of them (`usePatientInContext`): with none in context, or
- * a `404` for the id there, "No patient in context", reading no FFIs; while
- * the patient is read, its loading copy; a failed read leaves the page empty,
- * its copy on the page's one error line; and once read, the FFI History of
- * that patient, by its id.
- */
-function ForPatientInContext(): ReactNode {
-  const view = usePatientInContext();
-  switch (view.kind) {
-    case "none":
-    case "absent":
-    case "not-permitted":
-      return <NoPatientInContext />;
-    case "loading":
-      return <LoadingPatient />;
-    case "failed":
-      return null;
-    default:
-      return <FfiHistory key={view.data.id} patientId={view.data.id} />;
-  }
-}
-
 /**
  * FFI: the FFI History of the patient in context, read from the patient
- * source. A new patient in context is a new history, read from its first page.
+ * source, and "Loading FFIs…" while the patient is read
+ * ({@link ForPatientInContext}). A new patient in context is a new history,
+ * read from its first page.
  */
 export function Ffis() {
   return (
     <Card>
       <CardContent className="flex flex-col gap-4">
-        <ForPatientInContext />
+        <ForPatientInContext history={FfiHistory} loading="Loading FFIs…" />
       </CardContent>
     </Card>
   );

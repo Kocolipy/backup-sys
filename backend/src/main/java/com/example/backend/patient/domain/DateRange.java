@@ -3,9 +3,9 @@ package com.example.backend.patient.domain;
 import java.time.LocalDate;
 
 /**
- * A range of calendar dates an FFI History narrows by: from {@code from} to {@code to}, both
- * inclusive, either end optional. A range one day long is a from-date equal to its to-date; a
- * from-date after its to-date names no day and is refused.
+ * A range of calendar dates a history read through the patient source narrows by: from {@code
+ * from} to {@code to}, both inclusive, either end optional. A range one day long is a from-date
+ * equal to its to-date; a from-date after its to-date names no day and is refused.
  *
  * @param from the first day in the range, or {@code null} for a range open before
  * @param to   the last day in the range, or {@code null} for a range open after

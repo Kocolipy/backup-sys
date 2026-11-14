@@ -40,18 +40,6 @@ public record FfiFilter(Set<FfiType> types, Set<FfiOutcome> outcomes, DateRange 
         submittingMcs = inSetOrder(submittingMcs);
     }
 
-    /**
-     * The member of {@code set} that {@code code} spells, exactly, or {@code null} for a blank
-     * one, which is no filter.
-     *
-     * @throws IllegalArgumentException for any other spelling: a label, another case, a code of
-     *                                  no member
-     */
-    public static <E extends Enum<E> & FfiCode> E codeOf(Class<E> set, String code) {
-        return Spelling.spelledAs(set.getEnumConstants(), code, FfiCode::code,
-                "An FFI filter's code is outside its closed set");
-    }
-
     /** {@code codes}, none for {@code null}, as an unmodifiable copy in the enum's own order. */
     private static <E extends Enum<E>> Set<E> inSetOrder(Set<E> codes) {
         return codes == null ? Set.of() : Collections.unmodifiableSortedSet(new TreeSet<>(codes));

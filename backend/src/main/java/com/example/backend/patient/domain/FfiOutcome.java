@@ -1,7 +1,7 @@
 package com.example.backend.patient.domain;
 
 /** An FFI's Outcome: whether the patient was found fit for the instruction. */
-public enum FfiOutcome implements FfiCode {
+public enum FfiOutcome implements SourceCode {
     FIT("fit"),
     REQUEST_WAIVER("request-waiver"),
     UNFIT("unfit");
