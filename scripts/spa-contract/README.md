@@ -34,6 +34,8 @@ set-equal to the one before it. The document's enums are named under
 | Higher Authorities     | `FfiHigherAuthority`, by `code()`            | `FfiHigherAuthority`                                                                    | `FFI_HIGHER_AUTHORITIES` (`ffi-api.ts`) |
 | Submitting MCs         | `FfiSubmittingMc`, by `code()`               | `FfiSubmittingMc`                                                                       | `FFI_SUBMITTING_MCS` (`ffi-api.ts`)     |
 | FFI Statuses           | `FfiStatus`, by `code()`                     | `FfiStatus`                                                                             | `FFI_STATUSES` (`ffi-api.ts`)           |
+| NUMC Types             | `NumcType`, by `code()`                      | `NumcType`                                                                              | `NUMC_TYPES` (`numc-api.ts`)            |
+| NUMC Outcomes          | `NumcOutcome`, by `code()`                   | `NumcOutcome`                                                                           | `NUMC_OUTCOMES` (`numc-api.ts`)         |
 
 - **Java ↔ document**: the backend's `VocabularyContractTests`
   (`backend/docs/api-contract-check.md`) compares each Java set with each enum

@@ -103,7 +103,7 @@ export default defineConfig({
     // `setup` saves and no other project signs in as, so it runs beside the rest.
     {
       name: "medical-officer",
-      testMatch: /(?:roles-medical-officer|patient-search|ffi)\.spec\.ts/,
+      testMatch: /(?:roles-medical-officer|patient-search|ffi|numc)\.spec\.ts/,
       dependencies: ["setup"],
       use: {
         ...devices["Desktop Chrome"],

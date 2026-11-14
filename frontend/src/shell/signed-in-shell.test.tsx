@@ -133,6 +133,7 @@ describe("SignedInShell's navigation sidebar", () => {
     ["Search", "/search", ["patient:read"]],
     ["Profile", "/", []],
     ["FFI", "/ffi", ["patient:read"]],
+    ["NUMC", "/numc", ["patient:read"]],
     ["Accounts", "/accounts", ["user:read", "group:read", "connector:read"]],
     ["Audit logs", "/audit", ["audit:read"]],
   ] as const)(
@@ -165,14 +166,14 @@ describe("SignedInShell's navigation sidebar", () => {
     ).toEqual(["Profile"]);
   });
 
-  it("links Search first, then Profile and FFI, for a session holding patient:read alone", async () => {
+  it("links Search first, then Profile, FFI and NUMC, for a session holding patient:read alone", async () => {
     await renderSignedIn("/search", holding(["patient:read"]));
 
     expect(
       within(screen.getAllByRole("list")[0])
         .getAllByRole("link")
         .map((link) => link.textContent),
-    ).toEqual(["Search", "Profile", "FFI"]);
+    ).toEqual(["Search", "Profile", "FFI", "NUMC"]);
   });
 
   it("links Search first, ahead of every page a Superuser may open", async () => {
@@ -182,18 +183,19 @@ describe("SignedInShell's navigation sidebar", () => {
       within(screen.getAllByRole("list")[0])
         .getAllByRole("link")
         .map((link) => link.textContent),
-    ).toEqual(["Search", "Profile", "FFI", "Accounts", "Audit logs"]);
+    ).toEqual(["Search", "Profile", "FFI", "NUMC", "Accounts", "Audit logs"]);
   });
 
   it.each([
     ["/search", "Search"],
     ["/", "Profile"],
     ["/ffi", "FFI"],
+    ["/numc", "NUMC"],
     ["/audit", "Audit logs"],
   ])("on %s highlights %s's link, and no other", async (path, current) => {
     await renderShell(path, {}, holding(EVERY_PERMISSION));
 
-    const links = ["Search", "Profile", "FFI", "Accounts", "Audit logs"];
+    const links = ["Search", "Profile", "FFI", "NUMC", "Accounts", "Audit logs"];
     expect(
       links.map((name) => screen.getByRole("link", { name }).getAttribute("data-active")),
     ).toEqual(links.map((name) => String(name === current)));

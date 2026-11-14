@@ -1,16 +1,16 @@
 package com.example.backend.patient.infrastructure.http;
 
+import static com.example.backend.patient.infrastructure.http.SourceFields.coded;
+import static com.example.backend.patient.infrastructure.http.SourceFields.day;
+
 import com.example.backend.patient.domain.Ffi;
 import com.example.backend.patient.domain.FfiHigherAuthority;
 import com.example.backend.patient.domain.FfiOutcome;
 import com.example.backend.patient.domain.FfiStatus;
 import com.example.backend.patient.domain.FfiSubmittingMc;
 import com.example.backend.patient.domain.FfiType;
-import com.example.backend.patient.domain.SourceCode;
 import com.example.backend.patient.infrastructure.http.PatientSourceException.Failure;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import java.time.LocalDate;
-import java.time.format.DateTimeParseException;
 
 /**
  * One entry of a patient's FFI History as the in-house patient source answers it: a custom
@@ -53,26 +53,5 @@ record SourceFfi(String resourceType, String id, String type, String outcome, St
                 coded(FfiSubmittingMc.class, submittingMc, Failure.NO_SUBMITTING_MC,
                         Failure.UNKNOWN_SUBMITTING_MC),
                 coded(FfiStatus.class, status, Failure.NO_STATUS, Failure.UNKNOWN_STATUS));
-    }
-
-    /** The member of {@code set} {@code code} spells: {@code none} without one, {@code unknown} for another. */
-    private static <E extends Enum<E> & SourceCode> E coded(Class<E> set, String code, Failure none,
-            Failure unknown) {
-        if (code == null) {
-            throw PatientSourceException.failed(none);
-        }
-        return SourceCode.of(set, code).orElseThrow(() -> PatientSourceException.failed(unknown));
-    }
-
-    /** The calendar date {@code date} is, which must be there and to the day. */
-    private static LocalDate day(String date, Failure none, Failure notToTheDay) {
-        if (date == null) {
-            throw PatientSourceException.failed(none);
-        }
-        try {
-            return LocalDate.parse(date);
-        } catch (DateTimeParseException notADay) {
-            throw PatientSourceException.failed(notToTheDay);
-        }
     }
 }

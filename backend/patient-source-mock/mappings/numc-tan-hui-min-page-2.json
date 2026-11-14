@@ -1,0 +1,64 @@
+{
+  "name": "NUMC History: Tan Hui Min's seven NUMC Records, page 2",
+  "request": {
+    "method": "GET",
+    "urlPath": "/Patient/dev-patient-05/numc",
+    "queryParameters": {
+      "_count": {
+        "equalTo": "5"
+      },
+      "_offset": {
+        "equalTo": "5"
+      },
+      "_total": {
+        "equalTo": "accurate"
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/fhir+json"
+    },
+    "jsonBody": {
+      "resourceType": "Bundle",
+      "id": "numc-history",
+      "type": "searchset",
+      "total": 7,
+      "link": [
+        {
+          "relation": "self",
+          "url": "http://127.0.0.1:8104/Patient/dev-patient-05/numc?_offset=5&_count=5"
+        }
+      ],
+      "entry": [
+        {
+          "resource": {
+            "resourceType": "NUMC",
+            "id": "numc-tan-hui-min-6",
+            "type": "hyperbaric-chamber",
+            "outcome": "unfit",
+            "issueDate": "2023-04-17",
+            "expiryDate": "2024-04-16"
+          },
+          "search": {
+            "mode": "match"
+          }
+        },
+        {
+          "resource": {
+            "resourceType": "NUMC",
+            "id": "numc-tan-hui-min-7",
+            "type": "diving",
+            "outcome": "waiver-granted",
+            "issueDate": "2022-12-05",
+            "expiryDate": "2023-12-04"
+          },
+          "search": {
+            "mode": "match"
+          }
+        }
+      ]
+    }
+  }
+}

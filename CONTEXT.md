@@ -478,11 +478,11 @@ What an FFI found, one of FIT, REQUEST WAIVER and UNFIT.
 _Avoid_: result, verdict (the dormancy job's word)
 
 **Issue Date**:
-The calendar date an FFI was issued.
+The calendar date an FFI or a NUMC Record was issued.
 
 **Expiry Date**:
-The calendar date an FFI runs to. Nothing is derived from it: it does not
-decide the Status.
+The calendar date an FFI or a NUMC Record runs to. Nothing is derived from it:
+it does not decide an FFI's Status, and nothing works out "expired".
 
 **Higher Authority**:
 The medical authority an FFI answers to, one of CAMO, CARMO, CNMO, Comd MMI
@@ -497,6 +497,33 @@ Whether an FFI is Active or Inactive, as the Patient source says. It is the
 source's own and is never derived from the Expiry Date: an FFI past its
 Expiry Date may still be Active, and nothing works out "expired".
 _Avoid_: expired, valid
+
+### NUMC
+
+Rules: [numc](docs/domain/numc.md). Decided in ADR 0019 (D5).
+
+**NUMC Record**:
+One record of whether a patient was found fit for one underwater duty, as the
+Patient source holds it for the Navy Underwater Medicine Centre (NUMC): its
+NUMC Type, NUMC Outcome, Issue Date and Expiry Date, every one required. It has
+no Status. Read from the Patient source on every read, never held, and not
+audited.
+_Avoid_: NUMC Assessment, dive medical, underwater fitness record
+
+**NUMC History**:
+Every NUMC Record of one patient, in the Patient source's own order, read five
+to a page on the NUMC page (`/numc`) for the patient in context, by a session
+holding `patient:read`.
+_Avoid_: NUMC list, NUMC log
+
+**NUMC Type**:
+The underwater duty a NUMC Record is for, one of a closed set: Hyperbaric
+Chamber Duties, Submariner Duties, Diving Duties.
+
+**NUMC Outcome**:
+What a NUMC Record found, one of FIT, UNFIT, WAIVER GRANTED and WAIVER
+REJECTED. A set of its own, apart from an FFI's Outcome.
+_Avoid_: NUMC result, a bare "Outcome" (that is an FFI's)
 
 ### Database
 

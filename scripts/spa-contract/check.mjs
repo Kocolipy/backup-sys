@@ -70,6 +70,15 @@ export const VOCABULARIES = [
     module: "src/pages/ffi/ffi-api.ts",
     mirrors: [{ pointer: `#/components/schemas/${schema}`, relation: "equal" }],
   })),
+  // A NUMC Record's two closed sets, each carried as its code.
+  ...[
+    ["NUMC_TYPES", "NumcType"],
+    ["NUMC_OUTCOMES", "NumcOutcome"],
+  ].map(([set, schema]) => ({
+    set,
+    module: "src/pages/numc/numc-api.ts",
+    mirrors: [{ pointer: `#/components/schemas/${schema}`, relation: "equal" }],
+  })),
 ];
 
 /** The node a `#/a/b` JSON pointer names in `doc`, or `undefined`. */
