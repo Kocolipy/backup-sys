@@ -1,11 +1,11 @@
 import { ChoiceToggle } from "@/pages/choice-toggle";
-import { ISSUE_AND_EXPIRY_DATES } from "@/pages/history-api";
 import { HistoryFilterPopover, pickerCopy } from "@/pages/history-filter-popover";
 import { MEDICAL_CENTRE_LABELS, MEDICAL_CENTRES } from "@/pages/medical-centre-api";
 import { MultiSelectPicker } from "@/pages/multi-select-picker";
 
 import {
   countFfiFilters,
+  FFI_DATE_COLUMNS,
   FFI_HIGHER_AUTHORITIES,
   FFI_HIGHER_AUTHORITY_LABELS,
   FFI_OUTCOME_LABELS,
@@ -43,7 +43,7 @@ export function FfiFilterPopover({
       label="FFI filters"
       none={NO_FFI_FILTERS}
       onApply={onApply}
-      ranges={ISSUE_AND_EXPIRY_DATES}
+      columns={FFI_DATE_COLUMNS}
     >
       {({ dateRanges, draft, edit }) => (
         <>

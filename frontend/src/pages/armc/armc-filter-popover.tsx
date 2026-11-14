@@ -2,7 +2,7 @@ import { ChoiceToggle } from "@/pages/choice-toggle";
 import { HistoryFilterPopover } from "@/pages/history-filter-popover";
 
 import {
-  ARMC_DATE_RANGES,
+  ARMC_DATE_COLUMNS,
   ARMC_OUTCOME_LABELS,
   ARMC_OUTCOMES,
   type ArmcFilters,
@@ -37,7 +37,7 @@ export function ArmcFilterPopover({
       label="ARMC filters"
       none={NO_ARMC_FILTERS}
       onApply={onApply}
-      ranges={ARMC_DATE_RANGES}
+      columns={ARMC_DATE_COLUMNS}
     >
       {({ dateRanges, draft, edit }) => (
         <>

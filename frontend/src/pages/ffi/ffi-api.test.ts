@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 
+import { checkDateRanges } from "@/lib/date-range";
 import { DecodeError } from "@/lib/decode";
 import { describeDecoder, STRING } from "@/lib/decode.testHelpers";
 
 import {
   countFfiFilters,
   decodeFfi,
+  FFI_DATE_COLUMNS,
   FFI_HISTORY,
   NO_FFI_FILTERS,
   type FfiFilters,
@@ -59,7 +61,31 @@ describeDecoder(
   { strict: true },
 );
 
-// Which dates may be sent is `checkDateRanges`' (history-api.test.ts).
+// How a date range is checked is `checkDateRanges`' (lib/date-range.test.ts):
+// here, that the FFI History's two ranges are the ones checked, by name.
+describe("the FFI History's date ranges", () => {
+  it("declares the Issue Date and the Expiry Date, both calendar dates, in that order", () => {
+    expect(FFI_DATE_COLUMNS).toEqual([
+      { column: "issueDate", label: "Issue Date", precision: "date" },
+      { column: "expiryDate", label: "Expiry Date", precision: "date" },
+    ]);
+  });
+
+  it("checks its filters' ranges by the columns it declares", () => {
+    expect(
+      checkDateRanges(FFI_DATE_COLUMNS, {
+        ...NO_FFI_FILTERS,
+        expiryDateFrom: "2025-01-02",
+        expiryDateTo: "2025-01-01",
+      }),
+    ).toEqual({
+      column: "expiryDate",
+      message: "The Expiry Date from-date must not be after its to-date.",
+      ok: false,
+    });
+  });
+});
+
 describe("countFfiFilters", () => {
   it("counts none for no filter", () => {
     expect(countFfiFilters(NO_FFI_FILTERS)).toBe(0);

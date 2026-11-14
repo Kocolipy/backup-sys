@@ -1,18 +1,28 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
+import type { DatePrecision } from "@/lib/date-range";
+
 import { DateRangeFields } from "./date-range-fields";
 
 type Range = { from: string; to: string };
 
-/** A "Shipped" range at `range`, refused with `refusal`, every change it reports recorded. */
-function renderRange(range: Range = { from: "", to: "" }, refusal: string | null = null) {
+/**
+ * A "Shipped" range at `range`, refused with `refusal`, over a column of
+ * `precision`, every change it reports recorded.
+ */
+function renderRange(
+  range: Range = { from: "", to: "" },
+  refusal: string | null = null,
+  precision: DatePrecision = "date",
+) {
   const onChange = vi.fn<(next: Range) => void>();
   render(
     <DateRangeFields
       from={range.from}
       label="Shipped"
       onChange={onChange}
+      precision={precision}
       refusal={refusal}
       to={range.to}
     />,
@@ -31,6 +41,23 @@ describe("DateRangeFields", () => {
       ["date", "2024-01-01"],
       ["date", "2024-12-31"],
     ]);
+  });
+
+  it("over a date-time column, holds a From and a To date-time, each showing its end", () => {
+    renderRange({ from: "2024-01-01T09:30", to: "2024-12-31T17:00" }, null, "date-time");
+
+    expect((["From", "To"] as const).map((name) => [end(name).type, end(name).value])).toEqual([
+      ["datetime-local", "2024-01-01T09:30"],
+      ["datetime-local", "2024-12-31T17:00"],
+    ]);
+  });
+
+  it("over a date-time column, reports a change to an end as its date-time", () => {
+    const { onChange } = renderRange({ from: "", to: "" }, null, "date-time");
+
+    fireEvent.change(end("To"), { target: { value: "2024-02-03T08:15" } });
+
+    expect(onChange.mock.calls).toEqual([[{ from: "", to: "2024-02-03T08:15" }]]);
   });
 
   it.each([

@@ -1,97 +1,45 @@
 import { describe, expect, it } from "vitest";
 
-import { checkDateRanges } from "@/lib/date-range";
+import { countHistoryDates, historyDateParameters, noHistoryDates } from "./history-api";
 
-import {
-  countHistoryDates,
-  historyDateParameters,
-  ISSUE_AND_EXPIRY_DATES,
-  NO_ISSUE_AND_EXPIRY_DATES,
-} from "./history-api";
+// Each is read over a history declaring one column of each precision; each
+// history's own columns are its own API module's (ffi-api.test.ts,
+// numc-api.test.ts, armc-api.test.ts), and how a range is checked is
+// `checkDateRanges`' (lib/date-range.test.ts).
+const COLUMNS = [
+  { column: "shipped", label: "Shipped", precision: "date" },
+  { column: "takenAt", label: "Taken At", precision: "date-time" },
+] as const;
 
-// Each is read over the FFI and NUMC Histories' two ranges; the ARMC History's
-// are its own (armc-api.test.ts).
+const OPEN = { shippedFrom: "", shippedTo: "", takenAtFrom: "", takenAtTo: "" };
 
-// How a range is checked is `checkDateRanges`' (lib/date-range.test.ts):
-// here, that the FFI and NUMC Histories' two ranges are the ones checked, by name.
-describe("the FFI and NUMC Histories' date ranges", () => {
-  it("passes no date at all", () => {
-    expect(checkDateRanges(ISSUE_AND_EXPIRY_DATES, NO_ISSUE_AND_EXPIRY_DATES)).toEqual({
-      ok: true,
-    });
-  });
-
-  it.each([
-    ["issueDate", "Issue Date"],
-    ["expiryDate", "Expiry Date"],
-  ] as const)("refuses a %s from-date after its to-date, naming the range", (range, label) => {
-    expect(
-      checkDateRanges(ISSUE_AND_EXPIRY_DATES, {
-        ...NO_ISSUE_AND_EXPIRY_DATES,
-        [`${range}From`]: "2024-01-02",
-        [`${range}To`]: "2024-01-01",
-      }),
-    ).toEqual({
-      message: `The ${label} from-date must not be after its to-date.`,
-      ok: false,
-      range,
-    });
-  });
-
-  it.each([
-    ["issueDateTo", "issueDate", "Issue Date"],
-    ["expiryDateFrom", "expiryDate", "Expiry Date"],
-  ] as const)(
-    "refuses a %s the calendar does not have, naming the range",
-    (field, range, label) => {
-      expect(
-        checkDateRanges(ISSUE_AND_EXPIRY_DATES, {
-          ...NO_ISSUE_AND_EXPIRY_DATES,
-          [field]: "2024-02-30",
-        }),
-      ).toEqual({
-        message: `Enter the ${label} dates as real dates.`,
-        ok: false,
-        range,
-      });
-    },
-  );
-
-  it("passes a range of one day on each date", () => {
-    expect(
-      checkDateRanges(ISSUE_AND_EXPIRY_DATES, {
-        expiryDateFrom: "2025-01-09",
-        expiryDateTo: "2025-01-09",
-        issueDateFrom: "2024-01-10",
-        issueDateTo: "2024-01-10",
-      }),
-    ).toEqual({ ok: true });
+describe("noHistoryDates", () => {
+  it("leaves both ends of every declared column open", () => {
+    expect(noHistoryDates(COLUMNS)).toEqual(OPEN);
   });
 });
 
 describe("countHistoryDates", () => {
   it("counts none for no date", () => {
-    expect(countHistoryDates(ISSUE_AND_EXPIRY_DATES, NO_ISSUE_AND_EXPIRY_DATES)).toBe(0);
+    expect(countHistoryDates(COLUMNS, OPEN)).toBe(0);
   });
 
   it.each([
-    ["an Issue Date from-date", { issueDateFrom: "2024-01-01" }],
-    ["an Issue Date to-date", { issueDateTo: "2024-12-31" }],
-    ["an Expiry Date from-date", { expiryDateFrom: "2025-01-01" }],
-    ["an Expiry Date to-date", { expiryDateTo: "2025-12-31" }],
+    ["a date column's from-end", { shippedFrom: "2024-01-01" }],
+    ["a date column's to-end", { shippedTo: "2024-12-31" }],
+    ["a date-time column's from-end", { takenAtFrom: "2025-01-01T09:30" }],
+    ["a date-time column's to-end", { takenAtTo: "2025-12-31T17:00" }],
   ] as const)("counts %s as one", (_, set) => {
-    expect(
-      countHistoryDates(ISSUE_AND_EXPIRY_DATES, { ...NO_ISSUE_AND_EXPIRY_DATES, ...set }),
-    ).toBe(1);
+    expect(countHistoryDates(COLUMNS, { ...OPEN, ...set })).toBe(1);
   });
 
-  it("counts each end of both ranges", () => {
+  it("counts each end of every range", () => {
     expect(
-      countHistoryDates(ISSUE_AND_EXPIRY_DATES, {
-        expiryDateFrom: "2025-01-01",
-        expiryDateTo: "2025-12-31",
-        issueDateFrom: "2024-01-01",
-        issueDateTo: "2024-12-31",
+      countHistoryDates(COLUMNS, {
+        shippedFrom: "2024-01-01",
+        shippedTo: "2024-12-31",
+        takenAtFrom: "2025-01-01T09:30",
+        takenAtTo: "2025-12-31T17:00",
       }),
     ).toBe(4);
   });
@@ -99,17 +47,27 @@ describe("countHistoryDates", () => {
 
 describe("historyDateParameters", () => {
   it("sends no parameter for no date", () => {
-    expect(historyDateParameters(ISSUE_AND_EXPIRY_DATES, NO_ISSUE_AND_EXPIRY_DATES)).toEqual([]);
+    expect(historyDateParameters(COLUMNS, OPEN)).toEqual([]);
   });
 
-  it("sends each end set as its own parameter, the Issue Date's first", () => {
+  it("sends each end set as its own parameter, in the order the columns are declared", () => {
     expect(
-      historyDateParameters(ISSUE_AND_EXPIRY_DATES, {
-        expiryDateFrom: "",
-        expiryDateTo: "2025-12-31",
-        issueDateFrom: "2024-01-01",
-        issueDateTo: "",
+      historyDateParameters(COLUMNS, {
+        shippedFrom: "",
+        shippedTo: "2025-12-31",
+        takenAtFrom: "2024-01-01T09:30",
+        takenAtTo: "",
       }),
-    ).toEqual(["issueDateFrom=2024-01-01", "expiryDateTo=2025-12-31"]);
+    ).toEqual(["shippedTo=2025-12-31", "takenAtFrom=2024-01-01T09:30"]);
+  });
+
+  it("sends a date-time end as its Singapore minute, with no offset", () => {
+    expect(
+      historyDateParameters(COLUMNS, {
+        ...OPEN,
+        takenAtFrom: "2024-01-01T00:00",
+        takenAtTo: "2024-01-01T23:59",
+      }),
+    ).toEqual(["takenAtFrom=2024-01-01T00:00", "takenAtTo=2024-01-01T23:59"]);
   });
 });

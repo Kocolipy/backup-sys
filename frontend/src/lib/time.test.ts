@@ -7,6 +7,7 @@ import {
   formatDate,
   formatDateTime,
   isCalendarDate,
+  isMinuteDateTime,
   isOffsetDateTime,
   formatInstant,
   parseTypedTime,
@@ -258,5 +259,32 @@ describe("isCalendarDate", () => {
     ["a year short of four digits", "985-03-12"],
   ])("refuses %s", (_, date) => {
     expect(isCalendarDate(date)).toBe(false);
+  });
+});
+
+describe("isMinuteDateTime", () => {
+  it.each([
+    ["an ordinary minute", "2024-03-01T09:30"],
+    ["the first minute of the day", "2024-03-01T00:00"],
+    ["the last minute of the day", "2024-03-01T23:59"],
+    ["29 February in a leap year", "2024-02-29T12:00"],
+  ])("accepts %s", (_, dateTime) => {
+    expect(isMinuteDateTime(dateTime)).toBe(true);
+  });
+
+  it.each([
+    ["a date alone", "2024-03-01"],
+    ["seconds", "2024-03-01T09:30:00"],
+    ["seconds and a fraction", "2024-03-01T09:30:00.000"],
+    ["an offset", "2024-03-01T09:30+08:00"],
+    ["UTC's Z", "2024-03-01T09:30Z"],
+    ["a space for the T", "2024-03-01 09:30"],
+    ["an hour past 23", "2024-03-01T24:00"],
+    ["a minute past 59", "2024-03-01T09:60"],
+    ["a day the calendar does not have", "2023-02-29T09:30"],
+    ["a one-digit hour", "2024-03-01T9:30"],
+    ["a year past four digits", "275760-03-01T09:30"],
+  ])("refuses %s", (_, dateTime) => {
+    expect(isMinuteDateTime(dateTime)).toBe(false);
   });
 });

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { checkDateRanges } from "@/lib/date-range";
 import { DecodeError } from "@/lib/decode";
 import { describeDecoder, STRING } from "@/lib/decode.testHelpers";
 
@@ -7,6 +8,7 @@ import {
   countNumcFilters,
   decodeNumcRecord,
   NO_NUMC_FILTERS,
+  NUMC_DATE_COLUMNS,
   NUMC_HISTORY,
   type NumcFilters,
 } from "./numc-api";
@@ -46,7 +48,31 @@ describeDecoder(
   { strict: true },
 );
 
-// Which dates may be sent is `checkDateRanges`' (history-api.test.ts).
+// How a date range is checked is `checkDateRanges`' (lib/date-range.test.ts):
+// here, that the NUMC History's two ranges are the ones checked, by name.
+describe("the NUMC History's date ranges", () => {
+  it("declares the Issue Date and the Expiry Date, both calendar dates, in that order", () => {
+    expect(NUMC_DATE_COLUMNS).toEqual([
+      { column: "issueDate", label: "Issue Date", precision: "date" },
+      { column: "expiryDate", label: "Expiry Date", precision: "date" },
+    ]);
+  });
+
+  it("checks its filters' ranges by the columns it declares", () => {
+    expect(
+      checkDateRanges(NUMC_DATE_COLUMNS, {
+        ...NO_NUMC_FILTERS,
+        expiryDateFrom: "2025-01-02",
+        expiryDateTo: "2025-01-01",
+      }),
+    ).toEqual({
+      column: "expiryDate",
+      message: "The Expiry Date from-date must not be after its to-date.",
+      ok: false,
+    });
+  });
+});
+
 describe("countNumcFilters", () => {
   it("counts none for no filter", () => {
     expect(countNumcFilters(NO_NUMC_FILTERS)).toBe(0);
