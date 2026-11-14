@@ -101,7 +101,7 @@ for a Patient search ([patient](patient.md), "Patient search"; ADR 0018, D7).
   parameters, `issue-date` or `expiry-date`, `-` first for descending, ties
   broken by id: `_sort=-issue-date,_id`. **With no `sortBy`** — whatever
   `sortOrder` says — **no `_sort` is sent**, and the source's default order is
-  the order shown. The domain's `FfiSort` holds it.
+  the order shown. The domain's `HistorySort` holds it, for the NUMC History too.
 - **The filters** narrow the history, combined with AND, each optional
   (`FfiFilter`):
 

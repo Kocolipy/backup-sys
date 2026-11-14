@@ -269,14 +269,12 @@ two pages share moves up to `src/pages/` itself, and imports no page folder
   pending, and every other column is a `PlainHeading`; with no column sorted,
   `FFI_HISTORY` sends no `sortBy` and the source's own order applies.
   `ffi-filter-popover.tsx` holds the Filter panel at the history's top right,
-  built from the shared filter parts: a `MultiSelectPicker` for each closed
-  set but the Status, a `DateRangeFields` for Issue Date and Expiry Date, and
-  a `ChoiceToggle` for the Status. It applies only on Apply, and
-  `checkFfiFilters` refuses an inverted or impossible range beneath its field,
-  through `checkDateRanges`, with nothing sent. `FFI_HISTORY` sends each filter
-  only when set, each code set as its parameter repeated in the set's own
-  order through `codeParameters` (`src/lib/code-parameters.ts`), then the
-  sort through `sortParameters`. The filters
+  the shared `HistoryFilterPopover` laying out its fields: a
+  `MultiSelectPicker` for each closed set but the Status, the two date ranges
+  and a `ChoiceToggle` for the Status. `FFI_HISTORY` sends each filter only
+  when set, each code set as its parameter repeated in the set's own order
+  through `codeParameters` (`src/lib/code-parameters.ts`), the dates through
+  `historyDateParameters`, then the sort through `sortParameters`. The filters
   and the sort are component state alone, never the URL; a change of either
   reads from the first page, and a new patient in context starts with
   neither. With a filter applied, an empty history says "No FFIs match the
@@ -292,12 +290,34 @@ two pages share moves up to `src/pages/` itself, and imports no page folder
   load NUMC records" on the page's line, with Try again; an empty history is
   "No NUMC records". `decodeNumcRecord` is strict, each date read through
   `calendarDate`, and each of a NUMC Record's two closed sets is a `Record` of
-  labels keyed by its codes. Read-only, in the source's own order: no row
-  action, and every column a `PlainHeading`, with no sort and no filter. The
-  NUMC Outcome is a badge: FIT `success`, UNFIT `danger`, WAIVER GRANTED
-  `info`, WAIVER REJECTED muted.
+  labels keyed by its codes. Read-only: no row action. The NUMC Outcome is a
+  badge: FIT `success`, UNFIT `danger`, WAIVER GRANTED `info`, WAIVER REJECTED
+  muted. It sorts and filters as FFI does: Issue Date and Expiry Date sort
+  through the shared `SortHeading`, disabled while a read is pending, Type and
+  Outcome are `PlainHeading`s, and with no column sorted `NUMC_HISTORY` sends
+  no `sortBy`. `numc-filter-popover.tsx` holds the Filter panel at the
+  history's top right, the shared `HistoryFilterPopover` laying out a
+  `MultiSelectPicker` for Type and for Outcome and the two date ranges.
+  `NUMC_HISTORY` sends each filter only when set, as `FFI_HISTORY` does. The
+  filters and the sort are component state alone, never the URL; a change of
+  either reads from the first page, and a new patient in context starts with
+  neither. With a filter applied, an empty history says "No NUMC records match
+  the filters" rather than "No NUMC records".
+- `history-api.ts` / `history-filter-popover.tsx` — what the FFI and NUMC
+  histories share. `history-api.ts`, an API module of data alone, names the
+  sort both take (`HistorySort`, by `issueDate` or `expiryDate`) and their two
+  date ranges (`HistoryDates`, `HISTORY_DATE_RANGES`): `checkHistoryDates`
+  refuses an inverted or impossible range through `checkDateRanges`,
+  `countHistoryDates` counts each end set as one filter, and
+  `historyDateParameters` sends each end set as its own parameter.
+  `HistoryFilterPopover` is the panel both pages open: the shared
+  `FilterPopover` counting the filters applied, and a form — named by the page,
+  its fields laid out by the page around the two `DateRangeFields` it renders —
+  that keeps its own draft, applies only on Apply or Enter in a date, refuses a
+  bad range beneath its field with nothing sent, and resets to the page's own
+  no-filter value. `pickerCopy` names a picker's parts from its column.
 - `sort-heading.tsx` — the sortable column heading the accounts listing and
-  the FFI page share: `aria-sort`, a direction icon, and a press that sorts
+  the FFI and NUMC pages share: `aria-sort`, a direction icon, and a press that sorts
   its column ascending first, then toggles descending → ascending → …, never
   returning a sorted column to the listing's default order — and
   `PlainHeading`, the heading of a column that does not sort, every column of
@@ -309,7 +329,7 @@ two pages share moves up to `src/pages/` itself, and imports no page folder
   filter parameters.
 - `filter-popover.tsx` / `multi-select-picker.tsx` / `choice-toggle.tsx` /
   `date-range-fields.tsx` — the shared filter parts the Audit, Patient Search
-  and FFI panels are built from. `FilterPopover` is the Filter button and its
+  and history panels are built from. `FilterPopover` is the Filter button and its
   panel: the button names how many applied filters are set (`setCount`), and
   the panel's form is mounted each time it opens, so an edit never applied is
   forgotten, and closes only once an Apply or Reset has applied.

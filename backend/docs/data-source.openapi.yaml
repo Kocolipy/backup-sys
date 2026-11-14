@@ -429,26 +429,35 @@ paths:
     get:
       tags: [patient-source]
       operationId: readNumcHistory
-      summary: Read one page of a patient's NUMC History — paged and counted by the source
+      summary: Read one page of a patient's NUMC History — filtered, sorted, paged and counted by the source
       description: |
         The patient's NUMC Records (Navy Underwater Medicine Centre), each
         whether the patient was found fit for one underwater duty. The backend
-        sends no sort and no filter: it shows the page and the total the source
-        answers, in the source's own order. A mock must therefore:
+        does none of this work itself: it forwards the filters and the sort
+        and shows the page and the total the source answers. A mock must
+        therefore compute every step below over all the patient's NUMC
+        Records, for any combination of parameters.
 
-        1. **Count** every NUMC Record the patient has: that number is the
-           Bundle's `total`, whatever the page.
-        2. **Order** them in the source's own stable default order.
-        3. **Page**: skip `_offset` records, then return up to `_count` of
+        1. **Filter** by every `type`, `outcome`, `issue-date` and
+           `expiry-date` sent, combined with AND.
+        2. **Count** what is left: that number is the Bundle's `total`,
+           whatever the page.
+        3. **Sort** by `_sort` when it is sent; with none, keep the source's
+           own stable default order.
+        4. **Page**: skip `_offset` records, then return up to `_count` of
            them as the Bundle's entries, in that order.
 
         **Worked example** over the fixtures: Tan Hui Min (`dev-patient-05`)
         has seven NUMC Records, so `total` is 7 on both of her pages of five;
-        Tan Wei Ming has four, on one page.
+        `outcome=waiver-granted,waiver-rejected` leaves three, and
+        `type=diving` with `issue-date=ge2024-01-01` two. Tan Wei Ming's four
+        with `_sort=issue-date,_id` are his Hyperbaric Chamber Duties UNFIT and
+        FIT, Diving Duties and Submariner Duties records, in that order.
 
         **FHIR-shaped paging only, not FHIR-conformant**: the answer borrows a
-        searchset `Bundle`'s shape, and its entries are a custom `NUMC` object
-        no FHIR version defines (ADR 0019, D5). The id is sent unchanged, as a
+        searchset `Bundle`'s shape and FHIR's search-parameter syntax, and its
+        entries are a custom `NUMC` object no FHIR version defines (ADR 0019,
+        D5). The id is sent unchanged, as a
         read by id's is. The backend sends parameters in no guaranteed order;
         read them by name.
 
@@ -477,6 +486,72 @@ paths:
             type: string
             pattern: '^[A-Za-z0-9\-.]{1,64}$'
           example: eq081-VQEgP8drUUqCWzHfw3
+        - name: type
+          in: query
+          description: |
+            Keeps only NUMC Records whose `type` is any of these codes, joined
+            by commas (FHIR's OR). Sent once at most, the codes in their set's
+            order.
+          schema:
+            type: string
+            pattern: "^(hyperbaric-chamber|submariner|diving)(,(hyperbaric-chamber|submariner|diving))*$"
+          example: hyperbaric-chamber,submariner
+        - name: outcome
+          in: query
+          description: |
+            Keeps only NUMC Records whose `outcome` is any of these NUMC
+            Outcome codes, joined by commas.
+          schema:
+            type: string
+            pattern: "^(fit|unfit|waiver-granted|waiver-rejected)(,(fit|unfit|waiver-granted|waiver-rejected))*$"
+          example: waiver-granted,waiver-rejected
+        - name: issue-date
+          in: query
+          description: |
+            An Issue Date range, inclusive: `ge<date>` keeps an `issueDate` on
+            or after the date, `le<date>` one on or before it. Sent once for each
+            end the range has, so zero, one or two times; both apply together.
+            The backend guarantees the from-date is not after the to-date.
+          style: form
+          explode: true
+          schema:
+            type: array
+            maxItems: 2
+            items:
+              type: string
+              pattern: '^(ge|le)\d{4}-\d{2}-\d{2}$'
+          example: [ge2024-01-01, le2024-12-31]
+        - name: expiry-date
+          in: query
+          description: |
+            An Expiry Date range, read as `issue-date` is but against
+            `expiryDate`.
+          style: form
+          explode: true
+          schema:
+            type: array
+            maxItems: 2
+            items:
+              type: string
+              pattern: '^(ge|le)\d{4}-\d{2}-\d{2}$'
+          example: [le2024-12-31]
+        - name: _sort
+          in: query
+          description: |
+            One date column, then the id. `-` first is descending; `_id` is
+            always ascending and breaks every tie, so the order is total and a
+            page never repeats or skips a NUMC Record. **Absent** when no sort
+            is chosen on the NUMC page: the source's own default order applies.
+
+            - `issue-date`: by `issueDate`.
+            - `expiry-date`: by `expiryDate`.
+          schema:
+            type: string
+            enum:
+              - "issue-date,_id"
+              - "-issue-date,_id"
+              - "expiry-date,_id"
+              - "-expiry-date,_id"
         - name: _count
           in: query
           required: true
@@ -493,8 +568,8 @@ paths:
           in: query
           required: true
           description: |
-            How many NUMC Records to skip, in the source's order: the page's
-            `startIndex - 1`. An offset at or past `total` returns no entries
+            How many NUMC Records to skip, filtered and in sort order: the
+            page's `startIndex - 1`. An offset at or past `total` returns no entries
             and still the full `total`, never an error.
           schema:
             type: integer
@@ -510,9 +585,9 @@ paths:
       responses:
         "200":
           description: |
-            One page of the patient's NUMC Records, in the source's order, and
-            the `total` of every one. A patient with none is this answer with
-            `total: 0`.
+            One page of the patient's NUMC Records the filters keep, in sort
+            order, and the `total` of every one they keep. A patient with none,
+            or a filter keeping none, is this answer with `total: 0`.
           content:
             application/fhir+json:
               schema:

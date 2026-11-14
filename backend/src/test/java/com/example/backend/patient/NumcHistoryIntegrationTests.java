@@ -138,6 +138,31 @@ class NumcHistoryIntegrationTests {
     }
 
     /**
+     * A filtered read and a sorted one are answered as an unfiltered read is: the source's page,
+     * no audit row, and a stream naming none of the filters' values — not a code, not a date.
+     */
+    @Test
+    void aFilteredOrSortedReadAppendsNoAuditRowAndLogsNoFilter() throws Exception {
+        HttpClient session = signedIn();
+        long before = rowsBy(reader.userId());
+        logs.reset();
+
+        HttpResponse<String> filtered = send(session, HttpRequest.newBuilder(URI.create(
+                "http://localhost:" + port + "/api/patient-numc/dev-patient-05?count=5"
+                        + "&outcome=waiver-granted&outcome=waiver-rejected")));
+        HttpResponse<String> sorted = send(session, HttpRequest.newBuilder(URI.create(
+                "http://localhost:" + port + "/api/patient-numc/" + TAN_WEI_MING
+                        + "?count=5&sortBy=expiryDate&issueDateTo=2099-01-01")));
+        logs.awaitRequestRecords(2);
+
+        assertThat(List.of(filtered.statusCode(),
+                JSON.readTree(filtered.body()).at("/totalResults").asInt(), sorted.statusCode(),
+                rowsBy(reader.userId()) - before)).containsExactly(200, 3, 200, 0L);
+        assertThat(logs.lines()).doesNotContain("waiver-granted", "waiver-rejected",
+                "2099-01-01");
+    }
+
+    /**
      * Each NUMC fault stub the stub files serve, by the failure its record names and the
      * {@code error.category} it is reported under. The slow stub waits past the production read
      * timeout; the tests' is shorter (ContainerTestConfiguration).

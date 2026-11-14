@@ -12,6 +12,21 @@
       },
       "_total": {
         "equalTo": "accurate"
+      },
+      "_sort": {
+        "absent": true
+      },
+      "type": {
+        "absent": true
+      },
+      "outcome": {
+        "absent": true
+      },
+      "issue-date": {
+        "absent": true
+      },
+      "expiry-date": {
+        "absent": true
       }
     }
   },

@@ -3,7 +3,7 @@ package com.example.backend.patient.application;
 import com.example.backend.paging.domain.PageRequest;
 import com.example.backend.patient.domain.FfiFilter;
 import com.example.backend.patient.domain.FfiHistory;
-import com.example.backend.patient.domain.FfiSort;
+import com.example.backend.patient.domain.HistorySort;
 import com.example.backend.patient.domain.PatientId;
 import com.example.backend.patient.domain.PatientStore;
 import java.util.Optional;
@@ -28,7 +28,7 @@ public class FfiHistoryService {
      * The page {@code page} of the FFI History of the patient {@code id} that {@code filter}
      * narrows, in the order {@code sort} names, or none without the patient.
      */
-    public Optional<FfiHistory> find(PatientId id, FfiFilter filter, FfiSort sort,
+    public Optional<FfiHistory> find(PatientId id, FfiFilter filter, HistorySort sort,
             PageRequest page) {
         return patients.findFfiHistory(id, filter, sort, page);
     }

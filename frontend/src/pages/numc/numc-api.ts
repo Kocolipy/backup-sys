@@ -5,26 +5,34 @@
  * Nothing here requests anything: the NUMC page sends {@link NUMC_HISTORY}
  * through `usePagedRead` (behind `useSessionRequest`), so a `401` still ends
  * the session in one place. This file says what a response looks like, names
- * each code of a NUMC Record's two closed sets, and declares the read — its
- * path, decoder and Permission — once.
+ * each code of a NUMC Record's two closed sets, says what the Filter panel's
+ * filters and the sort are and which of them may be sent, and declares the
+ * read — its path, decoder and Permission — once.
  */
 
 import type { ReadDeclaration } from "@/auth/declarations";
+import { codeParameters } from "@/lib/code-parameters";
 import { calendarDate, jsonDecoder, readObject } from "@/lib/decode";
 import { pageDecoder, pagedPath, type Page, type PageAt } from "@/lib/paging";
+import { sortParameters } from "@/lib/sorting";
+import {
+  countHistoryDates,
+  historyDateParameters,
+  NO_HISTORY_DATES,
+  type HistoryDates,
+  type HistorySort,
+} from "@/pages/history-api";
 
-// A NUMC Record's two closed sets, each as the API carries it, by its codes.
-// Each is exported for the SPA–API contract check (`/scripts/spa-contract/`),
-// which holds it to its enum in `/backend/docs/openapi.yaml` from outside this
-// app's import graph, and nothing in `src/` but the decoder below reads them.
-// The NUMC Outcome is a set of its own, apart from an FFI's Outcome.
+// A NUMC Record's two closed sets, each as the API carries it, by its codes,
+// in the order the Filter panel lists them. Each is exported for the SPA–API
+// contract check (`/scripts/spa-contract/`), which holds it to its enum in
+// `/backend/docs/openapi.yaml` from outside this app's import graph. The NUMC
+// Outcome is a set of its own, apart from an FFI's Outcome.
 
 /** A NUMC Record's NUMC Type: the underwater duty. */
-// fallow-ignore-next-line unused-export
 export const NUMC_TYPES = ["hyperbaric-chamber", "submariner", "diving"] as const;
 
 /** A NUMC Record's NUMC Outcome. */
-// fallow-ignore-next-line unused-export
 export const NUMC_OUTCOMES = ["fit", "unfit", "waiver-granted", "waiver-rejected"] as const;
 
 export type NumcType = (typeof NUMC_TYPES)[number];
@@ -88,18 +96,55 @@ export const decodeNumcRecord = (value: unknown): NumcRecord => {
 };
 
 /**
- * The NUMC History of the patient `patientId`, a page at a time,
- * `GET /api/patient-numc/{patientId}`: the patient source's NUMC Records, in
- * its own order, with no sort and no filter. A `404` is an ordinary answer —
- * the source holds no patient under the id — so it reads as `absent`.
+ * The Filter panel's filters, each as its control holds it: the codes chosen
+ * of each closed set, none for no filter, and the two date ranges
+ * ({@link HistoryDates}). Every code the panel offers is one of its set's, so
+ * only the dates are checked before sending (`checkHistoryDates`).
+ */
+export interface NumcFilters extends HistoryDates {
+  types: readonly NumcType[];
+  outcomes: readonly NumcOutcome[];
+}
+
+/** No filter: every NUMC Record of the patient. */
+export const NO_NUMC_FILTERS: NumcFilters = { ...NO_HISTORY_DATES, outcomes: [], types: [] };
+
+/** How many of `filters` narrow the history: each set of codes chosen, as one, and each date set. */
+export function countNumcFilters(filters: NumcFilters): number {
+  const chosen = [filters.types.length > 0, filters.outcomes.length > 0].filter(Boolean).length;
+  return chosen + countHistoryDates(filters);
+}
+
+/** The query string `filters` and `sort` ask for, each filter only when set. */
+function historyQuery(filters: NumcFilters, sort: HistorySort | null): string {
+  return [
+    ...codeParameters("type", NUMC_TYPES, filters.types),
+    ...codeParameters("outcome", NUMC_OUTCOMES, filters.outcomes),
+    ...historyDateParameters(filters),
+    ...sortParameters(sort),
+  ].join("&");
+}
+
+/**
+ * The NUMC History of the patient `patientId` that `filters` narrow, a page
+ * at a time, in the order `sort` names, `GET /api/patient-numc/{patientId}`:
+ * the patient source's NUMC Records, in its own order when `sort` is `null`.
+ * The source filters and sorts; the backend passes both through. A `404` is
+ * an ordinary answer — the source holds no patient under the id — so it
+ * reads as `absent`.
  */
 export const NUMC_HISTORY: ReadDeclaration<
   Page<NumcRecord>,
-  [patientId: string, at: PageAt],
+  [patientId: string, filters: NumcFilters, sort: HistorySort | null, at: PageAt],
   true
 > = {
   absentOnNotFound: true,
   decode: jsonDecoder(pageDecoder("NumcHistoryPage", "records", decodeNumcRecord)),
-  path: (patientId, at) => pagedPath(`/api/patient-numc/${encodeURIComponent(patientId)}`, at),
+  path: (patientId, filters, sort, at) =>
+    pagedPath(
+      `/api/patient-numc/${encodeURIComponent(patientId)}`,
+      at,
+      historyQuery(filters, sort),
+    ),
   permission: "patient:read",
 };

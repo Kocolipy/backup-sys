@@ -3,7 +3,8 @@ package com.example.backend.patient;
 import com.example.backend.paging.domain.PageRequest;
 import com.example.backend.patient.domain.FfiFilter;
 import com.example.backend.patient.domain.FfiHistory;
-import com.example.backend.patient.domain.FfiSort;
+import com.example.backend.patient.domain.HistorySort;
+import com.example.backend.patient.domain.NumcFilter;
 import com.example.backend.patient.domain.NumcHistory;
 import com.example.backend.patient.domain.Patient;
 import com.example.backend.patient.domain.PatientFilter;
@@ -31,13 +32,14 @@ public abstract class RefusingPatientStore implements PatientStore {
     }
 
     @Override
-    public Optional<FfiHistory> findFfiHistory(PatientId id, FfiFilter filter, FfiSort sort,
+    public Optional<FfiHistory> findFfiHistory(PatientId id, FfiFilter filter, HistorySort sort,
             PageRequest page) {
         throw refused("an FFI History");
     }
 
     @Override
-    public Optional<NumcHistory> findNumcHistory(PatientId id, PageRequest page) {
+    public Optional<NumcHistory> findNumcHistory(PatientId id, NumcFilter filter, HistorySort sort,
+            PageRequest page) {
         throw refused("a NUMC History");
     }
 

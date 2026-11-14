@@ -21,6 +21,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.http.HttpMethod;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -143,15 +144,213 @@ class PatientNumcControllerTests {
                         "_total", List.of("accurate")));
     }
 
-    /** No sort and no filter reach the source: a parameter the read does not take is not passed on. */
+    /**
+     * Each filter reaches the source as its own search parameter: one case for each request
+     * parameter, beside the parameter the source is sent for it. A repeated code is one parameter,
+     * its codes joined by commas — FHIR's OR — in its closed set's order.
+     */
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', textBlock = """
+        type            | diving                    | type        | diving
+        type            | diving,hyperbaric-chamber | type        | hyperbaric-chamber,diving
+        outcome         | waiver-granted            | outcome     | waiver-granted
+        outcome         | waiver-rejected,unfit     | outcome     | unfit,waiver-rejected
+        issueDateFrom   | 2024-01-01                | issue-date  | ge2024-01-01
+        issueDateTo     | 2024-12-31                | issue-date  | le2024-12-31
+        expiryDateFrom  | 2025-01-01                | expiry-date | ge2025-01-01
+        expiryDateTo    | 2025-12-31                | expiry-date | le2025-12-31
+        """)
+    void eachFilterIsForwardedToTheSource(String parameter, String values, String forwarded,
+            String sent) throws Exception {
+        MockHttpServletRequestBuilder read = records(TAN_WEI_MING);
+        for (String value : values.split(",")) {
+            read.param(parameter, value);
+        }
+
+        assertThat(reading(read).getStatus()).isEqualTo(200);
+        assertThat(sentToTheSource(TAN_WEI_MING)).containsEntry(forwarded, List.of(sent));
+    }
+
+    /** Every filter at once reaches the source, combined, with the sort. */
     @Test
-    void aParameterTheReadDoesNotTakeIsNotSentToTheSource() throws Exception {
-        assertThat(reading(records(TAN_WEI_MING).param("sortBy", "issueDate")
-                .param("outcome", "fit")).getStatus()).isEqualTo(200);
+    void everyFilterAndTheSortAreForwardedTogether() throws Exception {
+        assertThat(reading(records(TAN_WEI_MING).param("type", "submariner")
+                .param("outcome", "fit").param("outcome", "unfit")
+                .param("issueDateFrom", "2023-01-01").param("issueDateTo", "2024-06-30")
+                .param("expiryDateTo", "2025-12-31")
+                .param("sortBy", "expiryDate").param("sortOrder", "descending")).getStatus())
+                .isEqualTo(200);
+
+        assertThat(sentToTheSource(TAN_WEI_MING)).isEqualTo(Map.ofEntries(
+                Map.entry("type", List.of("submariner")),
+                Map.entry("outcome", List.of("fit,unfit")),
+                Map.entry("issue-date", List.of("ge2023-01-01", "le2024-06-30")),
+                Map.entry("expiry-date", List.of("le2025-12-31")),
+                Map.entry("_sort", List.of("-expiry-date,_id")),
+                Map.entry("_offset", List.of("0")),
+                Map.entry("_count", List.of("5")),
+                Map.entry("_total", List.of("accurate"))));
+    }
+
+    /**
+     * The sort reaches the source as its {@code _sort}: a column with no direction ascending.
+     * With no column — whatever the direction says — no {@code _sort} is sent, and the order is
+     * the source's own.
+     */
+    @ParameterizedTest
+    @CsvSource(nullValues = "-", value = {
+        "issueDate, ascending, 'issue-date,_id'",
+        "issueDate, descending, '-issue-date,_id'",
+        "expiryDate, ascending, 'expiry-date,_id'",
+        "expiryDate, descending, '-expiry-date,_id'",
+        "issueDate, -, 'issue-date,_id'",
+        "-, ascending, -",
+        "-, -, -"})
+    void theSortIsForwardedToTheSource(String sortBy, String sortOrder, String sent)
+            throws Exception {
+        MockHttpServletRequestBuilder sorted = records(TAN_WEI_MING);
+        if (sortBy != null) {
+            sorted.param("sortBy", sortBy);
+        }
+        if (sortOrder != null) {
+            sorted.param("sortOrder", sortOrder);
+        }
+
+        assertThat(reading(sorted).getStatus()).isEqualTo(200);
+        assertThat(sentToTheSource(TAN_WEI_MING).get("_sort"))
+                .isEqualTo(sent == null ? null : List.of(sent));
+    }
+
+    /**
+     * A filter or sort the read cannot take is the application API's {@code 400}, refused before
+     * the source is called: a column but the two dates, a direction but ascending or descending,
+     * a code outside its closed set — a label, another case, a Java constant's name, another
+     * spelling or another set's code, an FFI Outcome's among them — and a date that is no
+     * calendar date {@code YYYY-MM-DD}. NUMC has no Status, Higher Authority or Submitting MC,
+     * so a filter on one is no parameter the read takes, and is not passed on (below).
+     */
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', textBlock = """
+        sortBy         | type
+        sortBy         | outcome
+        sortBy         | issue-date
+        sortBy         | ExpiryDate
+        sortOrder      | asc
+        sortOrder      | DESCENDING
+        type           | Diving Duties
+        type           | DIVING
+        type           | HYPERBARIC_CHAMBER
+        type           | ippt
+        outcome        | WAIVER GRANTED
+        outcome        | waiver_granted
+        outcome        | WAIVER_REJECTED
+        outcome        | request-waiver
+        issueDateFrom  | 2024-02-30
+        issueDateTo    | 01/02/2024
+        expiryDateFrom | 2025-1-1
+        expiryDateTo   | 2025-12-31T00:00:00
+        expiryDateTo   | yesterday
+        """)
+    void aFilterOrSortTheReadCannotTakeIsRefused(String parameter, String value)
+            throws Exception {
+        MockHttpServletResponse response =
+                reading(records(TAN_WEI_MING).param(parameter, value));
+
+        assertThat(body(response)).isEqualTo(apiError(400, "invalid-request",
+                "The request could not be read or did not pass validation."));
+        SOURCE.verify(0, anyRequestedFor(anyUrl()));
+    }
+
+    /** One code outside its set among good ones refuses the whole read. */
+    @Test
+    void oneCodeOutsideItsSetAmongOthersIsRefused() throws Exception {
+        assertThat(reading(records(TAN_WEI_MING).param("outcome", "fit")
+                .param("outcome", "request-waiver")).getStatus()).isEqualTo(400);
+        SOURCE.verify(0, anyRequestedFor(anyUrl()));
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "issueDateFrom, issueDateTo, 2024-01-02, 2024-01-01",
+        "expiryDateFrom, expiryDateTo, 2025-12-31, 2025-01-01"})
+    void aFromDateAfterItsToDateIsRefused(String fromParameter, String toParameter, String from,
+            String to) throws Exception {
+        MockHttpServletResponse response = reading(records(TAN_WEI_MING)
+                .param(fromParameter, from).param(toParameter, to));
+
+        assertThat(body(response)).isEqualTo(apiError(400, "invalid-request",
+                "The request could not be read or did not pass validation."));
+        SOURCE.verify(0, anyRequestedFor(anyUrl()));
+    }
+
+    /** A range one day long is a from-date equal to its to-date, and is no refusal. */
+    @Test
+    void aRangeOfOneDayIsRead() throws Exception {
+        assertThat(reading(records(TAN_WEI_MING)
+                .param("issueDateFrom", "2024-01-10").param("issueDateTo", "2024-01-10"))
+                .getStatus()).isEqualTo(200);
+        assertThat(sentToTheSource(TAN_WEI_MING))
+                .containsEntry("issue-date", List.of("ge2024-01-10", "le2024-01-10"));
+    }
+
+    /** A blank code, as an empty field sends one, is no filter on its column. */
+    @ParameterizedTest
+    @ValueSource(strings = {"type", "outcome"})
+    void aBlankCodeIsNoFilter(String parameter) throws Exception {
+        assertThat(reading(records(TAN_WEI_MING).param(parameter, "")).getStatus())
+                .isEqualTo(200);
         assertThat(sentToTheSource(TAN_WEI_MING)).isEqualTo(Map.of(
                 "_offset", List.of("0"),
                 "_count", List.of("5"),
                 "_total", List.of("accurate")));
+    }
+
+    /**
+     * A NUMC Record has no Status, Higher Authority or Submitting MC: a filter on one is no
+     * parameter the read takes, and nothing of it is passed on.
+     */
+    @Test
+    void aFilterOnAColumnNumcDoesNotHaveIsNotSentToTheSource() throws Exception {
+        assertThat(reading(records(TAN_WEI_MING).param("status", "active")
+                .param("higherAuthority", "camo").param("submittingMc", "kranji-camp"))
+                .getStatus()).isEqualTo(200);
+        assertThat(sentToTheSource(TAN_WEI_MING)).isEqualTo(Map.of(
+                "_offset", List.of("0"),
+                "_count", List.of("5"),
+                "_total", List.of("accurate")));
+    }
+
+    /** The ids of a page's NUMC Records, in its order, beside its total. */
+    private List<Object> idsAndTotal(MockHttpServletResponse response) throws Exception {
+        JsonNode page = body(response);
+        return List.of(page.at("/totalResults").asInt(),
+                page.at("/records").valueStream().map(record -> record.at("/id").asString())
+                        .toList());
+    }
+
+    /** A canned sorted read, answered in the order the source sorted it: latest Expiry Date first. */
+    @Test
+    void aSortedReadIsAnsweredInTheSourcesSortedOrder() throws Exception {
+        assertThat(idsAndTotal(reading(records(TAN_WEI_MING).param("sortBy", "expiryDate")
+                .param("sortOrder", "descending"))))
+                .containsExactly(4, List.of("numc-tan-wei-ming-2", "numc-tan-wei-ming-3",
+                        "numc-tan-wei-ming-1", "numc-tan-wei-ming-4"));
+    }
+
+    /** A canned filtered read, answered as the source filtered it. */
+    @Test
+    void aFilteredReadIsAnsweredAsTheSourceFilteredIt() throws Exception {
+        assertThat(idsAndTotal(reading(records("dev-patient-05")
+                .param("outcome", "waiver-granted").param("outcome", "waiver-rejected"))))
+                .containsExactly(3, List.of("numc-tan-hui-min-3", "numc-tan-hui-min-4",
+                        "numc-tan-hui-min-7"));
+    }
+
+    @Test
+    void aFilterTheSourceMatchesNothingWithIsAnEmptyPage() throws Exception {
+        assertThat(body(reading(records("dev-patient-05").param("expiryDateTo", "2022-12-31"))))
+                .isEqualTo(json.readTree("""
+                        {"totalResults": 0, "startIndex": 1, "records": []}"""));
     }
 
     @Test

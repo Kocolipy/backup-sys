@@ -6,7 +6,8 @@ import com.example.backend.paging.domain.PageRequest;
 import com.example.backend.patient.domain.DateRange;
 import com.example.backend.patient.domain.FfiFilter;
 import com.example.backend.patient.domain.FfiHistory;
-import com.example.backend.patient.domain.FfiSort;
+import com.example.backend.patient.domain.HistorySort;
+import com.example.backend.patient.domain.NumcFilter;
 import com.example.backend.patient.domain.NumcHistory;
 import com.example.backend.patient.domain.Patient;
 import com.example.backend.patient.domain.PatientId;
@@ -101,23 +102,26 @@ class PatientSourceAdapter implements PatientStore {
      */
     static final String FFI_HISTORY = "/Patient/{id}/ffi?" + SourceSearchset.PAGE_QUERY;
 
-    /** The source's search parameter for an FFI's Issue Date. */
+    /** The source's search parameter for an FFI's or a NUMC Record's Issue Date. */
     private static final String ISSUE_DATE = "issue-date";
 
-    /** The source's search parameter for an FFI's Expiry Date. */
+    /** The source's search parameter for an FFI's or a NUMC Record's Expiry Date. */
     private static final String EXPIRY_DATE = "expiry-date";
 
-    /** The source's search parameter each column of an FFI History sorts on. */
-    private static final Map<FfiSort.Field, String> FFI_SORTED_ON = Map.of(
-            FfiSort.Field.ISSUE_DATE, ISSUE_DATE,
-            FfiSort.Field.EXPIRY_DATE, EXPIRY_DATE);
+    /** The source's search parameter each column of a history sorts on. */
+    private static final Map<HistorySort.Field, String> SORTED_ON = Map.of(
+            HistorySort.Field.ISSUE_DATE, ISSUE_DATE,
+            HistorySort.Field.EXPIRY_DATE, EXPIRY_DATE);
 
     /** A searchset of FFIs, an FFI History's answer. */
     private static final ParameterizedTypeReference<SourceSearchset<SourceFfi>> FFIS =
             new ParameterizedTypeReference<>() {
             };
 
-    /** A patient's NUMC History, a page at a time, in the source's own order (ADR 0019, D5). */
+    /**
+     * A patient's NUMC History, a page at a time (ADR 0019), before the filters and the sort a
+     * read adds to it.
+     */
     static final String NUMC_HISTORY = "/Patient/{id}/numc?" + SourceSearchset.PAGE_QUERY;
 
     /** A searchset of NUMC Records, a NUMC History's answer. */
@@ -229,7 +233,7 @@ class PatientSourceAdapter implements PatientStore {
      * were asked for and the sort, and none of their values.
      */
     @Override
-    public Optional<FfiHistory> findFfiHistory(PatientId id, FfiFilter filter, FfiSort sort,
+    public Optional<FfiHistory> findFfiHistory(PatientId id, FfiFilter filter, HistorySort sort,
             PageRequest page) {
         SourceQuery query = new SourceQuery(FFI_HISTORY).variable("id", id.value());
         query.paged(page);
@@ -242,25 +246,34 @@ class PatientSourceAdapter implements PatientStore {
         if (filter.status() != null) {
             query.parameter("status", "status", filter.status().code());
         }
-        if (sort.field() != null) {
-            query.append("&_sort=" + sorted(FFI_SORTED_ON.get(sort.field()), sort.order())
-                    + ",_id");
-        }
+        query.sorted(sort);
         return history(query, FFIS, SourceFfi::toFfi, FfiHistory::new);
     }
 
     /**
-     * {@code GET {base}/Patient/{id}/numc?…}: the patient's NUMC History, paged and counted by the
-     * source, in its own order (ADR 0019, D5) — the page alone, with no sort and no filter. A
-     * {@code 404} is no patient under the id; the one other good answer is a {@code 200}
-     * searchset of NUMC Records, and anything else is a fault, as is a searchset with no total
-     * or an entry that is no NUMC Record the service can hold. The id is a URI variable, so the
-     * call is observed under the template alone.
+     * {@code GET {base}/Patient/{id}/numc?…}: the patient's NUMC History, filtered, sorted, paged
+     * and counted by the source (ADR 0019) — the NUMC Types and the NUMC Outcomes each as its
+     * search parameter once, {@code type} and {@code outcome}, its codes joined by commas, FHIR's
+     * OR; each end of a date range as its search parameter, {@code issue-date} or
+     * {@code expiry-date}, {@code ge} the from-date and {@code le} the to-date; and a sort as
+     * {@code _sort} on the same date parameters, {@code -} first for descending, ties broken by
+     * id. With no column to sort by, no {@code _sort} is sent, and the order is the source's own.
+     * A {@code 404} is no patient under the id; the one other good answer is a {@code 200}
+     * searchset of NUMC Records, and anything else is a fault, as is a searchset with no total or
+     * an entry that is no NUMC Record the service can hold. The id and the filters' values are
+     * URI variables, so the call is observed under the template alone: which filters were asked
+     * for and the sort, and none of their values.
      */
     @Override
-    public Optional<NumcHistory> findNumcHistory(PatientId id, PageRequest page) {
+    public Optional<NumcHistory> findNumcHistory(PatientId id, NumcFilter filter,
+            HistorySort sort, PageRequest page) {
         SourceQuery query = new SourceQuery(NUMC_HISTORY).variable("id", id.value());
         query.paged(page);
+        query.anyOf("type", "type", filter.types());
+        query.anyOf("outcome", "outcome", filter.outcomes());
+        query.narrowing(ISSUE_DATE, "issueDate", filter.issueDate());
+        query.narrowing(EXPIRY_DATE, "expiryDate", filter.expiryDate());
+        query.sorted(sort);
         return history(query, NUMC_RECORDS, SourceNumc::toRecord, NumcHistory::new);
     }
 
@@ -301,11 +314,6 @@ class PatientSourceAdapter implements PatientStore {
             throw PatientSourceException.answered(response.getStatusCode().value());
         }
         return true;
-    }
-
-    /** {@code parameter} sorted in {@code order}, before its tie-break: {@code -} first descending. */
-    private static String sorted(String parameter, SortOrder order) {
-        return order == SortOrder.DESCENDING ? "-" + parameter : parameter;
     }
 
     /**
@@ -476,6 +484,21 @@ class PatientSourceAdapter implements PatientStore {
                 variables.put(name, code.code());
                 place++;
             }
+        }
+
+        /**
+         * {@code sort} ordering the read: {@code _sort} on its column's search parameter,
+         * {@code -} first for descending, then {@code _id}, the tie-break; nothing for the
+         * source's own order, whose sort names no column.
+         */
+        void sorted(HistorySort sort) {
+            if (sort.field() == null) {
+                return;
+            }
+            String parameter = SORTED_ON.get(sort.field());
+            template.append("&_sort=")
+                    .append(sort.order() == SortOrder.DESCENDING ? "-" + parameter : parameter)
+                    .append(",_id");
         }
 
         /** The template as built so far. */

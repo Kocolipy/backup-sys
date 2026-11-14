@@ -409,22 +409,31 @@ class ApiContractFixtureTests {
     // ---- /api/patient-numc/{patientId} --------------------------------------------------
 
     private static void patientNumc(List<Fixture> all) {
-        add(all, "patient NUMC History: a page of NUMC Records, a patient with none, an unknown"
-                + " patient, a malformed id, a paging value that is no integer, a failing source,"
-                + " and the refusals", t -> {
+        add(all, "patient NUMC History: a page of NUMC Records, sorted and filtered, a patient"
+                + " with none, an unknown patient, a malformed id, a filter or sort it cannot"
+                + " take, a failing source, and the refusals", t -> {
             // patient:read is a Group's to confer, as for an FFI History. The histories are the
             // patient source's mock's (PatientSourceStubs): Tan Wei Ming has four NUMC Records,
-            // Siti Nurhaliza binte Ahmad none.
+            // Tan Hui Min seven, Siti Nurhaliza binte Ahmad none.
             Cookie user = t.medicalOfficer(t.logIn(ADMIN, ADMIN_PASSWORD));
             Cookie inNoGroup = t.settle(t.provision(true));
             Cookie confined = t.logIn(t.provision(true), CONNECTOR_PASSWORD);
             String path = "/api/patient-numc/eq081-VQEgP8drUUqCWzHfw3";
             t.expect(t.get(path + "?count=5").cookie(user), 200);
+            t.expect(t.get(path + "?count=5&sortBy=issueDate&sortOrder=descending").cookie(user),
+                    200);
+            t.expect(t.get("/api/patient-numc/dev-patient-05?count=5"
+                    + "&type=submariner&type=hyperbaric-chamber").cookie(user), 200);
             t.expect(t.get("/api/patient-numc/erXuFYUfucBZaryVksYEcMg3?count=5").cookie(user),
                     200);
             t.expect(t.get("/api/patient-numc/not-a-uuid").cookie(user), 404);
             t.expect(t.get("/api/patient-numc/" + "x".repeat(65)).cookie(user), 400);
             t.expect(t.get(path + "?count=five").cookie(user), 400);
+            t.expect(t.get(path + "?outcome=request-waiver").cookie(user), 400);
+            t.expect(t.get(path + "?sortBy=outcome").cookie(user), 400);
+            t.expect(t.get(path + "?expiryDateTo=2025-02-30").cookie(user), 400);
+            t.expect(t.get(path + "?issueDateFrom=2024-12-31&issueDateTo=2024-01-01")
+                    .cookie(user), 400);
             // The patient source failing: the mock's NUMC fault stub answering 503.
             t.expect(t.get("/api/patient-numc/fault-numc-server-error").cookie(user), 502);
             t.expect(t.get(path).cookie(inNoGroup), 403);

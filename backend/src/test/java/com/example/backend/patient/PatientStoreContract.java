@@ -4,15 +4,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.backend.paging.domain.PageRequest;
 import com.example.backend.patient.domain.AdministrativeGender;
+import com.example.backend.patient.domain.DateRange;
 import com.example.backend.patient.domain.Ffi;
 import com.example.backend.patient.domain.FfiHigherAuthority;
 import com.example.backend.patient.domain.FfiFilter;
 import com.example.backend.patient.domain.FfiHistory;
-import com.example.backend.patient.domain.FfiSort;
+import com.example.backend.patient.domain.HistorySort;
 import com.example.backend.patient.domain.FfiOutcome;
 import com.example.backend.patient.domain.FfiStatus;
 import com.example.backend.patient.domain.FfiSubmittingMc;
 import com.example.backend.patient.domain.FfiType;
+import com.example.backend.patient.domain.NumcFilter;
 import com.example.backend.patient.domain.NumcHistory;
 import com.example.backend.patient.domain.NumcOutcome;
 import com.example.backend.patient.domain.NumcRecord;
@@ -25,8 +27,11 @@ import com.example.backend.patient.domain.PatientName;
 import com.example.backend.patient.domain.PatientFilter;
 import com.example.backend.patient.domain.PatientQuery;
 import com.example.backend.patient.domain.PatientStore;
+import com.example.backend.patient.domain.SortOrder;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -265,7 +270,7 @@ public abstract class PatientStoreContract {
     /** Tan Wei Ming's four FFIs, in the source's own order. */
     @Test
     void tan_wei_mings_ffi_history_is_his_four_ffis_in_the_sources_order() {
-        assertThat(patients().findFfiHistory(new PatientId("eq081-VQEgP8drUUqCWzHfw3"), FfiFilter.NONE, FfiSort.SOURCE_ORDER,
+        assertThat(patients().findFfiHistory(new PatientId("eq081-VQEgP8drUUqCWzHfw3"), FfiFilter.NONE, HistorySort.SOURCE_ORDER,
                 FIRST_FIVE)).contains(new FfiHistory(4, List.of(
                         ffi("ffi-tan-wei-ming-1", FfiType.OVERSEAS_EXERCISES, FfiOutcome.FIT,
                                 "2023-10-14", "2024-10-13", FfiHigherAuthority.CAMO,
@@ -284,7 +289,7 @@ public abstract class PatientStoreContract {
     /** Tan Hui Min's seven FFIs over two pages of five: the first page. */
     @Test
     void tan_hui_mins_ffi_history_reads_its_first_page_of_five_of_seven() {
-        assertThat(patients().findFfiHistory(new PatientId("dev-patient-05"), FfiFilter.NONE, FfiSort.SOURCE_ORDER, FIRST_FIVE))
+        assertThat(patients().findFfiHistory(new PatientId("dev-patient-05"), FfiFilter.NONE, HistorySort.SOURCE_ORDER, FIRST_FIVE))
                 .contains(new FfiHistory(7, List.of(
                         ffi("ffi-tan-hui-min-1", FfiType.ORD_RELEASE_FROM_SERVICE,
                                 FfiOutcome.FIT, "2025-03-03", "2026-03-02",
@@ -306,7 +311,7 @@ public abstract class PatientStoreContract {
 
     @Test
     void tan_hui_mins_ffi_history_reads_its_last_two_on_the_second_page() {
-        assertThat(patients().findFfiHistory(new PatientId("dev-patient-05"), FfiFilter.NONE, FfiSort.SOURCE_ORDER, NEXT_FIVE))
+        assertThat(patients().findFfiHistory(new PatientId("dev-patient-05"), FfiFilter.NONE, HistorySort.SOURCE_ORDER, NEXT_FIVE))
                 .contains(new FfiHistory(7, List.of(
                         ffi("ffi-tan-hui-min-6", FfiType.VOCATIONAL, FfiOutcome.REQUEST_WAIVER,
                                 "2023-04-17", "2024-04-16", FfiHigherAuthority.CNMO,
@@ -319,14 +324,14 @@ public abstract class PatientStoreContract {
     /** Siti Nurhaliza binte Ahmad, as every fixture but those two, has no FFI. */
     @Test
     void a_patient_with_no_ffis_reads_an_empty_history_of_none() {
-        assertThat(patients().findFfiHistory(new PatientId("erXuFYUfucBZaryVksYEcMg3"), FfiFilter.NONE, FfiSort.SOURCE_ORDER,
+        assertThat(patients().findFfiHistory(new PatientId("erXuFYUfucBZaryVksYEcMg3"), FfiFilter.NONE, HistorySort.SOURCE_ORDER,
                 FIRST_FIVE)).contains(new FfiHistory(0, List.of()));
     }
 
     /** {@code not-a-uuid} is a well-formed id the source holds no patient under. */
     @Test
     void a_well_formed_id_no_patient_is_held_under_has_no_ffi_history() {
-        assertThat(patients().findFfiHistory(new PatientId("not-a-uuid"), FfiFilter.NONE, FfiSort.SOURCE_ORDER, FIRST_FIVE)).isEmpty();
+        assertThat(patients().findFfiHistory(new PatientId("not-a-uuid"), FfiFilter.NONE, HistorySort.SOURCE_ORDER, FIRST_FIVE)).isEmpty();
     }
 
     // ---- the NUMC Histories ----------------------------------------------------------------
@@ -337,11 +342,17 @@ public abstract class PatientStoreContract {
                 LocalDate.parse(expiryDate));
     }
 
+    /** The page {@code page} of {@code patient}'s NUMC History, unfiltered, in the source's order. */
+    private Optional<NumcHistory> numcHistory(String patient, PageRequest page) {
+        return patients().findNumcHistory(new PatientId(patient), NumcFilter.NONE,
+                HistorySort.SOURCE_ORDER, page);
+    }
+
     /** Tan Wei Ming's four NUMC Records, in the source's own order. */
     @Test
     void tan_wei_mings_numc_history_is_his_four_records_in_the_sources_order() {
-        assertThat(patients().findNumcHistory(new PatientId("eq081-VQEgP8drUUqCWzHfw3"),
-                FIRST_FIVE)).contains(new NumcHistory(4, List.of(
+        assertThat(numcHistory("eq081-VQEgP8drUUqCWzHfw3", FIRST_FIVE)).contains(
+                new NumcHistory(4, List.of(
                         numc("numc-tan-wei-ming-1", NumcType.HYPERBARIC_CHAMBER, NumcOutcome.FIT,
                                 "2023-10-14", "2024-10-13"),
                         numc("numc-tan-wei-ming-2", NumcType.SUBMARINER,
@@ -355,7 +366,7 @@ public abstract class PatientStoreContract {
     /** Tan Hui Min's seven NUMC Records over two pages of five: the first page. */
     @Test
     void tan_hui_mins_numc_history_reads_its_first_page_of_five_of_seven() {
-        assertThat(patients().findNumcHistory(new PatientId("dev-patient-05"), FIRST_FIVE))
+        assertThat(numcHistory("dev-patient-05", FIRST_FIVE))
                 .contains(new NumcHistory(7, List.of(
                         numc("numc-tan-hui-min-1", NumcType.DIVING, NumcOutcome.FIT,
                                 "2025-03-03", "2026-03-02"),
@@ -371,7 +382,7 @@ public abstract class PatientStoreContract {
 
     @Test
     void tan_hui_mins_numc_history_reads_its_last_two_on_the_second_page() {
-        assertThat(patients().findNumcHistory(new PatientId("dev-patient-05"), NEXT_FIVE))
+        assertThat(numcHistory("dev-patient-05", NEXT_FIVE))
                 .contains(new NumcHistory(7, List.of(
                         numc("numc-tan-hui-min-6", NumcType.HYPERBARIC_CHAMBER,
                                 NumcOutcome.UNFIT, "2023-04-17", "2024-04-16"),
@@ -379,16 +390,88 @@ public abstract class PatientStoreContract {
                                 "2022-12-05", "2023-12-04"))));
     }
 
+    /** The ids of a NUMC History's page, in its order, beside its total. */
+    private static List<Object> idsAndTotal(Optional<NumcHistory> history) {
+        NumcHistory read = history.orElseThrow();
+        return List.of(read.totalResults(),
+                read.records().stream().map(NumcRecord::id).toList());
+    }
+
+    /** Each canned sort of Tan Wei Ming's NUMC History: the sort, then the ids in its order. */
+    static Stream<Arguments> cannedNumcSorts() {
+        List<String> earliestFirst = List.of("numc-tan-wei-ming-4", "numc-tan-wei-ming-1",
+                "numc-tan-wei-ming-3", "numc-tan-wei-ming-2");
+        List<String> latestFirst = List.of("numc-tan-wei-ming-2", "numc-tan-wei-ming-3",
+                "numc-tan-wei-ming-1", "numc-tan-wei-ming-4");
+        return Stream.of(
+                Arguments.of(HistorySort.Field.ISSUE_DATE, SortOrder.ASCENDING, earliestFirst),
+                Arguments.of(HistorySort.Field.ISSUE_DATE, SortOrder.DESCENDING, latestFirst),
+                Arguments.of(HistorySort.Field.EXPIRY_DATE, SortOrder.ASCENDING, earliestFirst),
+                Arguments.of(HistorySort.Field.EXPIRY_DATE, SortOrder.DESCENDING, latestFirst));
+    }
+
+    @ParameterizedTest(name = "{0} {1}")
+    @MethodSource("cannedNumcSorts")
+    void tan_wei_mings_numc_history_reads_in_each_canned_sort(HistorySort.Field field,
+            SortOrder order, List<String> ids) {
+        assertThat(idsAndTotal(patients().findNumcHistory(
+                new PatientId("eq081-VQEgP8drUUqCWzHfw3"), NumcFilter.NONE,
+                new HistorySort(field, order), FIRST_FIVE)))
+                .containsExactly(4, ids);
+    }
+
+    private static final LocalDate START_OF_2024 = LocalDate.of(2024, 1, 1);
+
+    private static final LocalDate END_OF_2024 = LocalDate.of(2024, 12, 31);
+
+    /** Each canned filter of Tan Hui Min's NUMC History: the case, the filter, then the ids it selects. */
+    static Stream<Arguments> cannedNumcFilters() {
+        return Stream.of(
+                Arguments.of("hyperbaric-chamber or submariner", new NumcFilter(
+                        Set.of(NumcType.SUBMARINER, NumcType.HYPERBARIC_CHAMBER), Set.of(),
+                        DateRange.ANY, DateRange.ANY),
+                        List.of("numc-tan-hui-min-2", "numc-tan-hui-min-3",
+                                "numc-tan-hui-min-5", "numc-tan-hui-min-6")),
+                Arguments.of("waiver granted or rejected", new NumcFilter(Set.of(),
+                        Set.of(NumcOutcome.WAIVER_REJECTED, NumcOutcome.WAIVER_GRANTED),
+                        DateRange.ANY, DateRange.ANY),
+                        List.of("numc-tan-hui-min-3", "numc-tan-hui-min-4",
+                                "numc-tan-hui-min-7")),
+                Arguments.of("issued in 2024", new NumcFilter(Set.of(), Set.of(),
+                        new DateRange(START_OF_2024, END_OF_2024), DateRange.ANY),
+                        List.of("numc-tan-hui-min-2", "numc-tan-hui-min-3",
+                                "numc-tan-hui-min-4")),
+                Arguments.of("expiring to 2024", new NumcFilter(Set.of(), Set.of(),
+                        DateRange.ANY, new DateRange(null, END_OF_2024)),
+                        List.of("numc-tan-hui-min-5", "numc-tan-hui-min-6",
+                                "numc-tan-hui-min-7")),
+                Arguments.of("diving issued from 2024", new NumcFilter(Set.of(NumcType.DIVING),
+                        Set.of(), new DateRange(START_OF_2024, null), DateRange.ANY),
+                        List.of("numc-tan-hui-min-1", "numc-tan-hui-min-4")),
+                Arguments.of("expiring to 2022", new NumcFilter(Set.of(), Set.of(),
+                        DateRange.ANY, new DateRange(null, LocalDate.of(2022, 12, 31))),
+                        List.of()));
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("cannedNumcFilters")
+    void tan_hui_mins_numc_history_reads_each_canned_filter(String filtered, NumcFilter filter,
+            List<String> ids) {
+        assertThat(idsAndTotal(patients().findNumcHistory(new PatientId("dev-patient-05"),
+                filter, HistorySort.SOURCE_ORDER, FIRST_FIVE)))
+                .containsExactly(ids.size(), ids);
+    }
+
     /** Siti Nurhaliza binte Ahmad, as every fixture but those two, has no NUMC Record. */
     @Test
     void a_patient_with_no_numc_records_reads_an_empty_history_of_none() {
-        assertThat(patients().findNumcHistory(new PatientId("erXuFYUfucBZaryVksYEcMg3"),
-                FIRST_FIVE)).contains(new NumcHistory(0, List.of()));
+        assertThat(numcHistory("erXuFYUfucBZaryVksYEcMg3", FIRST_FIVE))
+                .contains(new NumcHistory(0, List.of()));
     }
 
     /** {@code not-a-uuid} is a well-formed id the source holds no patient under. */
     @Test
     void a_well_formed_id_no_patient_is_held_under_has_no_numc_history() {
-        assertThat(patients().findNumcHistory(new PatientId("not-a-uuid"), FIRST_FIVE)).isEmpty();
+        assertThat(numcHistory("not-a-uuid", FIRST_FIVE)).isEmpty();
     }
 }

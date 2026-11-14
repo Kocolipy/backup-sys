@@ -2,6 +2,7 @@ package com.example.backend.patient.controller;
 
 import static com.example.backend.patient.controller.QueryParameters.DATE;
 import static com.example.backend.patient.controller.QueryParameters.codes;
+import static com.example.backend.patient.controller.QueryParameters.historySort;
 import static com.example.backend.patient.controller.QueryParameters.range;
 import static com.example.backend.patient.controller.QueryParameters.spelled;
 
@@ -12,7 +13,7 @@ import com.example.backend.patient.controller.PatientController.NoSuchPatientExc
 import com.example.backend.patient.domain.FfiFilter;
 import com.example.backend.patient.domain.FfiHigherAuthority;
 import com.example.backend.patient.domain.FfiOutcome;
-import com.example.backend.patient.domain.FfiSort;
+import com.example.backend.patient.domain.HistorySort;
 import com.example.backend.patient.domain.FfiStatus;
 import com.example.backend.patient.domain.FfiSubmittingMc;
 import com.example.backend.patient.domain.FfiType;
@@ -53,7 +54,7 @@ import org.springframework.web.bind.annotation.RestController;
  *       {@code expiryDateTo} to calendar dates, {@code YYYY-MM-DD}. Any other value is the
  *       binder's {@code 400}, as a from-date after its to-date is.
  *   <li>{@code sortBy} binds to {@code issueDate} or {@code expiryDate} and {@code sortOrder} to
- *       {@code ascending} or {@code descending} ({@link FfiSort}); any other value is the binder's
+ *       {@code ascending} or {@code descending} ({@link HistorySort}); any other value is the binder's
  *       {@code 400}. A {@code sortOrder} with no {@code sortBy} names a direction for no order, and
  *       the read takes the source's own.
  *   <li>{@code startIndex} and {@code count} are read by ADR 0017's rules
@@ -80,16 +81,16 @@ public class PatientFfiController {
     }
 
     /**
-     * The Status and the sort read in their own spellings, which are no Java constant's name: a
-     * value that spells none of them fails the binding, as a malformed date does. The repeated
-     * codes are read by {@link QueryParameters#codes}.
+     * The Status and the sort read in their own spellings, which are no Java constant's name
+     * ({@link QueryParameters#historySort} for the sort): a value that spells none of them fails
+     * the binding, as a malformed date does. The repeated codes are read by
+     * {@link QueryParameters#codes}.
      */
     @InitBinder
     void spellings(WebDataBinder binder) {
         binder.registerCustomEditor(FfiStatus.class,
                 spelled(code -> SourceCode.ofParameter(FfiStatus.class, code)));
-        binder.registerCustomEditor(FfiSort.Field.class, spelled(FfiSort.Field::of));
-        binder.registerCustomEditor(SortOrder.class, spelled(SortOrder::of));
+        historySort(binder);
     }
 
     @GetMapping("/{patientId}")
@@ -105,7 +106,7 @@ public class PatientFfiController {
             @RequestParam(required = false) List<String> higherAuthority,
             @RequestParam(required = false) List<String> submittingMc,
             @RequestParam(required = false) FfiStatus status,
-            @RequestParam(required = false) FfiSort.Field sortBy,
+            @RequestParam(required = false) HistorySort.Field sortBy,
             @RequestParam(required = false) SortOrder sortOrder,
             @RequestParam(required = false) PageParameter startIndex,
             @RequestParam(required = false) PageParameter count) {
@@ -115,7 +116,7 @@ public class PatientFfiController {
                 codes(FfiHigherAuthority.class, higherAuthority),
                 codes(FfiSubmittingMc.class, submittingMc), status);
         PageRequest page = PageRequest.of(startIndex, count);
-        return ffis.find(patientId, filter, FfiSort.of(sortBy, sortOrder), page)
+        return ffis.find(patientId, filter, HistorySort.of(sortBy, sortOrder), page)
                 .map(history -> FfiHistoryPage.of(history, page.startIndex()))
                 .orElseThrow(NoSuchPatientException::new);
     }

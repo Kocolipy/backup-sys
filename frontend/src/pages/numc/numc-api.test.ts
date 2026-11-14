@@ -3,7 +3,13 @@ import { describe, expect, it } from "vitest";
 import { DecodeError } from "@/lib/decode";
 import { describeDecoder, STRING } from "@/lib/decode.testHelpers";
 
-import { decodeNumcRecord, NUMC_HISTORY } from "./numc-api";
+import {
+  countNumcFilters,
+  decodeNumcRecord,
+  NO_NUMC_FILTERS,
+  NUMC_HISTORY,
+  type NumcFilters,
+} from "./numc-api";
 
 /** One NUMC Record exactly as the backend serialises it. */
 const SUBMARINER = {
@@ -40,16 +46,95 @@ describeDecoder(
   { strict: true },
 );
 
+// Which dates may be sent is `checkHistoryDates`' (history-api.test.ts).
+describe("countNumcFilters", () => {
+  it("counts none for no filter", () => {
+    expect(countNumcFilters(NO_NUMC_FILTERS)).toBe(0);
+  });
+
+  it.each([
+    ["the NUMC Types, however many", { types: ["submariner", "diving"] }],
+    ["the NUMC Outcomes", { outcomes: ["waiver-granted"] }],
+    ["an Issue Date from-date", { issueDateFrom: "2024-01-01" }],
+    ["an Issue Date to-date", { issueDateTo: "2024-12-31" }],
+    ["an Expiry Date from-date", { expiryDateFrom: "2025-01-01" }],
+    ["an Expiry Date to-date", { expiryDateTo: "2025-12-31" }],
+  ] as const)("counts %s as one", (_, set) => {
+    expect(countNumcFilters({ ...NO_NUMC_FILTERS, ...set })).toBe(1);
+  });
+
+  it("counts every filter set", () => {
+    expect(countNumcFilters(EVERY_FILTER)).toBe(6);
+  });
+});
+
+/** Every filter set, the codes of each set given out of their set's order. */
+const EVERY_FILTER: NumcFilters = {
+  expiryDateFrom: "2025-01-01",
+  expiryDateTo: "2025-12-31",
+  issueDateFrom: "2024-01-01",
+  issueDateTo: "2024-12-31",
+  outcomes: ["waiver-rejected", "fit"],
+  types: ["diving", "hyperbaric-chamber"],
+};
+
+const FIRST_PAGE = { count: 5, startIndex: 1 };
+
 describe("NUMC_HISTORY", () => {
   it("reads a patient's NUMC History a page at a time, by the patient's id", () => {
-    expect(NUMC_HISTORY.path("eq081-VQEgP8drUUqCWzHfw3", { count: 5, startIndex: 6 })).toBe(
-      "/api/patient-numc/eq081-VQEgP8drUUqCWzHfw3?startIndex=6&count=5",
-    );
+    expect(
+      NUMC_HISTORY.path("eq081-VQEgP8drUUqCWzHfw3", NO_NUMC_FILTERS, null, {
+        count: 5,
+        startIndex: 6,
+      }),
+    ).toBe("/api/patient-numc/eq081-VQEgP8drUUqCWzHfw3?startIndex=6&count=5");
   });
 
   it("sends the patient's id encoded as a path segment", () => {
-    expect(NUMC_HISTORY.path("a/b c", { count: 5, startIndex: 1 })).toBe(
+    expect(NUMC_HISTORY.path("a/b c", NO_NUMC_FILTERS, null, FIRST_PAGE)).toBe(
       "/api/patient-numc/a%2Fb%20c?startIndex=1&count=5",
+    );
+  });
+
+  // Each code is a parameter of its own, repeated, in its closed set's order.
+  it("asks for every filter set, and the sort, before the page", () => {
+    expect(
+      NUMC_HISTORY.path(
+        "dev-patient-05",
+        EVERY_FILTER,
+        { by: "issueDate", order: "descending" },
+        FIRST_PAGE,
+      ),
+    ).toBe(
+      "/api/patient-numc/dev-patient-05?type=hyperbaric-chamber&type=diving" +
+        "&outcome=fit&outcome=waiver-rejected" +
+        "&issueDateFrom=2024-01-01&issueDateTo=2024-12-31" +
+        "&expiryDateFrom=2025-01-01&expiryDateTo=2025-12-31" +
+        "&sortBy=issueDate&sortOrder=descending&startIndex=1&count=5",
+    );
+  });
+
+  it.each([
+    ["a NUMC Type", { types: ["submariner"] }, "type=submariner"],
+    ["a NUMC Outcome", { outcomes: ["waiver-granted"] }, "outcome=waiver-granted"],
+    ["an Issue Date from-date", { issueDateFrom: "2024-01-01" }, "issueDateFrom=2024-01-01"],
+    ["an Issue Date to-date", { issueDateTo: "2024-12-31" }, "issueDateTo=2024-12-31"],
+    ["an Expiry Date from-date", { expiryDateFrom: "2025-01-01" }, "expiryDateFrom=2025-01-01"],
+    ["an Expiry Date to-date", { expiryDateTo: "2025-12-31" }, "expiryDateTo=2025-12-31"],
+  ] as const)("asks for %s alone when it is the one filter set", (_, set, asked) => {
+    expect(NUMC_HISTORY.path("p1", { ...NO_NUMC_FILTERS, ...set }, null, FIRST_PAGE)).toBe(
+      `/api/patient-numc/p1?${asked}&startIndex=1&count=5`,
+    );
+  });
+
+  it.each([
+    ["issueDate", "ascending"],
+    ["issueDate", "descending"],
+    ["expiryDate", "ascending"],
+    ["expiryDate", "descending"],
+  ] as const)("asks for the sort by %s, %s", (by, order) => {
+    expect(NUMC_HISTORY.path("p1", NO_NUMC_FILTERS, { by, order }, FIRST_PAGE)).toBe(
+      `/api/patient-numc/p1?sortBy=${by}&sortOrder=${order}&startIndex=1&count=5`,
     );
   });
 

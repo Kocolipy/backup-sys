@@ -1,9 +1,7 @@
 package com.example.backend.patient.domain;
 
-import java.util.Collections;
 import java.util.Objects;
 import java.util.Set;
-import java.util.TreeSet;
 
 /**
  * The filters narrowing an FFI History (/docs/domain/ffi.md, "Sort and filters"): any of the
@@ -32,16 +30,11 @@ public record FfiFilter(Set<FfiType> types, Set<FfiOutcome> outcomes, DateRange 
             DateRange.ANY, Set.of(), Set.of(), null);
 
     public FfiFilter {
-        types = inSetOrder(types);
-        outcomes = inSetOrder(outcomes);
+        types = ClosedSets.inSetOrder(types);
+        outcomes = ClosedSets.inSetOrder(outcomes);
         Objects.requireNonNull(issueDate, "issueDate");
         Objects.requireNonNull(expiryDate, "expiryDate");
-        higherAuthorities = inSetOrder(higherAuthorities);
-        submittingMcs = inSetOrder(submittingMcs);
-    }
-
-    /** {@code codes}, none for {@code null}, as an unmodifiable copy in the enum's own order. */
-    private static <E extends Enum<E>> Set<E> inSetOrder(Set<E> codes) {
-        return codes == null ? Set.of() : Collections.unmodifiableSortedSet(new TreeSet<>(codes));
+        higherAuthorities = ClosedSets.inSetOrder(higherAuthorities);
+        submittingMcs = ClosedSets.inSetOrder(submittingMcs);
     }
 }
