@@ -12,18 +12,24 @@ import com.example.backend.observability.LogEvent.ErrorCategory;
 import com.example.backend.paging.domain.PageRequest;
 import com.example.backend.patient.PatientSourceStubs;
 import com.example.backend.patient.domain.ArmcBoard;
+import com.example.backend.patient.domain.ArmcFilter;
 import com.example.backend.patient.domain.ArmcBoardType;
 import com.example.backend.patient.domain.ArmcHistory;
 import com.example.backend.patient.domain.ArmcOutcome;
+import com.example.backend.patient.domain.DateRange;
+import com.example.backend.patient.domain.HistorySort;
 import com.example.backend.patient.domain.PatientId;
+import com.example.backend.patient.domain.SortOrder;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import com.github.tomakehurst.wiremock.verification.LoggedRequest;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.TreeMap;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
@@ -36,8 +42,9 @@ import org.springframework.web.client.RestClient;
 
 /**
  * A patient's ARMC History as the HTTP adapter reads it (ADR 0019, D6), against the patient
- * source's mock in process: the one call it sends — the page, counted by the source, in the
- * source's own order — how an entry's fields become an ARMC Board, its End Date the one element
+ * source's mock in process: the one call it sends — the page, counted by the source, with each
+ * filter and the sort as the source's own search parameters, the sort's ties the source's to
+ * break — how an entry's fields become an ARMC Board, its End Date the one element
  * it may lack, and what a failure of that call is, each ARMC Board's under a reason naming ARMC.
  * What the mock's ARMC Histories hold is {@code PatientStoreContract}'s.
  */
@@ -94,9 +101,14 @@ class PatientSourceArmcAdapterTests {
         SOURCE.stubFor(get(urlPathEqualTo(PROBE_PATH)).atPriority(1).willReturn(okJson(body)));
     }
 
+    /** The second page of five of {@code patient}'s ARMC History, unfiltered, in the source's order. */
+    private static Optional<ArmcHistory> unfiltered(PatientSourceAdapter adapter, String patient) {
+        return adapter.findArmcHistory(new PatientId(patient), ArmcFilter.NONE,
+                HistorySort.SOURCE_ORDER, SECOND_PAGE_OF_FIVE);
+    }
+
     private static ArmcHistory reading() {
-        return adapter().findArmcHistory(new PatientId(PROBE_PATIENT), SECOND_PAGE_OF_FIVE)
-                .orElseThrow();
+        return unfiltered(adapter(), PROBE_PATIENT).orElseThrow();
     }
 
     /** A fault as its record reports it: its fixed message, its reason and its category. */
@@ -105,7 +117,7 @@ class PatientSourceArmcAdapterTests {
 
     private static Fault faultReading(PatientSourceAdapter adapter, String patient) {
         PatientSourceException fault = (PatientSourceException) catchThrowable(() ->
-                adapter.findArmcHistory(new PatientId(patient), SECOND_PAGE_OF_FIVE));
+                unfiltered(adapter, patient));
         return new Fault(fault.getMessage(), fault.reason(), fault.category());
     }
 
@@ -119,24 +131,107 @@ class PatientSourceArmcAdapterTests {
 
     // ---- the call ------------------------------------------------------------------------
 
-    /**
-     * The read asks the source for the patient's ARMC History from the page's zero-based offset,
-     * for the page's count, with an accurate total, and nothing else: no {@code _sort}, so the
-     * order is the source's own, and no filter.
-     */
-    @Test
-    void aReadAsksTheSourceForThePageAndItsTotalInTheSourcesOrder() {
-        answering(page());
-
-        reading();
-
+    /** The one ARMC History read the source received, every value of each query parameter. */
+    private static Map<String, List<String>> sentQuery() {
         Map<String, List<String>> query = new TreeMap<>();
         SOURCE.findAll(getRequestedFor(urlPathEqualTo(PROBE_PATH))).getFirst().getQueryParams()
                 .forEach((name, value) -> query.put(name, value.values()));
-        assertThat(query).isEqualTo(Map.of(
+        return query;
+    }
+
+    /** The second page of five of the probe patient's ARMC History, filtered and sorted so. */
+    private static void reading(ArmcFilter filter, HistorySort sort) {
+        answering(page());
+        adapter().findArmcHistory(new PatientId(PROBE_PATIENT), filter, sort, SECOND_PAGE_OF_FIVE);
+    }
+
+    /**
+     * The read asks the source for the patient's ARMC History from the page's zero-based offset,
+     * for the page's count, with an accurate total — and, with no filter and no column to sort
+     * by, nothing else: no {@code _sort}, so the order is the source's own.
+     */
+    @Test
+    void aReadAsksTheSourceForThePageAndItsTotalInTheSourcesOrder() {
+        reading(ArmcFilter.NONE, HistorySort.SOURCE_ORDER);
+
+        assertThat(sentQuery()).isEqualTo(Map.of(
                 "_offset", List.of("5"),
                 "_count", List.of("5"),
                 "_total", List.of("accurate")));
+    }
+
+    /**
+     * Each sort is the source's {@code _sort} on its own search parameter — {@code start-date}
+     * or {@code end-date}, descending with a leading {@code -} — and the column alone: the source
+     * breaks ties, so no {@code _id} follows it.
+     */
+    @ParameterizedTest
+    @CsvSource({
+        "START_DATE, ASCENDING, start-date",
+        "START_DATE, DESCENDING, -start-date",
+        "END_DATE, ASCENDING, end-date",
+        "END_DATE, DESCENDING, -end-date"})
+    void aSortIsTheSourcesOwnOnItsSearchParameterAlone(HistorySort.StartOrEnd field,
+            SortOrder order, String sorted) {
+        reading(ArmcFilter.NONE, new HistorySort(field, order));
+
+        assertThat(sentQuery()).containsEntry("_sort", List.of(sorted));
+    }
+
+    /** An Outcome is the source's {@code outcome}, once, its one code. */
+    @ParameterizedTest
+    @CsvSource({"FIT, fit", "UNFIT, unfit"})
+    void anOutcomeIsTheSourcesOutcomeParameter(ArmcOutcome outcome, String code) {
+        reading(new ArmcFilter(outcome, DateRange.ANY, DateRange.ANY), HistorySort.SOURCE_ORDER);
+
+        assertThat(sentQuery()).isEqualTo(Map.of(
+                "outcome", List.of(code),
+                "_offset", List.of("5"),
+                "_count", List.of("5"),
+                "_total", List.of("accurate")));
+    }
+
+    /**
+     * A date range is its search parameter once for each end it has — {@code ge} the from-date and
+     * {@code le} the to-date, both inclusive — the Start Date's {@code start-date} and the End
+     * Date's {@code end-date}.
+     */
+    @ParameterizedTest
+    @CsvSource(nullValues = "-", delimiter = '|', value = {
+        "2023-01-01 | 2023-12-31 | ge2023-01-01,le2023-12-31",
+        "2023-01-01 | -          | ge2023-01-01",
+        "-          | 2023-12-31 | le2023-12-31"})
+    void aDateRangeIsItsSearchParameterForEachEnd(LocalDate from, LocalDate to, String ends) {
+        reading(new ArmcFilter(null, new DateRange(from, to), DateRange.ANY),
+                HistorySort.SOURCE_ORDER);
+        Map<String, List<String>> started = sentQuery();
+        SOURCE.resetRequests();
+        reading(new ArmcFilter(null, DateRange.ANY, new DateRange(from, to)),
+                HistorySort.SOURCE_ORDER);
+        Map<String, List<String>> ended = sentQuery();
+
+        assertThat(Arrays.asList(started.get("start-date"), started.containsKey("end-date"),
+                ended.get("end-date"), ended.containsKey("start-date")))
+                .containsExactly(List.of(ends.split(",")), false, List.of(ends.split(",")),
+                        false);
+    }
+
+    /** Every filter and a sort at once, each sent as its own. */
+    @Test
+    void everyFilterNarrowsTheReadAtOnceWithTheSort() {
+        reading(new ArmcFilter(ArmcOutcome.FIT,
+                        new DateRange(LocalDate.of(2023, 1, 1), LocalDate.of(2023, 12, 31)),
+                        new DateRange(null, LocalDate.of(2024, 6, 30))),
+                new HistorySort(HistorySort.StartOrEnd.END_DATE, SortOrder.DESCENDING));
+
+        assertThat(sentQuery()).isEqualTo(Map.ofEntries(
+                Map.entry("outcome", List.of("fit")),
+                Map.entry("start-date", List.of("ge2023-01-01", "le2023-12-31")),
+                Map.entry("end-date", List.of("le2024-06-30")),
+                Map.entry("_sort", List.of("-end-date")),
+                Map.entry("_offset", List.of("5")),
+                Map.entry("_count", List.of("5")),
+                Map.entry("_total", List.of("accurate"))));
     }
 
     /** As every read of the source, it presents nothing, and asks for FHIR JSON. */
@@ -378,7 +473,7 @@ class PatientSourceArmcAdapterTests {
         answering(page(board("outcome", "lapsed")));
 
         Throwable fault = catchThrowable(() ->
-                adapter().findArmcHistory(new PatientId(PROBE_PATIENT), SECOND_PAGE_OF_FIVE));
+                unfiltered(adapter(), PROBE_PATIENT));
 
         StringWriter printed = new StringWriter();
         fault.printStackTrace(new PrintWriter(printed));

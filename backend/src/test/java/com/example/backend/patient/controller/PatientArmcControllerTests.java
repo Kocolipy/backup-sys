@@ -21,6 +21,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.http.HttpMethod;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -35,7 +36,8 @@ import tools.jackson.databind.json.JsonMapper;
  * adapter over the patient source's mock — the stub files the local mock serves
  * ({@link PatientSourceStubs}) — with the app-wide exception handler its failures go to: one page
  * of the patient's ARMC History as plain JSON, its codes as the source sent them and no
- * {@code endDate} for a board still open, or the application API's {@code ApiError}. The filter
+ * {@code endDate} for a board still open, with each filter and the sort the read takes passed to
+ * the source, or the application API's {@code ApiError}. The filter
  * chain is not in this MockMvc: the Permission and its backstop are
  * {@code AuthorizationContractTests}', the paging coercion {@code PagingContractTests}', and what
  * is logged and audited over the real chain {@code ArmcHistoryIntegrationTests}'.
@@ -154,15 +156,201 @@ class PatientArmcControllerTests {
                         "_total", List.of("accurate")));
     }
 
-    /** No sort and no filter reach the source: a parameter the read does not take is not passed on. */
+    /**
+     * Each filter reaches the source as its own search parameter: one case for each request
+     * parameter, beside the parameter the source is sent for it. The Outcome is one code.
+     */
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', textBlock = """
+        outcome        | fit        | outcome    | fit
+        outcome        | unfit      | outcome    | unfit
+        startDateFrom  | 2023-01-01 | start-date | ge2023-01-01
+        startDateTo    | 2023-12-31 | start-date | le2023-12-31
+        endDateFrom    | 2024-01-01 | end-date   | ge2024-01-01
+        endDateTo      | 2024-12-31 | end-date   | le2024-12-31
+        """)
+    void eachFilterIsForwardedToTheSource(String parameter, String value, String forwarded,
+            String sent) throws Exception {
+        assertThat(reading(boards(TAN_WEI_MING).param(parameter, value)).getStatus())
+                .isEqualTo(200);
+        assertThat(sentToTheSource(TAN_WEI_MING)).containsEntry(forwarded, List.of(sent));
+    }
+
+    /** Every filter at once reaches the source, combined, with the sort. */
     @Test
-    void aParameterTheReadDoesNotTakeIsNotSentToTheSource() throws Exception {
-        assertThat(reading(boards(TAN_WEI_MING).param("sortBy", "startDate")
-                .param("outcome", "fit")).getStatus()).isEqualTo(200);
+    void everyFilterAndTheSortAreForwardedTogether() throws Exception {
+        assertThat(reading(boards(TAN_WEI_MING).param("outcome", "unfit")
+                .param("startDateFrom", "2020-01-01").param("startDateTo", "2024-06-30")
+                .param("endDateTo", "2024-12-31")
+                .param("sortBy", "startDate").param("sortOrder", "descending")).getStatus())
+                .isEqualTo(200);
+
+        assertThat(sentToTheSource(TAN_WEI_MING)).isEqualTo(Map.ofEntries(
+                Map.entry("outcome", List.of("unfit")),
+                Map.entry("start-date", List.of("ge2020-01-01", "le2024-06-30")),
+                Map.entry("end-date", List.of("le2024-12-31")),
+                Map.entry("_sort", List.of("-start-date")),
+                Map.entry("_offset", List.of("0")),
+                Map.entry("_count", List.of("5")),
+                Map.entry("_total", List.of("accurate"))));
+    }
+
+    /**
+     * The sort reaches the source as its {@code _sort}, the column alone: a column with no
+     * direction ascending. With no column — whatever the direction says — no {@code _sort} is
+     * sent, and the order is the source's own.
+     */
+    @ParameterizedTest
+    @CsvSource(nullValues = "-", value = {
+        "startDate, ascending, start-date",
+        "startDate, descending, -start-date",
+        "endDate, ascending, end-date",
+        "endDate, descending, -end-date",
+        "endDate, -, end-date",
+        "-, descending, -",
+        "-, -, -"})
+    void theSortIsForwardedToTheSource(String sortBy, String sortOrder, String sent)
+            throws Exception {
+        MockHttpServletRequestBuilder sorted = boards(TAN_WEI_MING);
+        if (sortBy != null) {
+            sorted.param("sortBy", sortBy);
+        }
+        if (sortOrder != null) {
+            sorted.param("sortOrder", sortOrder);
+        }
+
+        assertThat(reading(sorted).getStatus()).isEqualTo(200);
+        assertThat(sentToTheSource(TAN_WEI_MING).get("_sort"))
+                .isEqualTo(sent == null ? null : List.of(sent));
+    }
+
+    /**
+     * A filter or sort the read cannot take is the application API's {@code 400}, refused before
+     * the source is called: a column but the two dates — an FFI's or a NUMC Record's among them
+     * — a direction but ascending or descending, an Outcome outside its closed set — a label,
+     * another case, a Java constant's name, another spelling or another set's code, a NUMC
+     * Outcome's among them — and a date that is no calendar date {@code YYYY-MM-DD}.
+     */
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', textBlock = """
+        sortBy        | issueDate
+        sortBy        | expiryDate
+        sortBy        | outcome
+        sortBy        | start-date
+        sortBy        | EndDate
+        sortBy        | START_DATE
+        sortOrder     | asc
+        sortOrder     | DESCENDING
+        outcome       | FIT
+        outcome       | Fit
+        outcome       | UNFIT
+        outcome       | all
+        outcome       | waiver-granted
+        outcome       | request-waiver
+        startDateFrom | 2023-02-29
+        startDateTo   | 01/02/2023
+        endDateFrom   | 2024-1-1
+        endDateTo     | 2024-12-31T00:00:00
+        endDateTo     | yesterday
+        """)
+    void aFilterOrSortTheReadCannotTakeIsRefused(String parameter, String value)
+            throws Exception {
+        MockHttpServletResponse response = reading(boards(TAN_WEI_MING).param(parameter, value));
+
+        assertThat(body(response)).isEqualTo(apiError(400, "invalid-request",
+                "The request could not be read or did not pass validation."));
+        SOURCE.verify(0, anyRequestedFor(anyUrl()));
+    }
+
+    /** The Outcome is one code: given twice, even two good ones, it refuses the whole read. */
+    @Test
+    void anOutcomeGivenTwiceIsRefused() throws Exception {
+        assertThat(reading(boards(TAN_WEI_MING).param("outcome", "fit", "unfit")).getStatus())
+                .isEqualTo(400);
+        SOURCE.verify(0, anyRequestedFor(anyUrl()));
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "startDateFrom, startDateTo, 2023-01-02, 2023-01-01",
+        "endDateFrom, endDateTo, 2024-12-31, 2024-01-01"})
+    void aFromDateAfterItsToDateIsRefused(String fromParameter, String toParameter, String from,
+            String to) throws Exception {
+        MockHttpServletResponse response = reading(boards(TAN_WEI_MING)
+                .param(fromParameter, from).param(toParameter, to));
+
+        assertThat(body(response)).isEqualTo(apiError(400, "invalid-request",
+                "The request could not be read or did not pass validation."));
+        SOURCE.verify(0, anyRequestedFor(anyUrl()));
+    }
+
+    /** A range one day long is a from-date equal to its to-date, and is no refusal. */
+    @Test
+    void aRangeOfOneDayIsRead() throws Exception {
+        assertThat(reading(boards(TAN_WEI_MING)
+                .param("endDateFrom", "2024-02-10").param("endDateTo", "2024-02-10"))
+                .getStatus()).isEqualTo(200);
+        assertThat(sentToTheSource(TAN_WEI_MING))
+                .containsEntry("end-date", List.of("ge2024-02-10", "le2024-02-10"));
+    }
+
+    /** A blank Outcome, as an empty field sends one, is no filter on its column. */
+    @Test
+    void aBlankOutcomeIsNoFilter() throws Exception {
+        assertThat(reading(boards(TAN_WEI_MING).param("outcome", "")).getStatus())
+                .isEqualTo(200);
         assertThat(sentToTheSource(TAN_WEI_MING)).isEqualTo(Map.of(
                 "_offset", List.of("0"),
                 "_count", List.of("5"),
                 "_total", List.of("accurate")));
+    }
+
+    /**
+     * An ARMC Board has no Issue Date, Expiry Date, Status or Higher Authority, and its Board
+     * Type takes no filter: a filter on one is no parameter the read takes, and nothing of it is
+     * passed on.
+     */
+    @Test
+    void aFilterOnAColumnArmcDoesNotFilterIsNotSentToTheSource() throws Exception {
+        assertThat(reading(boards(TAN_WEI_MING).param("type", "aces")
+                .param("boardType", "aces").param("issueDateFrom", "2024-01-01")
+                .param("expiryDateTo", "2025-12-31").param("status", "active")
+                .param("higherAuthority", "camo")).getStatus()).isEqualTo(200);
+        assertThat(sentToTheSource(TAN_WEI_MING)).isEqualTo(Map.of(
+                "_offset", List.of("0"),
+                "_count", List.of("5"),
+                "_total", List.of("accurate")));
+    }
+
+    /** The ids of a page's ARMC Boards, in its order, beside its total. */
+    private List<Object> idsAndTotal(MockHttpServletResponse response) throws Exception {
+        JsonNode page = body(response);
+        return List.of(page.at("/totalResults").asInt(),
+                page.at("/records").valueStream().map(board -> board.at("/id").asString())
+                        .toList());
+    }
+
+    /** A canned sorted read, answered in the order the source sorted it: earliest Start Date first. */
+    @Test
+    void aSortedReadIsAnsweredInTheSourcesSortedOrder() throws Exception {
+        assertThat(idsAndTotal(reading(boards(TAN_WEI_MING).param("sortBy", "startDate"))))
+                .containsExactly(2, List.of("armc-tan-wei-ming-2", "armc-tan-wei-ming-1"));
+    }
+
+    /** A canned filtered read, answered as the source filtered it: the open board left out. */
+    @Test
+    void aFilteredReadIsAnsweredAsTheSourceFilteredIt() throws Exception {
+        assertThat(idsAndTotal(reading(boards("dev-patient-05")
+                .param("endDateFrom", "2023-01-01"))))
+                .containsExactly(3, List.of("armc-tan-hui-min-2", "armc-tan-hui-min-3",
+                        "armc-tan-hui-min-4"));
+    }
+
+    @Test
+    void aFilterTheSourceMatchesNothingWithIsAnEmptyPage() throws Exception {
+        assertThat(body(reading(boards("dev-patient-05").param("startDateTo", "2019-12-31"))))
+                .isEqualTo(json.readTree("""
+                        {"totalResults": 0, "startIndex": 1, "records": []}"""));
     }
 
     @Test

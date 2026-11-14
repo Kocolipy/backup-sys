@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/table";
 import { formatCalendarDateTwoDigitDay } from "@/lib/time";
 import { ForPatientInContext, NoPatientInContext } from "@/pages/for-patient-in-context";
-import type { HistorySort, HistorySortColumn } from "@/pages/history-api";
+import type { IssueOrExpirySort, IssueOrExpiryColumn } from "@/pages/history-api";
 import { PagedListing } from "@/pages/paged-listing";
 import { usePagedRead } from "@/pages/paged-read";
 import { type ColumnSorting, PlainHeading, SortHeading } from "@/pages/sort-heading";
@@ -48,7 +48,7 @@ const STATUS_BADGES: Readonly<Record<FfiStatus, "success" | "muted">> = {
 };
 
 /** How the history is sorted, by the listing that holds the sort. */
-type HistorySorting = ColumnSorting<HistorySortColumn>;
+type HistorySorting = ColumnSorting<IssueOrExpiryColumn>;
 
 /**
  * The page's FFIs, one row each, in the order read: each closed set's code
@@ -125,7 +125,7 @@ function FfiTable({
  */
 function FfiHistory({ patientId }: { patientId: string }) {
   const [filters, setFilters] = useState<FfiFilters>(NO_FFI_FILTERS);
-  const [sort, setSort] = useState<HistorySort | null>(null);
+  const [sort, setSort] = useState<IssueOrExpirySort | null>(null);
   const reading = usePagedRead(FFI_HISTORY, {
     args: [patientId, filters, sort],
     failureMessage: "Couldn't load FFIs",

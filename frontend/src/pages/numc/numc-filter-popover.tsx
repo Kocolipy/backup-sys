@@ -1,3 +1,4 @@
+import { ISSUE_AND_EXPIRY_DATES } from "@/pages/history-api";
 import { HistoryFilterPopover, pickerCopy } from "@/pages/history-filter-popover";
 import { MultiSelectPicker } from "@/pages/multi-select-picker";
 
@@ -31,6 +32,7 @@ export function NumcFilterPopover({
       label="NUMC filters"
       none={NO_NUMC_FILTERS}
       onApply={onApply}
+      ranges={ISSUE_AND_EXPIRY_DATES}
     >
       {({ dateRanges, draft, edit }) => (
         <>

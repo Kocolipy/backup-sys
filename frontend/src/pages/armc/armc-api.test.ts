@@ -1,9 +1,17 @@
 import { describe, expect, it } from "vitest";
 
+import { checkDateRanges } from "@/lib/date-range";
 import { DecodeError } from "@/lib/decode";
 import { describeDecoder, STRING, without } from "@/lib/decode.testHelpers";
 
-import { ARMC_HISTORY, decodeArmcBoard } from "./armc-api";
+import {
+  ARMC_DATE_RANGES,
+  ARMC_HISTORY,
+  type ArmcFilters,
+  countArmcFilters,
+  decodeArmcBoard,
+  NO_ARMC_FILTERS,
+} from "./armc-api";
 
 /** One ARMC Board exactly as the backend serialises it, its End Date present. */
 const ACES_FIT = {
@@ -45,16 +53,112 @@ describeDecoder(
   { optional: ["endDate"], strict: true },
 );
 
+// How a date range is checked is `checkDateRanges`' (lib/date-range.test.ts):
+// here, that the ARMC History's two ranges are the ones checked, by name.
+describe("the ARMC History's date ranges", () => {
+  it.each([
+    ["startDate", "Start Date"],
+    ["endDate", "End Date"],
+  ] as const)("refuses a %s from-date after its to-date, naming the range", (range, label) => {
+    expect(
+      checkDateRanges(ARMC_DATE_RANGES, {
+        ...NO_ARMC_FILTERS,
+        [`${range}From`]: "2024-01-02",
+        [`${range}To`]: "2024-01-01",
+      }),
+    ).toEqual({
+      message: `The ${label} from-date must not be after its to-date.`,
+      ok: false,
+      range,
+    });
+  });
+});
+
+describe("countArmcFilters", () => {
+  it("counts none for no filter, All being no Outcome", () => {
+    expect(countArmcFilters(NO_ARMC_FILTERS)).toBe(0);
+  });
+
+  it.each([
+    ["the Outcome FIT", { outcome: "fit" }],
+    ["the Outcome UNFIT", { outcome: "unfit" }],
+    ["a Start Date from-date", { startDateFrom: "2023-01-01" }],
+    ["a Start Date to-date", { startDateTo: "2023-12-31" }],
+    ["an End Date from-date", { endDateFrom: "2024-01-01" }],
+    ["an End Date to-date", { endDateTo: "2024-12-31" }],
+  ] as const)("counts %s as one", (_, set) => {
+    expect(countArmcFilters({ ...NO_ARMC_FILTERS, ...set })).toBe(1);
+  });
+
+  it("counts every filter set", () => {
+    expect(countArmcFilters(EVERY_FILTER)).toBe(5);
+  });
+});
+
+/** Every filter set. */
+const EVERY_FILTER: ArmcFilters = {
+  endDateFrom: "2024-01-01",
+  endDateTo: "2024-12-31",
+  outcome: "unfit",
+  startDateFrom: "2023-01-01",
+  startDateTo: "2023-12-31",
+};
+
+const FIRST_PAGE = { count: 5, startIndex: 1 };
+
 describe("ARMC_HISTORY", () => {
   it("reads a patient's ARMC History a page at a time, by the patient's id", () => {
-    expect(ARMC_HISTORY.path("eq081-VQEgP8drUUqCWzHfw3", { count: 5, startIndex: 6 })).toBe(
-      "/api/patient-armc/eq081-VQEgP8drUUqCWzHfw3?startIndex=6&count=5",
-    );
+    expect(
+      ARMC_HISTORY.path("eq081-VQEgP8drUUqCWzHfw3", NO_ARMC_FILTERS, null, {
+        count: 5,
+        startIndex: 6,
+      }),
+    ).toBe("/api/patient-armc/eq081-VQEgP8drUUqCWzHfw3?startIndex=6&count=5");
   });
 
   it("sends the patient's id encoded as a path segment", () => {
-    expect(ARMC_HISTORY.path("a/b c", { count: 5, startIndex: 1 })).toBe(
+    expect(ARMC_HISTORY.path("a/b c", NO_ARMC_FILTERS, null, FIRST_PAGE)).toBe(
       "/api/patient-armc/a%2Fb%20c?startIndex=1&count=5",
+    );
+  });
+
+  it("asks for every filter set, and the sort, before the page", () => {
+    expect(
+      ARMC_HISTORY.path(
+        "dev-patient-05",
+        EVERY_FILTER,
+        { by: "endDate", order: "descending" },
+        FIRST_PAGE,
+      ),
+    ).toBe(
+      "/api/patient-armc/dev-patient-05?outcome=unfit" +
+        "&startDateFrom=2023-01-01&startDateTo=2023-12-31" +
+        "&endDateFrom=2024-01-01&endDateTo=2024-12-31" +
+        "&sortBy=endDate&sortOrder=descending&startIndex=1&count=5",
+    );
+  });
+
+  it.each([
+    ["the Outcome FIT", { outcome: "fit" }, "outcome=fit"],
+    ["the Outcome UNFIT", { outcome: "unfit" }, "outcome=unfit"],
+    ["a Start Date from-date", { startDateFrom: "2023-01-01" }, "startDateFrom=2023-01-01"],
+    ["a Start Date to-date", { startDateTo: "2023-12-31" }, "startDateTo=2023-12-31"],
+    ["an End Date from-date", { endDateFrom: "2024-01-01" }, "endDateFrom=2024-01-01"],
+    ["an End Date to-date", { endDateTo: "2024-12-31" }, "endDateTo=2024-12-31"],
+  ] as const)("asks for %s alone when it is the one filter set", (_, set, asked) => {
+    expect(ARMC_HISTORY.path("p1", { ...NO_ARMC_FILTERS, ...set }, null, FIRST_PAGE)).toBe(
+      `/api/patient-armc/p1?${asked}&startIndex=1&count=5`,
+    );
+  });
+
+  it.each([
+    ["startDate", "ascending"],
+    ["startDate", "descending"],
+    ["endDate", "ascending"],
+    ["endDate", "descending"],
+  ] as const)("asks for the sort by %s, %s", (by, order) => {
+    expect(ARMC_HISTORY.path("p1", NO_ARMC_FILTERS, { by, order }, FIRST_PAGE)).toBe(
+      `/api/patient-armc/p1?sortBy=${by}&sortOrder=${order}&startIndex=1&count=5`,
     );
   });
 

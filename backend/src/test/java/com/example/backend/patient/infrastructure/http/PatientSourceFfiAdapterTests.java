@@ -165,7 +165,7 @@ class PatientSourceFfiAdapterTests {
         "ISSUE_DATE, DESCENDING, '-issue-date,_id'",
         "EXPIRY_DATE, ASCENDING, 'expiry-date,_id'",
         "EXPIRY_DATE, DESCENDING, '-expiry-date,_id'"})
-    void aSortIsTheSourcesOwnOnItsSearchParameter(HistorySort.Field field, SortOrder order,
+    void aSortIsTheSourcesOwnOnItsSearchParameter(HistorySort.IssueOrExpiry field, SortOrder order,
             String sorted) {
         reading(FfiFilter.NONE, new HistorySort(field, order));
 
@@ -244,7 +244,7 @@ class PatientSourceFfiAdapterTests {
                         new DateRange(LocalDate.of(2024, 1, 1), null),
                         Set.of(FfiHigherAuthority.CNMO), Set.of(FfiSubmittingMc.KRANJI_CAMP),
                         FfiStatus.INACTIVE),
-                new HistorySort(HistorySort.Field.EXPIRY_DATE, SortOrder.DESCENDING));
+                new HistorySort(HistorySort.IssueOrExpiry.EXPIRY_DATE, SortOrder.DESCENDING));
 
         assertThat(sentQuery()).isEqualTo(Map.ofEntries(
                 Map.entry("type", List.of("vocational")),

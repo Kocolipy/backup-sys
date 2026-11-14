@@ -446,9 +446,9 @@ class ApiContractFixtureTests {
     // ---- /api/patient-armc/{patientId} --------------------------------------------------
 
     private static void patientArmc(List<Fixture> all) {
-        add(all, "patient ARMC History: a page of ARMC Boards, one still open, a patient with none,"
-                + " an unknown patient, a malformed id, a paging value that is no integer, a"
-                + " failing source, and the refusals", t -> {
+        add(all, "patient ARMC History: a page of ARMC Boards, one still open, sorted and"
+                + " filtered, a patient with none, an unknown patient, a malformed id, a filter or"
+                + " sort it cannot take, a failing source, and the refusals", t -> {
             // patient:read is a Group's to confer, as for an FFI History. The histories are the
             // patient source's mock's (PatientSourceStubs): Tan Wei Ming has two ARMC Boards,
             // Tan Hui Min seven, the first still open, Siti Nurhaliza binte Ahmad none.
@@ -458,11 +458,20 @@ class ApiContractFixtureTests {
             String path = "/api/patient-armc/eq081-VQEgP8drUUqCWzHfw3";
             t.expect(t.get(path + "?count=5").cookie(user), 200);
             t.expect(t.get("/api/patient-armc/dev-patient-05?count=5").cookie(user), 200);
+            t.expect(t.get(path + "?count=5&sortBy=startDate&sortOrder=descending").cookie(user),
+                    200);
+            t.expect(t.get("/api/patient-armc/dev-patient-05?count=5&endDateFrom=2023-01-01")
+                    .cookie(user), 200);
             t.expect(t.get("/api/patient-armc/erXuFYUfucBZaryVksYEcMg3?count=5").cookie(user),
                     200);
             t.expect(t.get("/api/patient-armc/not-a-uuid").cookie(user), 404);
             t.expect(t.get("/api/patient-armc/" + "x".repeat(65)).cookie(user), 400);
             t.expect(t.get(path + "?count=five").cookie(user), 400);
+            t.expect(t.get(path + "?outcome=waiver-granted").cookie(user), 400);
+            t.expect(t.get(path + "?sortBy=issueDate").cookie(user), 400);
+            t.expect(t.get(path + "?endDateTo=2024-02-30").cookie(user), 400);
+            t.expect(t.get(path + "?startDateFrom=2024-12-31&startDateTo=2024-01-01")
+                    .cookie(user), 400);
             // The patient source failing: the mock's ARMC fault stub answering 503.
             t.expect(t.get("/api/patient-armc/fault-armc-server-error").cookie(user), 502);
             t.expect(t.get(path).cookie(inNoGroup), 403);

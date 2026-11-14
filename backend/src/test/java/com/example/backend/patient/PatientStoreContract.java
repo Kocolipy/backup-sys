@@ -6,6 +6,7 @@ import com.example.backend.paging.domain.PageRequest;
 import com.example.backend.patient.domain.AdministrativeGender;
 import com.example.backend.patient.domain.ArmcBoard;
 import com.example.backend.patient.domain.ArmcBoardType;
+import com.example.backend.patient.domain.ArmcFilter;
 import com.example.backend.patient.domain.ArmcHistory;
 import com.example.backend.patient.domain.ArmcOutcome;
 import com.example.backend.patient.domain.DateRange;
@@ -14,6 +15,7 @@ import com.example.backend.patient.domain.FfiHigherAuthority;
 import com.example.backend.patient.domain.FfiFilter;
 import com.example.backend.patient.domain.FfiHistory;
 import com.example.backend.patient.domain.HistorySort;
+import com.example.backend.patient.domain.HistorySort.IssueOrExpiry;
 import com.example.backend.patient.domain.FfiOutcome;
 import com.example.backend.patient.domain.FfiStatus;
 import com.example.backend.patient.domain.FfiSubmittingMc;
@@ -409,15 +411,15 @@ public abstract class PatientStoreContract {
         List<String> latestFirst = List.of("numc-tan-wei-ming-2", "numc-tan-wei-ming-3",
                 "numc-tan-wei-ming-1", "numc-tan-wei-ming-4");
         return Stream.of(
-                Arguments.of(HistorySort.Field.ISSUE_DATE, SortOrder.ASCENDING, earliestFirst),
-                Arguments.of(HistorySort.Field.ISSUE_DATE, SortOrder.DESCENDING, latestFirst),
-                Arguments.of(HistorySort.Field.EXPIRY_DATE, SortOrder.ASCENDING, earliestFirst),
-                Arguments.of(HistorySort.Field.EXPIRY_DATE, SortOrder.DESCENDING, latestFirst));
+                Arguments.of(IssueOrExpiry.ISSUE_DATE, SortOrder.ASCENDING, earliestFirst),
+                Arguments.of(IssueOrExpiry.ISSUE_DATE, SortOrder.DESCENDING, latestFirst),
+                Arguments.of(IssueOrExpiry.EXPIRY_DATE, SortOrder.ASCENDING, earliestFirst),
+                Arguments.of(IssueOrExpiry.EXPIRY_DATE, SortOrder.DESCENDING, latestFirst));
     }
 
     @ParameterizedTest(name = "{0} {1}")
     @MethodSource("cannedNumcSorts")
-    void tan_wei_mings_numc_history_reads_in_each_canned_sort(HistorySort.Field field,
+    void tan_wei_mings_numc_history_reads_in_each_canned_sort(IssueOrExpiry field,
             SortOrder order, List<String> ids) {
         assertThat(idsAndTotal(patients().findNumcHistory(
                 new PatientId("eq081-VQEgP8drUUqCWzHfw3"), NumcFilter.NONE,
@@ -489,10 +491,16 @@ public abstract class PatientStoreContract {
                 medicalOfficer2);
     }
 
+    /** The page {@code page} of {@code patient}'s ARMC History, unfiltered, in the source's order. */
+    private Optional<ArmcHistory> armcHistory(PatientId patient, PageRequest page) {
+        return patients().findArmcHistory(patient, ArmcFilter.NONE, HistorySort.SOURCE_ORDER,
+                page);
+    }
+
     /** Tan Wei Ming's two ARMC Boards, in the source's own order. */
     @Test
     void tan_wei_mings_armc_history_is_his_two_boards_in_the_sources_order() {
-        assertThat(patients().findArmcHistory(new PatientId("eq081-VQEgP8drUUqCWzHfw3"),
+        assertThat(armcHistory(new PatientId("eq081-VQEgP8drUUqCWzHfw3"),
                 FIRST_FIVE)).contains(new ArmcHistory(2, List.of(
                         armc("armc-tan-wei-ming-1", ArmcOutcome.FIT, "2024-01-01", "2024-02-10",
                                 "Medical Officer 1", "Medical Officer 2"),
@@ -503,7 +511,7 @@ public abstract class PatientStoreContract {
     /** Tan Hui Min's seven ARMC Boards over two pages of five: the first page, its first open. */
     @Test
     void tan_hui_mins_armc_history_reads_its_first_page_of_five_of_seven() {
-        assertThat(patients().findArmcHistory(new PatientId("dev-patient-05"), FIRST_FIVE))
+        assertThat(armcHistory(new PatientId("dev-patient-05"), FIRST_FIVE))
                 .contains(new ArmcHistory(7, List.of(
                         armc("armc-tan-hui-min-1", ArmcOutcome.FIT, "2025-06-02", null,
                                 "Dr Lim Wei Jie", "Dr Nur Aisyah binte Rahman"),
@@ -519,7 +527,7 @@ public abstract class PatientStoreContract {
 
     @Test
     void tan_hui_mins_armc_history_reads_its_last_two_on_the_second_page() {
-        assertThat(patients().findArmcHistory(new PatientId("dev-patient-05"), NEXT_FIVE))
+        assertThat(armcHistory(new PatientId("dev-patient-05"), NEXT_FIVE))
                 .contains(new ArmcHistory(7, List.of(
                         armc("armc-tan-hui-min-6", ArmcOutcome.FIT, "2021-10-11", "2021-12-20",
                                 "Dr Rajesh Kumar", "Dr Nur Aisyah binte Rahman"),
@@ -527,16 +535,83 @@ public abstract class PatientStoreContract {
                                 "2020-08-24", "Dr Chen Mei Ling", "Dr Lim Wei Jie"))));
     }
 
+    /** The ids of an ARMC History's page, in its order, beside its total. */
+    private static List<Object> boardIdsAndTotal(Optional<ArmcHistory> history) {
+        ArmcHistory read = history.orElseThrow();
+        return List.of(read.totalResults(), read.boards().stream().map(ArmcBoard::id).toList());
+    }
+
+    /** Each canned sort of Tan Wei Ming's ARMC History: the sort, then the ids in its order. */
+    static Stream<Arguments> cannedArmcSorts() {
+        List<String> earliestFirst = List.of("armc-tan-wei-ming-2", "armc-tan-wei-ming-1");
+        List<String> latestFirst = List.of("armc-tan-wei-ming-1", "armc-tan-wei-ming-2");
+        return Stream.of(
+                Arguments.of(HistorySort.StartOrEnd.START_DATE, SortOrder.ASCENDING, earliestFirst),
+                Arguments.of(HistorySort.StartOrEnd.START_DATE, SortOrder.DESCENDING, latestFirst),
+                Arguments.of(HistorySort.StartOrEnd.END_DATE, SortOrder.ASCENDING, earliestFirst),
+                Arguments.of(HistorySort.StartOrEnd.END_DATE, SortOrder.DESCENDING, latestFirst));
+    }
+
+    @ParameterizedTest(name = "{0} {1}")
+    @MethodSource("cannedArmcSorts")
+    void tan_wei_mings_armc_history_reads_in_each_canned_sort(HistorySort.StartOrEnd field,
+            SortOrder order, List<String> ids) {
+        assertThat(boardIdsAndTotal(patients().findArmcHistory(
+                new PatientId("eq081-VQEgP8drUUqCWzHfw3"), ArmcFilter.NONE,
+                new HistorySort(field, order), FIRST_FIVE)))
+                .containsExactly(2, ids);
+    }
+
+    private static final LocalDate START_OF_2023 = LocalDate.of(2023, 1, 1);
+
+    /**
+     * Each canned filter of Tan Hui Min's ARMC History: the case, the filter, then the ids it
+     * selects. Her first board is still open, so an End Date range leaves it out.
+     */
+    static Stream<Arguments> cannedArmcFilters() {
+        return Stream.of(
+                Arguments.of("fit", new ArmcFilter(ArmcOutcome.FIT, DateRange.ANY, DateRange.ANY),
+                        List.of("armc-tan-hui-min-1", "armc-tan-hui-min-3",
+                                "armc-tan-hui-min-4", "armc-tan-hui-min-6")),
+                Arguments.of("unfit", new ArmcFilter(ArmcOutcome.UNFIT, DateRange.ANY,
+                        DateRange.ANY),
+                        List.of("armc-tan-hui-min-2", "armc-tan-hui-min-5",
+                                "armc-tan-hui-min-7")),
+                Arguments.of("started in 2023", new ArmcFilter(null,
+                        new DateRange(START_OF_2023, LocalDate.of(2023, 12, 31)), DateRange.ANY),
+                        List.of("armc-tan-hui-min-3", "armc-tan-hui-min-4")),
+                Arguments.of("ended from 2023, the open board left out", new ArmcFilter(null,
+                        DateRange.ANY, new DateRange(START_OF_2023, null)),
+                        List.of("armc-tan-hui-min-2", "armc-tan-hui-min-3",
+                                "armc-tan-hui-min-4")),
+                Arguments.of("fit started from 2023", new ArmcFilter(ArmcOutcome.FIT,
+                        new DateRange(START_OF_2023, null), DateRange.ANY),
+                        List.of("armc-tan-hui-min-1", "armc-tan-hui-min-3",
+                                "armc-tan-hui-min-4")),
+                Arguments.of("started to 2019", new ArmcFilter(null,
+                        new DateRange(null, LocalDate.of(2019, 12, 31)), DateRange.ANY),
+                        List.of()));
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("cannedArmcFilters")
+    void tan_hui_mins_armc_history_reads_each_canned_filter(String filtered, ArmcFilter filter,
+            List<String> ids) {
+        assertThat(boardIdsAndTotal(patients().findArmcHistory(new PatientId("dev-patient-05"),
+                filter, HistorySort.SOURCE_ORDER, FIRST_FIVE)))
+                .containsExactly(ids.size(), ids);
+    }
+
     /** Siti Nurhaliza binte Ahmad, as every fixture but those two, has no ARMC Board. */
     @Test
     void a_patient_with_no_armc_boards_reads_an_empty_history_of_none() {
-        assertThat(patients().findArmcHistory(new PatientId("erXuFYUfucBZaryVksYEcMg3"),
+        assertThat(armcHistory(new PatientId("erXuFYUfucBZaryVksYEcMg3"),
                 FIRST_FIVE)).contains(new ArmcHistory(0, List.of()));
     }
 
     /** {@code not-a-uuid} is a well-formed id the source holds no patient under. */
     @Test
     void a_well_formed_id_no_patient_is_held_under_has_no_armc_history() {
-        assertThat(patients().findArmcHistory(new PatientId("not-a-uuid"), FIRST_FIVE)).isEmpty();
+        assertThat(armcHistory(new PatientId("not-a-uuid"), FIRST_FIVE)).isEmpty();
     }
 }

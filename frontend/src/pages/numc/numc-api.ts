@@ -18,9 +18,10 @@ import { sortParameters } from "@/lib/sorting";
 import {
   countHistoryDates,
   historyDateParameters,
-  NO_HISTORY_DATES,
-  type HistoryDates,
-  type HistorySort,
+  ISSUE_AND_EXPIRY_DATES,
+  NO_ISSUE_AND_EXPIRY_DATES,
+  type IssueOrExpirySort,
+  type IssueAndExpiryDates,
 } from "@/pages/history-api";
 
 // A NUMC Record's two closed sets, each as the API carries it, by its codes,
@@ -98,29 +99,33 @@ export const decodeNumcRecord = (value: unknown): NumcRecord => {
 /**
  * The Filter panel's filters, each as its control holds it: the codes chosen
  * of each closed set, none for no filter, and the two date ranges
- * ({@link HistoryDates}). Every code the panel offers is one of its set's, so
- * only the dates are checked before sending (`checkHistoryDates`).
+ * ({@link IssueAndExpiryDates}). Every code the panel offers is one of its set's, so
+ * only the dates are checked before sending (`checkDateRanges`).
  */
-export interface NumcFilters extends HistoryDates {
+export interface NumcFilters extends IssueAndExpiryDates {
   types: readonly NumcType[];
   outcomes: readonly NumcOutcome[];
 }
 
 /** No filter: every NUMC Record of the patient. */
-export const NO_NUMC_FILTERS: NumcFilters = { ...NO_HISTORY_DATES, outcomes: [], types: [] };
+export const NO_NUMC_FILTERS: NumcFilters = {
+  ...NO_ISSUE_AND_EXPIRY_DATES,
+  outcomes: [],
+  types: [],
+};
 
 /** How many of `filters` narrow the history: each set of codes chosen, as one, and each date set. */
 export function countNumcFilters(filters: NumcFilters): number {
   const chosen = [filters.types.length > 0, filters.outcomes.length > 0].filter(Boolean).length;
-  return chosen + countHistoryDates(filters);
+  return chosen + countHistoryDates(ISSUE_AND_EXPIRY_DATES, filters);
 }
 
 /** The query string `filters` and `sort` ask for, each filter only when set. */
-function historyQuery(filters: NumcFilters, sort: HistorySort | null): string {
+function historyQuery(filters: NumcFilters, sort: IssueOrExpirySort | null): string {
   return [
     ...codeParameters("type", NUMC_TYPES, filters.types),
     ...codeParameters("outcome", NUMC_OUTCOMES, filters.outcomes),
-    ...historyDateParameters(filters),
+    ...historyDateParameters(ISSUE_AND_EXPIRY_DATES, filters),
     ...sortParameters(sort),
   ].join("&");
 }
@@ -135,7 +140,7 @@ function historyQuery(filters: NumcFilters, sort: HistorySort | null): string {
  */
 export const NUMC_HISTORY: ReadDeclaration<
   Page<NumcRecord>,
-  [patientId: string, filters: NumcFilters, sort: HistorySort | null, at: PageAt],
+  [patientId: string, filters: NumcFilters, sort: IssueOrExpirySort | null, at: PageAt],
   true
 > = {
   absentOnNotFound: true,

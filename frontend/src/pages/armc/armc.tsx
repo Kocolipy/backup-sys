@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -12,15 +14,21 @@ import { formatCalendarDateTwoDigitDay } from "@/lib/time";
 import { ForPatientInContext, NoPatientInContext } from "@/pages/for-patient-in-context";
 import { PagedListing } from "@/pages/paged-listing";
 import { usePagedRead } from "@/pages/paged-read";
-import { PlainHeading } from "@/pages/sort-heading";
+import { type ColumnSorting, PlainHeading, SortHeading } from "@/pages/sort-heading";
 
+import { ArmcFilterPopover } from "./armc-filter-popover";
 import {
   ARMC_BOARD_TYPE_LABELS,
   ARMC_HISTORY,
   ARMC_HISTORY_PAGE_SIZE,
   ARMC_OUTCOME_LABELS,
   type ArmcBoard,
+  type ArmcFilters,
   type ArmcOutcome,
+  type ArmcSort,
+  type ArmcSortColumn,
+  countArmcFilters,
+  NO_ARMC_FILTERS,
 } from "./armc-api";
 
 /** Each ARMC Outcome's badge: FIT green, UNFIT red. */
@@ -33,11 +41,20 @@ const OUTCOME_BADGES: Readonly<Record<ArmcOutcome, "success" | "danger">> = {
  * The page's ARMC Boards, one row each, in the order read: the ARMC Board
  * Type by its label, in bold, the ARMC Outcome as a badge, both dates as
  * `dd MMM yyyy` — `—` for the End Date of a board still open — and both
- * Medical Officers' names as the source gives them. Read-only, with no row
- * action and no column that sorts; each row is keyed by the board's id, which
- * is never shown.
+ * Medical Officers' names as the source gives them. Start Date and End Date
+ * sort, one at a time, held still while a read is `pending`; no other column
+ * does. Read-only, with no row action; each row is keyed by the board's id,
+ * which is never shown.
  */
-function ArmcTable({ boards }: { boards: readonly ArmcBoard[] }) {
+function ArmcTable({
+  boards,
+  pending,
+  sorting,
+}: {
+  boards: readonly ArmcBoard[];
+  pending: boolean;
+  sorting: ColumnSorting<ArmcSortColumn>;
+}) {
   return (
     <Table>
       <TableCaption className="sr-only">ARMC History</TableCaption>
@@ -45,8 +62,8 @@ function ArmcTable({ boards }: { boards: readonly ArmcBoard[] }) {
         <TableRow>
           <PlainHeading>Board Type</PlainHeading>
           <PlainHeading>Outcome</PlainHeading>
-          <PlainHeading>Start Date</PlainHeading>
-          <PlainHeading>End Date</PlainHeading>
+          <SortHeading by="startDate" disabled={pending} label="Start Date" sorting={sorting} />
+          <SortHeading by="endDate" disabled={pending} label="End Date" sorting={sorting} />
           <PlainHeading>Medical Officer #1</PlainHeading>
           <PlainHeading>Medical Officer #2</PlainHeading>
         </TableRow>
@@ -78,34 +95,57 @@ function ArmcTable({ boards }: { boards: readonly ArmcBoard[] }) {
 }
 
 /**
- * The ARMC History of the patient `patientId`, five ARMC Boards a page, in
- * the source's own order, through the shared paged listing: the numbered pager
- * and "Showing x to y of N ARMC records", the page shown held while the next
- * loads. A `404` — the source holds no patient under the id — is "No patient
- * in context", an answer rather than a failure; any other failure is
- * "Couldn't load ARMC records" on the page's one error line, with Try again.
+ * The ARMC History of the patient `patientId`, five ARMC Boards a page,
+ * through the shared paged listing: the numbered pager and "Showing x to y of
+ * N ARMC records", the page shown held while the next loads. A `404` — the
+ * source holds no patient under the id — is "No patient in context", an
+ * answer rather than a failure; any other failure is "Couldn't load ARMC
+ * records" on the page's one error line, with Try again.
+ *
+ * It sorts by Start Date or End Date, in the source's own order until a
+ * heading is pressed, and the Filter panel at its top right narrows it by its
+ * Outcome and either date. A change of either reads the history from its
+ * first page, the filters combined with AND and with the sort. Both live here
+ * alone: neither reaches the URL, and a new patient in context, a new
+ * history, starts with neither. With a filter applied, a history with no ARMC
+ * Board says none matches, rather than that the patient has none.
  */
 function ArmcHistory({ patientId }: { patientId: string }) {
+  const [filters, setFilters] = useState<ArmcFilters>(NO_ARMC_FILTERS);
+  const [sort, setSort] = useState<ArmcSort | null>(null);
   const reading = usePagedRead(ARMC_HISTORY, {
-    args: [patientId],
+    args: [patientId, filters, sort],
     failureMessage: "Couldn't load ARMC records",
     pageSize: ARMC_HISTORY_PAGE_SIZE,
   });
   const { view } = reading;
   if (view.kind === "absent") return <NoPatientInContext />;
+  // Rows are shown only once a page is read, so a read in flight beside them
+  // is one the listing holds them still for.
+  const pending = view.kind === "loading";
   return (
-    <PagedListing
-      copy={{
-        empty: "No ARMC records",
-        loading: "Loading ARMC records…",
-        noun: "ARMC records",
-        pagerLabel: "ARMC History pages",
-      }}
-      onePage="shown"
-      read={{ ...reading, view }}
-    >
-      {({ rows }) => <ArmcTable boards={rows} />}
-    </PagedListing>
+    <>
+      <div className="flex justify-end">
+        <ArmcFilterPopover applied={filters} onApply={setFilters} />
+      </div>
+      <PagedListing
+        copy={{
+          empty:
+            countArmcFilters(filters) === 0
+              ? "No ARMC records"
+              : "No ARMC records match the filters",
+          loading: "Loading ARMC records…",
+          noun: "ARMC records",
+          pagerLabel: "ARMC History pages",
+        }}
+        onePage="shown"
+        read={{ ...reading, view }}
+      >
+        {({ rows }) => (
+          <ArmcTable boards={rows} pending={pending} sorting={{ onSort: setSort, sort }} />
+        )}
+      </PagedListing>
+    </>
   );
 }
 

@@ -184,18 +184,29 @@ curl -s 'http://127.0.0.1:8104/Patient/eq081-VQEgP8drUUqCWzHfw3/numc?_offset=0&_
 
 The backend reads a patient's ARMC History at
 `GET {base}/Patient/{id}/armc?_offset=…&_count=…&_total=accurate`, on the same
-base URL, client and timeouts, with no sort and no filter (ADR 0019, D6;
-`/docs/domain/armc.md`, "The source contract"). The mock answers a FHIR-shaped
-searchset of `ARMC` objects, matched on `_count=5`, `_offset` and
-`_total=accurate`:
+base URL, client and timeouts, with each filter and the sort the ARMC page asks
+for, the sort the column alone, and no `_sort` when it asks for none (ADR 0019,
+D6; `/docs/domain/armc.md`, "The source contract"). The mock answers a
+FHIR-shaped searchset of `ARMC` objects, matched on `_count=5`, `_offset`,
+`_total=accurate`, the `_sort` and each filter, pinned or absent:
 
-| Stub file                 | Read                                                      | Answers                                                  |
-| ------------------------- | --------------------------------------------------------- | -------------------------------------------------------- |
-| `armc-tan-wei-ming`       | `eq081-VQEgP8drUUqCWzHfw3`                                | Tan Wei Ming's 2 ARMC Boards, `total: 2`                 |
-| `armc-tan-hui-min-page-1` | `dev-patient-05`                                          | 5 of `total: 7`, the first still open, with no `endDate` |
-| `armc-tan-hui-min-page-2` | `dev-patient-05`, `_offset=5`                             | the last 2 of `total: 7`                                 |
-| `armc-fallback`           | any other read of a development fixture's, lower priority | no entry, `total: 0`                                     |
-| `armc-not-found`          | any other well-formed id, lowest priority                 | `404`, as a read by id of an unknown id                  |
+| Stub file                                    | Read                                                           | Answers                                                  |
+| -------------------------------------------- | -------------------------------------------------------------- | -------------------------------------------------------- |
+| `armc-tan-wei-ming`                          | `eq081-VQEgP8drUUqCWzHfw3`                                     | Tan Wei Ming's 2 ARMC Boards, `total: 2`                 |
+| `armc-tan-wei-ming-by-start-date`            | Tan Wei Ming, `_sort=start-date`                               | his 2, earliest Start Date first                         |
+| `armc-tan-wei-ming-by-start-date-descending` | Tan Wei Ming, `_sort=-start-date`                              | his 2, latest Start Date first                           |
+| `armc-tan-wei-ming-by-end-date`              | Tan Wei Ming, `_sort=end-date`                                 | his 2, earliest End Date first                           |
+| `armc-tan-wei-ming-by-end-date-descending`   | Tan Wei Ming, `_sort=-end-date`                                | his 2, latest End Date first                             |
+| `armc-tan-hui-min-page-1`                    | `dev-patient-05`                                               | 5 of `total: 7`, the first still open, with no `endDate` |
+| `armc-tan-hui-min-page-2`                    | `dev-patient-05`, `_offset=5`                                  | the last 2 of `total: 7`                                 |
+| `armc-tan-hui-min-fit`                       | Tan Hui Min, `outcome=fit`                                     | `total: 4`, the open board among them                    |
+| `armc-tan-hui-min-unfit`                     | Tan Hui Min, `outcome=unfit`                                   | `total: 3`                                               |
+| `armc-tan-hui-min-started-2023`              | Tan Hui Min, `start-date=ge2023-01-01&start-date=le2023-12-31` | `total: 2`                                               |
+| `armc-tan-hui-min-ended-from-2023`           | Tan Hui Min, `end-date=ge2023-01-01`                           | `total: 3`: the open board left out                      |
+| `armc-tan-hui-min-fit-started-from-2023`     | Tan Hui Min, `outcome=fit&start-date=ge2023-01-01`             | `total: 3`: two filters combined                         |
+| `armc-tan-hui-min-started-to-2019`           | Tan Hui Min, `start-date=le2019-12-31`                         | no entry, `total: 0`: a filter matching nothing          |
+| `armc-fallback`                              | any other read of a development fixture's, lower priority      | no entry, `total: 0`                                     |
+| `armc-not-found`                             | any other well-formed id, lowest priority                      | `404`, as a read by id of an unknown id                  |
 
 Beside them, `fault-armc-<failure>` answers each failure of an ARMC read under a
 patient id of its own — `unreachable` (the connection reset), `slow` (after 7
@@ -206,6 +217,7 @@ seconds), `server-error` (`503`), `unexpected-status` (`400`),
 
 ```bash
 curl -s 'http://127.0.0.1:8104/Patient/eq081-VQEgP8drUUqCWzHfw3/armc?_offset=0&_count=5&_total=accurate'
+curl -s 'http://127.0.0.1:8104/Patient/dev-patient-05/armc?end-date=ge2023-01-01&_offset=0&_count=5&_total=accurate'
 ```
 
 A change to a stub file changes the backend's patient tests' fixtures too: they
