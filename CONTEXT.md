@@ -511,9 +511,11 @@ audited.
 _Avoid_: NUMC Assessment, dive medical, underwater fitness record
 
 **NUMC History**:
-Every NUMC Record of one patient, in the Patient source's own order, read five
-to a page on the NUMC page (`/numc`) for the patient in context, by a session
-holding `patient:read`.
+Every NUMC Record of one patient, in the Patient source's own order unless
+sorted by its Issue Date or Expiry Date, narrowed by any filter on its columns,
+read five to a page on the NUMC page (`/numc`) for the patient in context, by a
+session holding `patient:read`. The source sorts and filters it, as it does an
+FFI History.
 _Avoid_: NUMC list, NUMC log
 
 **NUMC Type**:

@@ -148,8 +148,9 @@ FAST_GATE=(
   com/example/backend/patient/controller/PatientSearchControllerTests
   com/example/backend/patient/controller/PatientR5ConformanceTests
   com/example/backend/patient/domain/FfiFilterTests
-  com/example/backend/patient/domain/FfiSortTests
   com/example/backend/patient/domain/FfiTests
+  com/example/backend/patient/domain/HistorySortTests
+  com/example/backend/patient/domain/NumcFilterTests
   com/example/backend/patient/domain/NumcRecordTests
   com/example/backend/patient/domain/PatientFilterTests
   com/example/backend/patient/domain/PatientIdTests

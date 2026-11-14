@@ -1,6 +1,8 @@
 package com.example.backend.patient.controller;
 
 import com.example.backend.patient.domain.DateRange;
+import com.example.backend.patient.domain.HistorySort;
+import com.example.backend.patient.domain.SortOrder;
 import com.example.backend.patient.domain.SourceCode;
 import java.beans.PropertyEditorSupport;
 import java.time.LocalDate;
@@ -10,6 +12,7 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.WebDataBinder;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
@@ -39,6 +42,16 @@ final class QueryParameters {
                 setValue(read.apply(text));
             }
         };
+    }
+
+    /**
+     * Registers a history's sort on {@code binder} in its own spellings, which are no Java
+     * constant's name: {@code sortBy} through {@link HistorySort.Field#of} and {@code sortOrder}
+     * through {@link SortOrder#of}, so a value that spells none of them fails the binding.
+     */
+    static void historySort(WebDataBinder binder) {
+        binder.registerCustomEditor(HistorySort.Field.class, spelled(HistorySort.Field::of));
+        binder.registerCustomEditor(SortOrder.class, spelled(SortOrder::of));
     }
 
     /** The range from {@code from} to {@code to}, or this request's {@code 400} for an inverted one. */

@@ -11,14 +11,25 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 import com.example.backend.observability.LogEvent.ErrorCategory;
 import com.example.backend.paging.domain.PageRequest;
 import com.example.backend.patient.PatientSourceStubs;
+import com.example.backend.patient.domain.DateRange;
+import com.example.backend.patient.domain.HistorySort;
+import com.example.backend.patient.domain.NumcFilter;
+import com.example.backend.patient.domain.NumcHistory;
+import com.example.backend.patient.domain.NumcOutcome;
+import com.example.backend.patient.domain.NumcType;
 import com.example.backend.patient.domain.PatientId;
+import com.example.backend.patient.domain.SortOrder;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import com.github.tomakehurst.wiremock.verification.LoggedRequest;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.time.Duration;
+import java.time.LocalDate;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
@@ -31,9 +42,10 @@ import org.springframework.web.client.RestClient;
 
 /**
  * A patient's NUMC History as the HTTP adapter reads it (ADR 0019, D5), against the patient
- * source's mock in process: the one call it sends — the page, counted by the source, in the
- * source's own order — and what a failure of that call is, each NUMC Record's under a reason
- * naming NUMC. What the mock's NUMC Histories hold is {@code PatientStoreContract}'s.
+ * source's mock in process: the one call it sends — the page, counted by the source, with each
+ * filter and the sort as the source's own search parameters — and what a failure of that call
+ * is, each NUMC Record's under a reason naming NUMC. What the mock's NUMC Histories hold is
+ * {@code PatientStoreContract}'s.
  */
 class PatientSourceNumcAdapterTests {
 
@@ -92,7 +104,7 @@ class PatientSourceNumcAdapterTests {
 
     private static Fault faultReading(PatientSourceAdapter adapter, String patient) {
         PatientSourceException fault = (PatientSourceException) catchThrowable(() ->
-                adapter.findNumcHistory(new PatientId(patient), SECOND_PAGE_OF_FIVE));
+                unfiltered(adapter, patient));
         return new Fault(fault.getMessage(), fault.reason(), fault.category());
     }
 
@@ -104,26 +116,134 @@ class PatientSourceNumcAdapterTests {
         return new Fault(message, reason, ErrorCategory.DATA);
     }
 
+    /** The second page of five of {@code patient}'s NUMC History, unfiltered, in the source's order. */
+    private static Optional<NumcHistory> unfiltered(PatientSourceAdapter adapter, String patient) {
+        return adapter.findNumcHistory(new PatientId(patient), NumcFilter.NONE,
+                HistorySort.SOURCE_ORDER, SECOND_PAGE_OF_FIVE);
+    }
+
     // ---- the call ------------------------------------------------------------------------
+
+    /** The one NUMC History read the source received. */
+    private static LoggedRequest sent() {
+        return SOURCE.findAll(getRequestedFor(urlPathEqualTo(PROBE_PATH))).getFirst();
+    }
+
+    /** The one NUMC History read the source received, every value of each query parameter. */
+    private static Map<String, List<String>> sentQuery() {
+        Map<String, List<String>> query = new TreeMap<>();
+        sent().getQueryParams().forEach((name, value) -> query.put(name, value.values()));
+        return query;
+    }
+
+    /** The second page of five of the probe patient's NUMC History, filtered and sorted so. */
+    private static void reading(NumcFilter filter, HistorySort sort) {
+        answering(page());
+        adapter().findNumcHistory(new PatientId(PROBE_PATIENT), filter, sort, SECOND_PAGE_OF_FIVE);
+    }
 
     /**
      * The read asks the source for the patient's NUMC History from the page's zero-based offset,
-     * for the page's count, with an accurate total, and nothing else: no {@code _sort}, so the
-     * order is the source's own, and no filter.
+     * for the page's count, with an accurate total — and, with no filter and no column to sort
+     * by, nothing else: no {@code _sort}, so the order is the source's own.
      */
     @Test
     void aReadAsksTheSourceForThePageAndItsTotalInTheSourcesOrder() {
-        answering(page());
+        reading(NumcFilter.NONE, HistorySort.SOURCE_ORDER);
 
-        adapter().findNumcHistory(new PatientId(PROBE_PATIENT), SECOND_PAGE_OF_FIVE);
-
-        Map<String, List<String>> query = new TreeMap<>();
-        SOURCE.findAll(getRequestedFor(urlPathEqualTo(PROBE_PATH))).getFirst().getQueryParams()
-                .forEach((name, value) -> query.put(name, value.values()));
-        assertThat(query).isEqualTo(Map.of(
+        assertThat(sentQuery()).isEqualTo(Map.of(
                 "_offset", List.of("5"),
                 "_count", List.of("5"),
                 "_total", List.of("accurate")));
+    }
+
+    /**
+     * Each sort is the source's {@code _sort} on its own search parameter — {@code issue-date}
+     * or {@code expiry-date}, descending with a leading {@code -} — its ties broken by id.
+     */
+    @ParameterizedTest
+    @CsvSource({
+        "ISSUE_DATE, ASCENDING, 'issue-date,_id'",
+        "ISSUE_DATE, DESCENDING, '-issue-date,_id'",
+        "EXPIRY_DATE, ASCENDING, 'expiry-date,_id'",
+        "EXPIRY_DATE, DESCENDING, '-expiry-date,_id'"})
+    void aSortIsTheSourcesOwnOnItsSearchParameter(HistorySort.Field field, SortOrder order,
+            String sorted) {
+        reading(NumcFilter.NONE, new HistorySort(field, order));
+
+        assertThat(sentQuery()).containsEntry("_sort", List.of(sorted));
+    }
+
+    /**
+     * A filter on a closed set is its search parameter once, its codes joined by commas — FHIR's
+     * OR — in the set's own order, whatever order they were asked in.
+     */
+    @Test
+    void eachSetOfCodesIsOneParameterItsCodesJoinedByCommas() {
+        reading(new NumcFilter(Set.of(NumcType.DIVING, NumcType.SUBMARINER),
+                Set.of(NumcOutcome.WAIVER_REJECTED, NumcOutcome.FIT, NumcOutcome.UNFIT),
+                DateRange.ANY, DateRange.ANY), HistorySort.SOURCE_ORDER);
+
+        assertThat(sentQuery()).isEqualTo(Map.of(
+                "type", List.of("submariner,diving"),
+                "outcome", List.of("fit,unfit,waiver-rejected"),
+                "_offset", List.of("5"),
+                "_count", List.of("5"),
+                "_total", List.of("accurate")));
+    }
+
+    /** The comma between two codes reaches the source as a comma, FHIR's OR, not escaped. */
+    @Test
+    void theCommaBetweenCodesIsSentAsItIs() {
+        reading(new NumcFilter(Set.of(), Set.of(NumcOutcome.WAIVER_GRANTED, NumcOutcome.FIT),
+                DateRange.ANY, DateRange.ANY), HistorySort.SOURCE_ORDER);
+
+        assertThat(sent().getUrl().split("[?&]")).contains("outcome=fit,waiver-granted");
+    }
+
+    /**
+     * A date range is its search parameter once for each end it has — {@code ge} the from-date and
+     * {@code le} the to-date, both inclusive — the Issue Date's {@code issue-date} and the Expiry
+     * Date's {@code expiry-date}.
+     */
+    @ParameterizedTest
+    @CsvSource(nullValues = "-", delimiter = '|', value = {
+        "2024-01-01 | 2024-12-31 | ge2024-01-01,le2024-12-31",
+        "2024-01-01 | -          | ge2024-01-01",
+        "-          | 2024-12-31 | le2024-12-31"})
+    void aDateRangeIsItsSearchParameterForEachEnd(LocalDate from, LocalDate to, String ends) {
+        reading(new NumcFilter(null, null, new DateRange(from, to), DateRange.ANY),
+                HistorySort.SOURCE_ORDER);
+        Map<String, List<String>> issued = sentQuery();
+        SOURCE.resetRequests();
+        reading(new NumcFilter(null, null, DateRange.ANY, new DateRange(from, to)),
+                HistorySort.SOURCE_ORDER);
+        Map<String, List<String>> expiring = sentQuery();
+
+        assertThat(Arrays.asList(issued.get("issue-date"), issued.containsKey("expiry-date"),
+                expiring.get("expiry-date"), expiring.containsKey("issue-date")))
+                .containsExactly(List.of(ends.split(",")), false, List.of(ends.split(",")),
+                        false);
+    }
+
+    /** Every filter and a sort at once, each sent as its own. */
+    @Test
+    void everyFilterNarrowsTheReadAtOnceWithTheSort() {
+        reading(new NumcFilter(Set.of(NumcType.HYPERBARIC_CHAMBER),
+                        Set.of(NumcOutcome.WAIVER_GRANTED),
+                        new DateRange(LocalDate.of(2023, 1, 1), LocalDate.of(2023, 12, 31)),
+                        new DateRange(LocalDate.of(2024, 1, 1), null)),
+                new HistorySort(HistorySort.Field.ISSUE_DATE, SortOrder.DESCENDING));
+
+        assertThat(sentQuery()).isEqualTo(Map.ofEntries(
+                Map.entry("type", List.of("hyperbaric-chamber")),
+                Map.entry("outcome", List.of("waiver-granted")),
+                Map.entry("issue-date", List.of("ge2023-01-01", "le2023-12-31")),
+                Map.entry("expiry-date", List.of("ge2024-01-01")),
+                Map.entry("_sort", List.of("-issue-date,_id")),
+                Map.entry("_offset", List.of("5")),
+                Map.entry("_count", List.of("5")),
+                Map.entry("_total", List.of("accurate"))));
     }
 
     /** As every read of the source, it presents nothing, and asks for FHIR JSON. */
@@ -131,7 +251,7 @@ class PatientSourceNumcAdapterTests {
     void aReadPresentsNoCredentialAndAsksForFhirJson() {
         answering(page());
 
-        adapter().findNumcHistory(new PatientId(PROBE_PATIENT), SECOND_PAGE_OF_FIVE);
+        unfiltered(adapter(), PROBE_PATIENT);
 
         LoggedRequest sent = SOURCE.findAll(getRequestedFor(urlPathEqualTo(PROBE_PATH)))
                 .getFirst();
@@ -146,8 +266,8 @@ class PatientSourceNumcAdapterTests {
         answering(page());
         PatientSourceAdapter adapter = adapter();
 
-        adapter.findNumcHistory(new PatientId(PROBE_PATIENT), SECOND_PAGE_OF_FIVE);
-        adapter.findNumcHistory(new PatientId(PROBE_PATIENT), SECOND_PAGE_OF_FIVE);
+        unfiltered(adapter, PROBE_PATIENT);
+        unfiltered(adapter, PROBE_PATIENT);
 
         SOURCE.verify(2, getRequestedFor(urlPathEqualTo(PROBE_PATH)));
     }
@@ -305,7 +425,7 @@ class PatientSourceNumcAdapterTests {
         answering(page(record("outcome", "lapsed")));
 
         Throwable fault = catchThrowable(() ->
-                adapter().findNumcHistory(new PatientId(PROBE_PATIENT), SECOND_PAGE_OF_FIVE));
+                unfiltered(adapter(), PROBE_PATIENT));
 
         StringWriter printed = new StringWriter();
         fault.printStackTrace(new PrintWriter(printed));

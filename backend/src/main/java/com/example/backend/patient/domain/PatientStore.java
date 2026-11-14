@@ -25,16 +25,18 @@ public interface PatientStore {
     /**
      * The page {@code page} of the FFI History of the patient held under {@code id} that
      * {@code filter} narrows, in the order {@code sort} names — the source's own order for
-     * {@link FfiSort#SOURCE_ORDER} — as the source filters, orders and pages it, ties broken by
+     * {@link HistorySort#SOURCE_ORDER} — as the source filters, orders and pages it, ties broken by
      * id (ADR 0019), or none when the source holds no patient under it.
      */
-    Optional<FfiHistory> findFfiHistory(PatientId id, FfiFilter filter, FfiSort sort,
+    Optional<FfiHistory> findFfiHistory(PatientId id, FfiFilter filter, HistorySort sort,
             PageRequest page);
 
     /**
-     * The page {@code page} of the NUMC History of the patient held under {@code id}, in the
-     * source's own order, as the source pages and counts it (ADR 0019, D5), or none when the
-     * source holds no patient under it.
+     * The page {@code page} of the NUMC History of the patient held under {@code id} that
+     * {@code filter} narrows, in the order {@code sort} names — the source's own order for
+     * {@link HistorySort#SOURCE_ORDER} — as the source filters, orders, pages and counts it, ties
+     * broken by id (ADR 0019), or none when the source holds no patient under it.
      */
-    Optional<NumcHistory> findNumcHistory(PatientId id, PageRequest page);
+    Optional<NumcHistory> findNumcHistory(PatientId id, NumcFilter filter, HistorySort sort,
+            PageRequest page);
 }

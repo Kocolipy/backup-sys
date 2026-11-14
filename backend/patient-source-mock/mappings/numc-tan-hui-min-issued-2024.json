@@ -1,0 +1,99 @@
+{
+  "name": "NUMC History: Tan Hui Min's NUMC Records issued in 2024",
+  "request": {
+    "method": "GET",
+    "urlPath": "/Patient/dev-patient-05/numc",
+    "queryParameters": {
+      "_count": {
+        "equalTo": "5"
+      },
+      "_offset": {
+        "equalTo": "0"
+      },
+      "_total": {
+        "equalTo": "accurate"
+      },
+      "_sort": {
+        "absent": true
+      },
+      "type": {
+        "absent": true
+      },
+      "outcome": {
+        "absent": true
+      },
+      "issue-date": {
+        "hasExactly": [
+          {
+            "equalTo": "ge2024-01-01"
+          },
+          {
+            "equalTo": "le2024-12-31"
+          }
+        ]
+      },
+      "expiry-date": {
+        "absent": true
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/fhir+json"
+    },
+    "jsonBody": {
+      "resourceType": "Bundle",
+      "id": "numc-history",
+      "type": "searchset",
+      "total": 3,
+      "link": [
+        {
+          "relation": "self",
+          "url": "http://127.0.0.1:8104/Patient/dev-patient-05/numc?_offset=0&_count=5"
+        }
+      ],
+      "entry": [
+        {
+          "resource": {
+            "resourceType": "NUMC",
+            "id": "numc-tan-hui-min-2",
+            "type": "submariner",
+            "outcome": "unfit",
+            "issueDate": "2024-11-18",
+            "expiryDate": "2025-11-17"
+          },
+          "search": {
+            "mode": "match"
+          }
+        },
+        {
+          "resource": {
+            "resourceType": "NUMC",
+            "id": "numc-tan-hui-min-3",
+            "type": "hyperbaric-chamber",
+            "outcome": "waiver-granted",
+            "issueDate": "2024-06-10",
+            "expiryDate": "2025-06-09"
+          },
+          "search": {
+            "mode": "match"
+          }
+        },
+        {
+          "resource": {
+            "resourceType": "NUMC",
+            "id": "numc-tan-hui-min-4",
+            "type": "diving",
+            "outcome": "waiver-rejected",
+            "issueDate": "2024-02-26",
+            "expiryDate": "2025-02-25"
+          },
+          "search": {
+            "mode": "match"
+          }
+        }
+      ]
+    }
+  }
+}

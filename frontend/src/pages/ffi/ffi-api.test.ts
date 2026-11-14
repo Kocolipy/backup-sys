@@ -4,7 +4,6 @@ import { DecodeError } from "@/lib/decode";
 import { describeDecoder, STRING } from "@/lib/decode.testHelpers";
 
 import {
-  checkFfiFilters,
   countFfiFilters,
   decodeFfi,
   FFI_HISTORY,
@@ -60,55 +59,7 @@ describeDecoder(
   { strict: true },
 );
 
-describe("checkFfiFilters", () => {
-  it("passes no filter at all", () => {
-    expect(checkFfiFilters(NO_FFI_FILTERS)).toEqual({ ok: true });
-  });
-
-  it.each([
-    ["issueDate", "Issue Date"],
-    ["expiryDate", "Expiry Date"],
-  ] as const)("refuses a %s from-date after its to-date, naming the range", (range, label) => {
-    expect(
-      checkFfiFilters({
-        ...NO_FFI_FILTERS,
-        [`${range}From`]: "2024-01-02",
-        [`${range}To`]: "2024-01-01",
-      }),
-    ).toEqual({
-      message: `The ${label} from-date must not be after its to-date.`,
-      ok: false,
-      range,
-    });
-  });
-
-  it.each([
-    ["issueDateTo", "issueDate", "Issue Date"],
-    ["expiryDateFrom", "expiryDate", "Expiry Date"],
-  ] as const)(
-    "refuses a %s the calendar does not have, naming the range",
-    (field, range, label) => {
-      expect(checkFfiFilters({ ...NO_FFI_FILTERS, [field]: "2024-02-30" })).toEqual({
-        message: `Enter the ${label} dates as real dates.`,
-        ok: false,
-        range,
-      });
-    },
-  );
-
-  it("passes a range of one day on each date", () => {
-    expect(
-      checkFfiFilters({
-        ...NO_FFI_FILTERS,
-        expiryDateFrom: "2025-01-09",
-        expiryDateTo: "2025-01-09",
-        issueDateFrom: "2024-01-10",
-        issueDateTo: "2024-01-10",
-      }),
-    ).toEqual({ ok: true });
-  });
-});
-
+// Which dates may be sent is `checkHistoryDates`' (history-api.test.ts).
 describe("countFfiFilters", () => {
   it("counts none for no filter", () => {
     expect(countFfiFilters(NO_FFI_FILTERS)).toBe(0);

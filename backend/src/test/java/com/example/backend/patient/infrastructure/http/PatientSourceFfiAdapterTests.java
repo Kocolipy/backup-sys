@@ -15,7 +15,7 @@ import com.example.backend.patient.domain.DateRange;
 import com.example.backend.patient.domain.FfiFilter;
 import com.example.backend.patient.domain.FfiHigherAuthority;
 import com.example.backend.patient.domain.FfiOutcome;
-import com.example.backend.patient.domain.FfiSort;
+import com.example.backend.patient.domain.HistorySort;
 import com.example.backend.patient.domain.FfiStatus;
 import com.example.backend.patient.domain.FfiSubmittingMc;
 import com.example.backend.patient.domain.FfiType;
@@ -108,7 +108,7 @@ class PatientSourceFfiAdapterTests {
     private static Fault faultReading(PatientSourceAdapter adapter, String patient) {
         PatientSourceException fault = (PatientSourceException) catchThrowable(() ->
                 adapter.findFfiHistory(new PatientId(patient), FfiFilter.NONE,
-                FfiSort.SOURCE_ORDER, SECOND_PAGE_OF_FIVE));
+                HistorySort.SOURCE_ORDER, SECOND_PAGE_OF_FIVE));
         return new Fault(fault.getMessage(), fault.reason(), fault.category());
     }
 
@@ -135,7 +135,7 @@ class PatientSourceFfiAdapterTests {
     }
 
     /** The second page of five of the probe patient's FFI History, filtered and sorted so. */
-    private static void reading(FfiFilter filter, FfiSort sort) {
+    private static void reading(FfiFilter filter, HistorySort sort) {
         answering(page());
         adapter().findFfiHistory(new PatientId(PROBE_PATIENT), filter, sort, SECOND_PAGE_OF_FIVE);
     }
@@ -147,7 +147,7 @@ class PatientSourceFfiAdapterTests {
      */
     @Test
     void aReadAsksTheSourceForThePageAndItsTotalInTheSourcesOrder() {
-        reading(FfiFilter.NONE, FfiSort.SOURCE_ORDER);
+        reading(FfiFilter.NONE, HistorySort.SOURCE_ORDER);
 
         assertThat(sentQuery()).isEqualTo(Map.of(
                 "_offset", List.of("5"),
@@ -165,9 +165,9 @@ class PatientSourceFfiAdapterTests {
         "ISSUE_DATE, DESCENDING, '-issue-date,_id'",
         "EXPIRY_DATE, ASCENDING, 'expiry-date,_id'",
         "EXPIRY_DATE, DESCENDING, '-expiry-date,_id'"})
-    void aSortIsTheSourcesOwnOnItsSearchParameter(FfiSort.Field field, SortOrder order,
+    void aSortIsTheSourcesOwnOnItsSearchParameter(HistorySort.Field field, SortOrder order,
             String sorted) {
-        reading(FfiFilter.NONE, new FfiSort(field, order));
+        reading(FfiFilter.NONE, new HistorySort(field, order));
 
         assertThat(sentQuery()).containsEntry("_sort", List.of(sorted));
     }
@@ -181,7 +181,7 @@ class PatientSourceFfiAdapterTests {
         reading(new FfiFilter(Set.of(FfiType.DENTAL, FfiType.IPPT),
                 Set.of(FfiOutcome.UNFIT, FfiOutcome.FIT), DateRange.ANY, DateRange.ANY,
                 Set.of(FfiHigherAuthority.DIS, FfiHigherAuthority.COMD_MMI),
-                Set.of(FfiSubmittingMc.HENDON_CAMP), null), FfiSort.SOURCE_ORDER);
+                Set.of(FfiSubmittingMc.HENDON_CAMP), null), HistorySort.SOURCE_ORDER);
 
         assertThat(sentQuery()).isEqualTo(Map.of(
                 "type", List.of("ippt,dental"),
@@ -197,7 +197,7 @@ class PatientSourceFfiAdapterTests {
     @Test
     void theCommaBetweenCodesIsSentAsItIs() {
         reading(new FfiFilter(Set.of(FfiType.DENTAL, FfiType.IPPT), Set.of(), DateRange.ANY,
-                DateRange.ANY, Set.of(), Set.of(), null), FfiSort.SOURCE_ORDER);
+                DateRange.ANY, Set.of(), Set.of(), null), HistorySort.SOURCE_ORDER);
 
         assertThat(sent().getUrl().split("[?&]")).contains("type=ippt,dental");
     }
@@ -214,11 +214,11 @@ class PatientSourceFfiAdapterTests {
         "-          | 2024-12-31 | le2024-12-31"})
     void aDateRangeIsItsSearchParameterForEachEnd(LocalDate from, LocalDate to, String ends) {
         reading(new FfiFilter(null, null, new DateRange(from, to), DateRange.ANY, null, null, null),
-                FfiSort.SOURCE_ORDER);
+                HistorySort.SOURCE_ORDER);
         Map<String, List<String>> issued = sentQuery();
         SOURCE.resetRequests();
         reading(new FfiFilter(null, null, DateRange.ANY, new DateRange(from, to), null, null, null),
-                FfiSort.SOURCE_ORDER);
+                HistorySort.SOURCE_ORDER);
         Map<String, List<String>> expiring = sentQuery();
 
         assertThat(Arrays.asList(issued.get("issue-date"), issued.containsKey("expiry-date"),
@@ -231,7 +231,7 @@ class PatientSourceFfiAdapterTests {
     @CsvSource({"ACTIVE, active", "INACTIVE, inactive"})
     void aStatusIsTheSourcesStatusByItsCode(FfiStatus status, String code) {
         reading(new FfiFilter(null, null, DateRange.ANY, DateRange.ANY, null, null, status),
-                FfiSort.SOURCE_ORDER);
+                HistorySort.SOURCE_ORDER);
 
         assertThat(sentQuery()).containsEntry("status", List.of(code));
     }
@@ -244,7 +244,7 @@ class PatientSourceFfiAdapterTests {
                         new DateRange(LocalDate.of(2024, 1, 1), null),
                         Set.of(FfiHigherAuthority.CNMO), Set.of(FfiSubmittingMc.KRANJI_CAMP),
                         FfiStatus.INACTIVE),
-                new FfiSort(FfiSort.Field.EXPIRY_DATE, SortOrder.DESCENDING));
+                new HistorySort(HistorySort.Field.EXPIRY_DATE, SortOrder.DESCENDING));
 
         assertThat(sentQuery()).isEqualTo(Map.ofEntries(
                 Map.entry("type", List.of("vocational")),
@@ -266,7 +266,7 @@ class PatientSourceFfiAdapterTests {
         answering(page());
 
         adapter().findFfiHistory(new PatientId(PROBE_PATIENT), FfiFilter.NONE,
-                FfiSort.SOURCE_ORDER, SECOND_PAGE_OF_FIVE);
+                HistorySort.SOURCE_ORDER, SECOND_PAGE_OF_FIVE);
 
         LoggedRequest sent = SOURCE.findAll(getRequestedFor(urlPathEqualTo(PROBE_PATH)))
                 .getFirst();
@@ -282,9 +282,9 @@ class PatientSourceFfiAdapterTests {
         PatientSourceAdapter adapter = adapter();
 
         adapter.findFfiHistory(new PatientId(PROBE_PATIENT), FfiFilter.NONE,
-                FfiSort.SOURCE_ORDER, SECOND_PAGE_OF_FIVE);
+                HistorySort.SOURCE_ORDER, SECOND_PAGE_OF_FIVE);
         adapter.findFfiHistory(new PatientId(PROBE_PATIENT), FfiFilter.NONE,
-                FfiSort.SOURCE_ORDER, SECOND_PAGE_OF_FIVE);
+                HistorySort.SOURCE_ORDER, SECOND_PAGE_OF_FIVE);
 
         SOURCE.verify(2, getRequestedFor(urlPathEqualTo(PROBE_PATH)));
     }
@@ -443,7 +443,7 @@ class PatientSourceFfiAdapterTests {
 
         Throwable fault = catchThrowable(() ->
                 adapter().findFfiHistory(new PatientId(PROBE_PATIENT), FfiFilter.NONE,
-                FfiSort.SOURCE_ORDER, SECOND_PAGE_OF_FIVE));
+                HistorySort.SOURCE_ORDER, SECOND_PAGE_OF_FIVE));
 
         StringWriter printed = new StringWriter();
         fault.printStackTrace(new PrintWriter(printed));

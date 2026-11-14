@@ -14,8 +14,14 @@ import type { ReadDeclaration } from "@/auth/declarations";
 import { codeParameters } from "@/lib/code-parameters";
 import { calendarDate, jsonDecoder, readObject } from "@/lib/decode";
 import { pageDecoder, pagedPath, type Page, type PageAt } from "@/lib/paging";
-import { type CheckedDateRanges, checkDateRanges } from "@/lib/date-range";
-import { sortParameters, type ColumnSort } from "@/lib/sorting";
+import { sortParameters } from "@/lib/sorting";
+import {
+  countHistoryDates,
+  historyDateParameters,
+  NO_HISTORY_DATES,
+  type HistoryDates,
+  type HistorySort,
+} from "@/pages/history-api";
 
 // An FFI's five closed sets, each as the API carries it, by its codes, in the
 // order the Filter panel lists them. Each is exported for the SPA–API contract
@@ -152,25 +158,16 @@ export const decodeFfi = (value: unknown): Ffi => {
   return decoded;
 };
 
-/** A column the FFI History sorts by, as the backend's `sortBy` names it. */
-export type FfiSortColumn = "issueDate" | "expiryDate";
-
-/** How the FFI History is sorted: one column, in one direction. */
-export type FfiSort = ColumnSort<FfiSortColumn>;
-
 /**
  * The Filter panel's filters, each as its control holds it: the codes chosen
  * of each closed set but the Status, none for no filter; the Status, `all` for
- * either; and the four `<input type="date">` values, `YYYY-MM-DD` or `""` for
- * an end left open.
+ * either; and the two date ranges ({@link HistoryDates}). Every code the panel
+ * offers is one of its set's, so only the dates are checked before sending
+ * (`checkHistoryDates`).
  */
-export interface FfiFilters {
+export interface FfiFilters extends HistoryDates {
   types: readonly FfiType[];
   outcomes: readonly FfiOutcome[];
-  issueDateFrom: string;
-  issueDateTo: string;
-  expiryDateFrom: string;
-  expiryDateTo: string;
   higherAuthorities: readonly FfiHigherAuthority[];
   submittingMcs: readonly FfiSubmittingMc[];
   status: "all" | FfiStatus;
@@ -178,66 +175,35 @@ export interface FfiFilters {
 
 /** No filter: every FFI of the patient. */
 export const NO_FFI_FILTERS: FfiFilters = {
-  expiryDateFrom: "",
-  expiryDateTo: "",
+  ...NO_HISTORY_DATES,
   higherAuthorities: [],
-  issueDateFrom: "",
-  issueDateTo: "",
   outcomes: [],
   status: "all",
   submittingMcs: [],
   types: [],
 };
 
-/** A date range the panel offers, by the prefix of its two fields, and its label. */
-export const FFI_DATE_RANGES = [
-  { label: "Issue Date", range: "issueDate" },
-  { label: "Expiry Date", range: "expiryDate" },
-] as const;
-
-/** Which range a refusal is about. */
-type FfiDateRange = (typeof FFI_DATE_RANGES)[number]["range"];
-
-/** The filters either passed, or refused with the range at fault and why. */
-export type CheckedFfiFilters = CheckedDateRanges<FfiDateRange>;
-
-/**
- * Whether `filters` may be sent: each date set is one the calendar has, and
- * no from-date is after its to-date ({@link checkDateRanges}). The backend
- * refuses either with a `400`, so the panel refuses it first and sends
- * nothing. Every code the panel offers is one of its set's.
- */
-export function checkFfiFilters(filters: FfiFilters): CheckedFfiFilters {
-  return checkDateRanges(FFI_DATE_RANGES, filters);
-}
-
 /**
  * How many of `filters` narrow the history: each set of codes chosen, as one,
  * the Status, and each date set.
  */
 export function countFfiFilters(filters: FfiFilters): number {
-  return [
+  const chosen = [
     filters.types.length > 0,
     filters.outcomes.length > 0,
-    filters.issueDateFrom !== "",
-    filters.issueDateTo !== "",
-    filters.expiryDateFrom !== "",
-    filters.expiryDateTo !== "",
     filters.higherAuthorities.length > 0,
     filters.submittingMcs.length > 0,
     filters.status !== "all",
   ].filter(Boolean).length;
+  return chosen + countHistoryDates(filters);
 }
 
 /** The query string `filters` and `sort` ask for, each filter only when set. */
-function historyQuery(filters: FfiFilters, sort: FfiSort | null): string {
-  const dates = (["issueDateFrom", "issueDateTo", "expiryDateFrom", "expiryDateTo"] as const)
-    .filter((field) => filters[field] !== "")
-    .map((field) => `${field}=${filters[field]}`);
+function historyQuery(filters: FfiFilters, sort: HistorySort | null): string {
   return [
     ...codeParameters("type", FFI_TYPES, filters.types),
     ...codeParameters("outcome", FFI_OUTCOMES, filters.outcomes),
-    ...dates,
+    ...historyDateParameters(filters),
     ...codeParameters("higherAuthority", FFI_HIGHER_AUTHORITIES, filters.higherAuthorities),
     ...codeParameters("submittingMc", FFI_SUBMITTING_MCS, filters.submittingMcs),
     ...(filters.status === "all" ? [] : [`status=${filters.status}`]),
@@ -255,7 +221,7 @@ function historyQuery(filters: FfiFilters, sort: FfiSort | null): string {
  */
 export const FFI_HISTORY: ReadDeclaration<
   Page<Ffi>,
-  [patientId: string, filters: FfiFilters, sort: FfiSort | null, at: PageAt],
+  [patientId: string, filters: FfiFilters, sort: HistorySort | null, at: PageAt],
   true
 > = {
   absentOnNotFound: true,

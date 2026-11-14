@@ -452,7 +452,12 @@ class PatientSourceFixturesTests {
 
     /** The values a stub's matcher pins {@code parameter} to: none when it is absent. */
     private static List<String> pinned(PatientSourceStubs.FfiStub stub, String parameter) {
-        JsonNode matcher = stub.query().path(parameter);
+        return pinnedIn(stub.query(), parameter);
+    }
+
+    /** The values the history stub's {@code query} pins {@code parameter} to: none when absent. */
+    private static List<String> pinnedIn(JsonNode query, String parameter) {
+        JsonNode matcher = query.path(parameter);
         if (matcher.has("equalTo")) {
             return List.of(matcher.get("equalTo").asString());
         }
@@ -461,10 +466,32 @@ class PatientSourceFixturesTests {
                 .toList();
     }
 
-    /** Whether {@code ffi}'s {@code field} is one of the comma-joined codes {@code pinned} names. */
-    private static boolean anyOf(JsonNode ffi, String field, List<String> pinned) {
+    /** Whether {@code entry}'s {@code field} is one of the comma-joined codes {@code pinned} names. */
+    private static boolean anyOf(JsonNode entry, String field, List<String> pinned) {
         return pinned.isEmpty()
-                || List.of(pinned.getFirst().split(",")).contains(ffi.get(field).asString());
+                || List.of(pinned.getFirst().split(",")).contains(entry.get(field).asString());
+    }
+
+    /**
+     * {@code entries} — FFIs or NUMC Records — as the {@code _sort} {@code sorts} pins orders
+     * them: by the date it names, {@code -} first for descending, ties by id; as they are with
+     * no sort pinned.
+     */
+    private static List<JsonNode> sortedAs(List<JsonNode> entries, List<String> sorts) {
+        if (sorts.isEmpty()) {
+            return entries;
+        }
+        String sort = sorts.getFirst();
+        String field = sort.startsWith("-issue-date") || sort.startsWith("issue-date")
+                ? "issueDate" : "expiryDate";
+        Comparator<String> direction = sort.startsWith("-")
+                ? Comparator.<String>reverseOrder()
+                : Comparator.<String>naturalOrder();
+        return entries.stream()
+                .sorted(Comparator.comparing((JsonNode entry) -> entry.get(field).asString(),
+                                direction)
+                        .thenComparing(entry -> entry.get("id").asString()))
+                .toList();
     }
 
     /**
@@ -507,21 +534,8 @@ class PatientSourceFixturesTests {
                     .filter(ffi -> anyOf(ffi, "submittingMc", pinned(stub, "submitting-mc")))
                     .filter(ffi -> anyOf(ffi, "status", pinned(stub, "status")))
                     .toList();
-            List<String> sorts = pinned(stub, "_sort");
-            if (!sorts.isEmpty()) {
-                String sort = sorts.getFirst();
-                String field = sort.startsWith("-issue-date") || sort.startsWith("issue-date")
-                        ? "issueDate" : "expiryDate";
-                Comparator<String> direction = sort.startsWith("-")
-                        ? Comparator.<String>reverseOrder()
-                        : Comparator.<String>naturalOrder();
-                selected = selected.stream()
-                        .sorted(Comparator.comparing((JsonNode ffi) -> ffi.get(field).asString(),
-                                        direction)
-                                .thenComparing(ffi -> ffi.get("id").asString()))
-                        .toList();
-            }
-            List<String> ids = selected.stream().map(ffi -> ffi.get("id").asString()).toList();
+            List<String> ids = sortedAs(selected, pinned(stub, "_sort")).stream()
+                    .map(ffi -> ffi.get("id").asString()).toList();
             int offset = stub.query().at("/_offset/equalTo").asInt();
 
             assertThat(List.of(stub.bundle().at("/total").asInt(),
@@ -536,7 +550,7 @@ class PatientSourceFixturesTests {
      * filtered history spanning two pages and one that matches nothing.
      */
     @Test
-    void theFfiSortAndFilterStubsCoverEverySortAndFilter() {
+    void theHistorySortAndFilterStubsCoverEverySortAndFilter() {
         List<PatientSourceStubs.FfiStub> canned = PatientSourceStubs.ffiHistories().stream()
                 .filter(PatientSourceFixturesTests::canned)
                 .toList();
@@ -586,15 +600,25 @@ class PatientSourceFixturesTests {
                 .toList();
     }
 
-    /** Whether {@code stub} is a fixture's own page rather than the fallback answering several. */
+    /** The filters a NUMC History read sends the source, each as its own search parameter. */
+    private static final List<String> NUMC_FILTER_PARAMETERS =
+            List.of("type", "outcome", "issue-date", "expiry-date");
+
+    /** Whether {@code stub} is a fixture's own stub rather than the fallback answering several. */
     private static boolean canned(PatientSourceStubs.NumcStub stub) {
         return !stub.path().contains("(");
+    }
+
+    /** Whether {@code stub} reads its history unfiltered, in the source's own order. */
+    private static boolean inTheSourcesOrder(PatientSourceStubs.NumcStub stub) {
+        return canned(stub) && Stream.concat(Stream.of("_sort"), NUMC_FILTER_PARAMETERS.stream())
+                .allMatch(parameter -> stub.query().at("/" + parameter + "/absent").asBoolean());
     }
 
     /** The NUMC Records of every page of {@code patient}'s NUMC History, page after page. */
     private static List<JsonNode> recordsOf(String patient) {
         return PatientSourceStubs.numcHistories().stream()
-                .filter(PatientSourceFixturesTests::canned)
+                .filter(PatientSourceFixturesTests::inTheSourcesOrder)
                 .filter(stub -> stub.path().equals("/Patient/" + patient + "/numc"))
                 .sorted(Comparator.comparing(stub -> stub.query().at("/_offset/equalTo")
                         .asInt()))
@@ -609,7 +633,7 @@ class PatientSourceFixturesTests {
     @Test
     void twoFixturesHaveANumcHistoryAndTheFallbackServesEveryFixture() {
         List<String> exact = PatientSourceStubs.numcHistories().stream()
-                .filter(PatientSourceFixturesTests::canned)
+                .filter(PatientSourceFixturesTests::inTheSourcesOrder)
                 .map(stub -> stub.path() + " " + stub.query().at("/_offset/equalTo").asString()
                         + " of " + stub.bundle().at("/total").asInt())
                 .toList();
@@ -628,18 +652,24 @@ class PatientSourceFixturesTests {
     }
 
     /**
-     * Every canned page is matched on the whole page the backend asks for — five to a page, its
-     * offset and an accurate total — so a read of any other page falls to the fallback.
+     * Every canned read is matched on the whole page the backend asks for — five to a page, its
+     * offset and an accurate total — and pins the sort and each filter it does not use as absent,
+     * and each it uses to its exact values, so a read of any other page, or with a filter or sort
+     * no stub names, falls to the fallback rather than to an unfiltered page.
      */
     @Test
-    void everyCannedNumcPagePinsItsPage() {
+    void everyCannedNumcReadPinsItsPageItsSortAndEveryFilterItUsesOrNot() {
         assertThat(PatientSourceStubs.numcHistories()).filteredOn(PatientSourceFixturesTests::canned)
-                .hasSize(3)
+                .hasSize(13)
                 .allSatisfy(stub -> assertThat(List.of(
                         stub.query().at("/_count/equalTo").asString(),
                         stub.query().at("/_offset/equalTo").isString(),
                         stub.query().at("/_total/equalTo").asString()))
-                        .containsExactly("5", true, "accurate"));
+                        .containsExactly("5", true, "accurate"))
+                .allSatisfy(stub -> assertThat(Stream.concat(Stream.of("_sort"),
+                        NUMC_FILTER_PARAMETERS.stream()))
+                        .as("each matcher, absent or pinned")
+                        .allMatch(parameter -> pinsOrAbsent(stub.query().path(parameter))));
     }
 
     /** Each page holds no more than five NUMC Records, and a history's pages hold its total. */
@@ -671,12 +701,12 @@ class PatientSourceFixturesTests {
                 .containsAll(codes));
     }
 
-    /** Every NUMC Record is a {@code NUMC} of exactly its four elements and its id. */
+    /** Every NUMC Record any stub answers is a {@code NUMC} of exactly its four elements and its id. */
     @Test
     void everyNumcRecordHoldsItsFourElementsAndItsIdAlone() {
         assertThat(PatientSourceStubs.numcHistories().stream()
                 .flatMap(stub -> recordsOf(stub).stream()))
-                .hasSize(11)
+                .isNotEmpty()
                 .allSatisfy(record -> assertThat(List.of(record.get("resourceType").asString(),
                         record.propertyNames()))
                         .containsExactly("NUMC", Set.of("resourceType", "id", "type", "outcome",
@@ -687,6 +717,7 @@ class PatientSourceFixturesTests {
     @Test
     void everyNumcRecordIdIsAFhirIdOfItsOwn() {
         List<String> ids = PatientSourceStubs.numcHistories().stream()
+                .filter(PatientSourceFixturesTests::inTheSourcesOrder)
                 .flatMap(stub -> recordsOf(stub).stream())
                 .map(record -> record.get("id").asString())
                 .toList();
@@ -698,6 +729,83 @@ class PatientSourceFixturesTests {
         assertThat(ids).hasSize(11).doesNotHaveDuplicates()
                 .doesNotContainAnyElementsOf(ffiIds)
                 .allSatisfy(id -> assertThat(id).matches("[A-Za-z0-9\\-.]{1,64}"));
+    }
+
+    // ---- the NUMC sort and filter stubs ---------------------------------------------------
+
+    /**
+     * Every sorted or filtered NUMC read answers exactly the NUMC Records its filters select from
+     * the patient's history in the source's own order, sorted as its {@code _sort} names — ties
+     * by id — or left in that order with none, paged by its offset, five to a page, with the
+     * total it selects: the source's behaviour, as /docs/domain/numc.md documents it. A set of
+     * codes is any of them, and a date range keeps both ends — each record exactly as the
+     * unfiltered history holds it.
+     */
+    @Test
+    void everySortedOrFilteredNumcReadAnswersTheRecordsItsFiltersAndSortSelect() {
+        List<PatientSourceStubs.NumcStub> narrowed = PatientSourceStubs.numcHistories().stream()
+                .filter(PatientSourceFixturesTests::canned)
+                .filter(stub -> !inTheSourcesOrder(stub))
+                .toList();
+
+        assertThat(narrowed).hasSize(10).allSatisfy(stub -> {
+            String patient = stub.path().replaceFirst("^/Patient/", "")
+                    .replaceFirst("/numc$", "");
+            JsonNode query = stub.query();
+            List<JsonNode> selected = recordsOf(patient).stream()
+                    .filter(record -> anyOf(record, "type", pinnedIn(query, "type")))
+                    .filter(record -> anyOf(record, "outcome", pinnedIn(query, "outcome")))
+                    .filter(record -> inRange(record.get("issueDate").asString(),
+                            pinnedIn(query, "issue-date")))
+                    .filter(record -> inRange(record.get("expiryDate").asString(),
+                            pinnedIn(query, "expiry-date")))
+                    .toList();
+            List<JsonNode> expected = sortedAs(selected, pinnedIn(query, "_sort"));
+            int offset = query.at("/_offset/equalTo").asInt();
+
+            assertThat(List.of(stub.bundle().at("/total").asInt(), recordsOf(stub)))
+                    .containsExactly(expected.size(),
+                            expected.subList(offset, Math.min(offset + 5, expected.size())));
+        });
+    }
+
+    /**
+     * The sort and filter stubs cover each direction of each sortable column, on Tan Wei Ming,
+     * every filter, on Tan Hui Min, two filters combined, and a filter that matches nothing.
+     */
+    @Test
+    void theNumcSortAndFilterStubsCoverEverySortAndFilter() {
+        List<PatientSourceStubs.NumcStub> narrowed = PatientSourceStubs.numcHistories().stream()
+                .filter(PatientSourceFixturesTests::canned)
+                .filter(stub -> !inTheSourcesOrder(stub))
+                .toList();
+        List<PatientSourceStubs.NumcStub> sorted = narrowed.stream()
+                .filter(stub -> !pinnedIn(stub.query(), "_sort").isEmpty())
+                .toList();
+        List<PatientSourceStubs.NumcStub> filtered = narrowed.stream()
+                .filter(stub -> pinnedIn(stub.query(), "_sort").isEmpty())
+                .toList();
+
+        assertThat(List.of(
+                sorted.stream().map(stub -> stub.path() + " " + pinnedIn(stub.query(), "_sort"))
+                        .collect(Collectors.toSet()),
+                filtered.stream().map(PatientSourceStubs.NumcStub::path)
+                        .collect(Collectors.toSet()),
+                NUMC_FILTER_PARAMETERS.stream()
+                        .filter(parameter -> filtered.stream()
+                                .anyMatch(stub -> !pinnedIn(stub.query(), parameter).isEmpty()))
+                        .toList(),
+                filtered.stream().anyMatch(stub -> NUMC_FILTER_PARAMETERS.stream()
+                        .filter(parameter -> !pinnedIn(stub.query(), parameter).isEmpty())
+                        .count() > 1),
+                filtered.stream().anyMatch(stub -> stub.bundle().at("/total").asInt() == 0)))
+                .containsExactly(
+                        Set.of("/Patient/eq081-VQEgP8drUUqCWzHfw3/numc [issue-date,_id]",
+                                "/Patient/eq081-VQEgP8drUUqCWzHfw3/numc [-issue-date,_id]",
+                                "/Patient/eq081-VQEgP8drUUqCWzHfw3/numc [expiry-date,_id]",
+                                "/Patient/eq081-VQEgP8drUUqCWzHfw3/numc [-expiry-date,_id]"),
+                        Set.of("/Patient/dev-patient-05/numc"),
+                        NUMC_FILTER_PARAMETERS, true, true);
     }
 
     /**

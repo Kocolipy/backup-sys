@@ -1,7 +1,7 @@
 ---
 type: Domain Rules
 title: NUMC
-description: A patient's NUMC History — the in-house patient source's own NUMC Records, read through it at GET {base}/Patient/{id}/numc on the FFI History's terms, the four elements and the two closed sets carried as codes, the source's order and paging, the failures and their NUMC log reasons, the logging rules, no caching, no auditing, the NUMC page and its states, and the mock's NUMC fixtures and fault stubs.
+description: A patient's NUMC History — the in-house patient source's own NUMC Records, read through it at GET {base}/Patient/{id}/numc on the FFI History's terms, the four elements and the two closed sets carried as codes, the sort and filters the source applies and their refusals, the source's paging, the failures and their NUMC log reasons, the logging rules, no caching, no auditing, the NUMC page with its sort headings, Filter panel and states, and the mock's NUMC fixtures, sort and filter stubs and fault stubs.
 tags: [patient, numc]
 ---
 
@@ -17,10 +17,11 @@ read-only, at `GET /api/patient-numc/{patientId}` to a session holding
 time. Nothing stores it.
 
 It is read on the same terms as an FFI History (ADR 0019, D5): what the
-[FFI rules](ffi.md) say of the source's paged read, its client and timeouts, its
-failures, its logging, caching and auditing holds here too, and this file says
-only where a NUMC History differs — the endpoint, the four elements and the two
-closed sets — and what is its own. The wire contract is
+[FFI rules](ffi.md) say of the source's paged read, its sort and filters, its
+client and timeouts, its failures, its logging, caching and auditing holds here
+too, and this file says only where a NUMC History differs — the endpoint, the
+four elements, the two closed sets and the filters on them — and what is its
+own. The wire contract is
 `backend/docs/openapi.yaml`. The SPA never reaches the source:
 SPA → `GET /api/patient-numc/{patientId}` → backend →
 `GET {base}/Patient/{id}/numc`.
@@ -64,8 +65,9 @@ only — not FHIR-conformant:
 
 - **The call.** `GET {base}/Patient/{id}/numc?_offset=…&_count=…&_total=accurate`,
   on the same client, base URL, timeouts and absent credential, the id sent
-  unchanged. Nothing else is sent: no `_sort` and no filter, so the source's
-  own order is the order shown.
+  unchanged, with the sort and each filter the read asks for
+  ([Sort and filters](#sort-and-filters)). With neither, nothing else is sent:
+  no `_sort`, so the source's own order is the order shown.
 - **The answer.** A FHIR-R4-shaped `searchset` `Bundle` — its `total` and each
   `entry[].resource` — whose every resource is a custom `"resourceType": "NUMC"`
   object of flat fields: `id`, `type`, `outcome`, `issueDate` and
@@ -80,21 +82,60 @@ only — not FHIR-conformant:
 - **No caching.** No NUMC Record is kept in Redis or in memory: every read, of
   the same page too, is a call to the source.
 
+## Sort and filters
+
+The patient source sorts, filters, pages and counts a NUMC History; the
+service checks the sort and the filters, passes them through and does none of
+it itself, as for an FFI History ([ffi](ffi.md), "Sort and filters"; ADR 0019,
+D4).
+
+- **The sort.** One column at a time, by `sortBy` — `issueDate` or
+  `expiryDate` — and `sortOrder` — `ascending` (the default with a `sortBy`)
+  or `descending`. It is sent as `_sort` on the source's own search
+  parameters, `issue-date` or `expiry-date`, `-` first for descending, ties
+  broken by id: `_sort=-expiry-date,_id`. **With no `sortBy`** — whatever
+  `sortOrder` says — **no `_sort` is sent**, and the source's default order is
+  the order shown. The domain's `HistorySort` holds it, as for an FFI History.
+- **The filters** narrow the history, combined with AND, each optional
+  (`NumcFilter`):
+
+  | Column       | Our API                          | Sent to the source                           |
+  | ------------ | -------------------------------- | -------------------------------------------- |
+  | NUMC Type    | `type`, repeated                 | `type=<a>,<b>`                               |
+  | NUMC Outcome | `outcome`, repeated              | `outcome=<a>,<b>`                            |
+  | Issue Date   | `issueDateFrom`, `issueDateTo`   | `issue-date=ge<from>`, `issue-date=le<to>`   |
+  | Expiry Date  | `expiryDateFrom`, `expiryDateTo` | `expiry-date=ge<from>`, `expiry-date=le<to>` |
+
+  A repeated parameter takes any of its codes: they reach the source as one
+  parameter, joined by commas — FHIR's OR — in their closed set's own order,
+  each comma sent as it is. Each code is one of its [closed
+  set](#the-closed-sets)'s, matched exactly. Each end of a date range is a
+  calendar date, `YYYY-MM-DD`, optional and inclusive; a from-date may not be
+  after its to-date (`DateRange`). A NUMC Record has no Status, Higher
+  Authority or Submitting MC, so nothing filters on them: a parameter naming
+  one is no parameter the read takes, and is not passed on.
+
+- **Checked as the request is read in.** A column or direction spelled any
+  other way, a code outside its closed set — a label, another case, a Java
+  constant's name, or another set's code, an FFI's `request-waiver` among
+  them — a date that is no calendar date, and a from-date after its to-date
+  are each `400`, before the source is called.
+
 ## Our API
 
-`GET /api/patient-numc/{patientId}?startIndex=…&count=…`, outside the
-`/api/patient` FHIR namespace: plain JSON, `{totalResults, startIndex,
-records: [{id, type, outcome, issueDate, expiryDate}]}`, each code as the source
-sent it and both dates `YYYY-MM-DD`. It takes no sort and no filter. Errors are
-the application API's `ApiError`:
+`GET /api/patient-numc/{patientId}?startIndex=…&count=…`, with any filters and
+sort, outside the `/api/patient` FHIR namespace: plain JSON, `{totalResults,
+startIndex, records: [{id, type, outcome, issueDate, expiryDate}]}`, each code
+as the source sent it and both dates `YYYY-MM-DD`. `totalResults` counts the
+NUMC Records the filters select. Errors are the application API's `ApiError`:
 
-| Case                                                                        | Status |
-| --------------------------------------------------------------------------- | ------ |
-| `patientId` outside FHIR's id grammar, or a paging value that is no integer | `400`  |
-| No session                                                                  | `401`  |
-| Session lacks `patient:read`                                                | `403`  |
-| The source's `404` for the patient                                          | `404`  |
-| The source failing                                                          | `502`  |
+| Case                                                                                                                                                       | Status |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| `patientId` outside FHIR's id grammar, a sort or filter the read cannot take ([Sort and filters](#sort-and-filters)), or a paging value that is no integer | `400`  |
+| No session                                                                                                                                                 | `401`  |
+| Session lacks `patient:read`                                                                                                                               | `403`  |
+| The source's `404` for the patient                                                                                                                         | `404`  |
+| The source failing                                                                                                                                         | `502`  |
 
 The `400` is refused before the source is called. The `403` is refused by the
 handler's `@PreAuthorize`, the chain's backstop and the document's `security`,
@@ -141,8 +182,9 @@ dates.
 
 ## Not audited
 
-A NUMC History read writes **no audit row**, as an FFI History read and a read
-of one Patient by id write none (ADR 0019, D3 and D5). A refused read is audited
+A NUMC History read writes **no audit row**, sorted and filtered too, as an
+FFI History read and a read of one Patient by id write none (ADR 0019, D3 and
+D5), and the log names none of a filter's values. A refused read is audited
 as `ACCESS_DENIED`, as every authorization refusal is.
 
 ## The NUMC page
@@ -159,15 +201,40 @@ a session without it is offered no link and is routed to its landing page.
   read-only, five NUMC Records a page, with no row action.
 - **The table**: Type, Outcome, Issue Date, Expiry Date — the NUMC Type by its
   label, the NUMC Outcome as its badge ([the elements](#the-elements)), both
-  dates `dd MMM yyyy`. No column sorts and nothing filters.
+  dates `dd MMM yyyy`.
 - **The shared paged listing**: the numbered pager and "Showing x to y of N
   NUMC records", named on a single page too, the page shown held while the next
   loads.
+- **Sort.** As on the FFI page ([ffi](ffi.md), "The FFI page"): only the Issue
+  Date and Expiry Date headings sort, one at a time, each the shared sortable
+  column heading stating its direction with `aria-sort`; Type and Outcome are
+  plain. The history opens in the source's own order, which neither heading
+  shows as sorted. The first press on a heading sorts it ascending, and each
+  later press toggles it descending and ascending, never back to the source's
+  order; another heading replaces the sort, starting ascending. Both headings
+  are disabled while a read is pending.
+- **Filter.** A Filter button at the top right of the NUMC History opens a
+  panel of the four filters, the button counting those applied ("Filter, 2
+  set", a badge of 2 — each set of codes and each end of a range one each): a
+  searchable multi-select for Type and for Outcome, listing its closed set by
+  label in the set's order; and a from–to range of `<input type="date">` for
+  Issue Date and for Expiry Date, each end optional and inclusive. Nothing in
+  the panel is sent until Apply, or Enter in a date; Reset clears every filter
+  and applies none. A from-date after its to-date is refused beneath its range
+  — "The Expiry Date from-date must not be after its to-date." — the panel
+  stays open and nothing is read. The panel is the FFI page's, shared
+  (`HistoryFilterPopover`), with the NUMC History's own fields.
+- **Filters and sort read from the first page.** Applying filters, or any
+  change of sort, reads the history from its first page, the filters combined
+  with AND and with the current sort. Both live on the page alone: neither
+  reaches the URL or the browser history, and a new patient in context starts
+  with neither.
 - **No patient in context** — the tab holds none, or the source holds no
   patient under its id (its `404`, our `404`) — shows "No patient in context",
   as the FFI page does, and reads no NUMC Records or reports nothing.
 - **A patient with no NUMC Records** — a `200` with `total: 0` — shows "No NUMC
-  records".
+  records". A filter matching none of a patient's NUMC Records shows "No NUMC
+  records match the filters".
 - **The source failing** shows "Couldn't load NUMC records" on the page's error
   line, and Try again, which reads the same page again.
 
@@ -193,14 +260,38 @@ tests read the same stub files (`PatientSourceStubs`).
   closed sets.
 - **Every other fixture** has none — Siti Nurhaliza binte Ahmad
   (`erXuFYUfucBZaryVksYEcMg3`) is the one the tests read — answered by
-  `numc-fallback`, which also answers any page of a fixture's history the
-  canned stubs do not name, with an empty searchset, `total: 0`.
+  `numc-fallback`, which also answers any page, filter or sort of a fixture's
+  history the canned stubs do not name, with an empty searchset, `total: 0`.
 - **Any other well-formed id** is the source's `404` (`numc-not-found`).
 
-Each canned page is matched on the page the backend sends — `_count=5`,
-`_offset` and `_total=accurate` — so a read of any other page falls to the
-fallback. Each fixture is selectable on Patient Search (the name search `tan`
-finds both Tans).
+Each canned page is matched on the whole query the backend sends — `_count=5`,
+`_offset`, `_total=accurate`, the `_sort`, and each filter pinned to its exact
+values or, where the read uses none, to absent — so a filtered or sorted read
+never falls to an unfiltered page. Each fixture is selectable on Patient Search
+(the name search `tan` finds both Tans).
+
+**Sort and filter stubs.** Beside the pages in the source's order:
+
+- **The sorts**, of Tan Wei Ming's four NUMC Records, whose own order is by
+  neither date: `numc-tan-wei-ming-by-issue-date` (`_sort=issue-date,_id`,
+  earliest first: Hyperbaric Chamber Duties UNFIT, Hyperbaric Chamber Duties
+  FIT, Diving Duties, Submariner Duties), `-by-issue-date-descending`
+  (`-issue-date`, the reverse), and `-by-expiry-date` and
+  `-by-expiry-date-descending` (`expiry-date`, the same two orders).
+- **The filters**, of Tan Hui Min's seven, in the source's order:
+  `numc-tan-hui-min-hyperbaric-chamber-or-submariner`
+  (`type=hyperbaric-chamber,submariner`, `total: 4`);
+  `-waiver-granted-or-rejected` (`outcome=waiver-granted,waiver-rejected`,
+  `total: 3`); `-issued-2024` (`issue-date=ge2024-01-01` and `le2024-12-31`,
+  `total: 3`); `-expiring-to-2024` (`expiry-date=le2024-12-31`, `total: 3`);
+  `-diving-issued-from-2024` (`type=diving` and `issue-date=ge2024-01-01`, two
+  filters combined, `total: 2`); and `-expiring-to-2022`
+  (`expiry-date=le2022-12-31`, which no NUMC Record matches, `total: 0`).
+
+`PatientSourceFixturesTests` holds each sorted or filtered stub to the NUMC
+Records its filters select from the history in the source's order, in the order
+its sort names, ties by id, and the stubs to covering each direction of each
+date, every filter, filters combined and a filter matching none.
 
 **Fault stubs.** Beside them, each failure above has a stub of its own under a
 well-formed patient id no fixture uses, `fault-numc-<failure>`, marked with

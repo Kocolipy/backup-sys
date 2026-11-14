@@ -1,0 +1,79 @@
+{
+  "name": "NUMC History: Tan Hui Min's Diving Duties NUMC Records issued from 2024",
+  "request": {
+    "method": "GET",
+    "urlPath": "/Patient/dev-patient-05/numc",
+    "queryParameters": {
+      "_count": {
+        "equalTo": "5"
+      },
+      "_offset": {
+        "equalTo": "0"
+      },
+      "_total": {
+        "equalTo": "accurate"
+      },
+      "_sort": {
+        "absent": true
+      },
+      "type": {
+        "equalTo": "diving"
+      },
+      "outcome": {
+        "absent": true
+      },
+      "issue-date": {
+        "equalTo": "ge2024-01-01"
+      },
+      "expiry-date": {
+        "absent": true
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/fhir+json"
+    },
+    "jsonBody": {
+      "resourceType": "Bundle",
+      "id": "numc-history",
+      "type": "searchset",
+      "total": 2,
+      "link": [
+        {
+          "relation": "self",
+          "url": "http://127.0.0.1:8104/Patient/dev-patient-05/numc?_offset=0&_count=5"
+        }
+      ],
+      "entry": [
+        {
+          "resource": {
+            "resourceType": "NUMC",
+            "id": "numc-tan-hui-min-1",
+            "type": "diving",
+            "outcome": "fit",
+            "issueDate": "2025-03-03",
+            "expiryDate": "2026-03-02"
+          },
+          "search": {
+            "mode": "match"
+          }
+        },
+        {
+          "resource": {
+            "resourceType": "NUMC",
+            "id": "numc-tan-hui-min-4",
+            "type": "diving",
+            "outcome": "waiver-rejected",
+            "issueDate": "2024-02-26",
+            "expiryDate": "2025-02-25"
+          },
+          "search": {
+            "mode": "match"
+          }
+        }
+      ]
+    }
+  }
+}
