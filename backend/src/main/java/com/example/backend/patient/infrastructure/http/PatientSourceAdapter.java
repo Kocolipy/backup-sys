@@ -8,6 +8,7 @@ import com.example.backend.patient.domain.ArmcHistory;
 import com.example.backend.patient.domain.FfiFilter;
 import com.example.backend.patient.domain.FfiHistory;
 import com.example.backend.patient.domain.HistorySort;
+import com.example.backend.patient.domain.MedicationFilter;
 import com.example.backend.patient.domain.MedicationHistory;
 import com.example.backend.patient.domain.NumcFilter;
 import com.example.backend.patient.domain.NumcHistory;
@@ -131,7 +132,10 @@ class PatientSourceAdapter implements PatientStore {
             new ParameterizedTypeReference<>() {
             };
 
-    /** A patient's Medication History, a page at a time, in the source's own order (ADR 0019, D7). */
+    /**
+     * A patient's Medication History, a page at a time (ADR 0019, D7), before the filters and the
+     * sort a read adds to it.
+     */
     static final String MEDICATION_HISTORY = "/Patient/{id}/medication?"
             + SourceSearchset.PAGE_QUERY;
 
@@ -317,17 +321,29 @@ class PatientSourceAdapter implements PatientStore {
     }
 
     /**
-     * {@code GET {base}/Patient/{id}/medication?…}: the patient's Medication History, paged and
-     * counted by the source, in its own order (ADR 0019, D7) — the page alone, with no sort and
-     * no filter. A {@code 404} is no patient under the id; the one other good answer is a
-     * {@code 200} searchset of Medication Records, and anything else is a fault, as is a
-     * searchset with no total or an entry that is no Medication Record the service can hold. The
-     * id is a URI variable, so the call is observed under the template alone.
+     * {@code GET {base}/Patient/{id}/medication?…}: the patient's Medication History, filtered,
+     * sorted, paged and counted by the source (ADR 0019, D7) — the Dispense Statuses as
+     * {@code dispense-status} once, its codes joined by commas, FHIR's OR; each end of a date-time
+     * range as its search parameter, {@code start-date} or {@code end-date}, the instant its
+     * Singapore minute names in UTC, {@code ge} the from-minute and {@code lt} the minute after the
+     * to-minute ({@link SourceQuery#narrowing}); and a sort as {@code _sort} on the same date
+     * parameters, {@code -} first for descending, the column alone: the source breaks ties. With
+     * no column to sort by, no {@code _sort} is sent, and the order is the source's own. A
+     * {@code 404} is no patient under the id; the one other good answer is a {@code 200}
+     * searchset of Medication Records, and anything else is a fault, as is a searchset with no
+     * total or an entry that is no Medication Record the service can hold. The id and the
+     * filters' values are URI variables, so the call is observed under the template alone: which
+     * filters were asked for and the sort, and none of their values.
      */
     @Override
-    public Optional<MedicationHistory> findMedicationHistory(PatientId id, PageRequest page) {
+    public Optional<MedicationHistory> findMedicationHistory(PatientId id,
+            MedicationFilter filter, HistorySort sort, PageRequest page) {
         SourceQuery query = new SourceQuery(MEDICATION_HISTORY).variable("id", id.value());
         query.paged(page);
+        query.anyOf("dispense-status", "dispenseStatus", filter.dispenseStatuses());
+        query.narrowing(MedicationHistory.START_DATE, filter.startDate());
+        query.narrowing(MedicationHistory.END_DATE, filter.endDate());
+        query.sorted(sort, Ties.THE_SOURCES);
         return history(query, MEDICATION_RECORDS, SourceMedication::toRecord,
                 MedicationHistory::new);
     }

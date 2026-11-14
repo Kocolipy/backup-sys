@@ -1,7 +1,7 @@
 ---
 type: Decision Record
 title: "ADR 0019: FFIs are the patient source's own, read through a FHIR-shaped page, and not audited"
-description: A patient's FFI History is the in-house patient source's own, read through it on every request at GET {base}/Patient/{id}/ffi and held by no table or cache; the source answers a FHIR-R4-shaped searchset Bundle of custom FFI objects that is documented as not FHIR-conformant, paged by ADR 0017's startIndex and count, sorted by Issue Date or Expiry Date and filtered on every column by the source, in its own order when no sort is chosen; and an FFI read, like a read of one Patient by id, appends no audit row. A patient's NUMC History is read on the same terms at GET {base}/Patient/{id}/numc, its NUMC Records of four elements and two closed sets, sorted by either date and filtered on every column by the source on D4's terms; and a patient's ARMC History likewise at GET {base}/Patient/{id}/armc, its ARMC Boards of six elements, the End Date the one optional, and two closed sets, sorted by Start Date or End Date with ties the source's to break and filtered by its Outcome and either date by the source, a board with no End Date in no End Date range; and a patient's Medication History likewise at GET {base}/Patient/{id}/medication, its Medication Records of six required and six optional elements, its Start Date and End Date date-times with an offset, its Dispense Status a closed set and its Dispensary a Medical Centre, the set an FFI's Submitting MC draws on, paged in the source's order.
+description: A patient's FFI History is the in-house patient source's own, read through it on every request at GET {base}/Patient/{id}/ffi and held by no table or cache; the source answers a FHIR-R4-shaped searchset Bundle of custom FFI objects that is documented as not FHIR-conformant, paged by ADR 0017's startIndex and count, sorted by Issue Date or Expiry Date and filtered on every column by the source, in its own order when no sort is chosen; and an FFI read, like a read of one Patient by id, appends no audit row. A patient's NUMC History is read on the same terms at GET {base}/Patient/{id}/numc, its NUMC Records of four elements and two closed sets, sorted by either date and filtered on every column by the source on D4's terms; and a patient's ARMC History likewise at GET {base}/Patient/{id}/armc, its ARMC Boards of six elements, the End Date the one optional, and two closed sets, sorted by Start Date or End Date with ties the source's to break and filtered by its Outcome and either date by the source, a board with no End Date in no End Date range; and a patient's Medication History likewise at GET {base}/Patient/{id}/medication, its Medication Records of six required and six optional elements, its Start Date and End Date date-times with an offset, its Dispense Status a closed set and its Dispensary a Medical Centre, the set an FFI's Submitting MC draws on, sorted by Start Date or End Date by the whole date-time with ties the source's to break and filtered by its Dispense Status and a date-time range over either date by the source, each end a Singapore minute sent as the instant it names.
 tags: [patient, ffi, numc, armc, medication, paging, audit, integration]
 ---
 
@@ -20,7 +20,7 @@ ARMC History, and the SPA's ARMC page reads it five at a time in the same way,
 sorted and filtered as the FFI and NUMC pages are (D6);
 `GET /api/patient-medication/{patientId}` reads a patient's Medication
 History, and the SPA's Medication page reads it five at a time in the same
-way, in the source's order (D7).
+way, sorted and filtered as the ARMC page is (D7).
 `/docs/domain/ffi.md`, `/docs/domain/numc.md`, `/docs/domain/armc.md` and
 `/docs/domain/medication.md` are the behaviour in full; this file holds the
 decisions and their reasons.
@@ -207,8 +207,22 @@ Each rule an ARMC Board breaks is logged under a reason naming ARMC
 Medication History is the source's own, read through it on every read, held
 and cached by nothing, and not audited, as D1 to D3 decide for an FFI History,
 through the same port (`PatientStore`'s `findMedicationHistory`), client,
-timeouts, failures and `SourceSearchset`. It is not sorted or filtered: the
-page and its order are the source's alone. It differs in four things alone:
+timeouts, failures and `SourceSearchset`, sorted and filtered reads included.
+It is sorted and filtered on D4's terms: by the Start Date or the End Date, one
+at a time, by the whole date-time, sent as the column alone,
+`_sort=±start-date|±end-date`, the source breaking ties as for an ARMC History
+(D6), and with no sort chosen no `_sort` is sent and the source's order is the
+order shown; a filter on any of the Dispense Statuses (`dispense-status`, its
+codes joined by commas) and a range for each date-time, combined with AND; and
+every value checked as the request is read in, a bad code, a malformed bound or
+an inverted range our `400` before the source is called. Its two columns are
+declared on the shared sort and range as date-times (`MedicationHistory`'s
+`DATE_COLUMNS`), so each end of a range is a Singapore minute,
+`YYYY-MM-DDTHH:mm`, inclusive, sent as the instant it names in UTC — `ge` the
+from-minute, `lt` the minute after the to-minute — as the shared range sends
+every date-time column. `MedicationFilter` holds the filters
+(`/docs/domain/medication.md`, "Sort and filters"); the Dispensary and the free
+text take none. It differs in four things alone:
 
 - **The endpoint.** The source's `GET {base}/Patient/{id}/medication`,
   answering the same FHIR-shaped, non-conformant `searchset` of custom
@@ -272,8 +286,9 @@ so a fault record says which history broke.
   Min's seven over two pages and one canned read of each filter; Tan Wei Ming's
   two ARMC Boards and each sort of them, Tan Hui Min's seven over two pages,
   the first still open, and one canned read of each filter;
-  Tan Wei Ming's six Medication Records over two pages and Tan Hui Min's four,
-  some lacking optional elements; none for every other fixture or read, and a
+  Tan Wei Ming's six Medication Records over two pages and the first page of
+  each sort of them, and Tan Hui Min's four, some lacking optional elements,
+  and one canned read of each filter; none for every other fixture or read, and a
   `404` for any other id
   (`backend/docs/configuration/patient-source.md`).
 

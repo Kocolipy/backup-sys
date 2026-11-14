@@ -11,22 +11,31 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 import com.example.backend.observability.LogEvent.ErrorCategory;
 import com.example.backend.paging.domain.PageRequest;
 import com.example.backend.patient.PatientSourceStubs;
+import com.example.backend.patient.domain.DateRange;
 import com.example.backend.patient.domain.DispenseStatus;
+import com.example.backend.patient.domain.HistorySort;
 import com.example.backend.patient.domain.MedicalCentre;
+import com.example.backend.patient.domain.MedicationFilter;
 import com.example.backend.patient.domain.MedicationHistory;
 import com.example.backend.patient.domain.MedicationRecord;
 import com.example.backend.patient.domain.PatientId;
+import com.example.backend.patient.domain.SortOrder;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import com.github.tomakehurst.wiremock.verification.LoggedRequest;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.time.Duration;
+import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.TreeMap;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
@@ -39,8 +48,10 @@ import org.springframework.web.client.RestClient;
 
 /**
  * A patient's Medication History as the HTTP adapter reads it (ADR 0019, D7), against the
- * patient source's mock in process: the one call it sends — the page, counted by the source, in
- * the source's own order — how an entry's fields become a Medication Record, its six optional
+ * patient source's mock in process: the one call it sends — the page, counted by the source, with
+ * each filter and the sort as the source's own search parameters, the sort's ties the source's to
+ * break and each end of a date-time range the instant it names — how an entry's fields become a
+ * Medication Record, its six optional
  * elements the ones it may lack, and what a failure of that call is, each Medication Record's
  * under a reason naming Medication. What the mock's Medication Histories hold is
  * {@code PatientStoreContract}'s.
@@ -104,9 +115,15 @@ class PatientSourceMedicationAdapterTests {
         SOURCE.stubFor(get(urlPathEqualTo(PROBE_PATH)).atPriority(1).willReturn(okJson(body)));
     }
 
+    /** The second page of five of {@code patient}'s Medication History, unfiltered, in the source's order. */
+    private static Optional<MedicationHistory> unfiltered(PatientSourceAdapter adapter,
+            String patient) {
+        return adapter.findMedicationHistory(new PatientId(patient), MedicationFilter.NONE,
+                HistorySort.SOURCE_ORDER, SECOND_PAGE_OF_FIVE);
+    }
+
     private static MedicationHistory reading() {
-        return adapter().findMedicationHistory(new PatientId(PROBE_PATIENT), SECOND_PAGE_OF_FIVE)
-                .orElseThrow();
+        return unfiltered(adapter(), PROBE_PATIENT).orElseThrow();
     }
 
     private static MedicationRecord readingOne(String field, String value) {
@@ -120,7 +137,7 @@ class PatientSourceMedicationAdapterTests {
 
     private static Fault faultReading(PatientSourceAdapter adapter, String patient) {
         PatientSourceException fault = (PatientSourceException) catchThrowable(() ->
-                adapter.findMedicationHistory(new PatientId(patient), SECOND_PAGE_OF_FIVE));
+                unfiltered(adapter, patient));
         return new Fault(fault.getMessage(), fault.reason(), fault.category());
     }
 
@@ -134,24 +151,124 @@ class PatientSourceMedicationAdapterTests {
 
     // ---- the call ------------------------------------------------------------------------
 
-    /**
-     * The read asks the source for the patient's Medication History from the page's zero-based
-     * offset, for the page's count, with an accurate total, and nothing else: no {@code _sort},
-     * so the order is the source's own, and no filter.
-     */
-    @Test
-    void aReadAsksTheSourceForThePageAndItsTotalInTheSourcesOrder() {
-        answering(page());
-
-        reading();
-
+    /** The one Medication History read the source received, every value of each query parameter. */
+    private static Map<String, List<String>> sentQuery() {
         Map<String, List<String>> query = new TreeMap<>();
         SOURCE.findAll(getRequestedFor(urlPathEqualTo(PROBE_PATH))).getFirst().getQueryParams()
                 .forEach((name, value) -> query.put(name, value.values()));
-        assertThat(query).isEqualTo(Map.of(
+        return query;
+    }
+
+    /** The second page of five of the probe patient's Medication History, filtered and sorted so. */
+    private static void reading(MedicationFilter filter, HistorySort sort) {
+        answering(page());
+        adapter().findMedicationHistory(new PatientId(PROBE_PATIENT), filter, sort,
+                SECOND_PAGE_OF_FIVE);
+    }
+
+    /**
+     * The read asks the source for the patient's Medication History from the page's zero-based
+     * offset, for the page's count, with an accurate total — and, with no filter and no column to
+     * sort by, nothing else: no {@code _sort}, so the order is the source's own.
+     */
+    @Test
+    void aReadAsksTheSourceForThePageAndItsTotalInTheSourcesOrder() {
+        reading(MedicationFilter.NONE, HistorySort.SOURCE_ORDER);
+
+        assertThat(sentQuery()).isEqualTo(Map.of(
                 "_offset", List.of("5"),
                 "_count", List.of("5"),
                 "_total", List.of("accurate")));
+    }
+
+    /**
+     * Each sort is the source's {@code _sort} on its own search parameter — {@code start-date}
+     * or {@code end-date}, descending with a leading {@code -} — and the column alone: the source
+     * breaks ties, so no {@code _id} follows it.
+     */
+    @ParameterizedTest
+    @CsvSource({
+        "startDate, ASCENDING, start-date",
+        "startDate, DESCENDING, -start-date",
+        "endDate, ASCENDING, end-date",
+        "endDate, DESCENDING, -end-date"})
+    void aSortIsTheSourcesOwnOnItsSearchParameterAlone(String field, SortOrder order,
+            String sorted) {
+        reading(MedicationFilter.NONE,
+                new HistorySort(HistorySort.column(MedicationHistory.DATE_COLUMNS, field), order));
+
+        assertThat(sentQuery()).containsEntry("_sort", List.of(sorted));
+    }
+
+    /**
+     * The Dispense Statuses are the source's {@code dispense-status}, once, their codes joined by
+     * commas — FHIR's OR — in their closed set's order, however they were chosen.
+     */
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', textBlock = """
+        PENDING                       | pending
+        UNCOLLECTED,DISPENSED         | dispensed,uncollected
+        UNCOLLECTED,PENDING,DISPENSED | pending,dispensed,uncollected
+        """)
+    void theDispenseStatusesAreTheSourcesDispenseStatusParameter(String chosen, String sent) {
+        Set<DispenseStatus> statuses = Arrays.stream(chosen.split(","))
+                .map(DispenseStatus::valueOf)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+
+        reading(new MedicationFilter(statuses, DateRange.any(), DateRange.any()),
+                HistorySort.SOURCE_ORDER);
+
+        assertThat(sentQuery()).isEqualTo(Map.of(
+                "dispense-status", List.of(sent),
+                "_offset", List.of("5"),
+                "_count", List.of("5"),
+                "_total", List.of("accurate")));
+    }
+
+    /**
+     * A date-time range is its search parameter once for each end it has, each the instant its
+     * Singapore minute names, in UTC: {@code ge} the from-minute's first instant and {@code lt}
+     * the first instant after the to-minute, so both whole minutes are in — the Start Date's
+     * {@code start-date} and the End Date's {@code end-date}.
+     */
+    @ParameterizedTest
+    @CsvSource(nullValues = "-", delimiter = '|', value = {
+        "2025-07-14T16:20 | 2025-07-14T16:20 | ge2025-07-14T08:20:00Z,lt2025-07-14T08:21:00Z",
+        "2026-03-01T10:00 | -                | ge2026-03-01T02:00:00Z",
+        "-                | 2025-12-31T23:59 | lt2025-12-31T16:00:00Z"})
+    void aDateTimeRangeIsItsSearchParameterForEachEndAsAnInstant(LocalDateTime from,
+            LocalDateTime to, String ends) {
+        reading(new MedicationFilter(Set.of(), new DateRange<>(from, to), DateRange.any()),
+                HistorySort.SOURCE_ORDER);
+        Map<String, List<String>> started = sentQuery();
+        SOURCE.resetRequests();
+        reading(new MedicationFilter(Set.of(), DateRange.any(), new DateRange<>(from, to)),
+                HistorySort.SOURCE_ORDER);
+        Map<String, List<String>> ended = sentQuery();
+
+        assertThat(Arrays.asList(started.get("start-date"), started.containsKey("end-date"),
+                ended.get("end-date"), ended.containsKey("start-date")))
+                .containsExactly(List.of(ends.split(",")), false, List.of(ends.split(",")),
+                        false);
+    }
+
+    /** Every filter and a sort at once, each sent as its own. */
+    @Test
+    void everyFilterNarrowsTheReadAtOnceWithTheSort() {
+        reading(new MedicationFilter(Set.of(DispenseStatus.DISPENSED),
+                        new DateRange<>(LocalDateTime.of(2025, 1, 1, 0, 0), null),
+                        new DateRange<>(LocalDateTime.of(2025, 1, 1, 0, 0),
+                                LocalDateTime.of(2025, 12, 31, 23, 59))),
+                new HistorySort(MedicationHistory.START_DATE, SortOrder.DESCENDING));
+
+        assertThat(sentQuery()).isEqualTo(Map.ofEntries(
+                Map.entry("dispense-status", List.of("dispensed")),
+                Map.entry("start-date", List.of("ge2024-12-31T16:00:00Z")),
+                Map.entry("end-date", List.of("ge2024-12-31T16:00:00Z", "lt2025-12-31T16:00:00Z")),
+                Map.entry("_sort", List.of("-start-date")),
+                Map.entry("_offset", List.of("5")),
+                Map.entry("_count", List.of("5")),
+                Map.entry("_total", List.of("accurate"))));
     }
 
     /** As every read of the source, it presents nothing, and asks for FHIR JSON. */
@@ -433,8 +550,7 @@ class PatientSourceMedicationAdapterTests {
         answering(page(record("dispensary", "lapsed-camp")));
 
         Throwable fault = catchThrowable(() ->
-                adapter().findMedicationHistory(new PatientId(PROBE_PATIENT),
-                        SECOND_PAGE_OF_FIVE));
+                unfiltered(adapter(), PROBE_PATIENT));
 
         StringWriter printed = new StringWriter();
         fault.printStackTrace(new PrintWriter(printed));

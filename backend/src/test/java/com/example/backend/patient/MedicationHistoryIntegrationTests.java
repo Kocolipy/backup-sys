@@ -141,6 +141,32 @@ class MedicationHistoryIntegrationTests {
     }
 
     /**
+     * A filtered read and a sorted one are answered as an unfiltered read is: the source's page,
+     * no audit row, and a stream naming none of the filters' values — not a code, not a
+     * date-time, nor the day of the instant it is sent as.
+     */
+    @Test
+    void aFilteredOrSortedReadAppendsNoAuditRowAndLogsNoFilter() throws Exception {
+        HttpClient session = signedIn();
+        long before = rowsBy(reader.userId());
+        logs.reset();
+
+        HttpResponse<String> filtered = send(session, HttpRequest.newBuilder(URI.create(
+                "http://localhost:" + port + "/api/patient-medication/dev-patient-05?count=5"
+                        + "&dispenseStatus=uncollected&dispenseStatus=pending")));
+        HttpResponse<String> sorted = send(session, HttpRequest.newBuilder(URI.create(
+                "http://localhost:" + port + "/api/patient-medication/" + TAN_WEI_MING
+                        + "?count=5&sortBy=startDate&sortOrder=descending"
+                        + "&endDateTo=2098-12-31T23:59")));
+        logs.awaitRequestRecords(2);
+
+        assertThat(List.of(filtered.statusCode(),
+                JSON.readTree(filtered.body()).at("/totalResults").asInt(), sorted.statusCode(),
+                rowsBy(reader.userId()) - before)).containsExactly(200, 2, 200, 0L);
+        assertThat(logs.lines()).doesNotContain("uncollected", "2098-12-31");
+    }
+
+    /**
      * Each Medication fault stub the stub files serve, by the failure its record names and the
      * {@code error.category} it is reported under. The slow stub waits past the production read
      * timeout; the tests' is shorter (ContainerTestConfiguration).

@@ -226,18 +226,25 @@ curl -s 'http://127.0.0.1:8104/Patient/dev-patient-05/armc?end-date=ge2023-01-01
 
 The backend reads a patient's Medication History at
 `GET {base}/Patient/{id}/medication?_offset=…&_count=…&_total=accurate`, on the
-same base URL, client and timeouts, with no sort and no filter (ADR 0019, D7;
-`/docs/domain/medication.md`, "The source contract"). The mock answers a
-FHIR-shaped searchset of `Medication` objects, matched on `_count=5`, `_offset`
-and `_total=accurate`:
+same base URL, client and timeouts, with each filter and the sort the read asks
+for (ADR 0019, D7; `/docs/domain/medication.md`, "Sort and filters"). The mock
+answers a FHIR-shaped searchset of `Medication` objects, matched on
+`_count=5`, `_offset`, `_total=accurate`, the `_sort` and each filter —
+`dispense-status`, `start-date`, `end-date` — pinned to its value or to
+absent:
 
-| Stub file                        | Read                                                      | Answers                                                                         |
-| -------------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| `medication-tan-wei-ming-page-1` | `eq081-VQEgP8drUUqCWzHfw3`                                | 5 of `total: 6`                                                                 |
-| `medication-tan-wei-ming-page-2` | `eq081-VQEgP8drUUqCWzHfw3`, `_offset=5`                   | the last 1 of `total: 6`, the one with a `step`                                 |
-| `medication-tan-hui-min`         | `dev-patient-05`                                          | Tan Hui Min's 4, `total: 4`, every Dispense Status, some optional fields absent |
-| `medication-fallback`            | any other read of a development fixture's, lower priority | no entry, `total: 0`                                                            |
-| `medication-not-found`           | any other well-formed id, lowest priority                 | `404`, as a read by id of an unknown id                                         |
+| Stub file                                                                                                       | Read                                                                                  | Answers                                                                         |
+| --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `medication-tan-wei-ming-page-1`                                                                                | `eq081-VQEgP8drUUqCWzHfw3`                                                            | 5 of `total: 6`                                                                 |
+| `medication-tan-wei-ming-page-2`                                                                                | `eq081-VQEgP8drUUqCWzHfw3`, `_offset=5`                                               | the last 1 of `total: 6`, the one with a `step`                                 |
+| `medication-tan-hui-min`                                                                                        | `dev-patient-05`                                                                      | Tan Hui Min's 4, `total: 4`, every Dispense Status, some optional fields absent |
+| `medication-tan-wei-ming-by-start-date`, `-by-start-date-descending`, `-by-end-date`, `-by-end-date-descending` | `eq081-VQEgP8drUUqCWzHfw3`, `_sort=±start-date` or `±end-date`                        | the first 5 of `total: 6`, in that order, ties as the source keeps them         |
+| `medication-tan-hui-min-pending`, `-dispensed`, `-uncollected`, `-pending-or-uncollected`                       | `dev-patient-05`, `dispense-status`                                                   | the records of those Dispense Statuses                                          |
+| `medication-tan-hui-min-started-to-14-jul-2025-16-20`, `-started-from-1-mar-2026-10-00`                         | `dev-patient-05`, `start-date=lt2025-07-14T08:21:00Z` or `ge2026-03-01T02:00:00Z`     | 3 and 1, each bound on a record's exact minute                                  |
+| `medication-tan-hui-min-ended-2025`, `-ended-to-2023`                                                           | `dev-patient-05`, `end-date` from and to 2025, or to 2023                             | 2, and none (`total: 0`)                                                        |
+| `medication-tan-hui-min-dispensed-started-from-2025`                                                            | `dev-patient-05`, `dispense-status=dispensed` and `start-date=ge2024-12-31T16:00:00Z` | 1, two filters combined                                                         |
+| `medication-fallback`                                                                                           | any other read, filter or sort of a development fixture's, lower priority             | no entry, `total: 0`                                                            |
+| `medication-not-found`                                                                                          | any other well-formed id, lowest priority                                             | `404`, as a read by id of an unknown id                                         |
 
 Beside them, `fault-medication-<failure>` answers each failure of a Medication
 read under a patient id of its own — `unreachable` (the connection reset),

@@ -1,0 +1,48 @@
+{
+  "name": "Medication History: Tan Hui Min's Medication Records ended by the end of 2023, which none is",
+  "request": {
+    "method": "GET",
+    "urlPath": "/Patient/dev-patient-05/medication",
+    "queryParameters": {
+      "_count": {
+        "equalTo": "5"
+      },
+      "_offset": {
+        "equalTo": "0"
+      },
+      "_total": {
+        "equalTo": "accurate"
+      },
+      "_sort": {
+        "absent": true
+      },
+      "dispense-status": {
+        "absent": true
+      },
+      "start-date": {
+        "absent": true
+      },
+      "end-date": {
+        "equalTo": "lt2023-12-31T16:00:00Z"
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/fhir+json"
+    },
+    "jsonBody": {
+      "resourceType": "Bundle",
+      "id": "medication-history",
+      "type": "searchset",
+      "total": 0,
+      "link": [
+        {
+          "relation": "self",
+          "url": "http://127.0.0.1:8104/Patient/dev-patient-05/medication?end-date=lt2023-12-31T16:00:00Z&_offset=0&_count=5"
+        }
+      ]
+    }
+  }
+}

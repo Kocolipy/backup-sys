@@ -788,22 +788,32 @@ paths:
     get:
       tags: [patient-source]
       operationId: readMedicationHistory
-      summary: Read one page of a patient's Medication History — paged and counted by the source
+      summary: Read one page of a patient's Medication History — filtered, sorted, paged and counted by the source
       description: |
         The patient's Medication Records, each one prescription, with how it
-        was dispensed and who prescribed it. The backend sends no sort and no
-        filter: it shows the page and the total the source answers, in the
-        source's own order. A mock must therefore:
+        was dispensed and who prescribed it. The backend does none of this work
+        itself: it forwards the filters and the sort and shows the page and
+        the total the source answers. A mock must therefore compute every step
+        below over all the patient's Medication Records, for any combination
+        of parameters.
 
-        1. **Count** every Medication Record the patient has: that number is
-           the Bundle's `total`, whatever the page.
-        2. **Order** them in the source's own stable default order.
-        3. **Page**: skip `_offset` records, then return up to `_count` of
+        1. **Filter** by every `dispense-status`, `start-date` and `end-date`
+           sent, combined with AND, each date-time compared as the instant it
+           names, whatever offset a record gives it in.
+        2. **Count** what is left: that number is the Bundle's `total`,
+           whatever the page.
+        3. **Sort** by `_sort` when it is sent, by the whole date-time,
+           breaking ties by the source's own rule, the same on every page; with
+           none, keep the source's own stable default order.
+        4. **Page**: skip `_offset` records, then return up to `_count` of
            them as the Bundle's entries, in that order.
 
         **Worked example** over the fixtures: Tan Wei Ming
         (`eq081-VQEgP8drUUqCWzHfw3`) has six Medication Records, so `total` is
-        6 on both of his pages of five; Tan Hui Min has four, on one page.
+        6 on both of his pages of five; with `_sort=-start-date` his second is
+        first, starting a minute after his first and third. Tan Hui Min has
+        four, on one page; `start-date=lt2025-07-14T08:21:00Z` leaves three,
+        her second, which starts at 08:20 UTC (16:20 in Singapore), among them.
 
         **FHIR-shaped paging only, not FHIR-conformant**: the answer borrows a
         searchset `Bundle`'s shape, and its entries are a custom `Medication`
@@ -838,6 +848,65 @@ paths:
             type: string
             pattern: '^[A-Za-z0-9\-.]{1,64}$'
           example: eq081-VQEgP8drUUqCWzHfw3
+        - name: dispense-status
+          in: query
+          description: |
+            Keeps only Medication Records whose `dispenseStatus` is any of
+            these codes, joined by commas (FHIR's OR). Sent once at most.
+          schema:
+            type: string
+            pattern: '^(pending|dispensed|uncollected)(,(pending|dispensed|uncollected))*$'
+          example: pending,uncollected
+        - name: start-date
+          in: query
+          description: |
+            A Start Date range over instants, each in UTC to the second:
+            `ge<instant>` keeps a `startDate` at or after the instant,
+            `lt<instant>` one before it. The backend sends a Singapore minute's
+            first instant as `ge` and the first instant after a to-minute as
+            `lt`, so both minutes are whole in the range. Sent once for each end
+            the range has, so zero, one or two times; both apply together. The
+            backend guarantees the `ge` instant is before the `lt` one.
+          style: form
+          explode: true
+          schema:
+            type: array
+            maxItems: 2
+            items:
+              type: string
+              pattern: '^(ge|lt)\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$'
+          example: [ge2025-07-14T08:20:00Z, lt2025-07-14T08:21:00Z]
+        - name: end-date
+          in: query
+          description: |
+            An End Date range, read as `start-date` is but against `endDate`.
+          style: form
+          explode: true
+          schema:
+            type: array
+            maxItems: 2
+            items:
+              type: string
+              pattern: '^(ge|lt)\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$'
+          example: [ge2024-12-31T16:00:00Z, lt2025-12-31T16:00:00Z]
+        - name: _sort
+          in: query
+          description: |
+            One date-time column alone, `-` first for descending, by the whole
+            date-time, with no `_id` after it: the source breaks ties by its own
+            rule, the same on every page, so a page never repeats or skips a
+            Medication Record. **Absent** when no sort is chosen on the
+            Medication page: the source's own default order applies.
+
+            - `start-date`: by `startDate`.
+            - `end-date`: by `endDate`.
+          schema:
+            type: string
+            enum:
+              - start-date
+              - -start-date
+              - end-date
+              - -end-date
         - name: _count
           in: query
           required: true
@@ -854,8 +923,8 @@ paths:
           in: query
           required: true
           description: |
-            How many Medication Records to skip, in the source's order: the
-            page's `startIndex - 1`. An offset at or past `total` returns no
+            How many Medication Records to skip, filtered and in sort order:
+            the page's `startIndex - 1`. An offset at or past `total` returns no
             entries and still the full `total`, never an error.
           schema:
             type: integer
@@ -871,9 +940,9 @@ paths:
       responses:
         "200":
           description: |
-            One page of the patient's Medication Records, in the source's
-            order, and the `total` of every one. A patient with none is this
-            answer with `total: 0`.
+            One page of the patient's Medication Records the filters keep, in
+            sort order, and the `total` of every one they keep. A patient with
+            none, or a filter keeping none, is this answer with `total: 0`.
           content:
             application/fhir+json:
               schema:

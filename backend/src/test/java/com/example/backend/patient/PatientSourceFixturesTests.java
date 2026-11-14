@@ -3,6 +3,7 @@ package com.example.backend.patient;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.Comparator;
@@ -1093,10 +1094,14 @@ class PatientSourceFixturesTests {
 
     // ---- the Medication Histories -----------------------------------------------------------
 
+    /** The filters a Medication History read sends the source, each as its own search parameter. */
+    private static final List<String> MEDICATION_FILTER_PARAMETERS =
+            List.of("dispense-status", "start-date", "end-date");
+
     /** The Medication Records of every page of {@code patient}'s Medication History, page after page. */
     private static List<JsonNode> medicationsOf(String patient) {
         return PatientSourceStubs.medicationHistories().stream()
-                .filter(PatientSourceFixturesTests::canned)
+                .filter(stub -> inTheSourcesOrder(stub, MEDICATION_FILTER_PARAMETERS))
                 .filter(stub -> stub.path().equals("/Patient/" + patient + "/medication"))
                 .sorted(Comparator.comparing(stub -> stub.query().at("/_offset/equalTo")
                         .asInt()))
@@ -1104,9 +1109,10 @@ class PatientSourceFixturesTests {
                 .toList();
     }
 
-    /** Every Medication Record any Medication History stub serves. */
+    /** Every Medication Record of every fixture's Medication History, each once, as its pages hold it. */
     private static List<JsonNode> everyMedicationRecord() {
         return PatientSourceStubs.medicationHistories().stream()
+                .filter(stub -> inTheSourcesOrder(stub, MEDICATION_FILTER_PARAMETERS))
                 .flatMap(stub -> resourcesOf(stub).stream())
                 .toList();
     }
@@ -1119,7 +1125,7 @@ class PatientSourceFixturesTests {
     @Test
     void twoFixturesHaveAMedicationHistoryAndTheFallbackServesEveryFixture() {
         List<String> exact = PatientSourceStubs.medicationHistories().stream()
-                .filter(PatientSourceFixturesTests::canned)
+                .filter(stub -> inTheSourcesOrder(stub, MEDICATION_FILTER_PARAMETERS))
                 .map(stub -> stub.path() + " " + stub.query().at("/_offset/equalTo").asString()
                         + " of " + stub.bundle().at("/total").asInt())
                 .toList();
@@ -1138,19 +1144,26 @@ class PatientSourceFixturesTests {
     }
 
     /**
-     * Every canned page is matched on the whole page the backend asks for — five to a page, its
-     * offset and an accurate total — so a read of any other page falls to the fallback.
+     * Every canned Medication History read is matched on the whole page the backend asks for —
+     * five to a page, its offset and an accurate total — and pins the sort and each filter it does
+     * not use as absent, and each it uses to its exact values, so a read of any other page, or
+     * with a filter or sort no stub names, falls to the fallback rather than to an unfiltered
+     * page.
      */
     @Test
-    void everyCannedMedicationPagePinsItsPage() {
+    void everyCannedMedicationReadPinsItsPageItsSortAndEveryFilterItUsesOrNot() {
         assertThat(PatientSourceStubs.medicationHistories())
                 .filteredOn(PatientSourceFixturesTests::canned)
-                .hasSize(3)
+                .hasSize(16)
                 .allSatisfy(stub -> assertThat(List.of(
                         stub.query().at("/_count/equalTo").asString(),
                         stub.query().at("/_offset/equalTo").isString(),
                         stub.query().at("/_total/equalTo").asString()))
-                        .containsExactly("5", true, "accurate"));
+                        .containsExactly("5", true, "accurate"))
+                .allSatisfy(stub -> assertThat(Stream.concat(Stream.of("_sort"),
+                        MEDICATION_FILTER_PARAMETERS.stream()))
+                        .as("each matcher, absent or pinned")
+                        .allMatch(parameter -> pinsOrAbsent(stub.query().path(parameter))));
     }
 
     /** Each page holds no more than five Medication Records, and a history's pages hold its total. */
@@ -1211,6 +1224,21 @@ class PatientSourceFixturesTests {
                 .containsExactly("medication-tan-hui-min-4");
     }
 
+    /** Every Medication Record any stub answers, sorted or filtered too, holds its elements alone. */
+    @Test
+    void everyMedicationRecordAnyStubAnswersHoldsItsElementsAlone() {
+        assertThat(PatientSourceStubs.medicationHistories().stream()
+                .flatMap(stub -> resourcesOf(stub).stream()))
+                .isNotEmpty()
+                .allSatisfy(record -> assertThat(List.<Object>of(
+                        record.get("resourceType").asString(),
+                        REQUIRED_MEDICATION_FIELDS.stream().allMatch(record::has),
+                        record.propertyNames().stream()
+                                .allMatch(field -> REQUIRED_MEDICATION_FIELDS.contains(field)
+                                        || OPTIONAL_MEDICATION_FIELDS.contains(field))))
+                        .containsExactly("Medication", true, true));
+    }
+
     /** Every fixture's record ends on or after the instant it starts. */
     @Test
     void everyMedicationRecordEndsOnOrAfterItStarts() {
@@ -1236,6 +1264,142 @@ class PatientSourceFixturesTests {
         assertThat(ids).hasSize(10).doesNotHaveDuplicates()
                 .doesNotContainAnyElementsOf(others.toList())
                 .allSatisfy(id -> assertThat(id).matches("[A-Za-z0-9\\-.]{1,64}"));
+    }
+
+    // ---- the Medication sort and filter stubs ---------------------------------------------
+
+    /** The instant a Medication Record's date-time {@code field} names, whatever its offset. */
+    private static Instant instantOf(JsonNode record, String field) {
+        return OffsetDateTime.parse(record.get(field).asString()).toInstant();
+    }
+
+    /**
+     * Whether {@code instant} lies within every end {@code ends} pins — {@code ge} an instant, on
+     * or after it, and {@code lt} an instant, before it: the instants a date-time range's
+     * Singapore minutes are sent as, both minutes inclusive — or any instant with no end pinned.
+     */
+    private static boolean inDateTimeRange(Instant instant, List<String> ends) {
+        return ends.stream().allMatch(end -> end.startsWith("ge")
+                ? !instant.isBefore(Instant.parse(end.substring(2)))
+                : end.startsWith("lt") && instant.isBefore(Instant.parse(end.substring(2))));
+    }
+
+    /**
+     * {@code records} as the {@code _sort} {@code sorts} pins orders them: by the instant the
+     * date-time it names is, {@code -} first for descending, ties left as the source keeps them;
+     * as they are with no sort pinned.
+     */
+    private static List<JsonNode> sortedByInstant(List<JsonNode> records, List<String> sorts) {
+        if (sorts.isEmpty()) {
+            return records;
+        }
+        String sort = sorts.getFirst();
+        String field = SORTED_FIELDS.get(sort.replaceFirst("^-", ""));
+        Comparator<JsonNode> order = Comparator.comparing(record -> instantOf(record, field));
+        return records.stream()
+                .sorted(sort.startsWith("-") ? order.reversed() : order)
+                .toList();
+    }
+
+    /** The canned Medication History reads that are sorted or filtered, not in the source's order. */
+    private static List<PatientSourceStubs.HistoryStub> narrowedMedicationReads() {
+        return PatientSourceStubs.medicationHistories().stream()
+                .filter(PatientSourceFixturesTests::canned)
+                .filter(stub -> !inTheSourcesOrder(stub, MEDICATION_FILTER_PARAMETERS))
+                .toList();
+    }
+
+    /**
+     * Every sorted or filtered Medication read answers exactly the Medication Records its filters
+     * select from the patient's history in the source's own order — the Dispense Statuses any of
+     * them, and a date-time range both ends, compared as instants whatever offset a record was
+     * given in — sorted as its {@code _sort} names by the whole date-time, ties left as the source
+     * keeps them, or left in that order with none, paged by its offset, five to a page, with the
+     * total it selects: the source's behaviour, as /docs/domain/medication.md documents it. Each
+     * record is exactly as the unfiltered history holds it.
+     */
+    @Test
+    void everySortedOrFilteredMedicationReadAnswersTheRecordsItsFiltersAndSortSelect() {
+        assertThat(narrowedMedicationReads()).hasSize(13).allSatisfy(stub -> {
+            String patient = stub.path().replaceFirst("^/Patient/", "")
+                    .replaceFirst("/medication$", "");
+            JsonNode query = stub.query();
+            List<JsonNode> selected = medicationsOf(patient).stream()
+                    .filter(record -> anyOf(record, "dispenseStatus",
+                            pinnedIn(query, "dispense-status")))
+                    .filter(record -> inDateTimeRange(instantOf(record, "startDate"),
+                            pinnedIn(query, "start-date")))
+                    .filter(record -> inDateTimeRange(instantOf(record, "endDate"),
+                            pinnedIn(query, "end-date")))
+                    .toList();
+            List<JsonNode> expected = sortedByInstant(selected, pinnedIn(query, "_sort"));
+            int offset = query.at("/_offset/equalTo").asInt();
+
+            assertThat(List.of(stub.bundle().at("/total").asInt(), resourcesOf(stub)))
+                    .containsExactly(expected.size(),
+                            expected.subList(offset, Math.min(offset + 5, expected.size())));
+        });
+    }
+
+    /**
+     * Whether some filtered read answers a record whose date-time falls on the very minute one of
+     * its {@code prefix} bounds names: for {@code ge}, the bound's own instant; for {@code lt},
+     * the minute before it — the bound's to-minute, which the range keeps whole.
+     */
+    private static boolean aBoundOnARecordsMinuteKeepsIt(
+            List<PatientSourceStubs.HistoryStub> filtered, String prefix) {
+        return filtered.stream().anyMatch(stub -> Stream.of("start-date", "end-date")
+                .anyMatch(parameter -> pinnedIn(stub.query(), parameter).stream()
+                        .filter(end -> end.startsWith(prefix))
+                        .map(end -> Instant.parse(end.substring(2))
+                                .minusSeconds(prefix.equals("lt") ? 60 : 0))
+                        .anyMatch(minute -> resourcesOf(stub).stream()
+                                .anyMatch(record -> instantOf(record,
+                                        SORTED_FIELDS.get(parameter)).equals(minute)))));
+    }
+
+    /**
+     * The sort and filter stubs cover each direction of each date-time, on Tan Wei Ming, each sent
+     * as the column alone; every filter, on Tan Hui Min, each Dispense Status among them and two
+     * at once; a from-bound and a to-bound each on a record's exact minute, keeping it; two
+     * filters combined; and a filter that matches nothing.
+     */
+    @Test
+    void theMedicationSortAndFilterStubsCoverEverySortAndFilter() {
+        List<PatientSourceStubs.HistoryStub> sorted = narrowedMedicationReads().stream()
+                .filter(stub -> !pinnedIn(stub.query(), "_sort").isEmpty())
+                .toList();
+        List<PatientSourceStubs.HistoryStub> filtered = narrowedMedicationReads().stream()
+                .filter(stub -> pinnedIn(stub.query(), "_sort").isEmpty())
+                .toList();
+
+        assertThat(List.of(
+                sorted.stream().map(stub -> stub.path() + " " + pinnedIn(stub.query(), "_sort"))
+                        .collect(Collectors.toSet()),
+                filtered.stream().map(PatientSourceStubs.HistoryStub::path)
+                        .collect(Collectors.toSet()),
+                MEDICATION_FILTER_PARAMETERS.stream()
+                        .filter(parameter -> filtered.stream()
+                                .anyMatch(stub -> !pinnedIn(stub.query(), parameter).isEmpty()))
+                        .toList(),
+                filtered.stream().flatMap(stub -> pinnedIn(stub.query(), "dispense-status")
+                                .stream())
+                        .collect(Collectors.toSet()),
+                aBoundOnARecordsMinuteKeepsIt(filtered, "ge"),
+                aBoundOnARecordsMinuteKeepsIt(filtered, "lt"),
+                filtered.stream().anyMatch(stub -> MEDICATION_FILTER_PARAMETERS.stream()
+                        .filter(parameter -> !pinnedIn(stub.query(), parameter).isEmpty())
+                        .count() > 1),
+                filtered.stream().anyMatch(stub -> stub.bundle().at("/total").asInt() == 0)))
+                .containsExactly(
+                        Set.of("/Patient/eq081-VQEgP8drUUqCWzHfw3/medication [start-date]",
+                                "/Patient/eq081-VQEgP8drUUqCWzHfw3/medication [-start-date]",
+                                "/Patient/eq081-VQEgP8drUUqCWzHfw3/medication [end-date]",
+                                "/Patient/eq081-VQEgP8drUUqCWzHfw3/medication [-end-date]"),
+                        Set.of("/Patient/dev-patient-05/medication"),
+                        MEDICATION_FILTER_PARAMETERS,
+                        Set.of("pending", "dispensed", "uncollected", "pending,uncollected"),
+                        true, true, true, true);
     }
 
     /**

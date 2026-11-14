@@ -21,6 +21,7 @@ import com.example.backend.patient.domain.FfiOutcome;
 import com.example.backend.patient.domain.FfiStatus;
 import com.example.backend.patient.domain.FfiType;
 import com.example.backend.patient.domain.MedicalCentre;
+import com.example.backend.patient.domain.MedicationFilter;
 import com.example.backend.patient.domain.MedicationHistory;
 import com.example.backend.patient.domain.MedicationRecord;
 import com.example.backend.patient.domain.NumcFilter;
@@ -38,6 +39,7 @@ import com.example.backend.patient.domain.PatientQuery;
 import com.example.backend.patient.domain.PatientStore;
 import com.example.backend.patient.domain.SortOrder;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -622,6 +624,12 @@ public abstract class PatientStoreContract {
 
     // ---- the Medication Histories ----------------------------------------------------------
 
+    /** The page {@code page} of {@code patient}'s Medication History, unfiltered, in the source's order. */
+    private Optional<MedicationHistory> medicationHistory(PatientId patient, PageRequest page) {
+        return patients().findMedicationHistory(patient, MedicationFilter.NONE,
+                HistorySort.SOURCE_ORDER, page);
+    }
+
     /**
      * A Medication Record with every optional element there but its Step — as each of Tan Wei
      * Ming's first five is — its dates ISO-8601 with an offset.
@@ -638,7 +646,7 @@ public abstract class PatientStoreContract {
     /** Tan Wei Ming's first five Medication Records of six, in the source's own order. */
     @Test
     void tan_wei_mings_medication_history_reads_its_first_page_of_five_of_six() {
-        assertThat(patients().findMedicationHistory(new PatientId("eq081-VQEgP8drUUqCWzHfw3"),
+        assertThat(medicationHistory(new PatientId("eq081-VQEgP8drUUqCWzHfw3"),
                 FIRST_FIVE)).contains(new MedicationHistory(6, List.of(
                         medication("medication-tan-wei-ming-1", "Paracetamol", "750 mg", "QDS",
                                 "30 tablets", DispenseStatus.PENDING, "5 days",
@@ -665,7 +673,7 @@ public abstract class PatientStoreContract {
     /** Tan Wei Ming's sixth Medication Record, the one with a Step, on the second page. */
     @Test
     void tan_wei_mings_medication_history_reads_its_sixth_on_the_second_page() {
-        assertThat(patients().findMedicationHistory(new PatientId("eq081-VQEgP8drUUqCWzHfw3"),
+        assertThat(medicationHistory(new PatientId("eq081-VQEgP8drUUqCWzHfw3"),
                 NEXT_FIVE)).contains(new MedicationHistory(6, List.of(new MedicationRecord(
                         "medication-tan-wei-ming-6", "Prednisolone", "30 mg", "PO", "OM", "1",
                         "14 tablets", DispenseStatus.DISPENSED, "7 days",
@@ -680,7 +688,7 @@ public abstract class PatientStoreContract {
      */
     @Test
     void tan_hui_mins_medication_history_reads_her_four_records() {
-        assertThat(patients().findMedicationHistory(new PatientId("dev-patient-05"), FIRST_FIVE))
+        assertThat(medicationHistory(new PatientId("dev-patient-05"), FIRST_FIVE))
                 .contains(new MedicationHistory(4, List.of(
                         new MedicationRecord("medication-tan-hui-min-1", "Ibuprofen", "400 mg",
                                 "PO", "TDS", null, "15 tablets", DispenseStatus.DISPENSED,
@@ -706,17 +714,107 @@ public abstract class PatientStoreContract {
                                 MedicalCentre.KRANJI_CAMP, "Dr Lim Wei Jie"))));
     }
 
+    /** The ids of a Medication History's page, in its order, beside its total. */
+    private static List<Object> medicationIdsAndTotal(Optional<MedicationHistory> history) {
+        MedicationHistory read = history.orElseThrow();
+        return List.of(read.totalResults(),
+                read.records().stream().map(MedicationRecord::id).toList());
+    }
+
+    /**
+     * Each canned sort of Tan Wei Ming's Medication History, by the whole date-time — his second
+     * record a minute after his first and third — the first page of six: the sort, then the ids
+     * in its order, ties as the source keeps them.
+     */
+    static Stream<Arguments> cannedMedicationSorts() {
+        List<String> earliestFirst = List.of("medication-tan-wei-ming-6",
+                "medication-tan-wei-ming-5", "medication-tan-wei-ming-4",
+                "medication-tan-wei-ming-1", "medication-tan-wei-ming-3");
+        List<String> latestFirst = List.of("medication-tan-wei-ming-2",
+                "medication-tan-wei-ming-1", "medication-tan-wei-ming-3",
+                "medication-tan-wei-ming-4", "medication-tan-wei-ming-5");
+        return Stream.of(
+                Arguments.of(MedicationHistory.START_DATE, SortOrder.ASCENDING, earliestFirst),
+                Arguments.of(MedicationHistory.START_DATE, SortOrder.DESCENDING, latestFirst),
+                Arguments.of(MedicationHistory.END_DATE, SortOrder.ASCENDING, earliestFirst),
+                Arguments.of(MedicationHistory.END_DATE, SortOrder.DESCENDING, latestFirst));
+    }
+
+    @ParameterizedTest(name = "{0} {1}")
+    @MethodSource("cannedMedicationSorts")
+    void tan_wei_mings_medication_history_reads_in_each_canned_sort(HistoryColumn<?> field,
+            SortOrder order, List<String> ids) {
+        assertThat(medicationIdsAndTotal(patients().findMedicationHistory(
+                new PatientId("eq081-VQEgP8drUUqCWzHfw3"), MedicationFilter.NONE,
+                new HistorySort(field, order), FIRST_FIVE)))
+                .containsExactly(6, ids);
+    }
+
+    /** A date-time range over the Start Date alone, from {@code from} to {@code to}. */
+    private static MedicationFilter started(LocalDateTime from, LocalDateTime to) {
+        return new MedicationFilter(Set.of(), new DateRange<>(from, to), DateRange.any());
+    }
+
+    private static final LocalDateTime START_OF_2025 = LocalDateTime.of(2025, 1, 1, 0, 0);
+
+    /**
+     * Each canned filter of Tan Hui Min's Medication History: the case, the filter, then the ids
+     * it selects. Each bound is a Singapore minute, inclusive: her second record starts on 14 Jul
+     * 2025 at 16:20, and her first on 01 Mar 2026 at 10:00, given in UTC.
+     */
+    static Stream<Arguments> cannedMedicationFilters() {
+        return Stream.of(
+                Arguments.of("pending", new MedicationFilter(Set.of(DispenseStatus.PENDING),
+                        DateRange.any(), DateRange.any()), List.of("medication-tan-hui-min-3")),
+                Arguments.of("dispensed", new MedicationFilter(Set.of(DispenseStatus.DISPENSED),
+                        DateRange.any(), DateRange.any()),
+                        List.of("medication-tan-hui-min-1", "medication-tan-hui-min-4")),
+                Arguments.of("uncollected", new MedicationFilter(
+                        Set.of(DispenseStatus.UNCOLLECTED), DateRange.any(), DateRange.any()),
+                        List.of("medication-tan-hui-min-2")),
+                Arguments.of("pending or uncollected", new MedicationFilter(
+                        Set.of(DispenseStatus.UNCOLLECTED, DispenseStatus.PENDING),
+                        DateRange.any(), DateRange.any()),
+                        List.of("medication-tan-hui-min-2", "medication-tan-hui-min-3")),
+                Arguments.of("started by 14 Jul 2025 16:20, that minute in",
+                        started(null, LocalDateTime.of(2025, 7, 14, 16, 20)),
+                        List.of("medication-tan-hui-min-2", "medication-tan-hui-min-3",
+                                "medication-tan-hui-min-4")),
+                Arguments.of("started from 01 Mar 2026 10:00, that minute in",
+                        started(LocalDateTime.of(2026, 3, 1, 10, 0), null),
+                        List.of("medication-tan-hui-min-1")),
+                Arguments.of("ended in 2025", new MedicationFilter(Set.of(), DateRange.any(),
+                        new DateRange<>(START_OF_2025, LocalDateTime.of(2025, 12, 31, 23, 59))),
+                        List.of("medication-tan-hui-min-2", "medication-tan-hui-min-3")),
+                Arguments.of("ended by the end of 2023", new MedicationFilter(Set.of(),
+                        DateRange.any(),
+                        new DateRange<>(null, LocalDateTime.of(2023, 12, 31, 23, 59))),
+                        List.of()),
+                Arguments.of("dispensed started from 2025", new MedicationFilter(
+                        Set.of(DispenseStatus.DISPENSED), new DateRange<>(START_OF_2025, null),
+                        DateRange.any()), List.of("medication-tan-hui-min-1")));
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("cannedMedicationFilters")
+    void tan_hui_mins_medication_history_reads_each_canned_filter(String filtered,
+            MedicationFilter filter, List<String> ids) {
+        assertThat(medicationIdsAndTotal(patients().findMedicationHistory(
+                new PatientId("dev-patient-05"), filter, HistorySort.SOURCE_ORDER, FIRST_FIVE)))
+                .containsExactly(ids.size(), ids);
+    }
+
     /** Siti Nurhaliza binte Ahmad, as every fixture but those two, has no Medication Record. */
     @Test
     void a_patient_with_no_medication_records_reads_an_empty_history_of_none() {
-        assertThat(patients().findMedicationHistory(new PatientId("erXuFYUfucBZaryVksYEcMg3"),
+        assertThat(medicationHistory(new PatientId("erXuFYUfucBZaryVksYEcMg3"),
                 FIRST_FIVE)).contains(new MedicationHistory(0, List.of()));
     }
 
     /** {@code not-a-uuid} is a well-formed id the source holds no patient under. */
     @Test
     void a_well_formed_id_no_patient_is_held_under_has_no_medication_history() {
-        assertThat(patients().findMedicationHistory(new PatientId("not-a-uuid"), FIRST_FIVE))
+        assertThat(medicationHistory(new PatientId("not-a-uuid"), FIRST_FIVE))
                 .isEmpty();
     }
 }

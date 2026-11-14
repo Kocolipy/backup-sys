@@ -267,9 +267,18 @@ two pages share moves up to `src/pages/` itself, and imports no page folder
   date-time with an offset, each of the six optional elements through
   `optionalString` — absent when the source lacks it, shown as `—` — the
   Dispense Status a `Record` of labels keyed by its codes, and the Dispensary
-  one of `MEDICAL_CENTRES` (`medical-centre-api.ts`). Read-only, in the
-  source's own order: no row action, and every column a `PlainHeading`, with
-  no sort and no filter. The Medication is bold, every free-text element is
+  one of `MEDICAL_CENTRES` (`medical-centre-api.ts`). Read-only, with no row
+  action. It sorts and filters as NUMC and ARMC do: `MEDICATION_DATE_COLUMNS`
+  declares the Start Date and End Date as `date-time` columns on the shared
+  plumbing (`history-api.ts`, `@/lib/date-range`), the two `SortHeading`s
+  sort by them and every other column is a `PlainHeading`, and
+  `MedicationFilterPopover` (`medication-filter-popover.tsx`) lays out a
+  Dispense Status `MultiSelectPicker` and the two `datetime-local` ranges in
+  the shared `HistoryFilterPopover`; `MEDICATION_HISTORY` sends each
+  `dispenseStatus` in its set's order, each end as its Singapore minute and
+  the sort, and every change reads from the first page; a filtered history
+  with none is "No medication records match the filters". The Medication is
+  bold, every free-text element is
   shown as sent, both dates through `formatDateTime` (`src/lib/time.ts`) in
   Singapore time, and the Dispense Status is a badge: PENDING `muted`,
   DISPENSED `success`, UNCOLLECTED `danger`. Its twelve columns are wider than
@@ -355,6 +364,17 @@ two pages share moves up to `src/pages/` itself, and imports no page folder
   draft, applies only on Apply or Enter in a date, refuses a bad range
   beneath its field with nothing sent, and resets to the page's own no-filter
   value. `pickerCopy` names a picker's parts from its column.
+- `filtered-history.tsx` — `FilteredHistory`, the filtered, sorted history
+  listing the FFI, NUMC, ARMC and Medication pages render once the patient in
+  context is read. Each page hands it its paged declaration, its page size,
+  its Filter panel, its no-filter value and filter count, its copy and its
+  table; it holds the filters and the sort as component state alone, never
+  the URL, so a new patient in context starts with neither, reads through
+  `usePagedRead` — a change of either from the first page — and renders the
+  Filter panel at the top right above the shared `PagedListing`, its range
+  named on a single page too. A `404` is `NoPatientInContext`; with a filter
+  applied, an empty history gives the page's "match the filters" copy; and
+  the table is told while a read is pending, so its sort headings hold still.
 - `armc.tsx` / `armc-api.ts` — ARMC, `/armc`, linked after NUMC for a session
   holding `patient:read` and guarded by it. It renders through the shared
   `ForPatientInContext` as NUMC does — "No patient in context" with none in

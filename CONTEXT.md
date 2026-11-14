@@ -608,9 +608,13 @@ never held, and not audited.
 _Avoid_: prescription record, medication order, drug record
 
 **Medication History**:
-Every Medication Record of one patient, in the Patient source's own order,
-read five to a page on the Medication page (`/medication`) for the patient in
-context, by a session holding `patient:read`.
+Every Medication Record of one patient, in the Patient source's own order
+unless sorted by its Start Date or End Date, by the whole date-time, narrowed by
+any of its Dispense Statuses and by a range of either date-time, to the minute
+in Singapore time, both ends inclusive — read five to a page on the Medication
+page (`/medication`) for the patient in context, by a session holding
+`patient:read`. The source sorts, breaking ties itself, and filters it, as it
+does an ARMC History.
 _Avoid_: medication list, medication log, prescription history
 
 **Dispense Status**:

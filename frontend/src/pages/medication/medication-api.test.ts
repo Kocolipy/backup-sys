@@ -1,9 +1,17 @@
 import { describe, expect, it } from "vitest";
 
+import { checkDateRanges } from "@/lib/date-range";
 import { DecodeError } from "@/lib/decode";
 import { describeDecoder, STRING, without } from "@/lib/decode.testHelpers";
 
-import { decodeMedicationRecord, MEDICATION_HISTORY } from "./medication-api";
+import {
+  countMedicationFilters,
+  decodeMedicationRecord,
+  MEDICATION_DATE_COLUMNS,
+  MEDICATION_HISTORY,
+  type MedicationFilters,
+  NO_MEDICATION_FILTERS,
+} from "./medication-api";
 
 /** One Medication Record exactly as the backend serialises it, every optional element present. */
 const AMOXICILLIN = {
@@ -63,16 +71,134 @@ describeDecoder(
   { optional: OPTIONAL, strict: true },
 );
 
+// How a date range is checked at each precision is `checkDateRanges`'
+// (lib/date-range.test.ts): here, that the Medication History's two ranges are
+// the ones checked, by name, as date-times.
+describe("the Medication History's date ranges", () => {
+  it("declares the Start Date and the End Date, both date-times, in that order", () => {
+    expect(MEDICATION_DATE_COLUMNS).toEqual([
+      { column: "startDate", label: "Start Date", precision: "date-time" },
+      { column: "endDate", label: "End Date", precision: "date-time" },
+    ]);
+  });
+
+  it("checks its filters' ranges by the columns it declares, to the minute", () => {
+    expect(
+      checkDateRanges(MEDICATION_DATE_COLUMNS, {
+        ...NO_MEDICATION_FILTERS,
+        endDateFrom: "2025-07-21T16:21",
+        endDateTo: "2025-07-21T16:20",
+      }),
+    ).toEqual({
+      column: "endDate",
+      message: "The End Date from-date must not be after its to-date.",
+      ok: false,
+    });
+  });
+
+  it("refuses a range end that is a date alone", () => {
+    expect(
+      checkDateRanges(MEDICATION_DATE_COLUMNS, {
+        ...NO_MEDICATION_FILTERS,
+        startDateFrom: "2025-07-14",
+      }),
+    ).toEqual({
+      column: "startDate",
+      message: "Enter the Start Date dates and times as real dates and times.",
+      ok: false,
+    });
+  });
+});
+
+describe("countMedicationFilters", () => {
+  it("counts none for no filter", () => {
+    expect(countMedicationFilters(NO_MEDICATION_FILTERS)).toBe(0);
+  });
+
+  it.each([
+    ["the Dispense Statuses, however many", { dispenseStatuses: ["pending", "uncollected"] }],
+    ["a Start Date from-end", { startDateFrom: "2025-07-14T16:20" }],
+    ["a Start Date to-end", { startDateTo: "2025-07-14T16:20" }],
+    ["an End Date from-end", { endDateFrom: "2025-01-01T00:00" }],
+    ["an End Date to-end", { endDateTo: "2025-12-31T23:59" }],
+  ] as const)("counts %s as one", (_, set) => {
+    expect(countMedicationFilters({ ...NO_MEDICATION_FILTERS, ...set })).toBe(1);
+  });
+
+  it("counts every filter set", () => {
+    expect(countMedicationFilters(EVERY_FILTER)).toBe(5);
+  });
+});
+
+/** Every filter set, the Dispense Statuses given out of their set's order. */
+const EVERY_FILTER: MedicationFilters = {
+  dispenseStatuses: ["uncollected", "pending"],
+  endDateFrom: "2025-01-01T00:00",
+  endDateTo: "2025-12-31T23:59",
+  startDateFrom: "2025-07-14T16:20",
+  startDateTo: "2026-03-01T10:00",
+};
+
+const FIRST_PAGE = { count: 5, startIndex: 1 };
+
 describe("MEDICATION_HISTORY", () => {
   it("reads a patient's Medication History a page at a time, by the patient's id", () => {
-    expect(MEDICATION_HISTORY.path("eq081-VQEgP8drUUqCWzHfw3", { count: 5, startIndex: 6 })).toBe(
-      "/api/patient-medication/eq081-VQEgP8drUUqCWzHfw3?startIndex=6&count=5",
-    );
+    expect(
+      MEDICATION_HISTORY.path("eq081-VQEgP8drUUqCWzHfw3", NO_MEDICATION_FILTERS, null, {
+        count: 5,
+        startIndex: 6,
+      }),
+    ).toBe("/api/patient-medication/eq081-VQEgP8drUUqCWzHfw3?startIndex=6&count=5");
   });
 
   it("sends the patient's id encoded as a path segment", () => {
-    expect(MEDICATION_HISTORY.path("a/b c", { count: 5, startIndex: 1 })).toBe(
+    expect(MEDICATION_HISTORY.path("a/b c", NO_MEDICATION_FILTERS, null, FIRST_PAGE)).toBe(
       "/api/patient-medication/a%2Fb%20c?startIndex=1&count=5",
+    );
+  });
+
+  // Each Dispense Status is a parameter of its own, repeated, in its closed
+  // set's order; each date-time end is its Singapore minute, with no offset.
+  it("asks for every filter set, and the sort, before the page", () => {
+    expect(
+      MEDICATION_HISTORY.path(
+        "dev-patient-05",
+        EVERY_FILTER,
+        { by: "endDate", order: "descending" },
+        FIRST_PAGE,
+      ),
+    ).toBe(
+      "/api/patient-medication/dev-patient-05?dispenseStatus=pending&dispenseStatus=uncollected" +
+        "&startDateFrom=2025-07-14T16:20&startDateTo=2026-03-01T10:00" +
+        "&endDateFrom=2025-01-01T00:00&endDateTo=2025-12-31T23:59" +
+        "&sortBy=endDate&sortOrder=descending&startIndex=1&count=5",
+    );
+  });
+
+  it.each([
+    ["a Dispense Status", { dispenseStatuses: ["dispensed"] }, "dispenseStatus=dispensed"],
+    [
+      "a Start Date from-end",
+      { startDateFrom: "2026-03-01T10:00" },
+      "startDateFrom=2026-03-01T10:00",
+    ],
+    ["a Start Date to-end", { startDateTo: "2025-07-14T16:20" }, "startDateTo=2025-07-14T16:20"],
+    ["an End Date from-end", { endDateFrom: "2025-01-01T00:00" }, "endDateFrom=2025-01-01T00:00"],
+    ["an End Date to-end", { endDateTo: "2023-12-31T23:59" }, "endDateTo=2023-12-31T23:59"],
+  ] as const)("asks for %s alone when it is the one filter set", (_, set, asked) => {
+    expect(
+      MEDICATION_HISTORY.path("p1", { ...NO_MEDICATION_FILTERS, ...set }, null, FIRST_PAGE),
+    ).toBe(`/api/patient-medication/p1?${asked}&startIndex=1&count=5`);
+  });
+
+  it.each([
+    ["startDate", "ascending"],
+    ["startDate", "descending"],
+    ["endDate", "ascending"],
+    ["endDate", "descending"],
+  ] as const)("asks for the sort by %s, %s", (by, order) => {
+    expect(MEDICATION_HISTORY.path("p1", NO_MEDICATION_FILTERS, { by, order }, FIRST_PAGE)).toBe(
+      `/api/patient-medication/p1?sortBy=${by}&sortOrder=${order}&startIndex=1&count=5`,
     );
   });
 

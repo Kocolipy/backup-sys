@@ -17,13 +17,14 @@ import org.junit.jupiter.params.provider.ValueSource;
 /**
  * How a history read through the patient source is ordered: by one of the date columns the
  * history declares, one at a time, in either direction — an FFI History or a NUMC History by the
- * Issue Date or the Expiry Date, an ARMC History by the Start Date or the End Date — or, with no
- * column named, in the patient source's own order. The direction's spelling is
+ * Issue Date or the Expiry Date, an ARMC History by the Start Date or the End Date, both calendar
+ * dates, and a Medication History by the Start Date or the End Date, both date-times — or, with
+ * no column named, in the patient source's own order. The direction's spelling is
  * {@link SortOrderTests}'.
  */
 class HistorySortTests {
 
-    /** A history declaring a date-time column beside a calendar date, as no history yet does. */
+    /** A history declaring a date-time column beside a calendar date. */
     private static final HistoryColumn<LocalDateTime> TAKEN_AT =
             new HistoryColumn<>("takenAt", "taken-at", DatePrecision.DATE_TIME);
 
@@ -34,7 +35,8 @@ class HistorySortTests {
     private static final Map<String, List<HistoryColumn<?>>> HISTORIES = Map.of(
             "FFI", FfiHistory.DATE_COLUMNS,
             "NUMC", NumcHistory.DATE_COLUMNS,
-            "ARMC", ArmcHistory.DATE_COLUMNS);
+            "ARMC", ArmcHistory.DATE_COLUMNS,
+            "Medication", MedicationHistory.DATE_COLUMNS);
 
     @Test
     void theSourcesOrderNamesNoColumnAndNoDirection() {
@@ -83,17 +85,32 @@ class HistorySortTests {
                 .hasMessage("A sort names both its column and its direction, or neither");
     }
 
-    /** Each history's columns, spelled as its record on our API names the field. */
+    /**
+     * Each history's columns, spelled as its record on our API names the field, beside the
+     * source's search parameter and the precision each is declared at: a Medication Record's
+     * dates are date-times to the minute, every other history's calendar dates.
+     */
     @ParameterizedTest
     @CsvSource({
-        "FFI, issueDate, issue-date", "FFI, expiryDate, expiry-date",
-        "NUMC, issueDate, issue-date", "NUMC, expiryDate, expiry-date",
-        "ARMC, startDate, start-date", "ARMC, endDate, end-date"})
+        "FFI, issueDate, issue-date, CALENDAR_DATE", "FFI, expiryDate, expiry-date, CALENDAR_DATE",
+        "NUMC, issueDate, issue-date, CALENDAR_DATE",
+        "NUMC, expiryDate, expiry-date, CALENDAR_DATE",
+        "ARMC, startDate, start-date, CALENDAR_DATE", "ARMC, endDate, end-date, CALENDAR_DATE",
+        "Medication, startDate, start-date, DATE_TIME",
+        "Medication, endDate, end-date, DATE_TIME"})
     void aColumnIsSpelledAsTheRecordsFieldIs(String history, String spelled,
-            String searchParameter) {
+            String searchParameter, String precision) {
         assertThat(HistorySort.column(HISTORIES.get(history), spelled))
-                .isEqualTo(new HistoryColumn<>(spelled, searchParameter,
-                        DatePrecision.CALENDAR_DATE));
+                .isEqualTo(declared(spelled, searchParameter, PRECISIONS.get(precision)));
+    }
+
+    /** Each precision, by its constant's name in the cases above. */
+    private static final Map<String, DatePrecision<?>> PRECISIONS = Map.of(
+            "CALENDAR_DATE", DatePrecision.CALENDAR_DATE, "DATE_TIME", DatePrecision.DATE_TIME);
+
+    private static <T extends Comparable<? super T>> HistoryColumn<T> declared(String name,
+            String searchParameter, DatePrecision<T> precision) {
+        return new HistoryColumn<>(name, searchParameter, precision);
     }
 
     /** Only the two dates sort an FFI History: no other column does, nor any other spelling. */
@@ -125,6 +142,20 @@ class HistorySortTests {
         "START_DATE", "enddate", "medicalOfficer1"})
     void anyOtherArmcColumnIsRefused(String spelled) {
         assertThatThrownBy(() -> HistorySort.column(ArmcHistory.DATE_COLUMNS, spelled))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("A history sorts by startDate or endDate");
+    }
+
+    /**
+     * Only a Medication Record's two date-times sort a Medication History: no other column does,
+     * its Dispense Status, its Dispensary and its free text among them, nor another history's
+     * dates, nor any other spelling of its own.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"issueDate", "expiryDate", "dispenseStatus", "dispensary",
+        "medication", "duration", "start-date", "START_DATE", "enddate"})
+    void anyOtherMedicationColumnIsRefused(String spelled) {
+        assertThatThrownBy(() -> HistorySort.column(MedicationHistory.DATE_COLUMNS, spelled))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("A history sorts by startDate or endDate");
     }
