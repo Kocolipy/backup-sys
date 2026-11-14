@@ -9,6 +9,8 @@ import com.example.backend.patient.domain.FfiOutcome;
 import com.example.backend.patient.domain.FfiStatus;
 import com.example.backend.patient.domain.FfiSubmittingMc;
 import com.example.backend.patient.domain.FfiType;
+import com.example.backend.patient.domain.NumcOutcome;
+import com.example.backend.patient.domain.NumcType;
 import com.example.backend.patient.domain.SourceCode;
 import com.example.backend.scim.domain.LockCause;
 import java.util.Arrays;
@@ -33,7 +35,8 @@ import org.junit.jupiter.api.Test;
  * token enums compare it.
  *
  * <p>An FFI's five closed sets — its FFI Type, Outcome, Higher Authority, Submitting MC and
- * Status — are carried by their codes, not their names, and are compared so.
+ * Status — and a NUMC Record's two — its NUMC Type and NUMC Outcome — are carried by their codes,
+ * not their names, and are compared so.
  *
  * <p>An enum the document refers to by {@code $ref} — the audit trail's {@code operation} query
  * parameter, the Group Permissions' request and listing — is the schema compared here, so it is
@@ -69,6 +72,10 @@ class VocabularyContractTests {
     private static final String FFI_SUBMITTING_MCS = "#/components/schemas/FfiSubmittingMc";
 
     private static final String FFI_STATUSES = "#/components/schemas/FfiStatus";
+
+    private static final String NUMC_TYPES = "#/components/schemas/NumcType";
+
+    private static final String NUMC_OUTCOMES = "#/components/schemas/NumcOutcome";
 
     private static final Predicate<Permission> HELD_BY_A_SESSION = permission -> !permission.tokenOnly();
 
@@ -133,6 +140,17 @@ class VocabularyContractTests {
     @Test
     void every_ffi_status_is_a_documented_ffi_status_and_no_other_is() {
         assertThat(CONTRACT.enumDisagreements(FFI_STATUSES, codes(FfiStatus.values())))
+                .isEmpty();
+    }
+
+    @Test
+    void every_numc_type_is_a_documented_numc_type_and_no_other_is() {
+        assertThat(CONTRACT.enumDisagreements(NUMC_TYPES, codes(NumcType.values()))).isEmpty();
+    }
+
+    @Test
+    void every_numc_outcome_is_a_documented_numc_outcome_and_no_other_is() {
+        assertThat(CONTRACT.enumDisagreements(NUMC_OUTCOMES, codes(NumcOutcome.values())))
                 .isEmpty();
     }
 

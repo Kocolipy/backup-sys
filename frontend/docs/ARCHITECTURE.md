@@ -281,6 +281,21 @@ two pages share moves up to `src/pages/` itself, and imports no page folder
   reads from the first page, and a new patient in context starts with
   neither. With a filter applied, an empty history says "No FFIs match the
   filters" rather than "No FFIs".
+- `numc.tsx` / `numc-api.ts` — NUMC, `/numc`, linked after FFI for a session
+  holding `patient:read` and guarded by it. It renders through the shared
+  `ForPatientInContext` as FFI does — "No patient in context" with none in
+  context or a `404` for the id there, "Loading NUMC records…" while the
+  patient is read — and, once the patient is read, that patient's NUMC
+  History, `GET /api/patient-numc/{patientId}`, five at a time through
+  `NUMC_HISTORY` and the shared paged listing, naming the range on a single
+  page too. `NUMC_HISTORY` reads a `404` as `absent`; a failure is "Couldn't
+  load NUMC records" on the page's line, with Try again; an empty history is
+  "No NUMC records". `decodeNumcRecord` is strict, each date read through
+  `calendarDate`, and each of a NUMC Record's two closed sets is a `Record` of
+  labels keyed by its codes. Read-only, in the source's own order: no row
+  action, and every column a `PlainHeading`, with no sort and no filter. The
+  NUMC Outcome is a badge: FIT `success`, UNFIT `danger`, WAIVER GRANTED
+  `info`, WAIVER REJECTED muted.
 - `sort-heading.tsx` — the sortable column heading the accounts listing and
   the FFI page share: `aria-sort`, a direction icon, and a press that sorts
   its column ascending first, then toggles descending → ascending → …, never
@@ -313,17 +328,17 @@ two pages share moves up to `src/pages/` itself, and imports no page folder
   inside its page status, reads `GET /api/patient/{id}` through `PATIENT`
   (opting in to `absent`, a `403` reported as failure) for the EHR context's
   patient, decoding the R5 `Patient` (typed by `@types/fhir`'s `fhir5`) down to
-  the fields shown and the id the FFI page reads by; with
+  the fields shown and the id the FFI and NUMC pages read by; with
   none in context it reads nothing. A new id is a new path, so a new first read,
   and a late answer for the id before never lands. A failure is reported to the
   page's error line once, by this read. `usePatientInContext()` hands its view —
   `none`, or the gated read's — to the top bar, the Patient card and the FFI
-  page, which only render it, so each patient change sends one request on every
+  and NUMC pages, which only render it, so each patient change sends one request on every
   page. The read is
   a sibling of the layout's children, never their parent, so a patient coming
   into context or leaving it never remounts the page. It lives in `src/pages/`
   itself, a part the pages share, because that is the lowest layer the Shell,
-  the Patient card and the FFI page may all import:
+  the Patient card and the FFI and NUMC pages may all import:
   `mb-pages-do-not-import-the-shell` rules out `src/shell/`, and
   `mb-pages-do-not-import-another-page` a page folder.
 - `for-patient-in-context.tsx` — the part of a page the patient in context

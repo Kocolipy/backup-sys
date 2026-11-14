@@ -1,0 +1,43 @@
+{
+  "name": "Fault, NUMC History: a Bundle that is no searchset",
+  "metadata": {
+    "fault": "not-a-searchset"
+  },
+  "request": {
+    "method": "GET",
+    "urlPath": "/Patient/fault-numc-not-a-searchset/numc"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/fhir+json"
+    },
+    "jsonBody": {
+      "resourceType": "Bundle",
+      "id": "numc-history",
+      "type": "collection",
+      "total": 1,
+      "link": [
+        {
+          "relation": "self",
+          "url": "http://127.0.0.1:8104/Patient/fault-numc-not-a-searchset/numc?_offset=0&_count=5"
+        }
+      ],
+      "entry": [
+        {
+          "resource": {
+            "resourceType": "NUMC",
+            "id": "numc-fault-2",
+            "type": "submariner",
+            "outcome": "fit",
+            "issueDate": "2015-03-16",
+            "expiryDate": "2016-03-15"
+          },
+          "search": {
+            "mode": "match"
+          }
+        }
+      ]
+    }
+  }
+}

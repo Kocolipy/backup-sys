@@ -5,7 +5,7 @@ import java.util.Optional;
 
 /**
  * Outbound port for reading Patients: one by its id, a page of a Patient search, or a page of one
- * patient's FFI History. Owned by the domain and implemented by an infrastructure adapter, so the
+ * patient's FFI History or NUMC History. Owned by the domain and implemented by an infrastructure adapter, so the
  * dependency points inward: the HTTP adapter over the in-house patient source (ADR 0014), which
  * the controller, the wire and the SPA do not know of.
  *
@@ -30,4 +30,11 @@ public interface PatientStore {
      */
     Optional<FfiHistory> findFfiHistory(PatientId id, FfiFilter filter, FfiSort sort,
             PageRequest page);
+
+    /**
+     * The page {@code page} of the NUMC History of the patient held under {@code id}, in the
+     * source's own order, as the source pages and counts it (ADR 0019, D5), or none when the
+     * source holds no patient under it.
+     */
+    Optional<NumcHistory> findNumcHistory(PatientId id, PageRequest page);
 }

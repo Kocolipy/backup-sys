@@ -988,6 +988,121 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /api/patient-numc/{patientId}:
+    get:
+      tags: [Patient]
+      summary: Read a patient's NUMC History, a page at a time
+      description: |
+        The NUMC Records (Navy Underwater Medicine Centre) of the patient held
+        under `patientId`, one page at a time, in the in-house patient source's
+        own order, as the source pages and counts them (ADR 0019, D5): the
+        service reads them from the source on every call and orders, pages,
+        holds and caches nothing of its own. No sort and no filter is asked of
+        the source. Read-only.
+
+        Each NUMC Record says whether the patient was found fit for one
+        underwater duty: its NUMC Type and NUMC Outcome are closed sets,
+        carried as their codes, and the SPA names each code with its label.
+        A NUMC Record has no Status, and nothing is derived from its Expiry
+        Date.
+
+        Paging follows ADR 0017's parameter rules: `startIndex` one-based,
+        `count` defaulting to 100 and capped at 200, an out-of-range value
+        coerced rather than refused. The page they resolve to is the source's
+        to read — `count=0` and a page past the end included — and
+        `totalResults` is the source's count of every NUMC Record the patient
+        has.
+
+        Requires `patient:read`, a delegatable Permission a User holds through a
+        Group that carries it, or as the Superuser. Outside `/api/patient`, so
+        the answer is plain JSON and every refusal and fault the application
+        API's `ApiError`, not a FHIR `OperationOutcome`.
+
+        **Not audited**, as a read of one Patient by id is not: a read appends
+        no audit row. The request's own log record names the route template,
+        never the patient id; a `502` adds the fault's one `ERROR` record,
+        naming the source's failure or the rule its answer broke under a NUMC
+        reason, and never the patient id or anything of the answer
+        (`docs/domain/numc.md`, "Logging").
+      operationId: getPatientNumcHistory
+      security:
+        - sessionCookie: [patient:read]
+      parameters:
+        - name: patientId
+          in: path
+          required: true
+          description: |
+            The patient's id, its EHR's FHIR id, as `GET /api/patient/{id}`
+            reads the Patient by. Any value in FHIR's id grammar is well-formed.
+          schema:
+            type: string
+            pattern: "^[A-Za-z0-9\\-.]{1,64}$"
+        - name: startIndex
+          in: query
+          required: false
+          description: |
+            One-based index of the first NUMC Record to return. Defaults to 1;
+            anything below 1 is coerced to 1 rather than refused, and an integer
+            of any size is coerced (one beyond 2147483647 is read as
+            2147483647). Sent to the source as the zero-based `_offset`.
+          schema:
+            type: integer
+        - name: count
+          in: query
+          required: false
+          description: |
+            NUMC Records per page. Defaults to 100; a negative value is coerced
+            to 0 and anything above 200 to 200, rather than refused, however
+            large. Sent to the source as `_count`. The SPA asks for 5.
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: One page of the patient's NUMC History.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NumcHistoryPage"
+        "400":
+          description: |
+            `patientId` is outside FHIR's id grammar, or `startIndex` or
+            `count` is not an integer. Refused before the patient source is
+            called, with the generic `invalid-request` `ApiError`, which quotes
+            nothing of the request.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/PermissionRequired"
+        "404":
+          description: |
+            `patientId` is well-formed but the patient source holds no patient
+            under it (its `404`): the generic `request-refused` `ApiError`. An
+            ordinary answer, not a fault — the SPA shows it as "No patient in
+            context".
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "502":
+          description: |
+            The patient source failed: it could not be reached, gave no answer
+            within 2 seconds to connect and 5 to answer, answered any status but
+            a `200` or a `404`, or answered a `200` that is no searchset
+            `Bundle`, has no `total`, or holds an entry that is no NUMC Record
+            the service can hold — no `id` or one outside FHIR's id grammar, an
+            element missing (every element is required), a code outside its
+            closed set, or a date not to the day. The generic `server-error`
+            `ApiError`, saying nothing about the failure; the fault's one record
+            names its reason. The SPA shows it as "Couldn't load NUMC records",
+            with Try again.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /api/admin/accounts:
     get:
       tags: [Administration]
@@ -4358,6 +4473,63 @@ components:
         An FFI's Status, the patient source's own — Active, Inactive — never
         derived from its Expiry Date.
       enum: [active, inactive]
+    NumcHistoryPage:
+      type: object
+      required: [totalResults, startIndex, records]
+      additionalProperties: false
+      properties:
+        totalResults:
+          type: integer
+          description: The patient's NUMC Records, across every page, as the patient source counted them.
+        startIndex:
+          type: integer
+          description: One-based index of this page's first NUMC Record, as coerced.
+        records:
+          type: array
+          description: This page's NUMC Records, in the source's own order.
+          items:
+            $ref: "#/components/schemas/NumcRecord"
+    NumcRecord:
+      type: object
+      required: [id, type, outcome, issueDate, expiryDate]
+      additionalProperties: false
+      description: |
+        One NUMC Record in a patient's NUMC History: whether the patient was
+        found fit for one underwater duty, every element required. It has no
+        Status. Restricted, Sensitive Normal, as the patient's data is.
+      properties:
+        id:
+          type: string
+          pattern: "^[A-Za-z0-9\\-.]{1,64}$"
+          description: The NUMC Record's own id at the patient source.
+        type:
+          $ref: "#/components/schemas/NumcType"
+        outcome:
+          $ref: "#/components/schemas/NumcOutcome"
+        issueDate:
+          type: string
+          format: date
+          pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+          description: The NUMC Record's Issue Date, a calendar date.
+        expiryDate:
+          type: string
+          format: date
+          pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+          description: |
+            The NUMC Record's Expiry Date, a calendar date. Nothing is derived
+            from it: nothing works out "expired".
+    NumcType:
+      type: string
+      description: |
+        A NUMC Record's NUMC Type, the underwater duty, by its code: Hyperbaric
+        Chamber Duties, Submariner Duties, Diving Duties.
+      enum: [hyperbaric-chamber, submariner, diving]
+    NumcOutcome:
+      type: string
+      description: |
+        A NUMC Record's NUMC Outcome, by its code — FIT, UNFIT, WAIVER GRANTED,
+        WAIVER REJECTED. A set of its own, apart from an FFI's Outcome.
+      enum: [fit, unfit, waiver-granted, waiver-rejected]
     HealthResponse:
       type: object
       required: [status]

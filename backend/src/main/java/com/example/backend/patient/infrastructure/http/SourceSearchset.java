@@ -13,7 +13,8 @@ import java.util.function.Function;
  * {@code Bundle}, as far as the service reads it — its {@code total} and each entry's
  * {@code resource}, of type {@code R}. Every other element ({@code link}, {@code search},
  * {@code fullUrl}) is never bound. A Patient search's page is one, of Patients (ADR 0018), and so
- * is a patient's FFI History, of the source's own FFIs (ADR 0019).
+ * are a patient's FFI History, of the source's own FFIs (ADR 0019), and NUMC History, of its own
+ * NUMC Records (ADR 0019, D5).
  *
  * <p>Every such read asks for its page alike ({@link #PAGE_QUERY}, {@link #pageVariables}): from
  * the zero-based {@code _offset} {@code startIndex - 1}, {@code _count} entries, with an accurate

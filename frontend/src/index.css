@@ -101,6 +101,8 @@
      (#fde68a) / condition-flag-text-observed (#78350f), the amber pair (7.3:1)
    - danger-soft/danger-soft-foreground <- error-container (#ffdad6) /
      on-error-container (#93000a), the error-tint pair (7.2:1)
+   - info-soft/info-soft-foreground <- #dbeafe / #1e40af, the blue status
+     badge pair (7.1:1); outside DESIGN.md's palette
    - male-soft/male-soft-foreground <- #dbeafe / #1e40af, the blue gender
      badge pair (7.1:1); outside DESIGN.md's palette
    - female-soft/female-soft-foreground <- #fce7f3 / #9d174d, the pink gender
@@ -145,6 +147,8 @@
   --warning-soft-foreground: oklch(0.414 0.105 45.904);
   --danger-soft: oklch(0.918 0.042 25.226);
   --danger-soft-foreground: oklch(0.417 0.17 27.379);
+  --info-soft: oklch(0.932 0.032 255.585);
+  --info-soft-foreground: oklch(0.424 0.181 265.638);
   --male-soft: oklch(0.932 0.032 255.585);
   --male-soft-foreground: oklch(0.424 0.181 265.638);
   --female-soft: oklch(0.948 0.028 342.258);
@@ -183,6 +187,8 @@
   --warning-soft-foreground: oklch(0.414 0.105 45.904);
   --danger-soft: oklch(0.918 0.042 25.226);
   --danger-soft-foreground: oklch(0.417 0.17 27.379);
+  --info-soft: oklch(0.932 0.032 255.585);
+  --info-soft-foreground: oklch(0.424 0.181 265.638);
   --male-soft: oklch(0.932 0.032 255.585);
   --male-soft-foreground: oklch(0.424 0.181 265.638);
   --female-soft: oklch(0.948 0.028 342.258);
@@ -323,6 +329,8 @@
   --color-warning-soft-foreground: var(--warning-soft-foreground);
   --color-danger-soft: var(--danger-soft);
   --color-danger-soft-foreground: var(--danger-soft-foreground);
+  --color-info-soft: var(--info-soft);
+  --color-info-soft-foreground: var(--info-soft-foreground);
   --color-male-soft: var(--male-soft);
   --color-male-soft-foreground: var(--male-soft-foreground);
   --color-female-soft: var(--female-soft);

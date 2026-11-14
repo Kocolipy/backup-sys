@@ -207,7 +207,7 @@ describe("FFI", () => {
         .getAllByText("Inactive")
         .map((badge) => badge.classList.contains("text-muted-foreground")),
     }).toEqual({
-      badges: ["Inactive secondary", "Active success", "Active success", "Inactive secondary"],
+      badges: ["Inactive muted", "Active success", "Active success", "Inactive muted"],
       muted: [true, true],
     });
   });

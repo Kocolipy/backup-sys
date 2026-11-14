@@ -43,11 +43,9 @@ const OUTCOME_BADGES: Readonly<Record<FfiOutcome, "success" | "warning" | "dange
 };
 
 /** Each Status's badge: Active green, Inactive muted. */
-const STATUS_BADGES: Readonly<
-  Record<FfiStatus, { variant: "success" | "secondary"; className?: string }>
-> = {
-  active: { variant: "success" },
-  inactive: { className: "bg-muted text-muted-foreground", variant: "secondary" },
+const STATUS_BADGES: Readonly<Record<FfiStatus, "success" | "muted">> = {
+  active: "success",
+  inactive: "muted",
 };
 
 /** How the history is sorted, by the listing that holds the sort. */
@@ -101,7 +99,7 @@ function FfiTable({
             <TableCell>{FFI_HIGHER_AUTHORITY_LABELS[ffi.higherAuthority]}</TableCell>
             <TableCell>{FFI_SUBMITTING_MC_LABELS[ffi.submittingMc]}</TableCell>
             <TableCell>
-              <Badge {...STATUS_BADGES[ffi.status]}>{FFI_STATUS_LABELS[ffi.status]}</Badge>
+              <Badge variant={STATUS_BADGES[ffi.status]}>{FFI_STATUS_LABELS[ffi.status]}</Badge>
             </TableCell>
           </TableRow>
         ))}

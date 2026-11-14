@@ -7,10 +7,8 @@ import com.example.backend.audit.RecordingAuditTrail;
 import com.example.backend.audit.RecordingAuditTrail.Recorded;
 import com.example.backend.audit.domain.AuditOperation;
 import com.example.backend.paging.domain.PageRequest;
+import com.example.backend.patient.RefusingPatientStore;
 import com.example.backend.patient.domain.AdministrativeGender;
-import com.example.backend.patient.domain.FfiFilter;
-import com.example.backend.patient.domain.FfiHistory;
-import com.example.backend.patient.domain.FfiSort;
 import com.example.backend.patient.domain.Patient;
 import com.example.backend.patient.domain.PatientId;
 import com.example.backend.patient.domain.PatientMatch;
@@ -47,7 +45,7 @@ class PatientSearchServiceTests {
             new PatientMatches(7, List.of(match("dev-patient-05"), match("dev-patient-06")));
 
     /** A source answering every search with {@code answer}, and keeping what it was asked. */
-    private static final class AnsweringStore implements PatientStore {
+    private static final class AnsweringStore extends RefusingPatientStore {
 
         private final PatientMatches answer;
 
@@ -61,23 +59,12 @@ class PatientSearchServiceTests {
         }
 
         @Override
-        public Optional<Patient> findById(PatientId id) {
-            throw new UnsupportedOperationException("a search reads no Patient by id");
-        }
-
-        @Override
         public PatientMatches search(PatientQuery query, PatientFilter filter, PageRequest page) {
             asked.add(Arrays.asList(query, filter, page));
             if (failure != null) {
                 throw failure;
             }
             return answer;
-        }
-
-        @Override
-        public Optional<FfiHistory> findFfiHistory(PatientId id, FfiFilter filter, FfiSort sort,
-                PageRequest page) {
-            throw new UnsupportedOperationException("a search reads no FFI History");
         }
     }
 

@@ -138,7 +138,7 @@ low/high = subtly tinted nested panels). `outline`/`outline-variant` are
 reserved for hairline borders — never load-bearing text color anywhere in the
 library.
 
-Status badges draw on three **soft status** tokens, each a light fill under dark
+Status badges draw on four **soft status** tokens, each a light fill under dark
 text of the same hue, defined in `src/index.css`'s `:root` / `.dark` pair and
 mapped in its `@theme inline` block:
 
@@ -147,9 +147,11 @@ mapped in its `@theme inline` block:
 | `success-soft` / `success-soft-foreground` | `secondary-container` / `on-secondary-container` (mint)       | 4.6:1    |
 | `warning-soft` / `warning-soft-foreground` | `condition-flag-bg-observed` / `condition-flag-text-observed` | 7.3:1    |
 | `danger-soft` / `danger-soft-foreground`   | `error-container` / `on-error-container`                      | 7.2:1    |
+| `info-soft` / `info-soft-foreground`       | `#dbeafe` / `#1e40af` (blue), outside the palette             | 7.1:1    |
 
 The amber pair adopts the observed condition-flag values as the declared
-warning role.
+warning role. The blue pair is the `info` badge, a granted waiver's (NUMC's
+WAIVER GRANTED); it shares its values with the blue gender pair below.
 
 A Patient's gender badge in Patient Search's results is no status: Male draws
 on `male-soft` / `male-soft-foreground` (blue, 7.1:1) and Female on
@@ -240,13 +242,16 @@ a checkbox per value, its trigger naming the filter and how many are selected.
 
 The single most-used primitive — status pills everywhere
 (Approved/Pending/Pass/Fail/Active/Expired/Fit/Unfit/Waiver, etc.). A status
-takes one of three soft variants, each drawn from its token pair under Colors
-and never from a raw Tailwind colour:
+takes one of five variants, each drawn from a theme token pair — the four soft
+pairs under Colors, or `muted` — and never from a raw Tailwind colour:
 
 - `success` — a positive state: an audit event's Success, an active User.
 - `warning` — a state to notice that is no fault: a Deactivated User, which
   reads "Deactivated", never "inactive".
 - `danger` — a refusal or failure: an audit event's Failure.
+- `info` — a granted waiver: NUMC's WAIVER GRANTED.
+- `muted` — a state set aside, neither good nor bad: an FFI's Inactive, NUMC's
+  WAIVER REJECTED.
 
 `src/pages/status-badge.tsx` holds the one mapping from each status the pages
 show to its label and variant. Two shape variants recur: `rounded` box and

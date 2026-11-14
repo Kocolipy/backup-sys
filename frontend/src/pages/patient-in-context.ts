@@ -1,7 +1,7 @@
 /**
  * The **patient in context**, read once: the one reader of the tab's EHR
  * context's patient (`@/auth/ehr-context`), whose view the top bar, Home's
- * Patient card and the FFI page all render from — so it sits in `src/pages/`,
+ * Patient card and the FFI and NUMC pages all render from — so it sits in `src/pages/`,
  * shared by the pages it serves.
  *
  * The gated read keeps no shared cache, so two readers of one patient would

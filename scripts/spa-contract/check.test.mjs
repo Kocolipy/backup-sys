@@ -57,6 +57,8 @@ function document() {
         FfiHigherAuthority: { type: "string", enum: ["camo", "dis"] },
         FfiSubmittingMc: { type: "string", enum: ["kranji-camp"] },
         FfiStatus: { type: "string", enum: ["active", "inactive"] },
+        NumcType: { type: "string", enum: ["submariner", "diving"] },
+        NumcOutcome: { type: "string", enum: ["fit", "waiver-granted"] },
       },
     },
   };
@@ -89,6 +91,10 @@ function spa() {
         FFI_HIGHER_AUTHORITIES: ["camo", "dis"],
         FFI_SUBMITTING_MCS: ["kranji-camp"],
         FFI_STATUSES: ["active", "inactive"],
+      },
+      "src/pages/numc/numc-api.ts": {
+        NUMC_TYPES: ["submariner", "diving"],
+        NUMC_OUTCOMES: ["fit", "waiver-granted"],
       },
       "src/pages/audit/audit-api.ts": {
         AUDIT_OPERATIONS: ["LOGIN_SUCCESS", "LOGOUT"],
@@ -207,6 +213,20 @@ describe("the SPA's vocabularies", () => {
       (_spa, doc) => schemas(doc)[schema].enum.push(code),
       `${set} (src/pages/ffi/ffi-api.ts) lacks "${code}", which #/components/schemas/${schema} has`,
     ]),
+    // One case per NUMC set, for the same reason.
+    ...[
+      ["NUMC_TYPES", "NumcType", "hyperbaric-chamber"],
+      ["NUMC_OUTCOMES", "NumcOutcome", "waiver-rejected"],
+    ].map(([set, schema, code]) => [
+      `the document gains a code of ${schema}`,
+      (_spa, doc) => schemas(doc)[schema].enum.push(code),
+      `${set} (src/pages/numc/numc-api.ts) lacks "${code}", which #/components/schemas/${schema} has`,
+    ]),
+    [
+      "the SPA gains a NUMC Outcome",
+      (s) => s.modules["src/pages/numc/numc-api.ts"].NUMC_OUTCOMES.push("request-waiver"),
+      `NUMC_OUTCOMES (src/pages/numc/numc-api.ts) has "request-waiver", which #/components/schemas/NumcOutcome lacks`,
+    ],
     [
       "the SPA gains an FFI Status",
       (s) => s.modules["src/pages/ffi/ffi-api.ts"].FFI_STATUSES.push("expired"),
@@ -448,6 +468,7 @@ export const TOKENS: PagedDeclaration<
       "src/pages/accounts/accounts-api.ts",
       "src/pages/audit/audit-api.ts",
       "src/pages/ffi/ffi-api.ts",
+      "src/pages/numc/numc-api.ts",
       "src/pages/tokens/tokens-api.ts",
     ]);
   });

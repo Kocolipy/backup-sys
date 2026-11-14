@@ -4,10 +4,10 @@ import com.example.backend.observability.OutboundCallFailure;
 import com.example.backend.observability.RedactedFaultException;
 import com.example.backend.paging.domain.PageRequest;
 import com.example.backend.patient.domain.DateRange;
-import com.example.backend.patient.domain.Ffi;
 import com.example.backend.patient.domain.FfiFilter;
 import com.example.backend.patient.domain.FfiHistory;
 import com.example.backend.patient.domain.FfiSort;
+import com.example.backend.patient.domain.NumcHistory;
 import com.example.backend.patient.domain.Patient;
 import com.example.backend.patient.domain.PatientId;
 import com.example.backend.patient.domain.PatientMatch;
@@ -25,9 +25,12 @@ import java.net.http.HttpClient;
 import java.net.http.HttpTimeoutException;
 import java.time.Duration;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.BiFunction;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -43,8 +46,10 @@ import org.springframework.web.client.RestClient;
 /**
  * Adapts the domain's {@link PatientStore} port onto the in-house patient source (ADR 0014):
  * {@code GET {base}/Patient/{id}} for a read by id, {@code GET {base}/Patient?…} for a
- * Patient search ({@link #search}, ADR 0018), and {@code GET {base}/Patient/{id}/ffi?…} for a
- * patient's FFI History ({@link #findFfiHistory}, ADR 0019). The source is assumed to answer FHIR R4 and to need
+ * Patient search ({@link #search}, ADR 0018), {@code GET {base}/Patient/{id}/ffi?…} for a
+ * patient's FFI History ({@link #findFfiHistory}, ADR 0019), and
+ * {@code GET {base}/Patient/{id}/numc?…} for a patient's NUMC History ({@link #findNumcHistory},
+ * ADR 0019, D5). The source is assumed to answer FHIR R4 and to need
  * no authorisation, so the call carries no credential of any kind. The patient's id is its EHR's
  * FHIR id, sent unchanged.
  *
@@ -109,6 +114,14 @@ class PatientSourceAdapter implements PatientStore {
 
     /** A searchset of FFIs, an FFI History's answer. */
     private static final ParameterizedTypeReference<SourceSearchset<SourceFfi>> FFIS =
+            new ParameterizedTypeReference<>() {
+            };
+
+    /** A patient's NUMC History, a page at a time, in the source's own order (ADR 0019, D5). */
+    static final String NUMC_HISTORY = "/Patient/{id}/numc?" + SourceSearchset.PAGE_QUERY;
+
+    /** A searchset of NUMC Records, a NUMC History's answer. */
+    private static final ParameterizedTypeReference<SourceSearchset<SourceNumc>> NUMC_RECORDS =
             new ParameterizedTypeReference<>() {
             };
 
@@ -233,6 +246,33 @@ class PatientSourceAdapter implements PatientStore {
             query.append("&_sort=" + sorted(FFI_SORTED_ON.get(sort.field()), sort.order())
                     + ",_id");
         }
+        return history(query, FFIS, SourceFfi::toFfi, FfiHistory::new);
+    }
+
+    /**
+     * {@code GET {base}/Patient/{id}/numc?…}: the patient's NUMC History, paged and counted by the
+     * source, in its own order (ADR 0019, D5) — the page alone, with no sort and no filter. A
+     * {@code 404} is no patient under the id; the one other good answer is a {@code 200}
+     * searchset of NUMC Records, and anything else is a fault, as is a searchset with no total
+     * or an entry that is no NUMC Record the service can hold. The id is a URI variable, so the
+     * call is observed under the template alone.
+     */
+    @Override
+    public Optional<NumcHistory> findNumcHistory(PatientId id, PageRequest page) {
+        SourceQuery query = new SourceQuery(NUMC_HISTORY).variable("id", id.value());
+        query.paged(page);
+        return history(query, NUMC_RECORDS, SourceNumc::toRecord, NumcHistory::new);
+    }
+
+    /**
+     * {@code query}'s answer as one page of a patient's history: empty on a {@code 404}, no
+     * patient under the id; on a {@code 200}, the searchset {@code body} reads, each entry read
+     * by {@code read}, and its total and entries made the page by {@code page}. Any other status
+     * is a fault, as is a searchset with no total or an entry {@code read} refuses.
+     */
+    private <R, E, H> Optional<H> history(SourceQuery query,
+            ParameterizedTypeReference<SourceSearchset<R>> body, Function<R, E> read,
+            BiFunction<Integer, List<E>, H> page) {
         String uri = query.template();
         Map<String, Object> variables = query.variables();
         return called(() -> source.get()
@@ -240,11 +280,10 @@ class PatientSourceAdapter implements PatientStore {
                 .accept(FHIR_JSON)
                 .exchange((request, response) -> {
                     if (!found(response)) {
-                        return Optional.<FfiHistory>empty();
+                        return Optional.<H>empty();
                     }
-                    SourceSearchset.Page<Ffi> ffis =
-                            response.bodyTo(FFIS).page(SourceFfi::toFfi);
-                    return Optional.of(new FfiHistory(ffis.total(), ffis.entries()));
+                    SourceSearchset.Page<E> entries = response.bodyTo(body).page(read);
+                    return Optional.of(page.apply(entries.total(), entries.entries()));
                 }));
     }
 

@@ -20,6 +20,9 @@ const badgeVariants = cva(
         success: "bg-success-soft text-success-soft-foreground",
         warning: "bg-warning-soft text-warning-soft-foreground",
         danger: "bg-danger-soft text-danger-soft-foreground",
+        info: "bg-info-soft text-info-soft-foreground",
+        // A state set aside, neither good nor bad: muted text on the muted fill.
+        muted: "bg-muted text-muted-foreground",
       },
     },
     defaultVariants: {

@@ -121,6 +121,14 @@ change, when the backend side moves. What the SPA has to honour:
   is the EHR context's patient, sent through `encodeURIComponent`. Each FFI is
   decoded strictly: an unknown code or a field the decoder does not know is a
   failure, never passed through.
+- **A patient's NUMC History answers plain JSON too, on the same terms.**
+  `GET /api/patient-numc/{patientId}` answers `application/json`, every
+  refusal or fault an `ApiError`. Its declaration (`NUMC_HISTORY`,
+  `src/pages/numc/numc-api.ts`) opts in to `absentOnNotFound`, so the `404` is
+  the NUMC page's "No patient in context" and the `502` "Couldn't load NUMC
+  records" with Try again; the `{patientId}` is sent through
+  `encodeURIComponent`, and each NUMC Record is decoded strictly, a Status
+  among the fields it refuses.
 - **A request body is JSON, and says so.** The backend reads a request body
   through its JSON converter only, so a body sent without
   `Content-Type: application/json` is refused `415` before any handler runs.
@@ -214,9 +222,9 @@ change, when the backend side moves. What the SPA has to honour:
   is not bound to the EHR context: `patient:read` reads any id. It is a
   delegatable Permission the backend issues only to a member of a Group that
   carries it and to the Superuser; a session without it is refused the read,
-  the Patient search and the FFI History `403`, so the SPA sends none of them —
-  the Patient card says the account has no access to patients, and neither
-  Patient Search nor FFI is linked or opened.
+  the Patient search, the FFI History and the NUMC History `403`, so the SPA
+  sends none of them — the Patient card says the account has no access to
+  patients, and none of Patient Search, FFI or NUMC is linked or opened.
 - **Logout answers `Clear-Site-Data: "cache","cookies","storage"`** — on a
   successful logout and on the `401` a logout with no live session gets. The
   browser drops anything in `localStorage` / `sessionStorage` along with the

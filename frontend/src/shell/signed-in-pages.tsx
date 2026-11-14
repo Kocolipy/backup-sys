@@ -6,6 +6,7 @@ import {
   Search as SearchIcon,
   Settings,
   Users,
+  Waves,
 } from "lucide-react";
 import type { ReactNode } from "react";
 
@@ -19,6 +20,8 @@ import { ChangePassword } from "@/pages/change-password/change-password";
 import { Ffis } from "@/pages/ffi/ffi";
 import { FFI_HISTORY } from "@/pages/ffi/ffi-api";
 import { Home } from "@/pages/home/home";
+import { NumcRecords } from "@/pages/numc/numc";
+import { NUMC_HISTORY } from "@/pages/numc/numc-api";
 import { Search } from "@/pages/search/search";
 import { PATIENT_SEARCH } from "@/pages/search/search-api";
 
@@ -133,6 +136,21 @@ const FFI_PAGE: SignedInPage = {
 };
 
 /**
+ * NUMC: the NUMC History of the patient in context, linked after FFI for a
+ * session holding `patient:read`, the Permission its read requires, and
+ * guarded by it as FFI is, so a session without it is routed to its landing
+ * page and offered no link. Its title heads the page.
+ */
+const NUMC_PAGE: SignedInPage = {
+  element: <NumcRecords />,
+  homeLink: "NUMC",
+  icon: Waves,
+  path: "/numc",
+  permissions: [NUMC_HISTORY.permission],
+  title: "NUMC",
+};
+
+/**
  * Every signed-in page, declared once: `App` turns each entry into a route
  * (behind its Permission guard, if any), `SignedInShell` reads the matching
  * entry for the title, and links each entry
@@ -143,6 +161,7 @@ export const SIGNED_IN_PAGES: readonly SignedInPage[] = [
   SEARCH_PAGE,
   HOME_PAGE,
   FFI_PAGE,
+  NUMC_PAGE,
   ...PAGES_BEYOND_HOME,
   SETTINGS_PAGE,
 ];

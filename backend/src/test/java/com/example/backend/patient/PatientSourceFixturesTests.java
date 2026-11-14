@@ -577,6 +577,147 @@ class PatientSourceFixturesTests {
                         "expiry-date-not-to-the-day");
     }
 
+    // ---- the NUMC Histories -----------------------------------------------------------------
+
+    /** The NUMC Records a stub's searchset holds, in its order. */
+    private static List<JsonNode> recordsOf(PatientSourceStubs.NumcStub stub) {
+        return StreamSupport.stream(stub.bundle().at("/entry").spliterator(), false)
+                .map(entry -> entry.get("resource"))
+                .toList();
+    }
+
+    /** Whether {@code stub} is a fixture's own page rather than the fallback answering several. */
+    private static boolean canned(PatientSourceStubs.NumcStub stub) {
+        return !stub.path().contains("(");
+    }
+
+    /** The NUMC Records of every page of {@code patient}'s NUMC History, page after page. */
+    private static List<JsonNode> recordsOf(String patient) {
+        return PatientSourceStubs.numcHistories().stream()
+                .filter(PatientSourceFixturesTests::canned)
+                .filter(stub -> stub.path().equals("/Patient/" + patient + "/numc"))
+                .sorted(Comparator.comparing(stub -> stub.query().at("/_offset/equalTo")
+                        .asInt()))
+                .flatMap(stub -> recordsOf(stub).stream())
+                .toList();
+    }
+
+    /**
+     * Two fixtures have NUMC Records, each page its own stub — Tan Wei Ming's one page of four and
+     * Tan Hui Min's two of seven — and a fallback answers every fixture's other read with none.
+     */
+    @Test
+    void twoFixturesHaveANumcHistoryAndTheFallbackServesEveryFixture() {
+        List<String> exact = PatientSourceStubs.numcHistories().stream()
+                .filter(PatientSourceFixturesTests::canned)
+                .map(stub -> stub.path() + " " + stub.query().at("/_offset/equalTo").asString()
+                        + " of " + stub.bundle().at("/total").asInt())
+                .toList();
+        String fallback = PatientSourceStubs.numcHistories().stream()
+                .map(PatientSourceStubs.NumcStub::path)
+                .filter(path -> path.contains("("))
+                .findFirst().orElseThrow();
+
+        assertThat(exact).containsExactlyInAnyOrder(
+                "/Patient/eq081-VQEgP8drUUqCWzHfw3/numc 0 of 4",
+                "/Patient/dev-patient-05/numc 0 of 7",
+                "/Patient/dev-patient-05/numc 5 of 7");
+        assertThat(fixtureIds()).allSatisfy(id ->
+                assertThat("/Patient/" + id + "/numc").matches(fallback));
+        assertThat("/Patient/fault-numc-no-id/numc").doesNotMatch(fallback);
+    }
+
+    /**
+     * Every canned page is matched on the whole page the backend asks for — five to a page, its
+     * offset and an accurate total — so a read of any other page falls to the fallback.
+     */
+    @Test
+    void everyCannedNumcPagePinsItsPage() {
+        assertThat(PatientSourceStubs.numcHistories()).filteredOn(PatientSourceFixturesTests::canned)
+                .hasSize(3)
+                .allSatisfy(stub -> assertThat(List.of(
+                        stub.query().at("/_count/equalTo").asString(),
+                        stub.query().at("/_offset/equalTo").isString(),
+                        stub.query().at("/_total/equalTo").asString()))
+                        .containsExactly("5", true, "accurate"));
+    }
+
+    /** Each page holds no more than five NUMC Records, and a history's pages hold its total. */
+    @Test
+    void everyNumcHistoryPageHoldsAtMostFiveAndItsPagesHoldTheirTotal() {
+        assertThat(PatientSourceStubs.numcHistories())
+                .allSatisfy(stub -> assertThat(recordsOf(stub)).hasSizeLessThanOrEqualTo(5));
+        assertThat(List.of(recordsOf("eq081-VQEgP8drUUqCWzHfw3").size(),
+                recordsOf("dev-patient-05").size())).containsExactly(4, 7);
+    }
+
+    /** Every code of both closed sets a NUMC Record has, as the two sets spell them on the wire. */
+    private static final Map<String, Set<String>> NUMC_CLOSED_SETS = Map.of(
+            "type", Set.of("hyperbaric-chamber", "submariner", "diving"),
+            "outcome", Set.of("fit", "unfit", "waiver-granted", "waiver-rejected"));
+
+    /**
+     * Tan Hui Min's history, over its two pages, holds every code of both closed sets, so a page
+     * reading it shows each label and each badge.
+     */
+    @Test
+    void theTwoPageNumcHistoryCoversEveryCodeOfBothClosedSets() {
+        List<JsonNode> records = recordsOf("dev-patient-05");
+
+        NUMC_CLOSED_SETS.forEach((field, codes) -> assertThat(records)
+                .extracting(record -> record.get(field).asString())
+                .as(field)
+                .containsOnlyElementsOf(codes)
+                .containsAll(codes));
+    }
+
+    /** Every NUMC Record is a {@code NUMC} of exactly its four elements and its id. */
+    @Test
+    void everyNumcRecordHoldsItsFourElementsAndItsIdAlone() {
+        assertThat(PatientSourceStubs.numcHistories().stream()
+                .flatMap(stub -> recordsOf(stub).stream()))
+                .hasSize(11)
+                .allSatisfy(record -> assertThat(List.of(record.get("resourceType").asString(),
+                        record.propertyNames()))
+                        .containsExactly("NUMC", Set.of("resourceType", "id", "type", "outcome",
+                                "issueDate", "expiryDate")));
+    }
+
+    /** Every NUMC Record's id is in FHIR's id grammar and no other record's, an FFI's included. */
+    @Test
+    void everyNumcRecordIdIsAFhirIdOfItsOwn() {
+        List<String> ids = PatientSourceStubs.numcHistories().stream()
+                .flatMap(stub -> recordsOf(stub).stream())
+                .map(record -> record.get("id").asString())
+                .toList();
+        List<String> ffiIds = PatientSourceStubs.ffiHistories().stream()
+                .flatMap(stub -> ffisOf(stub).stream())
+                .map(ffi -> ffi.get("id").asString())
+                .toList();
+
+        assertThat(ids).hasSize(11).doesNotHaveDuplicates()
+                .doesNotContainAnyElementsOf(ffiIds)
+                .allSatisfy(id -> assertThat(id).matches("[A-Za-z0-9\\-.]{1,64}"));
+    }
+
+    /**
+     * The NUMC fault stubs, each by the failure it serves under a well-formed patient id no
+     * fixture uses, so it never shadows a fixture's history and the read reaches the source.
+     */
+    @Test
+    void theNumcFaultStubsServeEachFailureUnderAPatientIdOfItsOwn() {
+        assertThat(PatientSourceStubs.numcFaults())
+                .allSatisfy(fault -> assertThat(fault.id())
+                        .isEqualTo("fault-numc-" + fault.fault())
+                        .matches("[A-Za-z0-9\\-.]{1,64}")
+                        .isNotIn(fixtureIds()))
+                .extracting(PatientSourceStubs.FaultStub::fault)
+                .containsExactlyInAnyOrder("unreachable", "slow", "server-error",
+                        "unexpected-status", "not-a-searchset", "no-total", "no-id",
+                        "invalid-id", "no-outcome", "unknown-type", "unknown-outcome",
+                        "expiry-date-not-to-the-day");
+    }
+
     /**
      * Pins the check-letter algorithm the next test relies on to worked values, so the
      * algorithm itself cannot drift into one every NRIC fails.

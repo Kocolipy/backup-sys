@@ -1,8 +1,8 @@
 ---
 type: Decision Record
 title: "ADR 0019: FFIs are the patient source's own, read through a FHIR-shaped page, and not audited"
-description: A patient's FFI History is the in-house patient source's own, read through it on every request at GET {base}/Patient/{id}/ffi and held by no table or cache; the source answers a FHIR-R4-shaped searchset Bundle of custom FFI objects that is documented as not FHIR-conformant, paged by ADR 0017's startIndex and count, sorted by Issue Date or Expiry Date and filtered on every column by the source, in its own order when no sort is chosen; and an FFI read, like a read of one Patient by id, appends no audit row.
-tags: [patient, ffi, paging, audit, integration]
+description: A patient's FFI History is the in-house patient source's own, read through it on every request at GET {base}/Patient/{id}/ffi and held by no table or cache; the source answers a FHIR-R4-shaped searchset Bundle of custom FFI objects that is documented as not FHIR-conformant, paged by ADR 0017's startIndex and count, sorted by Issue Date or Expiry Date and filtered on every column by the source, in its own order when no sort is chosen; and an FFI read, like a read of one Patient by id, appends no audit row. A patient's NUMC History is read on the same terms at GET {base}/Patient/{id}/numc, its NUMC Records of four elements and two closed sets, paged in the source's order.
+tags: [patient, ffi, numc, paging, audit, integration]
 ---
 
 # 19. FFIs are the patient source's own, read through a FHIR-shaped page, and not audited
@@ -12,9 +12,11 @@ Date: 2026-11-12
 ## Status
 
 Accepted. `GET /api/patient-ffi/{patientId}` reads a patient's FFI History, and
-the SPA's FFI page reads it five at a time for the patient in context.
-`/docs/domain/ffi.md` is the behaviour in full; this file holds the decisions and
-their reasons.
+the SPA's FFI page reads it five at a time for the patient in context;
+`GET /api/patient-numc/{patientId}` reads a patient's NUMC History, and the
+SPA's NUMC page reads it five at a time in the same way (D5).
+`/docs/domain/ffi.md` and `/docs/domain/numc.md` are the behaviour in full;
+this file holds the decisions and their reasons.
 
 ## Context
 
@@ -29,6 +31,11 @@ FHIR has no resource for an FFI. Its nearest, `Observation` or a profiled
 `DocumentReference`, would need a profile, value sets for five closed sets and an
 extension for the Higher Authority — a modelling exercise for data the source
 already holds in flat fields of its own.
+
+The source also holds each patient's NUMC Records: whether the Navy Underwater
+Medicine Centre found the patient fit for an underwater duty — what duty, what
+it found, when it was issued and when it runs to. They have the same shape of
+problem as FFIs, with fewer fields.
 
 A read of one Patient by the id the EHR context gave is the ordinary unit of
 care and is not audited (`/docs/domain/patient.md`); a search across Patients is,
@@ -90,24 +97,51 @@ History has the order the source keeps it in, and that is the order shown until
 a heading is pressed. The domain's `FfiSort` and `FfiFilter` hold the rules
 (`/docs/domain/ffi.md`, "Sort and filters").
 
+**D5. NUMC Records are read on the same terms as FFIs.** A patient's NUMC
+History is the source's own, read through it on every read, held and cached by
+nothing, and not audited, as D1 to D3 decide for an FFI History, through the
+same port (`PatientStore`'s `findNumcHistory`), client, timeouts, failures and
+`SourceSearchset`. It differs in three things alone:
+
+- **The endpoint.** The source's `GET {base}/Patient/{id}/numc`, answering the
+  same FHIR-shaped, non-conformant `searchset` of custom `"resourceType": "NUMC"`
+  objects; our `GET /api/patient-numc/{patientId}`, plain JSON a page at a time,
+  paged as D2 pages an FFI History, the order the source's own.
+- **The four elements.** A NUMC Record has a NUMC Type, a NUMC Outcome, an Issue
+  Date and an Expiry Date, every one required, beside its own `id`. It has no
+  Status, and nothing works out "expired" from its Expiry Date.
+- **The two sets.** NUMC Type (`hyperbaric-chamber`, `submariner`, `diving`) and
+  NUMC Outcome (`fit`, `unfit`, `waiver-granted`, `waiver-rejected`), each a
+  Java enum, an enum of `openapi.yaml` and an SPA set held set-equal, as D2's
+  are. The NUMC Outcome is a set of its own, not the FFI Outcome: the two share
+  codes by chance, not by meaning.
+
+Each rule a NUMC Record breaks is logged under a reason naming NUMC
+(`numc-no-id`, `no-numc-type`, `unknown-numc-outcome`, …), so a fault record
+says which history broke; a failure of the call or of the searchset itself is
+the one every paged read shares. The NUMC History is not sorted or filtered:
+the page and its order are the source's alone.
+
 ## Consequences
 
-- **The FFI page depends on the source's availability.** A slow or failing
-  source is "Couldn't load FFIs" with Try again, never an empty history.
+- **The FFI and NUMC pages depend on the source's availability.** A slow or
+  failing source is "Couldn't load FFIs" or "Couldn't load NUMC records" with
+  Try again, never an empty history.
 - **A real source must answer this contract**, or the adapter changes with it.
   It must filter, sort, page, count accurately, keep its own stable order and
-  send every field of every FFI; a source that cannot is no FFI History source
-  until its adapter changes.
+  send every field of every FFI and every element of every NUMC Record; a source
+  that cannot is no history source until its adapter changes.
 - **A new code in any closed set is a contract change.** The source sending a
   code the service does not know is a `502`, not a row shown with a blank cell,
   until the enum, the document and the SPA set gain it together.
-- **No trail records who read whose FFIs.** A deployment whose policy requires
+- **No trail records who read whose FFIs or NUMC Records.** A deployment whose policy requires
   every read of patient data to be recorded must revisit D3 together with the
   unaudited read by id (`/docs/domain/patient.md`).
 - **The local mock answers canned pages only**: Tan Wei Ming's four FFIs and
   each sort of them, Tan Hui Min's seven over two pages and one canned read of
-  each filter, none for every other fixture or read, and a `404` for any other
-  id (`backend/docs/configuration/patient-source.md`).
+  each filter; Tan Wei Ming's four NUMC Records and Tan Hui Min's seven over two
+  pages; none for every other fixture or read, and a `404` for any other id
+  (`backend/docs/configuration/patient-source.md`).
 
 ## Alternatives considered
 
@@ -126,6 +160,10 @@ a heading is pressed. The domain's `FfiSort` and `FfiFilter` hold the rules
 - **A default sort, as a Patient search has** — newest Issue Date first.
   Rejected: the source keeps an FFI History in an order of its own, which a
   default sort would hide behind one the service chose.
+- **Fold NUMC Records into the FFI History**, as an FFI Type of their own.
+  Rejected: a NUMC Record has no Higher Authority, Submitting MC or Status, and
+  its Outcome is another set, so every FFI column would be blank or wrong for
+  it.
 - **Sort and filter the page in the service.** Rejected: the service holds only
   the page the source answered, so its order and its count would be wrong across
   pages, as a Patient search's would (ADR 0018, D7).

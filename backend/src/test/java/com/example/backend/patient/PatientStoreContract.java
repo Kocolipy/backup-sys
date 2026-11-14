@@ -13,6 +13,10 @@ import com.example.backend.patient.domain.FfiOutcome;
 import com.example.backend.patient.domain.FfiStatus;
 import com.example.backend.patient.domain.FfiSubmittingMc;
 import com.example.backend.patient.domain.FfiType;
+import com.example.backend.patient.domain.NumcHistory;
+import com.example.backend.patient.domain.NumcOutcome;
+import com.example.backend.patient.domain.NumcRecord;
+import com.example.backend.patient.domain.NumcType;
 import com.example.backend.patient.domain.Patient;
 import com.example.backend.patient.domain.PatientId;
 import com.example.backend.patient.domain.PatientMatch;
@@ -34,8 +38,9 @@ import org.junit.jupiter.params.provider.MethodSource;
  * development fixtures and its canned searches ({@code patient-source-mock/mappings},
  * /docs/domain/patient.md): each fixture by its id, exactly as the domain holds it, nothing under
  * an id no fixture holds, each documented search's page of matches with its Last visits and
- * its total, in the source's own order, and each FFI History the mock serves
- * (/docs/domain/ffi.md, "The patient source's FFI fixtures"), page by page.
+ * its total, in the source's own order, and each FFI History and NUMC History the mock serves
+ * (/docs/domain/ffi.md, "The patient source's FFI fixtures"; /docs/domain/numc.md, "The patient
+ * source's NUMC fixtures"), page by page.
  *
  * <p>The expected Patients are written out here, not derived from the stub files, so a stub that
  * drifted from the fixture table in /docs/domain/patient.md fails here.
@@ -322,5 +327,68 @@ public abstract class PatientStoreContract {
     @Test
     void a_well_formed_id_no_patient_is_held_under_has_no_ffi_history() {
         assertThat(patients().findFfiHistory(new PatientId("not-a-uuid"), FfiFilter.NONE, FfiSort.SOURCE_ORDER, FIRST_FIVE)).isEmpty();
+    }
+
+    // ---- the NUMC Histories ----------------------------------------------------------------
+
+    private static NumcRecord numc(String id, NumcType type, NumcOutcome outcome,
+            String issueDate, String expiryDate) {
+        return new NumcRecord(id, type, outcome, LocalDate.parse(issueDate),
+                LocalDate.parse(expiryDate));
+    }
+
+    /** Tan Wei Ming's four NUMC Records, in the source's own order. */
+    @Test
+    void tan_wei_mings_numc_history_is_his_four_records_in_the_sources_order() {
+        assertThat(patients().findNumcHistory(new PatientId("eq081-VQEgP8drUUqCWzHfw3"),
+                FIRST_FIVE)).contains(new NumcHistory(4, List.of(
+                        numc("numc-tan-wei-ming-1", NumcType.HYPERBARIC_CHAMBER, NumcOutcome.FIT,
+                                "2023-10-14", "2024-10-13"),
+                        numc("numc-tan-wei-ming-2", NumcType.SUBMARINER,
+                                NumcOutcome.WAIVER_REJECTED, "2024-01-10", "2025-01-09"),
+                        numc("numc-tan-wei-ming-3", NumcType.DIVING, NumcOutcome.WAIVER_GRANTED,
+                                "2023-11-22", "2024-11-21"),
+                        numc("numc-tan-wei-ming-4", NumcType.HYPERBARIC_CHAMBER,
+                                NumcOutcome.UNFIT, "2023-08-05", "2024-08-04"))));
+    }
+
+    /** Tan Hui Min's seven NUMC Records over two pages of five: the first page. */
+    @Test
+    void tan_hui_mins_numc_history_reads_its_first_page_of_five_of_seven() {
+        assertThat(patients().findNumcHistory(new PatientId("dev-patient-05"), FIRST_FIVE))
+                .contains(new NumcHistory(7, List.of(
+                        numc("numc-tan-hui-min-1", NumcType.DIVING, NumcOutcome.FIT,
+                                "2025-03-03", "2026-03-02"),
+                        numc("numc-tan-hui-min-2", NumcType.SUBMARINER, NumcOutcome.UNFIT,
+                                "2024-11-18", "2025-11-17"),
+                        numc("numc-tan-hui-min-3", NumcType.HYPERBARIC_CHAMBER,
+                                NumcOutcome.WAIVER_GRANTED, "2024-06-10", "2025-06-09"),
+                        numc("numc-tan-hui-min-4", NumcType.DIVING, NumcOutcome.WAIVER_REJECTED,
+                                "2024-02-26", "2025-02-25"),
+                        numc("numc-tan-hui-min-5", NumcType.SUBMARINER, NumcOutcome.FIT,
+                                "2023-09-04", "2024-09-03"))));
+    }
+
+    @Test
+    void tan_hui_mins_numc_history_reads_its_last_two_on_the_second_page() {
+        assertThat(patients().findNumcHistory(new PatientId("dev-patient-05"), NEXT_FIVE))
+                .contains(new NumcHistory(7, List.of(
+                        numc("numc-tan-hui-min-6", NumcType.HYPERBARIC_CHAMBER,
+                                NumcOutcome.UNFIT, "2023-04-17", "2024-04-16"),
+                        numc("numc-tan-hui-min-7", NumcType.DIVING, NumcOutcome.WAIVER_GRANTED,
+                                "2022-12-05", "2023-12-04"))));
+    }
+
+    /** Siti Nurhaliza binte Ahmad, as every fixture but those two, has no NUMC Record. */
+    @Test
+    void a_patient_with_no_numc_records_reads_an_empty_history_of_none() {
+        assertThat(patients().findNumcHistory(new PatientId("erXuFYUfucBZaryVksYEcMg3"),
+                FIRST_FIVE)).contains(new NumcHistory(0, List.of()));
+    }
+
+    /** {@code not-a-uuid} is a well-formed id the source holds no patient under. */
+    @Test
+    void a_well_formed_id_no_patient_is_held_under_has_no_numc_history() {
+        assertThat(patients().findNumcHistory(new PatientId("not-a-uuid"), FIRST_FIVE)).isEmpty();
     }
 }

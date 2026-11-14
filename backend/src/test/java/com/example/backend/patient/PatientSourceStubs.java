@@ -114,7 +114,7 @@ public final class PatientSourceStubs {
      * well-formed id no fixture uses.
      */
     public static List<FaultStub> faults() {
-        return faultStubs(false).stream()
+        return faultStubs("").stream()
                 .map(stub -> new FaultStub(stub.at(FAULT).asString(),
                         stub.at("/request/urlPath").asString().substring("/Patient/".length()),
                         stub.at("/response")))
@@ -128,11 +128,26 @@ public final class PatientSourceStubs {
      * (/docs/domain/ffi.md, "The patient source's FFI fixtures").
      */
     public static List<FaultStub> ffiFaults() {
-        return faultStubs(true).stream()
+        return historyFaults(FFI);
+    }
+
+    /**
+     * Every NUMC fault stub: a stub whose {@code metadata.fault} names the failure a NUMC History
+     * read meets there — no answer, a status but a {@code 200} or a {@code 404}, or a page the
+     * service cannot hold — under a well-formed patient id no fixture uses
+     * (/docs/domain/numc.md, "The patient source's NUMC fixtures").
+     */
+    public static List<FaultStub> numcFaults() {
+        return historyFaults(NUMC);
+    }
+
+    /** The fault stubs of the history under {@code segment}, each under its patient id. */
+    private static List<FaultStub> historyFaults(String segment) {
+        return faultStubs(segment).stream()
                 .map(stub -> {
                     String path = stub.at("/request/urlPath").asString();
                     return new FaultStub(stub.at(FAULT).asString(),
-                            path.substring("/Patient/".length(), path.length() - FFI.length()),
+                            path.substring("/Patient/".length(), path.length() - segment.length()),
                             stub.at("/response"));
                 })
                 .toList();
@@ -163,6 +178,31 @@ public final class PatientSourceStubs {
     public record FfiStub(String path, JsonNode query, JsonNode bundle) {
     }
 
+    /**
+     * Every NUMC History stub that is no fault stub: each development fixture's page as the
+     * patient id it answers for — or, for a stub answering several, its pattern — beside the
+     * searchset it serves.
+     */
+    public static List<NumcStub> numcHistories() {
+        return stubs()
+                .filter(stub -> stub.at(FAULT).isMissingNode())
+                .filter(stub -> stub.at("/response/status").asInt() == 200)
+                .filter(stub -> path(stub).endsWith(NUMC))
+                .map(stub -> new NumcStub(path(stub), stub.at("/request/queryParameters"),
+                        stub.at("/response/jsonBody")))
+                .toList();
+    }
+
+    /**
+     * One NUMC History stub.
+     *
+     * @param path   the path it answers, {@code /Patient/{id}/numc}, or the pattern of paths
+     * @param query  its query parameters' matchers — missing for one answering any page
+     * @param bundle the searchset it answers
+     */
+    public record NumcStub(String path, JsonNode query, JsonNode bundle) {
+    }
+
     /** The path a stub matches, exactly or by pattern. */
     private static String path(JsonNode stub) {
         JsonNode request = stub.at("/request");
@@ -170,16 +210,27 @@ public final class PatientSourceStubs {
                 .map(JsonNode::asString).orElse("");
     }
 
-    /** The fault stubs of FFI History reads ({@code ffi}) or of Patient reads by id. */
-    private static List<JsonNode> faultStubs(boolean ffi) {
+    /**
+     * The fault stubs of reads of the history under {@code segment}, or, for {@code ""}, of
+     * Patient reads by id: the stubs whose path names no history segment.
+     */
+    private static List<JsonNode> faultStubs(String segment) {
         return stubs()
                 .filter(stub -> !stub.at(FAULT).isMissingNode())
-                .filter(stub -> path(stub).endsWith(FFI) == ffi)
+                .filter(stub -> segment.isEmpty()
+                        ? HISTORIES.stream().noneMatch(path(stub)::endsWith)
+                        : path(stub).endsWith(segment))
                 .toList();
     }
 
     /** The FFI History's path segment, after the patient's id. */
     private static final String FFI = "/ffi";
+
+    /** The NUMC History's path segment, after the patient's id. */
+    private static final String NUMC = "/numc";
+
+    /** Every history's path segment. */
+    private static final List<String> HISTORIES = List.of(FFI, NUMC);
 
     /**
      * One fault stub.
@@ -213,6 +264,19 @@ public final class PatientSourceStubs {
          * an error body's diagnostics.
          */
         public List<String> ffiValues() {
+            return recordValues();
+        }
+
+        /**
+         * What a record of a NUMC History's failure must not quote: each NUMC Record's id and
+         * dates, and an error body's diagnostics.
+         */
+        public List<String> numcValues() {
+            return recordValues();
+        }
+
+        /** Each of a history page's records' id and dates, and an error body's diagnostics. */
+        private List<String> recordValues() {
             JsonNode body = response.at("/jsonBody");
             List<String> values = new ArrayList<>();
             body.at("/entry").forEach(entry -> List.of("id", "issueDate", "expiryDate").forEach(
