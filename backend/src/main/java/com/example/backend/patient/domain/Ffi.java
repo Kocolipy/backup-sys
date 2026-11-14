@@ -21,7 +21,7 @@ import java.util.Objects;
  * @param status          its Status, the source's own
  */
 public record Ffi(String id, FfiType type, FfiOutcome outcome, LocalDate issueDate,
-        LocalDate expiryDate, FfiHigherAuthority higherAuthority, FfiSubmittingMc submittingMc,
+        LocalDate expiryDate, FfiHigherAuthority higherAuthority, MedicalCentre submittingMc,
         FfiStatus status) {
 
     public Ffi {

@@ -1,8 +1,8 @@
 ---
 type: Decision Record
 title: "ADR 0019: FFIs are the patient source's own, read through a FHIR-shaped page, and not audited"
-description: A patient's FFI History is the in-house patient source's own, read through it on every request at GET {base}/Patient/{id}/ffi and held by no table or cache; the source answers a FHIR-R4-shaped searchset Bundle of custom FFI objects that is documented as not FHIR-conformant, paged by ADR 0017's startIndex and count, sorted by Issue Date or Expiry Date and filtered on every column by the source, in its own order when no sort is chosen; and an FFI read, like a read of one Patient by id, appends no audit row. A patient's NUMC History is read on the same terms at GET {base}/Patient/{id}/numc, its NUMC Records of four elements and two closed sets, sorted by either date and filtered on every column by the source on D4's terms; and a patient's ARMC History likewise at GET {base}/Patient/{id}/armc, its ARMC Boards of six elements, the End Date the one optional, and two closed sets, paged in the source's order.
-tags: [patient, ffi, numc, armc, paging, audit, integration]
+description: A patient's FFI History is the in-house patient source's own, read through it on every request at GET {base}/Patient/{id}/ffi and held by no table or cache; the source answers a FHIR-R4-shaped searchset Bundle of custom FFI objects that is documented as not FHIR-conformant, paged by ADR 0017's startIndex and count, sorted by Issue Date or Expiry Date and filtered on every column by the source, in its own order when no sort is chosen; and an FFI read, like a read of one Patient by id, appends no audit row. A patient's NUMC History is read on the same terms at GET {base}/Patient/{id}/numc, its NUMC Records of four elements and two closed sets, sorted by either date and filtered on every column by the source on D4's terms; and a patient's ARMC History likewise at GET {base}/Patient/{id}/armc, its ARMC Boards of six elements, the End Date the one optional, and two closed sets, paged in the source's order; and a patient's Medication History likewise at GET {base}/Patient/{id}/medication, its Medication Records of six required and six optional elements, its Start Date and End Date date-times with an offset, its Dispense Status a closed set and its Dispensary a Medical Centre, the set an FFI's Submitting MC draws on, paged in the source's order.
+tags: [patient, ffi, numc, armc, medication, paging, audit, integration]
 ---
 
 # 19. FFIs are the patient source's own, read through a FHIR-shaped page, and not audited
@@ -17,9 +17,12 @@ the SPA's FFI page reads it five at a time for the patient in context;
 SPA's NUMC page reads it five at a time in the same way, sorted and filtered as
 the FFI page is (D5); `GET /api/patient-armc/{patientId}` reads a patient's
 ARMC History, and the SPA's ARMC page reads it five at a time in the same way,
-in the source's order (D6).
-`/docs/domain/ffi.md`, `/docs/domain/numc.md` and `/docs/domain/armc.md` are
-the behaviour in full; this file holds the decisions and their reasons.
+in the source's order (D6); `GET /api/patient-medication/{patientId}` reads a
+patient's Medication History, and the SPA's Medication page reads it five at a
+time in the same way, in the source's order (D7).
+`/docs/domain/ffi.md`, `/docs/domain/numc.md`, `/docs/domain/armc.md` and
+`/docs/domain/medication.md` are the behaviour in full; this file holds the
+decisions and their reasons.
 
 ## Context
 
@@ -45,6 +48,13 @@ Aeromedical Centre (ARMC) sat the patient on — what kind of board, what it
 found, when it started and, once it has, when it ended, and the two Medical
 Officers who sat on it. A board still open has no end yet, so its End Date is
 the first element of any of these histories that the source may leave out.
+
+And it holds each patient's Medication Records: each prescription — the
+medication, its dosage, route, frequency, step, quantity and duration as the
+prescriber wrote them, whether it was dispensed and collected, the period it
+runs over to the minute, the camp medical centre that dispenses it, and the
+doctor who prescribed it. Half of those elements a prescription may lack, and
+the dispensing centres are the very camp medical centres that submit FFIs.
 
 A read of one Patient by the id the EHR context gave is the ordinary unit of
 care and is not audited (`/docs/domain/patient.md`); a search across Patients is,
@@ -174,20 +184,66 @@ Each rule an ARMC Board breaks is logged under a reason naming ARMC
 ARMC History is not sorted or filtered: the page and its order are the
 source's alone.
 
+**D7. Medication Records are read on the same terms as FFIs.** A patient's
+Medication History is the source's own, read through it on every read, held
+and cached by nothing, and not audited, as D1 to D3 decide for an FFI History,
+through the same port (`PatientStore`'s `findMedicationHistory`), client,
+timeouts, failures and `SourceSearchset`. It is not sorted or filtered: the
+page and its order are the source's alone. It differs in four things alone:
+
+- **The endpoint.** The source's `GET {base}/Patient/{id}/medication`,
+  answering the same FHIR-shaped, non-conformant `searchset` of custom
+  `"resourceType": "Medication"` objects; our
+  `GET /api/patient-medication/{patientId}`, plain JSON a page at a time, paged
+  as D2 pages an FFI History, the order the source's own.
+- **The elements.** A Medication Record has six required elements — the
+  Medication, Dispense Status, Start Date, End Date, Dispensary and Prescribing
+  Doctor — and six optional ones — the Dosage, Route, Frequency, Step, Quantity
+  and Duration — beside its own `id`. Every element but the Dispense Status,
+  the dates and the Dispensary is free text, shown as the source gives it and
+  read by nothing: the Duration is never worked out from the dates, and the
+  Prescribing Doctor is a name linked to no User or account; a missing or
+  blank Medication or Prescribing Doctor is a failure of the source. An
+  optional element the source lacks is left out of our answer, never sent as
+  `null`, as D6 leaves out an open board's End Date. The Dispense Status
+  (`pending`, `dispensed`, `uncollected`) is a closed set of its own, a Java
+  enum, an enum of `openapi.yaml` and an SPA set held set-equal, as D2's are.
+- **The date-time precision.** The Start Date and End Date are date-times, to
+  the minute, not calendar dates: the source gives each as ISO-8601 with an
+  offset, our answer passes each on with that offset, and the SPA shows each
+  in Singapore time. One with no offset names no instant, and is a failure of
+  the source; so is an End Date before its Start Date, compared as instants, a
+  rule of the domain's `MedicationRecord`. The shared field reading
+  (`SourceFields`) reads a date-time with an offset for them.
+- **The Dispensary shares Medical Centre with the FFI.** The Dispensary draws
+  on the closed set an FFI's Submitting MC draws on, Medical Centre — one Java
+  enum (`MedicalCentre`), one enum of `openapi.yaml` and one SPA set, held
+  set-equal as D2's are. The fields keep their own names: `submittingMc` on an
+  FFI, `dispensary` on a Medication Record. A centre the set gains is a centre
+  of both.
+
+Each rule a Medication Record breaks is logged under a reason naming
+Medication or an element of its own (`medication-no-id`,
+`no-dispense-status`, `unknown-dispensary`, `medication-end-before-start`, …),
+so a fault record says which history broke.
+
 ## Consequences
 
-- **The FFI, NUMC and ARMC pages depend on the source's availability.** A slow
-  or failing source is "Couldn't load FFIs", "Couldn't load NUMC records" or
-  "Couldn't load ARMC records" with Try again, never an empty history.
+- **The FFI, NUMC, ARMC and Medication pages depend on the source's
+  availability.** A slow or failing source is "Couldn't load FFIs", "Couldn't
+  load NUMC records", "Couldn't load ARMC records" or "Couldn't load
+  medication records" with Try again, never an empty history.
 - **A real source must answer this contract**, or the adapter changes with it.
   It must filter, sort, page, count accurately, keep its own stable order and
   send every field of every FFI, every element of every NUMC Record and every
-  required element of every ARMC Board; a source that cannot is no history
-  source until its adapter changes.
+  required element of every ARMC Board and Medication Record, each date-time
+  with its offset; a source that cannot is no history source until its adapter
+  changes.
 - **A new code in any closed set is a contract change.** The source sending a
   code the service does not know is a `502`, not a row shown with a blank cell,
   until the enum, the document and the SPA set gain it together.
-- **No trail records who read whose FFIs, NUMC Records or ARMC Boards.** A deployment whose policy requires
+- **No trail records who read whose FFIs, NUMC Records, ARMC Boards or
+  Medication Records.** A deployment whose policy requires
   every read of patient data to be recorded must revisit D3 together with the
   unaudited read by id (`/docs/domain/patient.md`).
 - **The local mock answers canned pages only**: Tan Wei Ming's four FFIs and
@@ -195,7 +251,9 @@ source's alone.
   each filter; Tan Wei Ming's four NUMC Records and each sort of them, Tan Hui
   Min's seven over two pages and one canned read of each filter; Tan Wei Ming's
   two ARMC Boards and Tan Hui Min's seven over two pages, the first still open;
-  none for every other fixture or read, and a `404` for any other id
+  Tan Wei Ming's six Medication Records over two pages and Tan Hui Min's four,
+  some lacking optional elements; none for every other fixture or read, and a
+  `404` for any other id
   (`backend/docs/configuration/patient-source.md`).
 
 ## Alternatives considered
@@ -220,6 +278,14 @@ source's alone.
   its Outcome is another set, so every FFI column would be blank or wrong for
   it. An ARMC Board is further still: it has a period and two Medical Officers,
   and no Issue or Expiry Date.
+- **Give the Dispensary a set of its own**, a Dispensary set beside the
+  FFI's Submitting MC set. Rejected: both name the same camp medical centres,
+  so two sets would have to gain each new centre together, and a centre known
+  to one would be a failure of the source in the other.
+- **Read a Medication Record's dates as calendar dates**, as an ARMC Board's
+  are. Rejected: two prescriptions on one day differ by the minute, and the
+  source gives the instant with its offset; a calendar date would drop the
+  time, and the day itself would depend on the zone it was read in.
 - **Send a still-open board's End Date as `null`**, as the application API
   sends its other absent values. Rejected: the source leaves it out, and an
   absent field keeps "still open" one shape from the source to the SPA.

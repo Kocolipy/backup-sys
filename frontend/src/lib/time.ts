@@ -97,6 +97,38 @@ export function isCalendarDate(text: string): boolean {
 }
 
 /**
+ * A date-time with an offset's shape, as ISO-8601 writes it: a date, `T`, an
+ * hour and minute, seconds and a fraction where given, and `Z` or `±hh:mm`.
+ */
+const OFFSET_DATE_TIME =
+  /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,9})?)?(?:Z|[+-](\d{2}):(\d{2}))$/;
+
+/** The furthest an offset reaches from UTC, as ISO-8601 bounds it, in minutes. */
+const MAX_OFFSET_MINUTES = 18 * 60;
+
+/**
+ * Whether `text` is a date-time with an offset — ISO-8601, `Z` among the
+ * offsets — on a day the calendar has, at a time the clock has, its offset no
+ * further than 18 hours from UTC. A date alone, or a date-time with no offset,
+ * names no instant, and is refused.
+ */
+export function isOffsetDateTime(text: string): boolean {
+  const match = OFFSET_DATE_TIME.exec(text);
+  if (match === null) return false;
+  const [hour, minute, second, offsetHours, offsetMinutes] = match
+    .slice(2, 7)
+    .map((field) => Number(field ?? 0));
+  return (
+    isCalendarDate(match[1]) &&
+    hour <= 23 &&
+    minute <= 59 &&
+    second <= 59 &&
+    offsetMinutes <= 59 &&
+    offsetHours * 60 + offsetMinutes <= MAX_OFFSET_MINUTES
+  );
+}
+
+/**
  * What a `datetime-local` control delivers: a date, `T`, and an hour and
  * minute, with seconds and milliseconds only where its step allows them. A
  * year can run past four digits, which the control accepts.
@@ -142,6 +174,16 @@ export const formatCalendarDate = (date: string): string => formatCalendarDateWi
  */
 export const formatCalendarDateTwoDigitDay = (date: string): string =>
   formatCalendarDateWith(date, twoDigits);
+
+/**
+ * A date-time with an offset ({@link isOffsetDateTime}) as its Singapore
+ * wall clock, `dd MMM yyyy HH:mm`, its day always two digits and its seconds
+ * dropped: `2026-03-01T02:00:00Z` is `01 Mar 2026 10:00`.
+ */
+export function formatDateTime(dateTime: string): string {
+  const { date, minute } = singaporeWallClock(new Date(dateTime));
+  return `${formatCalendarDateTwoDigitDay(date)} ${minute}`;
+}
 
 /** Today's date in Singapore, as `YYYY-MM-DD`, by `clock`. */
 export const today = (clock: Clock): string => singaporeWallClock(clock()).date;

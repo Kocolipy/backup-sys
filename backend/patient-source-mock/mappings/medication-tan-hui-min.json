@@ -1,0 +1,111 @@
+{
+  "name": "Medication History: Tan Hui Min's four Medication Records, every Dispense Status and some optional elements absent",
+  "request": {
+    "method": "GET",
+    "urlPath": "/Patient/dev-patient-05/medication",
+    "queryParameters": {
+      "_count": {
+        "equalTo": "5"
+      },
+      "_offset": {
+        "equalTo": "0"
+      },
+      "_total": {
+        "equalTo": "accurate"
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/fhir+json"
+    },
+    "jsonBody": {
+      "resourceType": "Bundle",
+      "id": "medication-history",
+      "type": "searchset",
+      "total": 4,
+      "link": [
+        {
+          "relation": "self",
+          "url": "http://127.0.0.1:8104/Patient/dev-patient-05/medication?_offset=0&_count=5"
+        }
+      ],
+      "entry": [
+        {
+          "resource": {
+            "resourceType": "Medication",
+            "id": "medication-tan-hui-min-1",
+            "medication": "Ibuprofen",
+            "dosage": "400 mg",
+            "route": "PO",
+            "frequency": "TDS",
+            "quantity": "15 tablets",
+            "dispenseStatus": "dispensed",
+            "duration": "5 days",
+            "startDate": "2026-03-01T02:00:00Z",
+            "endDate": "2026-03-06T02:00:00Z",
+            "dispensary": "hendon-camp",
+            "prescribingDoctor": "Dr Rajesh Kumar"
+          },
+          "search": {
+            "mode": "match"
+          }
+        },
+        {
+          "resource": {
+            "resourceType": "Medication",
+            "id": "medication-tan-hui-min-2",
+            "medication": "Lignocaine 2% gel",
+            "route": "Topical",
+            "quantity": "1 tube",
+            "dispenseStatus": "uncollected",
+            "startDate": "2025-07-14T16:20:00+08:00",
+            "endDate": "2025-07-21T16:20:00+08:00",
+            "dispensary": "mandai-hill-camp",
+            "prescribingDoctor": "Dr Nur Aisyah binte Rahman"
+          },
+          "search": {
+            "mode": "match"
+          }
+        },
+        {
+          "resource": {
+            "resourceType": "Medication",
+            "id": "medication-tan-hui-min-3",
+            "medication": "Prednisolone",
+            "dosage": "20 mg",
+            "route": "PO",
+            "frequency": "OM",
+            "step": "2",
+            "quantity": "7 tablets",
+            "dispenseStatus": "pending",
+            "duration": "7 days",
+            "startDate": "2025-02-10T08:45:00+08:00",
+            "endDate": "2025-02-17T08:45:00+08:00",
+            "dispensary": "mandai-hill-camp",
+            "prescribingDoctor": "Dr Chen Mei Ling"
+          },
+          "search": {
+            "mode": "match"
+          }
+        },
+        {
+          "resource": {
+            "resourceType": "Medication",
+            "id": "medication-tan-hui-min-4",
+            "medication": "Oral rehydration salts",
+            "dispenseStatus": "dispensed",
+            "startDate": "2024-08-05T11:05:00+08:00",
+            "endDate": "2024-08-05T11:05:00+08:00",
+            "dispensary": "kranji-camp",
+            "prescribingDoctor": "Dr Lim Wei Jie"
+          },
+          "search": {
+            "mode": "match"
+          }
+        }
+      ]
+    }
+  }
+}

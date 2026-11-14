@@ -6,11 +6,12 @@ import com.example.backend.audit.domain.AuditOperation;
 import com.example.backend.authorization.domain.Permission;
 import com.example.backend.patient.domain.ArmcBoardType;
 import com.example.backend.patient.domain.ArmcOutcome;
+import com.example.backend.patient.domain.DispenseStatus;
 import com.example.backend.patient.domain.FfiHigherAuthority;
 import com.example.backend.patient.domain.FfiOutcome;
 import com.example.backend.patient.domain.FfiStatus;
-import com.example.backend.patient.domain.FfiSubmittingMc;
 import com.example.backend.patient.domain.FfiType;
+import com.example.backend.patient.domain.MedicalCentre;
 import com.example.backend.patient.domain.NumcOutcome;
 import com.example.backend.patient.domain.NumcType;
 import com.example.backend.patient.domain.SourceCode;
@@ -36,10 +37,11 @@ import org.junit.jupiter.api.Test;
  * {@linkplain Permission#tokenOnly() token-only}, so token-grantable by that definition, and the
  * token enums compare it.
  *
- * <p>An FFI's five closed sets — its FFI Type, Outcome, Higher Authority, Submitting MC and
- * Status — a NUMC Record's two — its NUMC Type and NUMC Outcome — and an ARMC Board's two — its
- * ARMC Board Type and ARMC Outcome — are carried by their codes, not their names, and are
- * compared so.
+ * <p>An FFI's four closed sets of its own — its FFI Type, Outcome, Higher Authority and Status —
+ * a NUMC Record's two — its NUMC Type and NUMC Outcome — an ARMC Board's two — its ARMC Board
+ * Type and ARMC Outcome — a Medication Record's Dispense Status, and Medical Centre, the set an
+ * FFI's Submitting MC and a Medication Record's Dispensary share, are carried by their codes,
+ * not their names, and are compared so.
  *
  * <p>An enum the document refers to by {@code $ref} — the audit trail's {@code operation} query
  * parameter, the Group Permissions' request and listing — is the schema compared here, so it is
@@ -72,8 +74,6 @@ class VocabularyContractTests {
 
     private static final String FFI_HIGHER_AUTHORITIES = "#/components/schemas/FfiHigherAuthority";
 
-    private static final String FFI_SUBMITTING_MCS = "#/components/schemas/FfiSubmittingMc";
-
     private static final String FFI_STATUSES = "#/components/schemas/FfiStatus";
 
     private static final String NUMC_TYPES = "#/components/schemas/NumcType";
@@ -83,6 +83,10 @@ class VocabularyContractTests {
     private static final String ARMC_BOARD_TYPES = "#/components/schemas/ArmcBoardType";
 
     private static final String ARMC_OUTCOMES = "#/components/schemas/ArmcOutcome";
+
+    private static final String MEDICAL_CENTRES = "#/components/schemas/MedicalCentre";
+
+    private static final String DISPENSE_STATUSES = "#/components/schemas/DispenseStatus";
 
     private static final Predicate<Permission> HELD_BY_A_SESSION = permission -> !permission.tokenOnly();
 
@@ -139,12 +143,6 @@ class VocabularyContractTests {
     }
 
     @Test
-    void every_submitting_mc_is_a_documented_submitting_mc_and_no_other_is() {
-        assertThat(CONTRACT.enumDisagreements(FFI_SUBMITTING_MCS,
-                codes(FfiSubmittingMc.values()))).isEmpty();
-    }
-
-    @Test
     void every_ffi_status_is_a_documented_ffi_status_and_no_other_is() {
         assertThat(CONTRACT.enumDisagreements(FFI_STATUSES, codes(FfiStatus.values())))
                 .isEmpty();
@@ -170,6 +168,18 @@ class VocabularyContractTests {
     @Test
     void every_armc_outcome_is_a_documented_armc_outcome_and_no_other_is() {
         assertThat(CONTRACT.enumDisagreements(ARMC_OUTCOMES, codes(ArmcOutcome.values())))
+                .isEmpty();
+    }
+
+    @Test
+    void every_medical_centre_is_a_documented_medical_centre_and_no_other_is() {
+        assertThat(CONTRACT.enumDisagreements(MEDICAL_CENTRES, codes(MedicalCentre.values())))
+                .isEmpty();
+    }
+
+    @Test
+    void every_dispense_status_is_a_documented_dispense_status_and_no_other_is() {
+        assertThat(CONTRACT.enumDisagreements(DISPENSE_STATUSES, codes(DispenseStatus.values())))
                 .isEmpty();
     }
 

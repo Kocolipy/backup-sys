@@ -17,8 +17,8 @@ import com.example.backend.patient.domain.FfiHigherAuthority;
 import com.example.backend.patient.domain.FfiOutcome;
 import com.example.backend.patient.domain.HistorySort;
 import com.example.backend.patient.domain.FfiStatus;
-import com.example.backend.patient.domain.FfiSubmittingMc;
 import com.example.backend.patient.domain.FfiType;
+import com.example.backend.patient.domain.MedicalCentre;
 import com.example.backend.patient.domain.PatientId;
 import com.example.backend.patient.domain.SortOrder;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
@@ -181,7 +181,7 @@ class PatientSourceFfiAdapterTests {
         reading(new FfiFilter(Set.of(FfiType.DENTAL, FfiType.IPPT),
                 Set.of(FfiOutcome.UNFIT, FfiOutcome.FIT), DateRange.ANY, DateRange.ANY,
                 Set.of(FfiHigherAuthority.DIS, FfiHigherAuthority.COMD_MMI),
-                Set.of(FfiSubmittingMc.HENDON_CAMP), null), HistorySort.SOURCE_ORDER);
+                Set.of(MedicalCentre.HENDON_CAMP), null), HistorySort.SOURCE_ORDER);
 
         assertThat(sentQuery()).isEqualTo(Map.of(
                 "type", List.of("ippt,dental"),
@@ -242,7 +242,7 @@ class PatientSourceFfiAdapterTests {
         reading(new FfiFilter(Set.of(FfiType.VOCATIONAL), Set.of(FfiOutcome.REQUEST_WAIVER),
                         new DateRange(LocalDate.of(2023, 1, 1), LocalDate.of(2023, 12, 31)),
                         new DateRange(LocalDate.of(2024, 1, 1), null),
-                        Set.of(FfiHigherAuthority.CNMO), Set.of(FfiSubmittingMc.KRANJI_CAMP),
+                        Set.of(FfiHigherAuthority.CNMO), Set.of(MedicalCentre.KRANJI_CAMP),
                         FfiStatus.INACTIVE),
                 new HistorySort(HistorySort.Field.EXPIRY_DATE, SortOrder.DESCENDING));
 
@@ -395,7 +395,7 @@ class PatientSourceFfiAdapterTests {
         outcome         | FIT                   | unknown-outcome          | The patient source's FFI's outcome is not an Outcome
         outcome         | expired               | unknown-outcome          | The patient source's FFI's outcome is not an Outcome
         higherAuthority | comd_mmi              | unknown-higher-authority | The patient source's FFI's higher authority is not a Higher Authority
-        submittingMc    | nee-soon-camp-mc      | unknown-submitting-mc    | The patient source's FFI's submitting MC is not a Submitting MC
+        submittingMc    | nee-soon-camp-mc      | unknown-submitting-mc    | The patient source's FFI's submitting MC is not a Medical Centre
         status          | expired               | unknown-status           | The patient source's FFI's status is not a Status
         status          | Active                | unknown-status           | The patient source's FFI's status is not a Status
         """)

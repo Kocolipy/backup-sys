@@ -55,12 +55,13 @@ function document() {
         FfiType: { type: "string", enum: ["ippt", "dental"] },
         FfiOutcome: { type: "string", enum: ["fit", "unfit"] },
         FfiHigherAuthority: { type: "string", enum: ["camo", "dis"] },
-        FfiSubmittingMc: { type: "string", enum: ["kranji-camp"] },
+        MedicalCentre: { type: "string", enum: ["kranji-camp"] },
         FfiStatus: { type: "string", enum: ["active", "inactive"] },
         NumcType: { type: "string", enum: ["submariner", "diving"] },
         NumcOutcome: { type: "string", enum: ["fit", "waiver-granted"] },
         ArmcBoardType: { type: "string", enum: ["aces"] },
         ArmcOutcome: { type: "string", enum: ["fit"] },
+        DispenseStatus: { type: "string", enum: ["pending"] },
       },
     },
   };
@@ -91,7 +92,6 @@ function spa() {
         FFI_TYPES: ["ippt", "dental"],
         FFI_OUTCOMES: ["fit", "unfit"],
         FFI_HIGHER_AUTHORITIES: ["camo", "dis"],
-        FFI_SUBMITTING_MCS: ["kranji-camp"],
         FFI_STATUSES: ["active", "inactive"],
       },
       "src/pages/numc/numc-api.ts": {
@@ -101,6 +101,10 @@ function spa() {
       "src/pages/armc/armc-api.ts": {
         ARMC_BOARD_TYPES: ["aces"],
         ARMC_OUTCOMES: ["fit"],
+      },
+      "src/pages/medical-centre-api.ts": { MEDICAL_CENTRES: ["kranji-camp"] },
+      "src/pages/medication/medication-api.ts": {
+        DISPENSE_STATUSES: ["pending"],
       },
       "src/pages/audit/audit-api.ts": {
         AUDIT_OPERATIONS: ["LOGIN_SUCCESS", "LOGOUT"],
@@ -212,7 +216,6 @@ describe("the SPA's vocabularies", () => {
       ["FFI_TYPES", "FfiType", "vocational"],
       ["FFI_OUTCOMES", "FfiOutcome", "request-waiver"],
       ["FFI_HIGHER_AUTHORITIES", "FfiHigherAuthority", "cnmo"],
-      ["FFI_SUBMITTING_MCS", "FfiSubmittingMc", "hendon-camp"],
       ["FFI_STATUSES", "FfiStatus", "lapsed"],
     ].map(([set, schema, code]) => [
       `the document gains a code of ${schema}`,
@@ -249,6 +252,26 @@ describe("the SPA's vocabularies", () => {
           "waiver-granted",
         ),
       `ARMC_OUTCOMES (src/pages/armc/armc-api.ts) has "waiver-granted", which #/components/schemas/ArmcOutcome lacks`,
+    ],
+    // Medical Centre, the set an FFI's Submitting MC and a Medication Record's
+    // Dispensary share, is its own row, in a module of its own.
+    [
+      "the document gains a Medical Centre",
+      (_spa, doc) => schemas(doc).MedicalCentre.enum.push("khatib-camp"),
+      `MEDICAL_CENTRES (src/pages/medical-centre-api.ts) lacks "khatib-camp", which #/components/schemas/MedicalCentre has`,
+    ],
+    [
+      "the document gains a Dispense Status",
+      (_spa, doc) => schemas(doc).DispenseStatus.enum.push("uncollected"),
+      `DISPENSE_STATUSES (src/pages/medication/medication-api.ts) lacks "uncollected", which #/components/schemas/DispenseStatus has`,
+    ],
+    [
+      "the SPA gains a Dispense Status",
+      (s) =>
+        s.modules["src/pages/medication/medication-api.ts"].DISPENSE_STATUSES.push(
+          "collected",
+        ),
+      `DISPENSE_STATUSES (src/pages/medication/medication-api.ts) has "collected", which #/components/schemas/DispenseStatus lacks`,
     ],
     [
       "the SPA gains an FFI Status",
@@ -491,8 +514,10 @@ export const TOKENS: PagedDeclaration<
       "src/pages/accounts/accounts-api.ts",
       "src/pages/audit/audit-api.ts",
       "src/pages/ffi/ffi-api.ts",
+      "src/pages/medical-centre-api.ts",
       "src/pages/numc/numc-api.ts",
       "src/pages/armc/armc-api.ts",
+      "src/pages/medication/medication-api.ts",
       "src/pages/tokens/tokens-api.ts",
     ]);
   });

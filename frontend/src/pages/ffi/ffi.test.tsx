@@ -114,6 +114,13 @@ describe("FFI", () => {
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(/^FFI History$/);
   });
 
+  it("shows a Submitting MC of Khatib Camp MC by its label", async () => {
+    await renderFfi(page([ffi("ffi-khatib", { submittingMc: "khatib-camp" })], 1, 1));
+    await screen.findByRole("table", { name: "FFI History" });
+
+    expect(rows()[0]![5]).toBe("Khatib Camp MC");
+  });
+
   it("shows the patient in context's FFIs in the source's order, each code by its label", async () => {
     await renderFfi(page(FOUR_FFIS, 1, 4));
 
@@ -503,7 +510,13 @@ describe("FFI, filtered", () => {
       ],
       ["FIT", "REQUEST WAIVER", "UNFIT"],
       ["CAMO", "CARMO", "CNMO", "Comd MMI", "DIS"],
-      ["Nee Soon Camp MC", "Kranji Camp MC", "Hendon Camp MC", "Mandai Hill Camp MC"],
+      [
+        "Nee Soon Camp MC",
+        "Kranji Camp MC",
+        "Hendon Camp MC",
+        "Mandai Hill Camp MC",
+        "Khatib Camp MC",
+      ],
     ]);
   });
 
@@ -542,7 +555,11 @@ describe("FFI, filtered", () => {
     ["FFI Type", ["Dental FFI", "IPPT FFI"], "type=ippt&type=dental"],
     ["Outcome", ["UNFIT"], "outcome=unfit"],
     ["Higher Authority", ["DIS", "CAMO"], "higherAuthority=camo&higherAuthority=dis"],
-    ["Submitting MC", ["Hendon Camp MC"], "submittingMc=hendon-camp"],
+    [
+      "Submitting MC",
+      ["Khatib Camp MC", "Hendon Camp MC"],
+      "submittingMc=hendon-camp&submittingMc=khatib-camp",
+    ],
   ] as const)(
     "filters by %s, each code chosen once, counted as one, and closes",
     async (name, labels, asked) => {

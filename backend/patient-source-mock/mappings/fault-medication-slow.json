@@ -1,0 +1,51 @@
+{
+  "name": "Fault, Medication History: no answer within the read timeout",
+  "metadata": {
+    "fault": "slow"
+  },
+  "request": {
+    "method": "GET",
+    "urlPath": "/Patient/fault-medication-slow/medication"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/fhir+json"
+    },
+    "jsonBody": {
+      "resourceType": "Bundle",
+      "id": "medication-history",
+      "type": "searchset",
+      "total": 1,
+      "link": [
+        {
+          "relation": "self",
+          "url": "http://127.0.0.1:8104/Patient/fault-medication-slow/medication?_offset=0&_count=5"
+        }
+      ],
+      "entry": [
+        {
+          "resource": {
+            "resourceType": "Medication",
+            "id": "medication-fault-1",
+            "medication": "Fault Medication",
+            "dosage": "250 mg",
+            "route": "PO",
+            "frequency": "BD",
+            "quantity": "10 tablets",
+            "dispenseStatus": "dispensed",
+            "duration": "5 days",
+            "startDate": "2015-03-16T09:00:00+08:00",
+            "endDate": "2015-03-21T09:00:00+08:00",
+            "dispensary": "kranji-camp",
+            "prescribingDoctor": "Dr Fault One"
+          },
+          "search": {
+            "mode": "match"
+          }
+        }
+      ]
+    },
+    "fixedDelayMilliseconds": 7000
+  }
+}

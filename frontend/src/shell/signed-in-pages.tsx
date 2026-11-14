@@ -2,6 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   ClipboardCheck,
   IdCard,
+  Pill,
   Plane,
   ScrollText,
   Search as SearchIcon,
@@ -23,6 +24,8 @@ import { ChangePassword } from "@/pages/change-password/change-password";
 import { Ffis } from "@/pages/ffi/ffi";
 import { FFI_HISTORY } from "@/pages/ffi/ffi-api";
 import { Home } from "@/pages/home/home";
+import { Medications } from "@/pages/medication/medication";
+import { MEDICATION_HISTORY } from "@/pages/medication/medication-api";
 import { NumcRecords } from "@/pages/numc/numc";
 import { NUMC_HISTORY } from "@/pages/numc/numc-api";
 import { Search } from "@/pages/search/search";
@@ -124,8 +127,24 @@ const SEARCH_PAGE: SignedInPage = {
 };
 
 /**
- * FFI: the FFI History of the patient in context, linked after Profile for a
- * session holding `patient:read`, the Permission its read requires, and
+ * Medication: the Medication History of the patient in context, linked after
+ * Profile and above FFI for a session holding `patient:read`, the Permission
+ * its read requires, and guarded by it as Patient Search is, so a session
+ * without it is routed to its landing page and offered no link. Its title
+ * heads the page.
+ */
+const MEDICATION_PAGE: SignedInPage = {
+  element: <Medications />,
+  homeLink: "Medication",
+  icon: Pill,
+  path: "/medication",
+  permissions: [MEDICATION_HISTORY.permission],
+  title: "Medication",
+};
+
+/**
+ * FFI: the FFI History of the patient in context, linked after Medication for
+ * a session holding `patient:read`, the Permission its read requires, and
  * guarded by it as Patient Search is, so a session without it is routed to
  * its landing page and offered no link. Its title heads the page.
  */
@@ -178,6 +197,7 @@ const ARMC_PAGE: SignedInPage = {
 export const SIGNED_IN_PAGES: readonly SignedInPage[] = [
   SEARCH_PAGE,
   HOME_PAGE,
+  MEDICATION_PAGE,
   FFI_PAGE,
   NUMC_PAGE,
   ARMC_PAGE,

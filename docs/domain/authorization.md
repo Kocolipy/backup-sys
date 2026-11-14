@@ -86,8 +86,10 @@ declares nothing is refused. Four kinds of operation:
   `patient:read` reads a Patient (`GET /api/patient/{id}`), runs a Patient
   search (`GET /api/patient-search`, [patient](patient.md)) and reads a
   patient's FFI History (`GET /api/patient-ffi/{patientId}`, [ffi](ffi.md)), NUMC
-  History (`GET /api/patient-numc/{patientId}`, [numc](numc.md)) and ARMC History
-  (`GET /api/patient-armc/{patientId}`, [armc](armc.md)); a session without it,
+  History (`GET /api/patient-numc/{patientId}`, [numc](numc.md)), ARMC History
+  (`GET /api/patient-armc/{patientId}`, [armc](armc.md)) and Medication History
+  (`GET /api/patient-medication/{patientId}`, [medication](medication.md)); a
+  session without it,
   a User in no Group that carries it included, gets the Authorization refusal.
 - **Superuser only** — connector creation and deletion, issuing, rotating and
   revoking a token, and setting a Group's Permissions

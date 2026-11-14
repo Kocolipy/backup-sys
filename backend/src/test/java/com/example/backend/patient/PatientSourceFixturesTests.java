@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
@@ -396,7 +397,7 @@ class PatientSourceFixturesTests {
             "outcome", Set.of("fit", "request-waiver", "unfit"),
             "higherAuthority", Set.of("camo", "carmo", "cnmo", "comd-mmi", "dis"),
             "submittingMc", Set.of("nee-soon-camp", "kranji-camp", "hendon-camp",
-                    "mandai-hill-camp"),
+                    "mandai-hill-camp", "khatib-camp"),
             "status", Set.of("active", "inactive"));
 
     /**
@@ -966,6 +967,172 @@ class PatientSourceFixturesTests {
                         "invalid-id", "no-outcome", "no-medical-officer-2",
                         "unknown-board-type", "unknown-outcome", "end-before-start",
                         "end-date-not-to-the-day");
+    }
+
+    // ---- the Medication Histories -----------------------------------------------------------
+
+    /** The Medication Records of every page of {@code patient}'s Medication History, page after page. */
+    private static List<JsonNode> medicationsOf(String patient) {
+        return PatientSourceStubs.medicationHistories().stream()
+                .filter(PatientSourceFixturesTests::canned)
+                .filter(stub -> stub.path().equals("/Patient/" + patient + "/medication"))
+                .sorted(Comparator.comparing(stub -> stub.query().at("/_offset/equalTo")
+                        .asInt()))
+                .flatMap(stub -> resourcesOf(stub).stream())
+                .toList();
+    }
+
+    /** Every Medication Record any Medication History stub serves. */
+    private static List<JsonNode> everyMedicationRecord() {
+        return PatientSourceStubs.medicationHistories().stream()
+                .flatMap(stub -> resourcesOf(stub).stream())
+                .toList();
+    }
+
+    /**
+     * Two fixtures have Medication Records, each page its own stub — Tan Wei Ming's two pages of
+     * six and Tan Hui Min's one of four — and a fallback answers every fixture's other read with
+     * none.
+     */
+    @Test
+    void twoFixturesHaveAMedicationHistoryAndTheFallbackServesEveryFixture() {
+        List<String> exact = PatientSourceStubs.medicationHistories().stream()
+                .filter(PatientSourceFixturesTests::canned)
+                .map(stub -> stub.path() + " " + stub.query().at("/_offset/equalTo").asString()
+                        + " of " + stub.bundle().at("/total").asInt())
+                .toList();
+        String fallback = PatientSourceStubs.medicationHistories().stream()
+                .map(PatientSourceStubs.HistoryStub::path)
+                .filter(path -> path.contains("("))
+                .findFirst().orElseThrow();
+
+        assertThat(exact).containsExactlyInAnyOrder(
+                "/Patient/eq081-VQEgP8drUUqCWzHfw3/medication 0 of 6",
+                "/Patient/eq081-VQEgP8drUUqCWzHfw3/medication 5 of 6",
+                "/Patient/dev-patient-05/medication 0 of 4");
+        assertThat(fixtureIds()).allSatisfy(id ->
+                assertThat("/Patient/" + id + "/medication").matches(fallback));
+        assertThat("/Patient/fault-medication-no-id/medication").doesNotMatch(fallback);
+    }
+
+    /**
+     * Every canned page is matched on the whole page the backend asks for — five to a page, its
+     * offset and an accurate total — so a read of any other page falls to the fallback.
+     */
+    @Test
+    void everyCannedMedicationPagePinsItsPage() {
+        assertThat(PatientSourceStubs.medicationHistories())
+                .filteredOn(PatientSourceFixturesTests::canned)
+                .hasSize(3)
+                .allSatisfy(stub -> assertThat(List.of(
+                        stub.query().at("/_count/equalTo").asString(),
+                        stub.query().at("/_offset/equalTo").isString(),
+                        stub.query().at("/_total/equalTo").asString()))
+                        .containsExactly("5", true, "accurate"));
+    }
+
+    /** Each page holds no more than five Medication Records, and a history's pages hold its total. */
+    @Test
+    void everyMedicationHistoryPageHoldsAtMostFiveAndItsPagesHoldTheirTotal() {
+        assertThat(PatientSourceStubs.medicationHistories())
+                .allSatisfy(stub -> assertThat(resourcesOf(stub)).hasSizeLessThanOrEqualTo(5));
+        assertThat(List.of(medicationsOf("eq081-VQEgP8drUUqCWzHfw3").size(),
+                medicationsOf("dev-patient-05").size())).containsExactly(6, 4);
+    }
+
+    /** Tan Hui Min's history holds every Dispense Status, so a page reading it shows each badge. */
+    @Test
+    void tanHuiMinsMedicationHistoryCoversEveryDispenseStatus() {
+        assertThat(medicationsOf("dev-patient-05"))
+                .extracting(record -> record.get("dispenseStatus").asString())
+                .containsOnly("pending", "dispensed", "uncollected")
+                .contains("pending", "dispensed", "uncollected");
+    }
+
+    /** The two histories hold every Medical Centre between them, as their Dispensaries. */
+    @Test
+    void theMedicationHistoriesCoverEveryMedicalCentre() {
+        Set<String> centres = Set.of("nee-soon-camp", "kranji-camp", "hendon-camp",
+                "mandai-hill-camp", "khatib-camp");
+
+        assertThat(everyMedicationRecord())
+                .extracting(record -> record.get("dispensary").asString())
+                .containsOnlyElementsOf(centres)
+                .containsAll(centres);
+    }
+
+    /** A Medication Record's six required elements, beside its resource type and its id. */
+    private static final Set<String> REQUIRED_MEDICATION_FIELDS = Set.of("resourceType", "id",
+            "medication", "dispenseStatus", "startDate", "endDate", "dispensary",
+            "prescribingDoctor");
+
+    /** A Medication Record's six optional elements. */
+    private static final Set<String> OPTIONAL_MEDICATION_FIELDS = Set.of("dosage", "route",
+            "frequency", "step", "quantity", "duration");
+
+    /**
+     * Every Medication Record is a {@code Medication} of every required element, its id and
+     * any of the optional ones, nothing else; one fixture's record has none of the six.
+     */
+    @Test
+    void everyMedicationRecordHoldsItsRequiredElementsAndOneHasNoOptionalOne() {
+        assertThat(everyMedicationRecord()).hasSize(10)
+                .allSatisfy(record -> assertThat(List.<Object>of(
+                        record.get("resourceType").asString(),
+                        REQUIRED_MEDICATION_FIELDS.stream().allMatch(record::has),
+                        record.propertyNames().stream()
+                                .allMatch(field -> REQUIRED_MEDICATION_FIELDS.contains(field)
+                                        || OPTIONAL_MEDICATION_FIELDS.contains(field))))
+                        .containsExactly("Medication", true, true))
+                .filteredOn(record -> OPTIONAL_MEDICATION_FIELDS.stream().noneMatch(record::has))
+                .extracting(record -> record.get("id").asString())
+                .containsExactly("medication-tan-hui-min-4");
+    }
+
+    /** Every fixture's record ends on or after the instant it starts. */
+    @Test
+    void everyMedicationRecordEndsOnOrAfterItStarts() {
+        assertThat(everyMedicationRecord())
+                .allSatisfy(record -> assertThat(
+                        OffsetDateTime.parse(record.get("endDate").asString()))
+                        .isAfterOrEqualTo(OffsetDateTime.parse(
+                                record.get("startDate").asString())));
+    }
+
+    /** Every Medication Record's id is in FHIR's id grammar and no other record's. */
+    @Test
+    void everyMedicationRecordIdIsAFhirIdOfItsOwn() {
+        List<String> ids = everyMedicationRecord().stream()
+                .map(record -> record.get("id").asString())
+                .toList();
+        Stream<String> others = Stream.of(PatientSourceStubs.ffiHistories(),
+                        PatientSourceStubs.numcHistories(), PatientSourceStubs.armcHistories())
+                .flatMap(List::stream)
+                .flatMap(stub -> resourcesOf(stub).stream())
+                .map(record -> record.get("id").asString());
+
+        assertThat(ids).hasSize(10).doesNotHaveDuplicates()
+                .doesNotContainAnyElementsOf(others.toList())
+                .allSatisfy(id -> assertThat(id).matches("[A-Za-z0-9\\-.]{1,64}"));
+    }
+
+    /**
+     * The Medication fault stubs, each by the failure it serves under a well-formed patient id
+     * no fixture uses, so it never shadows a fixture's history and the read reaches the source.
+     */
+    @Test
+    void theMedicationFaultStubsServeEachFailureUnderAPatientIdOfItsOwn() {
+        assertThat(PatientSourceStubs.medicationFaults())
+                .allSatisfy(fault -> assertThat(fault.id())
+                        .isEqualTo("fault-medication-" + fault.fault())
+                        .matches("[A-Za-z0-9\\-.]{1,64}")
+                        .isNotIn(fixtureIds()))
+                .extracting(PatientSourceStubs.FaultStub::fault)
+                .containsExactlyInAnyOrder("unreachable", "slow", "server-error",
+                        "unexpected-status", "not-a-searchset", "no-total", "no-id",
+                        "invalid-id", "no-dispense-status", "no-prescribing-doctor",
+                        "unknown-dispense-status", "unknown-dispensary",
+                        "start-date-not-a-date-time", "end-before-start");
     }
 
     /**

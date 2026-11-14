@@ -5,7 +5,9 @@ import {
   formatCalendarDate,
   formatCalendarDateTwoDigitDay,
   formatDate,
+  formatDateTime,
   isCalendarDate,
+  isOffsetDateTime,
   formatInstant,
   parseTypedTime,
   today,
@@ -48,6 +50,20 @@ describe("formatInstant", () => {
 
   it("writes single-digit months, days, hours and minutes with their leading zero", () => {
     expect(formatInstant("2026-01-04T17:05:00Z")).toBe("2026-01-05 01:05");
+  });
+});
+
+describe("formatDateTime", () => {
+  it("shows a date-time as its two-digit day, month, year and minute in Singapore", () => {
+    expect(formatDateTime("2026-10-18T17:30:00+08:00")).toBe("18 Oct 2026 17:30");
+  });
+
+  it("shows a date-time given in UTC at Singapore's wall clock, dropping seconds", () => {
+    expect(formatDateTime("2026-03-01T02:00:59Z")).toBe("01 Mar 2026 10:00");
+  });
+
+  it("moves a date-time given in another offset onto Singapore's date", () => {
+    expect(formatDateTime("2026-12-31T11:30:00-05:00")).toBe("01 Jan 2027 00:30");
   });
 });
 
@@ -178,6 +194,38 @@ describe("parseTypedTime", () => {
     ["a year past what a Date can hold", "275760-12-31T23:59"],
   ])("refuses %s", (_, typed) => {
     expect(readAs(typed)).toBeNull();
+  });
+});
+
+describe("isOffsetDateTime", () => {
+  it.each([
+    ["a time to the minute with an offset", "2026-10-18T17:30+08:00"],
+    ["a time to the second with an offset", "2026-10-18T17:30:00+08:00"],
+    ["a fraction of a second", "2026-10-18T17:30:00.123-05:00"],
+    ["UTC's Z", "2026-03-01T02:00:00Z"],
+    ["29 February in a leap year", "2024-02-29T00:00:00+08:00"],
+    ["the last minute of a day", "2026-10-18T23:59:59+08:00"],
+    ["the furthest offset", "2026-10-18T17:30:00-18:00"],
+    ["an offset at its last minute", "2026-10-18T17:30:00+05:59"],
+  ])("accepts %s", (_, dateTime) => {
+    expect(isOffsetDateTime(dateTime)).toBe(true);
+  });
+
+  it.each([
+    ["a calendar date alone", "2026-10-18"],
+    ["a time with no offset", "2026-10-18T17:30:00"],
+    ["a space for the T", "2026-10-18 17:30:00+08:00"],
+    ["an offset with no colon", "2026-10-18T17:30:00+0800"],
+    ["a day the calendar does not have", "2023-02-29T10:00:00+08:00"],
+    ["an hour past 23", "2026-10-18T24:00:00+08:00"],
+    ["a minute past 59", "2026-10-18T17:60:00+08:00"],
+    ["a second past 59", "2026-10-18T17:30:60+08:00"],
+    ["an offset past 18 hours", "2026-10-18T17:30:00+18:01"],
+    ["an offset minute past 59", "2026-10-18T17:30:00+08:60"],
+    ["text before it", "at 2026-10-18T17:30:00+08:00"],
+    ["text after it", "2026-10-18T17:30:00+08:00 SGT"],
+  ])("refuses %s", (_, dateTime) => {
+    expect(isOffsetDateTime(dateTime)).toBe(false);
   });
 });
 

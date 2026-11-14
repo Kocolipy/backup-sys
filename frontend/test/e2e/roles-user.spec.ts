@@ -28,7 +28,9 @@ test.describe("baseline User pages", () => {
     expect(patientRequests()).toEqual([]);
   });
 
-  test("is offered no Search, FFI, NUMC or ARMC link, only Profile", async ({ page }) => {
+  test("is offered no Search, Medication, FFI, NUMC or ARMC link, only Profile", async ({
+    page,
+  }) => {
     await page.goto("/");
 
     await expect(sidebar(page).getByRole("link")).toHaveText(["Profile"]);

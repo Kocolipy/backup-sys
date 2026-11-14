@@ -22,22 +22,23 @@ through the document to the SPA. Nothing is generated: each link is a copy, held
 set-equal to the one before it. The document's enums are named under
 `#/components/schemas/`.
 
-| Closed set             | Java (backend)                               | `openapi.yaml` enum                                                                     | SPA                                     |
-| ---------------------- | -------------------------------------------- | --------------------------------------------------------------------------------------- | --------------------------------------- |
-| Session Permissions    | every `Permission` that is not `tokenOnly()` | `UserResponse/properties/permissions/items`                                             | `PERMISSIONS` (`src/auth/api.ts`)       |
-| Delegatable Permission | `Permission.delegatable()`                   | `DelegatablePermission`                                                                 | covered by `PERMISSIONS`                |
-| Token Permissions      | `Permission.tokenGrantable()`                | `ConnectorTokenPermissions/items`, `ConnectorTokenSummary/properties/permissions/items` | `TOKEN_PERMISSIONS` (`accounts-api.ts`) |
-| Audit operations       | `AuditOperation`, by `name()`                | `AuditOperation`                                                                        | `AUDIT_OPERATIONS` (`audit-api.ts`)     |
-| Lock causes            | `LockCause`, by `name()`                     | `AccountSummary/properties/lockCause` (its `null` is no member)                         | `LOCK_CAUSES` (`accounts-api.ts`)       |
-| FFI Types              | `FfiType`, by `code()`                       | `FfiType`                                                                               | `FFI_TYPES` (`ffi-api.ts`)              |
-| FFI Outcomes           | `FfiOutcome`, by `code()`                    | `FfiOutcome`                                                                            | `FFI_OUTCOMES` (`ffi-api.ts`)           |
-| Higher Authorities     | `FfiHigherAuthority`, by `code()`            | `FfiHigherAuthority`                                                                    | `FFI_HIGHER_AUTHORITIES` (`ffi-api.ts`) |
-| Submitting MCs         | `FfiSubmittingMc`, by `code()`               | `FfiSubmittingMc`                                                                       | `FFI_SUBMITTING_MCS` (`ffi-api.ts`)     |
-| FFI Statuses           | `FfiStatus`, by `code()`                     | `FfiStatus`                                                                             | `FFI_STATUSES` (`ffi-api.ts`)           |
-| NUMC Types             | `NumcType`, by `code()`                      | `NumcType`                                                                              | `NUMC_TYPES` (`numc-api.ts`)            |
-| NUMC Outcomes          | `NumcOutcome`, by `code()`                   | `NumcOutcome`                                                                           | `NUMC_OUTCOMES` (`numc-api.ts`)         |
-| ARMC Board Types       | `ArmcBoardType`, by `code()`                 | `ArmcBoardType`                                                                         | `ARMC_BOARD_TYPES` (`armc-api.ts`)      |
-| ARMC Outcomes          | `ArmcOutcome`, by `code()`                   | `ArmcOutcome`                                                                           | `ARMC_OUTCOMES` (`armc-api.ts`)         |
+| Closed set             | Java (backend)                               | `openapi.yaml` enum                                                                     | SPA                                         |
+| ---------------------- | -------------------------------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------- |
+| Session Permissions    | every `Permission` that is not `tokenOnly()` | `UserResponse/properties/permissions/items`                                             | `PERMISSIONS` (`src/auth/api.ts`)           |
+| Delegatable Permission | `Permission.delegatable()`                   | `DelegatablePermission`                                                                 | covered by `PERMISSIONS`                    |
+| Token Permissions      | `Permission.tokenGrantable()`                | `ConnectorTokenPermissions/items`, `ConnectorTokenSummary/properties/permissions/items` | `TOKEN_PERMISSIONS` (`accounts-api.ts`)     |
+| Audit operations       | `AuditOperation`, by `name()`                | `AuditOperation`                                                                        | `AUDIT_OPERATIONS` (`audit-api.ts`)         |
+| Lock causes            | `LockCause`, by `name()`                     | `AccountSummary/properties/lockCause` (its `null` is no member)                         | `LOCK_CAUSES` (`accounts-api.ts`)           |
+| FFI Types              | `FfiType`, by `code()`                       | `FfiType`                                                                               | `FFI_TYPES` (`ffi-api.ts`)                  |
+| FFI Outcomes           | `FfiOutcome`, by `code()`                    | `FfiOutcome`                                                                            | `FFI_OUTCOMES` (`ffi-api.ts`)               |
+| Higher Authorities     | `FfiHigherAuthority`, by `code()`            | `FfiHigherAuthority`                                                                    | `FFI_HIGHER_AUTHORITIES` (`ffi-api.ts`)     |
+| FFI Statuses           | `FfiStatus`, by `code()`                     | `FfiStatus`                                                                             | `FFI_STATUSES` (`ffi-api.ts`)               |
+| NUMC Types             | `NumcType`, by `code()`                      | `NumcType`                                                                              | `NUMC_TYPES` (`numc-api.ts`)                |
+| NUMC Outcomes          | `NumcOutcome`, by `code()`                   | `NumcOutcome`                                                                           | `NUMC_OUTCOMES` (`numc-api.ts`)             |
+| ARMC Board Types       | `ArmcBoardType`, by `code()`                 | `ArmcBoardType`                                                                         | `ARMC_BOARD_TYPES` (`armc-api.ts`)          |
+| ARMC Outcomes          | `ArmcOutcome`, by `code()`                   | `ArmcOutcome`                                                                           | `ARMC_OUTCOMES` (`armc-api.ts`)             |
+| Dispense Statuses      | `DispenseStatus`, by `code()`                | `DispenseStatus`                                                                        | `DISPENSE_STATUSES` (`medication-api.ts`)   |
+| Medical Centres        | `MedicalCentre`, by `code()`                 | `MedicalCentre`                                                                         | `MEDICAL_CENTRES` (`medical-centre-api.ts`) |
 
 - **Java ↔ document**: the backend's `VocabularyContractTests`
   (`backend/docs/api-contract-check.md`) compares each Java set with each enum

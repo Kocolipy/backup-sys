@@ -97,10 +97,11 @@ authorities:
 - **Runtime** (CSRF, CSP, sessions): `frontend/docs/BACKEND_CONTRACT.md` — read
   it before changing request handling on either side.
 - **Vocabulary** (Permissions, token Permissions, audit operations, lock causes,
-  an FFI's five closed sets — FFI Type, Outcome, Higher Authority, Submitting
-  MC, Status — a NUMC Record's two — NUMC Type, NUMC Outcome — an ARMC
-  Board's two — ARMC Board Type, ARMC Outcome — and each request's Permission
-  or Superuser requirement):
+  an FFI's four closed sets of its own — FFI Type, Outcome, Higher Authority,
+  Status — a NUMC Record's two — NUMC Type, NUMC Outcome — an ARMC Board's
+  two — ARMC Board Type, ARMC Outcome — a Medication Record's Dispense Status,
+  Medical Centre — the set an FFI's Submitting MC and a Medication Record's
+  Dispensary share — and each request's Permission or Superuser requirement):
   `backend/docs/openapi.yaml`,
   held by the contract check, so a backend change to any lands with the SPA's.
 

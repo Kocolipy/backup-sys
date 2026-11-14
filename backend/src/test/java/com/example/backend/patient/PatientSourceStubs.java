@@ -151,6 +151,16 @@ public final class PatientSourceStubs {
         return historyFaults(ARMC);
     }
 
+    /**
+     * Every Medication fault stub: a stub whose {@code metadata.fault} names the failure a
+     * Medication History read meets there — no answer, a status but a {@code 200} or a
+     * {@code 404}, or a page the service cannot hold — under a well-formed patient id no fixture
+     * uses (/docs/domain/medication.md, "The patient source's Medication fixtures").
+     */
+    public static List<FaultStub> medicationFaults() {
+        return historyFaults(MEDICATION);
+    }
+
     /** The fault stubs of the history under {@code segment}, each under its patient id. */
     private static List<FaultStub> historyFaults(String segment) {
         return faultStubs(segment).stream()
@@ -178,6 +188,11 @@ public final class PatientSourceStubs {
         return histories(ARMC);
     }
 
+    /** Every Medication History stub that is no fault stub ({@link #histories}). */
+    public static List<HistoryStub> medicationHistories() {
+        return histories(MEDICATION);
+    }
+
     /**
      * Every stub of the history under {@code segment} that is no fault stub: each development
      * fixture's page as the patient id it answers for — or, for a stub answering several, its
@@ -194,10 +209,10 @@ public final class PatientSourceStubs {
     }
 
     /**
-     * One stub of an FFI, NUMC or ARMC History.
+     * One stub of an FFI, NUMC, ARMC or Medication History.
      *
-     * @param path   the path it answers, {@code /Patient/{id}/ffi}, {@code /numc} or {@code /armc},
-     *               or the pattern of paths
+     * @param path   the path it answers, {@code /Patient/{id}/ffi}, {@code /numc}, {@code /armc}
+     *               or {@code /medication}, or the pattern of paths
      * @param query  its query parameters' matchers — missing for one answering any page
      * @param bundle the searchset it answers
      */
@@ -233,8 +248,11 @@ public final class PatientSourceStubs {
     /** The ARMC History's path segment, after the patient's id. */
     private static final String ARMC = "/armc";
 
+    /** The Medication History's path segment, after the patient's id. */
+    private static final String MEDICATION = "/medication";
+
     /** Every history's path segment. */
-    private static final List<String> HISTORIES = List.of(FFI, NUMC, ARMC);
+    private static final List<String> HISTORIES = List.of(FFI, NUMC, ARMC, MEDICATION);
 
     /**
      * One fault stub.
@@ -286,6 +304,15 @@ public final class PatientSourceStubs {
         public List<String> armcValues() {
             return recordValues(List.of("id", "startDate", "endDate", "medicalOfficer1",
                     "medicalOfficer2"));
+        }
+
+        /**
+         * What a record of a Medication History's failure must not quote: each Medication
+         * Record's id, Medication, dates and Prescribing Doctor, and an error body's diagnostics.
+         */
+        public List<String> medicationValues() {
+            return recordValues(List.of("id", "medication", "startDate", "endDate",
+                    "prescribingDoctor"));
         }
 
         /** The fields of an FFI or a NUMC Record no record of a failure may quote. */

@@ -33,7 +33,7 @@ Every FFI has every element; none is optional.
 | Issue Date       | `issueDate`, `YYYY-MM-DD`  | `05 Feb 2001`                                                                                                                                                                                           |
 | Expiry Date      | `expiryDate`, `YYYY-MM-DD` | `05 Feb 2001`                                                                                                                                                                                           |
 | Higher Authority | `higherAuthority`, a code  | `camo` CAMO · `carmo` CARMO · `cnmo` CNMO · `comd-mmi` Comd MMI · `dis` DIS                                                                                                                             |
-| Submitting MC    | `submittingMc`, a code     | `nee-soon-camp` Nee Soon Camp MC · `kranji-camp` Kranji Camp MC · `hendon-camp` Hendon Camp MC · `mandai-hill-camp` Mandai Hill Camp MC                                                                 |
+| Submitting MC    | `submittingMc`, a code     | a Medical Centre: `nee-soon-camp` Nee Soon Camp MC · `kranji-camp` Kranji Camp MC · `hendon-camp` Hendon Camp MC · `mandai-hill-camp` Mandai Hill Camp MC · `khatib-camp` Khatib Camp MC                |
 | Status           | `status`, a code           | `active` Active (green) · `inactive` Inactive (muted)                                                                                                                                                   |
 
 Each FFI also carries its own `id` at the source, in FHIR's id grammar, which
@@ -45,11 +45,17 @@ The FFI Type, Outcome, Higher Authority, Submitting MC and Status are closed
 sets. Each value travels as its **code** — from the source, and to the SPA —
 and the SPA alone names it with its **label**. A code is matched exactly: a
 label, another case or another spelling is outside the set. Each set is one
-Java enum (`FfiType`, `FfiOutcome`, `FfiHigherAuthority`, `FfiSubmittingMc`,
-`FfiStatus`, codes through `SourceCode`), one enum in `backend/docs/openapi.yaml`
-and one SPA set (`src/pages/ffi/ffi-api.ts`), held set-equal by
-`VocabularyContractTests` and by `make verify-contract`
-(`/scripts/spa-contract/README.md`).
+Java enum (`FfiType`, `FfiOutcome`, `FfiHigherAuthority`, `FfiStatus`, codes
+through `SourceCode`), one enum in `backend/docs/openapi.yaml` and one SPA set
+(`src/pages/ffi/ffi-api.ts`), held set-equal by `VocabularyContractTests` and
+by `make verify-contract` (`/scripts/spa-contract/README.md`).
+
+**The Submitting MC draws on Medical Centre**, the closed set a Medication
+Record's Dispensary draws on too ([medication](medication.md)): the field is
+the FFI's own, `submittingMc` on both wires, and the set is shared — one Java
+enum (`MedicalCentre`), one enum in `backend/docs/openapi.yaml`
+(`MedicalCentre`) and one SPA set (`src/pages/medical-centre-api.ts`), held
+set-equal as the others are.
 
 ### Status is the source's
 
@@ -204,7 +210,7 @@ refused read is audited as `ACCESS_DENIED`, as every authorization refusal is.
 
 ## The FFI page
 
-`/ffi`, linked **FFI** in the sidebar after Profile for a session holding
+`/ffi`, linked **FFI** in the sidebar after Medication for a session holding
 `patient:read`, and guarded by it as Patient Search is: a session without it is
 offered no link and is routed to its landing page. Headed "FFI History".
 
@@ -231,7 +237,8 @@ offered no link and is routed to its landing page. Headed "FFI History".
   of the seven filters, the button counting those applied ("Filter, 2 set", a
   badge of 2 — each set of codes, the Status and each end of a range one
   each): a searchable multi-select for each of FFI Type, Outcome, Higher
-  Authority and Submitting MC, listing its closed set by label; a from–to
+  Authority and Submitting MC, listing its closed set by label — every
+  Medical Centre for the Submitting MC; a from–to
   range of `<input type="date">` for Issue Date and for Expiry Date, each end
   optional and inclusive; and the Status — All (the default), Active or
   Inactive. Nothing in the panel is sent until Apply, or Enter in a date;
@@ -271,8 +278,9 @@ fixtures, and the backend's tests read the same stub files
 
 - **Tan Hui Min** (`dev-patient-05`) has seven FFIs over two pages of five
   (`ffi-tan-hui-min-page-1`, `-page-2`), between them every code of every
-  closed set — every Outcome, Higher Authority and Status among them — and
-  Active FFIs past their Expiry Date.
+  closed set — every Outcome, Higher Authority, Medical Centre and Status among
+  them, her seventh submitted by Khatib Camp MC — and Active FFIs past their
+  Expiry Date.
 - **Every other fixture** has none — Siti Nurhaliza binte Ahmad
   (`erXuFYUfucBZaryVksYEcMg3`), found by the NRIC search `S9212345A`, is the
   one the tests read — answered by `ffi-fallback`, which also answers any page,

@@ -488,9 +488,15 @@ it does not decide an FFI's Status, and nothing works out "expired".
 The medical authority an FFI answers to, one of CAMO, CARMO, CNMO, Comd MMI
 and DIS.
 
+**Medical Centre**:
+A camp medical centre, one of a closed set: Nee Soon Camp MC, Kranji Camp MC,
+Hendon Camp MC, Mandai Hill Camp MC and Khatib Camp MC. An FFI's Submitting MC
+and a Medication Record's Dispensary each name one.
+_Avoid_: MC set, camp MC list, a bare "Submitting MC" for the set (that is an
+FFI's field)
+
 **Submitting MC**:
-The camp medical centre that submitted an FFI, one of Nee Soon Camp MC,
-Kranji Camp MC, Hendon Camp MC and Mandai Hill Camp MC.
+The Medical Centre that submitted an FFI.
 
 **Status**:
 Whether an FFI is Active or Inactive, as the Patient source says. It is the
@@ -558,16 +564,52 @@ FFI's Outcome and a NUMC Record's NUMC Outcome.
 _Avoid_: ARMC result, a bare "Outcome" (that is an FFI's)
 
 **Start Date**:
-The calendar date an ARMC Board started.
+The start of a record's period: a calendar date on an ARMC Board, and a
+date-time, to the minute, on a Medication Record.
 
 **End Date**:
-The calendar date an ARMC Board ended, on or after its Start Date. An ARMC
-Board may have none: it is still open.
+The end of a record's period, never before its Start Date: a calendar date on
+an ARMC Board, which may have none while it is still open, and a date-time, to
+the minute, on a Medication Record, which always has one.
 
 **Medical Officer #1** / **Medical Officer #2**:
 The two Medical Officers who sat on an ARMC Board, each a name as the Patient
 source gives it. Neither is linked to a User or an account.
 _Avoid_: MO 1 / MO 2, board member
+
+### Medication
+
+Rules: [medication](docs/domain/medication.md). Decided in ADR 0019 (D7).
+
+**Medication Record**:
+One prescription of a patient's, with how it was dispensed and who prescribed
+it, as the Patient source holds it: its Medication, Dispense Status, Start
+Date, End Date, Dispensary and Prescribing Doctor, every one required, and its
+Dosage, Route, Frequency, Step, Quantity and Duration, each optional. Every
+element but the Dispense Status, the dates and the Dispensary is free text,
+shown as the source gives it. Read from the Patient source on every read,
+never held, and not audited.
+_Avoid_: prescription record, medication order, drug record
+
+**Medication History**:
+Every Medication Record of one patient, in the Patient source's own order,
+read five to a page on the Medication page (`/medication`) for the patient in
+context, by a session holding `patient:read`.
+_Avoid_: medication list, medication log, prescription history
+
+**Dispense Status**:
+Whether a Medication Record's medication was dispensed and collected, one of a
+closed set: PENDING, DISPENSED, UNCOLLECTED.
+_Avoid_: dispensing state, a bare "Status" (that is an FFI's)
+
+**Dispensary**:
+The Medical Centre that dispenses a Medication Record's medication.
+_Avoid_: pharmacy, dispensing MC
+
+**Prescribing Doctor**:
+The doctor who prescribed a Medication Record, a name as the Patient source
+gives it. Not linked to a User or an account.
+_Avoid_: prescriber, ordering doctor
 
 ### Database
 

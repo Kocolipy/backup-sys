@@ -33,13 +33,15 @@ tags:
       `PatientSourceAdapter`. A mock of it matches, filters, orders, pages and
       counts over its own Patients.
 
-      - **Five reads.** `GET /Patient/{id}` for one Patient (Home's Patient
+      - **Six reads.** `GET /Patient/{id}` for one Patient (Home's Patient
         card), `GET /Patient?…` for a Patient search (the Search page),
         `GET /Patient/{id}/ffi?…` for a patient's FFI History (the FFI page,
         ADR 0019), `GET /Patient/{id}/numc?…` for a patient's NUMC History
-        (the NUMC page, ADR 0019, D5) and `GET /Patient/{id}/armc?…` for a
-        patient's ARMC History (the ARMC page, ADR 0019, D6). The backend calls
-        nothing else on it.
+        (the NUMC page, ADR 0019, D5), `GET /Patient/{id}/armc?…` for a
+        patient's ARMC History (the ARMC page, ADR 0019, D6) and
+        `GET /Patient/{id}/medication?…` for a patient's Medication History
+        (the Medication page, ADR 0019, D7). The backend calls nothing else on
+        it.
       - **FHIR R4 JSON, no credential.** Every call is a `GET` with
         `Accept: application/fhir+json` and no `Authorization` header; the
         source answers `application/fhir+json` (`application/json` is read too).
@@ -709,6 +711,112 @@ paths:
               schema:
                 $ref: "#/components/schemas/OperationOutcome"
 
+  /Patient/{id}/medication:
+    servers:
+      - url: http://127.0.0.1:8104
+        description: The patient source's local mock (`APP_PATIENT_SOURCE_BASE_URL`)
+    get:
+      tags: [patient-source]
+      operationId: readMedicationHistory
+      summary: Read one page of a patient's Medication History — paged and counted by the source
+      description: |
+        The patient's Medication Records, each one prescription, with how it
+        was dispensed and who prescribed it. The backend sends no sort and no
+        filter: it shows the page and the total the source answers, in the
+        source's own order. A mock must therefore:
+
+        1. **Count** every Medication Record the patient has: that number is
+           the Bundle's `total`, whatever the page.
+        2. **Order** them in the source's own stable default order.
+        3. **Page**: skip `_offset` records, then return up to `_count` of
+           them as the Bundle's entries, in that order.
+
+        **Worked example** over the fixtures: Tan Wei Ming
+        (`eq081-VQEgP8drUUqCWzHfw3`) has six Medication Records, so `total` is
+        6 on both of his pages of five; Tan Hui Min has four, on one page.
+
+        **FHIR-shaped paging only, not FHIR-conformant**: the answer borrows a
+        searchset `Bundle`'s shape, and its entries are a custom `Medication`
+        object of flat fields, not FHIR's `Medication` resource (ADR 0019,
+        D7). The id is sent unchanged, as a read by id's is. The backend sends
+        parameters in no guaranteed order; read them by name.
+
+        **Fault ids (mock only).** Beside the fixtures' histories, the mock
+        serves one failure of this read per patient id, none a fixture's:
+
+        | Id                                            | Answers                                                                 |
+        | --------------------------------------------- | ----------------------------------------------------------------------- |
+        | `fault-medication-unreachable`                | the connection reset, no answer                                         |
+        | `fault-medication-slow`                       | `200` page after 7 seconds, past the read timeout                       |
+        | `fault-medication-server-error`               | `503`                                                                   |
+        | `fault-medication-unexpected-status`          | `400`                                                                   |
+        | `fault-medication-not-a-searchset`            | `200` Bundle of `type: collection`                                      |
+        | `fault-medication-no-total`                   | `200` searchset with no `total`                                         |
+        | `fault-medication-no-id`                      | `200` page whose Medication Record has no `id`                          |
+        | `fault-medication-invalid-id`                 | `200` page whose Medication Record's `id` is outside FHIR's id grammar  |
+        | `fault-medication-no-dispense-status`         | `200` page whose Medication Record has no `dispenseStatus`              |
+        | `fault-medication-no-prescribing-doctor`      | `200` page whose Medication Record has no `prescribingDoctor`           |
+        | `fault-medication-unknown-dispense-status`    | `200` page whose `dispenseStatus` is no code of its set                 |
+        | `fault-medication-unknown-dispensary`         | `200` page whose `dispensary` is no Medical Centre's code               |
+        | `fault-medication-start-date-not-a-date-time` | `200` page whose `startDate` has no offset                              |
+        | `fault-medication-end-before-start`           | `200` page whose `endDate` is before its `startDate`                    |
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[A-Za-z0-9\-.]{1,64}$'
+          example: eq081-VQEgP8drUUqCWzHfw3
+        - name: _count
+          in: query
+          required: true
+          description: |
+            The most Medication Records to return. The Medication page asks
+            for 5; the backend passes through anything from 0 to 200. `0`
+            returns no entries and still the full `total`.
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 200
+          example: 5
+        - name: _offset
+          in: query
+          required: true
+          description: |
+            How many Medication Records to skip, in the source's order: the
+            page's `startIndex - 1`. An offset at or past `total` returns no
+            entries and still the full `total`, never an error.
+          schema:
+            type: integer
+            minimum: 0
+          example: 0
+        - name: _total
+          in: query
+          required: true
+          description: Always `accurate`. The `total` must be the exact count, never an estimate.
+          schema:
+            type: string
+            const: accurate
+      responses:
+        "200":
+          description: |
+            One page of the patient's Medication Records, in the source's
+            order, and the `total` of every one. A patient with none is this
+            answer with `total: 0`.
+          content:
+            application/fhir+json:
+              schema:
+                $ref: "#/components/schemas/MedicationSearchset"
+        "404":
+          description: |
+            No patient under the id: the one answer the backend reads as "no
+            patient", shown as "No patient in context". The body is never read.
+          content:
+            application/fhir+json:
+              schema:
+                $ref: "#/components/schemas/OperationOutcome"
+
   /__admin/health:
     servers:
       - url: http://127.0.0.1:8104
@@ -988,9 +1096,16 @@ components:
           type: string
           enum: [camo, carmo, cnmo, comd-mmi, dis]
         submittingMc:
-          description: The Submitting MC, by its code.
+          description: The Submitting MC, by its code — a Medical Centre's.
           type: string
-          enum: [nee-soon-camp, kranji-camp, hendon-camp, mandai-hill-camp]
+          enum:
+            [
+              nee-soon-camp,
+              kranji-camp,
+              hendon-camp,
+              mandai-hill-camp,
+              khatib-camp,
+            ]
         status:
           description: |
             The source's own Status, never derived from the Expiry Date: an FFI
@@ -1164,6 +1279,133 @@ components:
           minLength: 1
         medicalOfficer2:
           description: Medical Officer #2's name, as the source holds it. Not blank.
+          type: string
+          minLength: 1
+
+    MedicationSearchset:
+      description: |
+        A FHIR-R4-shaped searchset `Bundle` of `Medication` objects: FHIR's
+        paging shape, not a FHIR-conformant Bundle. The backend reads
+        `resourceType`, `type`, `total` and each entry's `resource`; `id`,
+        `link` and `fullUrl` may be sent and are ignored.
+      type: object
+      required: [resourceType, type, total]
+      properties:
+        resourceType:
+          const: Bundle
+        type:
+          const: searchset
+        total:
+          description: Every Medication Record the patient has, not the page's size. Required.
+          type: integer
+          minimum: 0
+        entry:
+          description: The page, at most `_count` long. Left out, or empty, for a page with none.
+          type: array
+          items:
+            type: object
+            required: [resource]
+            properties:
+              resource:
+                $ref: "#/components/schemas/Medication"
+      example:
+        resourceType: Bundle
+        type: searchset
+        total: 6
+        entry:
+          - resource:
+              resourceType: Medication
+              id: medication-tan-wei-ming-1
+              medication: Paracetamol
+              dosage: 750 mg
+              route: PO
+              frequency: QDS
+              quantity: 30 tablets
+              dispenseStatus: pending
+              duration: 5 days
+              startDate: "2026-10-18T17:30:00+08:00"
+              endDate: "2026-10-22T17:30:00+08:00"
+              dispensary: nee-soon-camp
+              prescribingDoctor: Dr Lim Wei Jie
+
+    Medication:
+      description: |
+        One Medication Record, a custom object of flat fields — not FHIR's
+        `Medication` resource. Six fields are required; `dosage`, `route`,
+        `frequency`, `step`, `quantity` and `duration` are optional free text,
+        left out when the source has none. Each rule below is one the backend
+        holds: a record breaking any is the source failing, the backend's
+        `502`. A field it does not read is ignored.
+      type: object
+      required:
+        [
+          resourceType,
+          id,
+          medication,
+          dispenseStatus,
+          startDate,
+          endDate,
+          dispensary,
+          prescribingDoctor,
+        ]
+      properties:
+        resourceType:
+          const: Medication
+        id:
+          description: The Medication Record's own id, in FHIR's id grammar.
+          type: string
+          pattern: '^[A-Za-z0-9\-.]{1,64}$'
+        medication:
+          description: The Medication, free text. Not blank.
+          type: string
+          minLength: 1
+        dosage:
+          description: The Dosage, free text. Left out when there is none; never `null`.
+          type: string
+        route:
+          description: The Route, free text. Left out when there is none; never `null`.
+          type: string
+        frequency:
+          description: The Frequency, free text. Left out when there is none; never `null`.
+          type: string
+        step:
+          description: The Step, free text. Left out when there is none; never `null`.
+          type: string
+        quantity:
+          description: The Quantity, free text. Left out when there is none; never `null`.
+          type: string
+        dispenseStatus:
+          description: The Dispense Status, by its code.
+          type: string
+          enum: [pending, dispensed, uncollected]
+        duration:
+          description: |
+            The Duration, free text ("5 days"), never worked out from the
+            dates. Left out when there is none; never `null`.
+          type: string
+        startDate:
+          description: ISO-8601 with an offset (`Z` among them), to the minute or finer.
+          type: string
+          format: date-time
+        endDate:
+          description: |
+            ISO-8601 with an offset, to the minute or finer, and not before
+            `startDate` as an instant.
+          type: string
+          format: date-time
+        dispensary:
+          description: The Dispensary, by its code — a Medical Centre's, as an FFI's `submittingMc` is.
+          type: string
+          enum:
+            [
+              nee-soon-camp,
+              kranji-camp,
+              hendon-camp,
+              mandai-hill-camp,
+              khatib-camp,
+            ]
+        prescribingDoctor:
+          description: The Prescribing Doctor's name, as the source holds it. Not blank.
           type: string
           minLength: 1
 

@@ -139,6 +139,18 @@ change, when the backend side moves. What the SPA has to honour:
   open has no `endDate` at all — the backend leaves it out rather than sending
   `null` — and the decoder reads its absence as the board still open, and a
   `null` one as a failure.
+- **A patient's Medication History answers plain JSON too, on the same
+  terms.** `GET /api/patient-medication/{patientId}` answers
+  `application/json`, every refusal or fault an `ApiError`. Its declaration
+  (`MEDICATION_HISTORY`, `src/pages/medication/medication-api.ts`) opts in to
+  `absentOnNotFound`, so the `404` is the Medication page's "No patient in
+  context" and the `502` "Couldn't load medication records" with Try again;
+  the `{patientId}` is sent through `encodeURIComponent`, and each Medication
+  Record is decoded strictly. An optional element the source lacks — its
+  Dosage, Route, Frequency, Step, Quantity or Duration — is left out, never
+  sent as `null`, and the decoder refuses a `null` one. The Start Date and End
+  Date are ISO-8601 date-times with an offset, which the decoder holds to that
+  shape and the page shows in Singapore time.
 - **A request body is JSON, and says so.** The backend reads a request body
   through its JSON converter only, so a body sent without
   `Content-Type: application/json` is refused `415` before any handler runs.
@@ -232,10 +244,10 @@ change, when the backend side moves. What the SPA has to honour:
   is not bound to the EHR context: `patient:read` reads any id. It is a
   delegatable Permission the backend issues only to a member of a Group that
   carries it and to the Superuser; a session without it is refused the read,
-  the Patient search, the FFI History, the NUMC History and the ARMC History
-  `403`, so the SPA
-  sends none of them — the Patient card says the account has no access to
-  patients, and none of Patient Search, FFI, NUMC or ARMC is linked or opened.
+  the Patient search, the FFI History, the NUMC History, the ARMC History and
+  the Medication History `403`, so the SPA sends none of them — the Patient
+  card says the account has no access to patients, and none of Patient
+  Search, Medication, FFI, NUMC or ARMC is linked or opened.
 - **Logout answers `Clear-Site-Data: "cache","cookies","storage"`** — on a
   successful logout and on the `401` a logout with no live session gets. The
   browser drops anything in `localStorage` / `sessionStorage` along with the

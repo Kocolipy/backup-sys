@@ -40,11 +40,13 @@ Every ARMC Board has every element but the End Date.
 Each ARMC Board also carries its own `id` at the source, in FHIR's id grammar,
 which the page keys its row by and never shows.
 
-- **The End Date is the one optional element** of any history read from the
-  source. An absent End Date is a board still open. The source leaves the field
-  out, and so does our API: it is never sent as `null`. Every other date of
-  every history — an FFI's, a NUMC Record's, an ARMC Board's Start Date — stays
-  required.
+- **The End Date is the one optional element** of an ARMC Board, and the one
+  optional date of any history read from the source. An absent End Date is a
+  board still open. The source leaves the field out, and so does our API: it is
+  never sent as `null`, the convention every optional element of a history
+  follows — a Medication Record's too ([medication](medication.md)). Every
+  other date of every history — an FFI's, a NUMC Record's, an ARMC Board's
+  Start Date, a Medication Record's two — stays required.
 - **When the End Date is there, it is on or after the Start Date**; a board may
   start and end on the same day. The rule is the domain's own (`ArmcBoard`), so
   a board ending before it starts is a failure of the source, never a row.
@@ -184,7 +186,8 @@ is: a session without it is offered no link and is routed to its landing page.
   loads.
 - **No patient in context** — the tab holds none, or the source holds no
   patient under its id (its `404`, our `404`) — shows "No patient in context",
-  as the FFI and NUMC pages do, and reads no ARMC Boards or reports nothing.
+  as the FFI, NUMC and Medication pages do, and reads no ARMC Boards or
+  reports nothing.
 - **A patient with no ARMC Boards** — a `200` with `total: 0` — shows "No ARMC
   records".
 - **The source failing** shows "Couldn't load ARMC records" on the page's error
@@ -194,7 +197,8 @@ is: a session without it is offered no link and is routed to its landing page.
 
 The patient source's mock (`backend/patient-source-mock`, [patient](patient.md),
 "The patient source's fixtures") serves the ARMC Histories of the development
-fixtures beside their FFI and NUMC Histories, on the same patients, and the
+fixtures beside their FFI, NUMC and Medication Histories, on the same
+patients, and the
 backend's tests read the same stub files (`PatientSourceStubs`).
 
 - **Tan Wei Ming** (`eq081-VQEgP8drUUqCWzHfw3`) has exactly two ARMC Boards, on

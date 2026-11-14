@@ -1,0 +1,59 @@
+{
+  "name": "Medication History: Tan Wei Ming's sixth Medication Record, on the second page",
+  "request": {
+    "method": "GET",
+    "urlPath": "/Patient/eq081-VQEgP8drUUqCWzHfw3/medication",
+    "queryParameters": {
+      "_count": {
+        "equalTo": "5"
+      },
+      "_offset": {
+        "equalTo": "5"
+      },
+      "_total": {
+        "equalTo": "accurate"
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/fhir+json"
+    },
+    "jsonBody": {
+      "resourceType": "Bundle",
+      "id": "medication-history",
+      "type": "searchset",
+      "total": 6,
+      "link": [
+        {
+          "relation": "self",
+          "url": "http://127.0.0.1:8104/Patient/eq081-VQEgP8drUUqCWzHfw3/medication?_offset=5&_count=5"
+        }
+      ],
+      "entry": [
+        {
+          "resource": {
+            "resourceType": "Medication",
+            "id": "medication-tan-wei-ming-6",
+            "medication": "Prednisolone",
+            "dosage": "30 mg",
+            "route": "PO",
+            "frequency": "OM",
+            "step": "1",
+            "quantity": "14 tablets",
+            "dispenseStatus": "dispensed",
+            "duration": "7 days",
+            "startDate": "2024-12-02T09:15:00+08:00",
+            "endDate": "2024-12-09T09:15:00+08:00",
+            "dispensary": "hendon-camp",
+            "prescribingDoctor": "Dr Chen Mei Ling"
+          },
+          "search": {
+            "mode": "match"
+          }
+        }
+      ]
+    }
+  }
+}

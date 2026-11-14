@@ -13,6 +13,7 @@ import {
 import { formatCalendarDateTwoDigitDay } from "@/lib/time";
 import { ForPatientInContext, NoPatientInContext } from "@/pages/for-patient-in-context";
 import type { HistorySort, HistorySortColumn } from "@/pages/history-api";
+import { MEDICAL_CENTRE_LABELS } from "@/pages/medical-centre-api";
 import { PagedListing } from "@/pages/paged-listing";
 import { usePagedRead } from "@/pages/paged-read";
 import { type ColumnSorting, PlainHeading, SortHeading } from "@/pages/sort-heading";
@@ -25,7 +26,6 @@ import {
   FFI_HISTORY_PAGE_SIZE,
   FFI_OUTCOME_LABELS,
   FFI_STATUS_LABELS,
-  FFI_SUBMITTING_MC_LABELS,
   FFI_TYPE_LABELS,
   NO_FFI_FILTERS,
   type Ffi,
@@ -96,7 +96,7 @@ function FfiTable({
               {formatCalendarDateTwoDigitDay(ffi.expiryDate)}
             </TableCell>
             <TableCell>{FFI_HIGHER_AUTHORITY_LABELS[ffi.higherAuthority]}</TableCell>
-            <TableCell>{FFI_SUBMITTING_MC_LABELS[ffi.submittingMc]}</TableCell>
+            <TableCell>{MEDICAL_CENTRE_LABELS[ffi.submittingMc]}</TableCell>
             <TableCell>
               <Badge variant={STATUS_BADGES[ffi.status]}>{FFI_STATUS_LABELS[ffi.status]}</Badge>
             </TableCell>

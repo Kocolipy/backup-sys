@@ -369,7 +369,7 @@ public class SecurityConfig {
                                 .hasRole(SUPERUSER_ROLE)
                         .requestMatchers(read("/api/patient/*"), read("/api/patient-search"),
                                 read("/api/patient-ffi/*"), read("/api/patient-numc/*"),
-                                read("/api/patient-armc/*"))
+                                read("/api/patient-armc/*"), read("/api/patient-medication/*"))
                                 .hasAuthority(Permission.PATIENT_READ.value())
                         // Not a backstop: no operation serves any other method on a patient, and
                         // the rule above matches a read only. It lets one through, for a session

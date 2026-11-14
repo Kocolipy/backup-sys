@@ -7,8 +7,8 @@ import com.example.backend.patient.domain.Ffi;
 import com.example.backend.patient.domain.FfiHigherAuthority;
 import com.example.backend.patient.domain.FfiOutcome;
 import com.example.backend.patient.domain.FfiStatus;
-import com.example.backend.patient.domain.FfiSubmittingMc;
 import com.example.backend.patient.domain.FfiType;
+import com.example.backend.patient.domain.MedicalCentre;
 import com.example.backend.patient.infrastructure.http.PatientSourceException.Failure;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
@@ -50,7 +50,7 @@ record SourceFfi(String resourceType, String id, String type, String outcome, St
                 day(expiryDate, Failure.NO_EXPIRY_DATE, Failure.EXPIRY_DATE_NOT_TO_THE_DAY),
                 coded(FfiHigherAuthority.class, higherAuthority, Failure.NO_HIGHER_AUTHORITY,
                         Failure.UNKNOWN_HIGHER_AUTHORITY),
-                coded(FfiSubmittingMc.class, submittingMc, Failure.NO_SUBMITTING_MC,
+                coded(MedicalCentre.class, submittingMc, Failure.NO_SUBMITTING_MC,
                         Failure.UNKNOWN_SUBMITTING_MC),
                 coded(FfiStatus.class, status, Failure.NO_STATUS, Failure.UNKNOWN_STATUS));
     }

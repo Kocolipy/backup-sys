@@ -70,7 +70,7 @@ test.describe("FFI", () => {
     await expect(page.getByText("Showing 6 to 7 of 7 FFIs")).toBeVisible();
     await expect(ffiRows(page)).toHaveText([
       "Vocational FFIREQUEST WAIVER17 Apr 202316 Apr 2024CNMOKranji Camp MCInactive",
-      "IPPT FFIUNFIT05 Dec 202204 Dec 2023CAMOHendon Camp MCInactive",
+      "IPPT FFIUNFIT05 Dec 202204 Dec 2023CAMOKhatib Camp MCInactive",
     ]);
   });
 
@@ -148,7 +148,7 @@ test.describe("FFI", () => {
       "Overseas ExercisesFIT26 Feb 202425 Feb 2025CARMOMandai Hill Camp MCActive",
       "Dental FFIFIT04 Sep 202303 Sep 2024CAMONee Soon Camp MCInactive",
       "Vocational FFIREQUEST WAIVER17 Apr 202316 Apr 2024CNMOKranji Camp MCInactive",
-      "IPPT FFIUNFIT05 Dec 202204 Dec 2023CAMOHendon Camp MCInactive",
+      "IPPT FFIUNFIT05 Dec 202204 Dec 2023CAMOKhatib Camp MCInactive",
     ];
     /** Tan Hui Min's FFIs `numbers`, one-based in the source's order. */
     const rowsOf = (...numbers: number[]) => numbers.map((n) => TAN_HUI_MIN_ROWS[n - 1]);
@@ -171,6 +171,24 @@ test.describe("FFI", () => {
       await expect(ffiRows(page)).toHaveText(rowsOf(3, 5, 6, 7));
       await expect(filterButton(page)).toHaveAccessibleName("Filter, 1 set");
       await expect(page).toHaveURL("/ffi");
+    });
+
+    test("offers every Medical Centre as a Submitting MC, Khatib Camp MC among them", async ({
+      page,
+    }) => {
+      await filterTanHuiMin(page);
+
+      await panel(page)
+        .getByRole("button", { name: /^Submitting MC: / })
+        .click();
+
+      await expect(page.getByRole("option")).toHaveText([
+        "Nee Soon Camp MC",
+        "Kranji Camp MC",
+        "Hendon Camp MC",
+        "Mandai Hill Camp MC",
+        "Khatib Camp MC",
+      ]);
     });
 
     test("applies a date range, reading its stubbed rows from page 1 over two pages", async ({

@@ -246,17 +246,20 @@ takes one of five variants, each drawn from a theme token pair — the four soft
 pairs under Colors, or `muted` — and never from a raw Tailwind colour:
 
 - `success` — a positive state: an audit event's Success, an active User, a
-  FIT Outcome (an FFI's, NUMC's, ARMC's).
+  FIT Outcome (an FFI's, NUMC's, ARMC's), a DISPENSED Dispense Status.
 - `warning` — a state to notice that is no fault: a Deactivated User, which
   reads "Deactivated", never "inactive".
 - `danger` — a refusal or failure: an audit event's Failure, an UNFIT Outcome
-  (an FFI's, NUMC's, ARMC's).
+  (an FFI's, NUMC's, ARMC's), an UNCOLLECTED Dispense Status.
 - `info` — a granted waiver: NUMC's WAIVER GRANTED.
 - `muted` — a state set aside, neither good nor bad: an FFI's Inactive, NUMC's
-  WAIVER REJECTED.
+  WAIVER REJECTED, a PENDING Dispense Status.
 
-`src/pages/status-badge.tsx` holds the one mapping from each status the pages
-show to its label and variant. Two shape variants recur: `rounded` box and
+`src/pages/status-badge.tsx` maps an audit event's outcome and a User's status
+to its label and variant. Each history page maps the closed sets it shows as
+badges to their variants beside the table that shows them (`ffi/ffi.tsx`,
+`numc/numc.tsx`, `armc/armc.tsx`, `medication/medication.tsx`), by the rules
+above. Two shape variants recur: `rounded` box and
 `rounded-full` pill, some with a leading colored dot.
 
 ### Signed-in chip
