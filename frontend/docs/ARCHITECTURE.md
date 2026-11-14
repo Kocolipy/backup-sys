@@ -355,6 +355,17 @@ two pages share moves up to `src/pages/` itself, and imports no page folder
   draft, applies only on Apply or Enter in a date, refuses a bad range
   beneath its field with nothing sent, and resets to the page's own no-filter
   value. `pickerCopy` names a picker's parts from its column.
+- `filtered-history.tsx` — `FilteredHistory`, the filtered, sorted history
+  listing the FFI, NUMC, ARMC and Medication pages render once the patient in
+  context is read. Each page hands it its paged declaration, its page size,
+  its Filter panel, its no-filter value and filter count, its copy and its
+  table; it holds the filters and the sort as component state alone, never
+  the URL, so a new patient in context starts with neither, reads through
+  `usePagedRead` — a change of either from the first page — and renders the
+  Filter panel at the top right above the shared `PagedListing`, its range
+  named on a single page too. A `404` is `NoPatientInContext`; with a filter
+  applied, an empty history gives the page's "match the filters" copy; and
+  the table is told while a read is pending, so its sort headings hold still.
 - `armc.tsx` / `armc-api.ts` — ARMC, `/armc`, linked after NUMC for a session
   holding `patient:read` and guarded by it. It renders through the shared
   `ForPatientInContext` as NUMC does — "No patient in context" with none in

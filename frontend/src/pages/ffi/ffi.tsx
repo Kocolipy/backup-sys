@@ -1,5 +1,3 @@
-import { useState } from "react";
-
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -11,10 +9,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatCalendarDateTwoDigitDay } from "@/lib/time";
-import { ForPatientInContext, NoPatientInContext } from "@/pages/for-patient-in-context";
+import { FilteredHistory } from "@/pages/filtered-history";
+import { ForPatientInContext } from "@/pages/for-patient-in-context";
 import { MEDICAL_CENTRE_LABELS } from "@/pages/medical-centre-api";
-import { PagedListing } from "@/pages/paged-listing";
-import { usePagedRead } from "@/pages/paged-read";
 import { type ColumnSorting, PlainHeading, SortHeading } from "@/pages/sort-heading";
 
 import { FfiFilterPopover } from "./ffi-filter-popover";
@@ -28,9 +25,7 @@ import {
   FFI_TYPE_LABELS,
   NO_FFI_FILTERS,
   type Ffi,
-  type FfiFilters,
   type FfiOutcome,
-  type FfiSort,
   type FfiSortColumn,
   type FfiStatus,
 } from "./ffi-api";
@@ -110,53 +105,32 @@ function FfiTable({
 
 /**
  * The FFI History of the patient `patientId`, five FFIs a page, through the
- * shared paged listing: the numbered pager and "Showing x to y of N FFIs",
- * the page shown held while the next loads. A `404` — the source holds no
- * patient under the id — is "No patient in context", an answer rather than a
- * failure; any other failure is "Couldn't load FFIs" on the page's one error
- * line, with Try again.
- *
- * It sorts by Issue Date or Expiry Date, in the source's own order until a
- * heading is pressed, and the Filter panel at its top right narrows it on
- * every column. A change of either reads the history from its first page,
- * the filters combined with AND and with the sort. Both live here alone:
- * neither reaches the URL, and a new patient in context, a new history,
- * starts with neither. With a filter applied, a history with no FFI says
- * none matches, rather than that the patient has none.
+ * shared filtered history ({@link FilteredHistory}): "Showing x to y of N
+ * FFIs", "Couldn't load FFIs" for a failed read, and "No FFIs", or with a
+ * filter applied "No FFIs match the filters", for an empty one. It sorts by
+ * Issue Date or Expiry Date, and the Filter panel narrows it on every column.
  */
 function FfiHistory({ patientId }: { patientId: string }) {
-  const [filters, setFilters] = useState<FfiFilters>(NO_FFI_FILTERS);
-  const [sort, setSort] = useState<FfiSort | null>(null);
-  const reading = usePagedRead(FFI_HISTORY, {
-    args: [patientId, filters, sort],
-    failureMessage: "Couldn't load FFIs",
-    pageSize: FFI_HISTORY_PAGE_SIZE,
-  });
-  const { view } = reading;
-  if (view.kind === "absent") return <NoPatientInContext />;
-  // Rows are shown only once a page is read, so a read in flight beside them
-  // is one the listing holds them still for.
-  const pending = view.kind === "loading";
   return (
-    <>
-      <div className="flex justify-end">
-        <FfiFilterPopover applied={filters} onApply={setFilters} />
-      </div>
-      <PagedListing
-        copy={{
-          empty: countFfiFilters(filters) === 0 ? "No FFIs" : "No FFIs match the filters",
-          loading: "Loading FFIs…",
-          noun: "FFIs",
-          pagerLabel: "FFI History pages",
-        }}
-        onePage="shown"
-        read={{ ...reading, view }}
-      >
-        {({ rows }) => (
-          <FfiTable ffis={rows} pending={pending} sorting={{ onSort: setSort, sort }} />
-        )}
-      </PagedListing>
-    </>
+    <FilteredHistory
+      copy={{
+        empty: "No FFIs",
+        emptyFiltered: "No FFIs match the filters",
+        failure: "Couldn't load FFIs",
+        loading: "Loading FFIs…",
+        noun: "FFIs",
+        pagerLabel: "FFI History pages",
+      }}
+      countFilters={countFfiFilters}
+      declaration={FFI_HISTORY}
+      filterPopover={FfiFilterPopover}
+      noFilters={NO_FFI_FILTERS}
+      pageSize={FFI_HISTORY_PAGE_SIZE}
+      patientId={patientId}
+      table={({ pending, rows, sorting }) => (
+        <FfiTable ffis={rows} pending={pending} sorting={sorting} />
+      )}
+    />
   );
 }
 

@@ -1,5 +1,3 @@
-import { useState } from "react";
-
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -11,9 +9,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatCalendarDateTwoDigitDay } from "@/lib/time";
-import { ForPatientInContext, NoPatientInContext } from "@/pages/for-patient-in-context";
-import { PagedListing } from "@/pages/paged-listing";
-import { usePagedRead } from "@/pages/paged-read";
+import { FilteredHistory } from "@/pages/filtered-history";
+import { ForPatientInContext } from "@/pages/for-patient-in-context";
 import { type ColumnSorting, PlainHeading, SortHeading } from "@/pages/sort-heading";
 
 import { NumcFilterPopover } from "./numc-filter-popover";
@@ -24,10 +21,8 @@ import {
   NUMC_HISTORY_PAGE_SIZE,
   NUMC_OUTCOME_LABELS,
   NUMC_TYPE_LABELS,
-  type NumcFilters,
   type NumcOutcome,
   type NumcRecord,
-  type NumcSort,
   type NumcSortColumn,
 } from "./numc-api";
 
@@ -94,56 +89,33 @@ function NumcTable({
 
 /**
  * The NUMC History of the patient `patientId`, five NUMC Records a page,
- * through the shared paged listing: the numbered pager and "Showing x to y of
- * N NUMC records", the page shown held while the next loads. A `404` — the
- * source holds no patient under the id — is "No patient in context", an
- * answer rather than a failure; any other failure is "Couldn't load NUMC
- * records" on the page's one error line, with Try again.
- *
- * It sorts by Issue Date or Expiry Date, in the source's own order until a
- * heading is pressed, and the Filter panel at its top right narrows it on
- * every column. A change of either reads the history from its first page,
- * the filters combined with AND and with the sort. Both live here alone:
- * neither reaches the URL, and a new patient in context, a new history,
- * starts with neither. With a filter applied, a history with no NUMC Record
- * says none matches, rather than that the patient has none.
+ * through the shared filtered history ({@link FilteredHistory}): "Showing x
+ * to y of N NUMC records", "Couldn't load NUMC records" for a failed read,
+ * and "No NUMC records", or with a filter applied "No NUMC records match the
+ * filters", for an empty one. It sorts by Issue Date or Expiry Date, and the
+ * Filter panel narrows it on every column.
  */
 function NumcHistory({ patientId }: { patientId: string }) {
-  const [filters, setFilters] = useState<NumcFilters>(NO_NUMC_FILTERS);
-  const [sort, setSort] = useState<NumcSort | null>(null);
-  const reading = usePagedRead(NUMC_HISTORY, {
-    args: [patientId, filters, sort],
-    failureMessage: "Couldn't load NUMC records",
-    pageSize: NUMC_HISTORY_PAGE_SIZE,
-  });
-  const { view } = reading;
-  if (view.kind === "absent") return <NoPatientInContext />;
-  // Rows are shown only once a page is read, so a read in flight beside them
-  // is one the listing holds them still for.
-  const pending = view.kind === "loading";
   return (
-    <>
-      <div className="flex justify-end">
-        <NumcFilterPopover applied={filters} onApply={setFilters} />
-      </div>
-      <PagedListing
-        copy={{
-          empty:
-            countNumcFilters(filters) === 0
-              ? "No NUMC records"
-              : "No NUMC records match the filters",
-          loading: "Loading NUMC records…",
-          noun: "NUMC records",
-          pagerLabel: "NUMC History pages",
-        }}
-        onePage="shown"
-        read={{ ...reading, view }}
-      >
-        {({ rows }) => (
-          <NumcTable pending={pending} records={rows} sorting={{ onSort: setSort, sort }} />
-        )}
-      </PagedListing>
-    </>
+    <FilteredHistory
+      copy={{
+        empty: "No NUMC records",
+        emptyFiltered: "No NUMC records match the filters",
+        failure: "Couldn't load NUMC records",
+        loading: "Loading NUMC records…",
+        noun: "NUMC records",
+        pagerLabel: "NUMC History pages",
+      }}
+      countFilters={countNumcFilters}
+      declaration={NUMC_HISTORY}
+      filterPopover={NumcFilterPopover}
+      noFilters={NO_NUMC_FILTERS}
+      pageSize={NUMC_HISTORY_PAGE_SIZE}
+      patientId={patientId}
+      table={({ pending, rows, sorting }) => (
+        <NumcTable pending={pending} records={rows} sorting={sorting} />
+      )}
+    />
   );
 }
 
