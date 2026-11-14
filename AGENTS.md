@@ -98,8 +98,9 @@ authorities:
   it before changing request handling on either side.
 - **Vocabulary** (Permissions, token Permissions, audit operations, lock causes,
   an FFI's five closed sets — FFI Type, Outcome, Higher Authority, Submitting
-  MC, Status — a NUMC Record's two — NUMC Type, NUMC Outcome — and each
-  request's Permission or Superuser requirement):
+  MC, Status — a NUMC Record's two — NUMC Type, NUMC Outcome — an ARMC
+  Board's two — ARMC Board Type, ARMC Outcome — and each request's Permission
+  or Superuser requirement):
   `backend/docs/openapi.yaml`,
   held by the contract check, so a backend change to any lands with the SPA's.
 

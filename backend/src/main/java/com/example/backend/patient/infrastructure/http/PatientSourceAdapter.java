@@ -3,6 +3,7 @@ package com.example.backend.patient.infrastructure.http;
 import com.example.backend.observability.OutboundCallFailure;
 import com.example.backend.observability.RedactedFaultException;
 import com.example.backend.paging.domain.PageRequest;
+import com.example.backend.patient.domain.ArmcHistory;
 import com.example.backend.patient.domain.DateRange;
 import com.example.backend.patient.domain.FfiFilter;
 import com.example.backend.patient.domain.FfiHistory;
@@ -50,7 +51,8 @@ import org.springframework.web.client.RestClient;
  * Patient search ({@link #search}, ADR 0018), {@code GET {base}/Patient/{id}/ffi?…} for a
  * patient's FFI History ({@link #findFfiHistory}, ADR 0019), and
  * {@code GET {base}/Patient/{id}/numc?…} for a patient's NUMC History ({@link #findNumcHistory},
- * ADR 0019, D5). The source is assumed to answer FHIR R4 and to need
+ * ADR 0019, D5), and {@code GET {base}/Patient/{id}/armc?…} for a patient's ARMC History
+ * ({@link #findArmcHistory}, ADR 0019, D6). The source is assumed to answer FHIR R4 and to need
  * no authorisation, so the call carries no credential of any kind. The patient's id is its EHR's
  * FHIR id, sent unchanged.
  *
@@ -126,6 +128,14 @@ class PatientSourceAdapter implements PatientStore {
 
     /** A searchset of NUMC Records, a NUMC History's answer. */
     private static final ParameterizedTypeReference<SourceSearchset<SourceNumc>> NUMC_RECORDS =
+            new ParameterizedTypeReference<>() {
+            };
+
+    /** A patient's ARMC History, a page at a time, in the source's own order (ADR 0019, D6). */
+    static final String ARMC_HISTORY = "/Patient/{id}/armc?" + SourceSearchset.PAGE_QUERY;
+
+    /** A searchset of ARMC Boards, an ARMC History's answer. */
+    private static final ParameterizedTypeReference<SourceSearchset<SourceArmc>> ARMC_BOARDS =
             new ParameterizedTypeReference<>() {
             };
 
@@ -275,6 +285,21 @@ class PatientSourceAdapter implements PatientStore {
         query.narrowing(EXPIRY_DATE, "expiryDate", filter.expiryDate());
         query.sorted(sort);
         return history(query, NUMC_RECORDS, SourceNumc::toRecord, NumcHistory::new);
+    }
+
+    /**
+     * {@code GET {base}/Patient/{id}/armc?…}: the patient's ARMC History, paged and counted by the
+     * source, in its own order (ADR 0019, D6) — the page alone, with no sort and no filter. A
+     * {@code 404} is no patient under the id; the one other good answer is a {@code 200}
+     * searchset of ARMC Boards, and anything else is a fault, as is a searchset with no total
+     * or an entry that is no ARMC Board the service can hold. The id is a URI variable, so the
+     * call is observed under the template alone.
+     */
+    @Override
+    public Optional<ArmcHistory> findArmcHistory(PatientId id, PageRequest page) {
+        SourceQuery query = new SourceQuery(ARMC_HISTORY).variable("id", id.value());
+        query.paged(page);
+        return history(query, ARMC_BOARDS, SourceArmc::toBoard, ArmcHistory::new);
     }
 
     /**

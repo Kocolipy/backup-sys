@@ -85,8 +85,9 @@ declares nothing is refused. Four kinds of operation:
   actuator endpoint but health, on whichever port actuator is served.
   `patient:read` reads a Patient (`GET /api/patient/{id}`), runs a Patient
   search (`GET /api/patient-search`, [patient](patient.md)) and reads a
-  patient's FFI History (`GET /api/patient-ffi/{patientId}`, [ffi](ffi.md)) and NUMC
-  History (`GET /api/patient-numc/{patientId}`, [numc](numc.md)); a session without it,
+  patient's FFI History (`GET /api/patient-ffi/{patientId}`, [ffi](ffi.md)), NUMC
+  History (`GET /api/patient-numc/{patientId}`, [numc](numc.md)) and ARMC History
+  (`GET /api/patient-armc/{patientId}`, [armc](armc.md)); a session without it,
   a User in no Group that carries it included, gets the Authorization refusal.
 - **Superuser only** — connector creation and deletion, issuing, rotating and
   revoking a token, and setting a Group's Permissions

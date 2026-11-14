@@ -31,7 +31,10 @@ const IDENTITIES: readonly {
   ready?: Record<string, (page: Page) => Promise<void>>;
   storageState?: string;
 }[] = [
-  { role: "admin", routes: ["/search", "/", "/ffi", "/numc", "/accounts", "/audit", "/settings"] },
+  {
+    role: "admin",
+    routes: ["/search", "/", "/ffi", "/numc", "/armc", "/accounts", "/audit", "/settings"],
+  },
   {
     role: "user",
     routes: ["/", "/settings"],

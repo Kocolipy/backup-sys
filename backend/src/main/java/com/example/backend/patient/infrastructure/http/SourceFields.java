@@ -6,9 +6,10 @@ import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 
 /**
- * How an entry of a history the patient source pages — an FFI, a NUMC Record — reads its flat
- * fields: a closed set's code and a calendar date, each required, each failure named by the
- * history's own {@link Failure}, quoting no value.
+ * How an entry of a history the patient source pages — an FFI, a NUMC Record, an ARMC Board —
+ * reads its flat fields: a closed set's code, a calendar date, required or optional, and a name,
+ * each failure named by the history's own {@link Failure}, quoting no value. A date is required
+ * unless its history says otherwise: an ARMC Board's End Date is the one optional element.
  */
 final class SourceFields {
 
@@ -29,6 +30,26 @@ final class SourceFields {
         if (date == null) {
             throw PatientSourceException.failed(none);
         }
+        return toTheDay(date, notToTheDay);
+    }
+
+    /**
+     * The calendar date {@code date} is, to the day, or {@code null} when the source sent none:
+     * an optional date's absence is no failure.
+     */
+    static LocalDate optionalDay(String date, Failure notToTheDay) {
+        return date == null ? null : toTheDay(date, notToTheDay);
+    }
+
+    /** The name {@code name} is, as the source gives it: one missing or blank is {@code none}. */
+    static String named(String name, Failure none) {
+        if (name == null || name.isBlank()) {
+            throw PatientSourceException.failed(none);
+        }
+        return name;
+    }
+
+    private static LocalDate toTheDay(String date, Failure notToTheDay) {
         try {
             return LocalDate.parse(date);
         } catch (DateTimeParseException notADay) {

@@ -1,0 +1,68 @@
+{
+  "name": "ARMC History: Tan Hui Min's seven ARMC Boards, the second page, of two",
+  "request": {
+    "method": "GET",
+    "urlPath": "/Patient/dev-patient-05/armc",
+    "queryParameters": {
+      "_count": {
+        "equalTo": "5"
+      },
+      "_offset": {
+        "equalTo": "5"
+      },
+      "_total": {
+        "equalTo": "accurate"
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/fhir+json"
+    },
+    "jsonBody": {
+      "resourceType": "Bundle",
+      "id": "armc-history",
+      "type": "searchset",
+      "total": 7,
+      "link": [
+        {
+          "relation": "self",
+          "url": "http://127.0.0.1:8104/Patient/dev-patient-05/armc?_offset=5&_count=5"
+        }
+      ],
+      "entry": [
+        {
+          "resource": {
+            "resourceType": "ARMC",
+            "id": "armc-tan-hui-min-6",
+            "boardType": "aces",
+            "outcome": "fit",
+            "startDate": "2021-10-11",
+            "endDate": "2021-12-20",
+            "medicalOfficer1": "Dr Rajesh Kumar",
+            "medicalOfficer2": "Dr Nur Aisyah binte Rahman"
+          },
+          "search": {
+            "mode": "match"
+          }
+        },
+        {
+          "resource": {
+            "resourceType": "ARMC",
+            "id": "armc-tan-hui-min-7",
+            "boardType": "aces",
+            "outcome": "unfit",
+            "startDate": "2020-05-18",
+            "endDate": "2020-08-24",
+            "medicalOfficer1": "Dr Chen Mei Ling",
+            "medicalOfficer2": "Dr Lim Wei Jie"
+          },
+          "search": {
+            "mode": "match"
+          }
+        }
+      ]
+    }
+  }
+}

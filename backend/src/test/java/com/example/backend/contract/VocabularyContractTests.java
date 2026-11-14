@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.backend.audit.domain.AuditOperation;
 import com.example.backend.authorization.domain.Permission;
+import com.example.backend.patient.domain.ArmcBoardType;
+import com.example.backend.patient.domain.ArmcOutcome;
 import com.example.backend.patient.domain.FfiHigherAuthority;
 import com.example.backend.patient.domain.FfiOutcome;
 import com.example.backend.patient.domain.FfiStatus;
@@ -35,8 +37,9 @@ import org.junit.jupiter.api.Test;
  * token enums compare it.
  *
  * <p>An FFI's five closed sets — its FFI Type, Outcome, Higher Authority, Submitting MC and
- * Status — and a NUMC Record's two — its NUMC Type and NUMC Outcome — are carried by their codes,
- * not their names, and are compared so.
+ * Status — a NUMC Record's two — its NUMC Type and NUMC Outcome — and an ARMC Board's two — its
+ * ARMC Board Type and ARMC Outcome — are carried by their codes, not their names, and are
+ * compared so.
  *
  * <p>An enum the document refers to by {@code $ref} — the audit trail's {@code operation} query
  * parameter, the Group Permissions' request and listing — is the schema compared here, so it is
@@ -76,6 +79,10 @@ class VocabularyContractTests {
     private static final String NUMC_TYPES = "#/components/schemas/NumcType";
 
     private static final String NUMC_OUTCOMES = "#/components/schemas/NumcOutcome";
+
+    private static final String ARMC_BOARD_TYPES = "#/components/schemas/ArmcBoardType";
+
+    private static final String ARMC_OUTCOMES = "#/components/schemas/ArmcOutcome";
 
     private static final Predicate<Permission> HELD_BY_A_SESSION = permission -> !permission.tokenOnly();
 
@@ -151,6 +158,18 @@ class VocabularyContractTests {
     @Test
     void every_numc_outcome_is_a_documented_numc_outcome_and_no_other_is() {
         assertThat(CONTRACT.enumDisagreements(NUMC_OUTCOMES, codes(NumcOutcome.values())))
+                .isEmpty();
+    }
+
+    @Test
+    void every_armc_board_type_is_a_documented_armc_board_type_and_no_other_is() {
+        assertThat(CONTRACT.enumDisagreements(ARMC_BOARD_TYPES, codes(ArmcBoardType.values())))
+                .isEmpty();
+    }
+
+    @Test
+    void every_armc_outcome_is_a_documented_armc_outcome_and_no_other_is() {
+        assertThat(CONTRACT.enumDisagreements(ARMC_OUTCOMES, codes(ArmcOutcome.values())))
                 .isEmpty();
     }
 

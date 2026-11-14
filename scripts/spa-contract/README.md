@@ -36,6 +36,8 @@ set-equal to the one before it. The document's enums are named under
 | FFI Statuses           | `FfiStatus`, by `code()`                     | `FfiStatus`                                                                             | `FFI_STATUSES` (`ffi-api.ts`)           |
 | NUMC Types             | `NumcType`, by `code()`                      | `NumcType`                                                                              | `NUMC_TYPES` (`numc-api.ts`)            |
 | NUMC Outcomes          | `NumcOutcome`, by `code()`                   | `NumcOutcome`                                                                           | `NUMC_OUTCOMES` (`numc-api.ts`)         |
+| ARMC Board Types       | `ArmcBoardType`, by `code()`                 | `ArmcBoardType`                                                                         | `ARMC_BOARD_TYPES` (`armc-api.ts`)      |
+| ARMC Outcomes          | `ArmcOutcome`, by `code()`                   | `ArmcOutcome`                                                                           | `ARMC_OUTCOMES` (`armc-api.ts`)         |
 
 - **Java ↔ document**: the backend's `VocabularyContractTests`
   (`backend/docs/api-contract-check.md`) compares each Java set with each enum

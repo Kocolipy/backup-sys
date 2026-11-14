@@ -3,7 +3,9 @@ package com.example.backend.patient;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 
+import java.time.LocalDate;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -316,8 +318,8 @@ class PatientSourceFixturesTests {
         return FIXTURES.stream().map(fixture -> fixture.get("id").asString()).toList();
     }
 
-    /** The FFIs a stub's searchset holds, in its order. */
-    private static List<JsonNode> ffisOf(PatientSourceStubs.FfiStub stub) {
+    /** The FFIs, NUMC Records or ARMC Boards a history stub's searchset holds, in its order. */
+    private static List<JsonNode> resourcesOf(PatientSourceStubs.HistoryStub stub) {
         return StreamSupport.stream(stub.bundle().at("/entry").spliterator(), false)
                 .map(entry -> entry.get("resource"))
                 .toList();
@@ -328,24 +330,28 @@ class PatientSourceFixturesTests {
             "issue-date", "expiry-date", "higher-authority", "submitting-mc", "status");
 
     /** Whether {@code stub} is a fixture's own stub rather than the fallback answering several. */
-    private static boolean canned(PatientSourceStubs.FfiStub stub) {
+    private static boolean canned(PatientSourceStubs.HistoryStub stub) {
         return !stub.path().contains("(");
     }
 
-    /** Whether {@code stub} reads its history unfiltered, in the source's own order. */
-    private static boolean inTheSourcesOrder(PatientSourceStubs.FfiStub stub) {
-        return canned(stub) && Stream.concat(Stream.of("_sort"), FFI_FILTER_PARAMETERS.stream())
+    /**
+     * Whether {@code stub} reads its history unfiltered, in the source's own order: it pins the
+     * sort and each of the history's {@code filters} absent.
+     */
+    private static boolean inTheSourcesOrder(PatientSourceStubs.HistoryStub stub,
+            List<String> filters) {
+        return canned(stub) && Stream.concat(Stream.of("_sort"), filters.stream())
                 .allMatch(parameter -> stub.query().at("/" + parameter + "/absent").asBoolean());
     }
 
     /** The FFIs of every page of {@code patient}'s FFI History, page after page, as the source orders it. */
     private static List<JsonNode> ffisOf(String patient) {
         return PatientSourceStubs.ffiHistories().stream()
-                .filter(PatientSourceFixturesTests::inTheSourcesOrder)
+                .filter(stub -> inTheSourcesOrder(stub, FFI_FILTER_PARAMETERS))
                 .filter(stub -> stub.path().equals("/Patient/" + patient + "/ffi"))
                 .sorted(Comparator.comparing(stub -> stub.query().at("/_offset/equalTo")
                         .asInt()))
-                .flatMap(stub -> ffisOf(stub).stream())
+                .flatMap(stub -> resourcesOf(stub).stream())
                 .toList();
     }
 
@@ -356,12 +362,12 @@ class PatientSourceFixturesTests {
     @Test
     void twoFixturesHaveAnFfiHistoryAndTheFallbackServesEveryFixture() {
         List<String> exact = PatientSourceStubs.ffiHistories().stream()
-                .filter(PatientSourceFixturesTests::inTheSourcesOrder)
+                .filter(stub -> inTheSourcesOrder(stub, FFI_FILTER_PARAMETERS))
                 .map(stub -> stub.path() + " " + stub.query().at("/_offset/equalTo").asString()
                         + " of " + stub.bundle().at("/total").asInt())
                 .toList();
         String fallback = PatientSourceStubs.ffiHistories().stream()
-                .map(PatientSourceStubs.FfiStub::path)
+                .map(PatientSourceStubs.HistoryStub::path)
                 .filter(path -> path.contains("("))
                 .findFirst().orElseThrow();
 
@@ -378,7 +384,7 @@ class PatientSourceFixturesTests {
     @Test
     void everyFfiHistoryPageHoldsAtMostFiveAndItsPagesHoldTheirTotal() {
         assertThat(PatientSourceStubs.ffiHistories())
-                .allSatisfy(stub -> assertThat(ffisOf(stub)).hasSizeLessThanOrEqualTo(5));
+                .allSatisfy(stub -> assertThat(resourcesOf(stub)).hasSizeLessThanOrEqualTo(5));
         assertThat(List.of(ffisOf("eq081-VQEgP8drUUqCWzHfw3").size(),
                 ffisOf("dev-patient-05").size())).containsExactly(4, 7);
     }
@@ -424,8 +430,8 @@ class PatientSourceFixturesTests {
     @Test
     void everyFfiIdIsAFhirIdOfItsOwn() {
         List<String> ids = PatientSourceStubs.ffiHistories().stream()
-                .filter(PatientSourceFixturesTests::inTheSourcesOrder)
-                .flatMap(stub -> ffisOf(stub).stream())
+                .filter(stub -> inTheSourcesOrder(stub, FFI_FILTER_PARAMETERS))
+                .flatMap(stub -> resourcesOf(stub).stream())
                 .map(ffi -> ffi.get("id").asString())
                 .toList();
 
@@ -451,7 +457,7 @@ class PatientSourceFixturesTests {
     }
 
     /** The values a stub's matcher pins {@code parameter} to: none when it is absent. */
-    private static List<String> pinned(PatientSourceStubs.FfiStub stub, String parameter) {
+    private static List<String> pinned(PatientSourceStubs.HistoryStub stub, String parameter) {
         return pinnedIn(stub.query(), parameter);
     }
 
@@ -516,9 +522,9 @@ class PatientSourceFixturesTests {
      */
     @Test
     void everySortedOrFilteredFfiReadAnswersTheFfisItsFiltersAndSortSelect() {
-        List<PatientSourceStubs.FfiStub> narrowed = PatientSourceStubs.ffiHistories().stream()
+        List<PatientSourceStubs.HistoryStub> narrowed = PatientSourceStubs.ffiHistories().stream()
                 .filter(PatientSourceFixturesTests::canned)
-                .filter(stub -> !inTheSourcesOrder(stub))
+                .filter(stub -> !inTheSourcesOrder(stub, FFI_FILTER_PARAMETERS))
                 .toList();
 
         assertThat(narrowed).hasSize(14).allSatisfy(stub -> {
@@ -539,7 +545,7 @@ class PatientSourceFixturesTests {
             int offset = stub.query().at("/_offset/equalTo").asInt();
 
             assertThat(List.of(stub.bundle().at("/total").asInt(),
-                    ffisOf(stub).stream().map(ffi -> ffi.get("id").asString()).toList()))
+                    resourcesOf(stub).stream().map(ffi -> ffi.get("id").asString()).toList()))
                     .containsExactly(ids.size(),
                             ids.subList(offset, Math.min(offset + 5, ids.size())));
         });
@@ -551,7 +557,7 @@ class PatientSourceFixturesTests {
      */
     @Test
     void theHistorySortAndFilterStubsCoverEverySortAndFilter() {
-        List<PatientSourceStubs.FfiStub> canned = PatientSourceStubs.ffiHistories().stream()
+        List<PatientSourceStubs.HistoryStub> canned = PatientSourceStubs.ffiHistories().stream()
                 .filter(PatientSourceFixturesTests::canned)
                 .toList();
 
@@ -562,10 +568,10 @@ class PatientSourceFixturesTests {
                         .filter(parameter -> canned.stream()
                                 .anyMatch(stub -> !pinned(stub, parameter).isEmpty()))
                         .toList(),
-                canned.stream().filter(stub -> !inTheSourcesOrder(stub))
+                canned.stream().filter(stub -> !inTheSourcesOrder(stub, FFI_FILTER_PARAMETERS))
                         .map(stub -> stub.bundle().at("/total").asInt())
                         .anyMatch(total -> total > 5),
-                canned.stream().filter(stub -> !inTheSourcesOrder(stub))
+                canned.stream().filter(stub -> !inTheSourcesOrder(stub, FFI_FILTER_PARAMETERS))
                         .anyMatch(stub -> stub.bundle().at("/total").asInt() == 0)))
                 .containsExactly(
                         Set.of("issue-date,_id", "-issue-date,_id", "expiry-date,_id",
@@ -593,36 +599,18 @@ class PatientSourceFixturesTests {
 
     // ---- the NUMC Histories -----------------------------------------------------------------
 
-    /** The NUMC Records a stub's searchset holds, in its order. */
-    private static List<JsonNode> recordsOf(PatientSourceStubs.NumcStub stub) {
-        return StreamSupport.stream(stub.bundle().at("/entry").spliterator(), false)
-                .map(entry -> entry.get("resource"))
-                .toList();
-    }
-
     /** The filters a NUMC History read sends the source, each as its own search parameter. */
     private static final List<String> NUMC_FILTER_PARAMETERS =
             List.of("type", "outcome", "issue-date", "expiry-date");
 
-    /** Whether {@code stub} is a fixture's own stub rather than the fallback answering several. */
-    private static boolean canned(PatientSourceStubs.NumcStub stub) {
-        return !stub.path().contains("(");
-    }
-
-    /** Whether {@code stub} reads its history unfiltered, in the source's own order. */
-    private static boolean inTheSourcesOrder(PatientSourceStubs.NumcStub stub) {
-        return canned(stub) && Stream.concat(Stream.of("_sort"), NUMC_FILTER_PARAMETERS.stream())
-                .allMatch(parameter -> stub.query().at("/" + parameter + "/absent").asBoolean());
-    }
-
     /** The NUMC Records of every page of {@code patient}'s NUMC History, page after page. */
     private static List<JsonNode> recordsOf(String patient) {
         return PatientSourceStubs.numcHistories().stream()
-                .filter(PatientSourceFixturesTests::inTheSourcesOrder)
+                .filter(stub -> inTheSourcesOrder(stub, NUMC_FILTER_PARAMETERS))
                 .filter(stub -> stub.path().equals("/Patient/" + patient + "/numc"))
                 .sorted(Comparator.comparing(stub -> stub.query().at("/_offset/equalTo")
                         .asInt()))
-                .flatMap(stub -> recordsOf(stub).stream())
+                .flatMap(stub -> resourcesOf(stub).stream())
                 .toList();
     }
 
@@ -633,12 +621,12 @@ class PatientSourceFixturesTests {
     @Test
     void twoFixturesHaveANumcHistoryAndTheFallbackServesEveryFixture() {
         List<String> exact = PatientSourceStubs.numcHistories().stream()
-                .filter(PatientSourceFixturesTests::inTheSourcesOrder)
+                .filter(stub -> inTheSourcesOrder(stub, NUMC_FILTER_PARAMETERS))
                 .map(stub -> stub.path() + " " + stub.query().at("/_offset/equalTo").asString()
                         + " of " + stub.bundle().at("/total").asInt())
                 .toList();
         String fallback = PatientSourceStubs.numcHistories().stream()
-                .map(PatientSourceStubs.NumcStub::path)
+                .map(PatientSourceStubs.HistoryStub::path)
                 .filter(path -> path.contains("("))
                 .findFirst().orElseThrow();
 
@@ -676,7 +664,7 @@ class PatientSourceFixturesTests {
     @Test
     void everyNumcHistoryPageHoldsAtMostFiveAndItsPagesHoldTheirTotal() {
         assertThat(PatientSourceStubs.numcHistories())
-                .allSatisfy(stub -> assertThat(recordsOf(stub)).hasSizeLessThanOrEqualTo(5));
+                .allSatisfy(stub -> assertThat(resourcesOf(stub)).hasSizeLessThanOrEqualTo(5));
         assertThat(List.of(recordsOf("eq081-VQEgP8drUUqCWzHfw3").size(),
                 recordsOf("dev-patient-05").size())).containsExactly(4, 7);
     }
@@ -705,7 +693,7 @@ class PatientSourceFixturesTests {
     @Test
     void everyNumcRecordHoldsItsFourElementsAndItsIdAlone() {
         assertThat(PatientSourceStubs.numcHistories().stream()
-                .flatMap(stub -> recordsOf(stub).stream()))
+                .flatMap(stub -> resourcesOf(stub).stream()))
                 .isNotEmpty()
                 .allSatisfy(record -> assertThat(List.of(record.get("resourceType").asString(),
                         record.propertyNames()))
@@ -717,12 +705,12 @@ class PatientSourceFixturesTests {
     @Test
     void everyNumcRecordIdIsAFhirIdOfItsOwn() {
         List<String> ids = PatientSourceStubs.numcHistories().stream()
-                .filter(PatientSourceFixturesTests::inTheSourcesOrder)
-                .flatMap(stub -> recordsOf(stub).stream())
+                .filter(stub -> inTheSourcesOrder(stub, NUMC_FILTER_PARAMETERS))
+                .flatMap(stub -> resourcesOf(stub).stream())
                 .map(record -> record.get("id").asString())
                 .toList();
         List<String> ffiIds = PatientSourceStubs.ffiHistories().stream()
-                .flatMap(stub -> ffisOf(stub).stream())
+                .flatMap(stub -> resourcesOf(stub).stream())
                 .map(ffi -> ffi.get("id").asString())
                 .toList();
 
@@ -743,9 +731,9 @@ class PatientSourceFixturesTests {
      */
     @Test
     void everySortedOrFilteredNumcReadAnswersTheRecordsItsFiltersAndSortSelect() {
-        List<PatientSourceStubs.NumcStub> narrowed = PatientSourceStubs.numcHistories().stream()
+        List<PatientSourceStubs.HistoryStub> narrowed = PatientSourceStubs.numcHistories().stream()
                 .filter(PatientSourceFixturesTests::canned)
-                .filter(stub -> !inTheSourcesOrder(stub))
+                .filter(stub -> !inTheSourcesOrder(stub, NUMC_FILTER_PARAMETERS))
                 .toList();
 
         assertThat(narrowed).hasSize(10).allSatisfy(stub -> {
@@ -763,7 +751,7 @@ class PatientSourceFixturesTests {
             List<JsonNode> expected = sortedAs(selected, pinnedIn(query, "_sort"));
             int offset = query.at("/_offset/equalTo").asInt();
 
-            assertThat(List.of(stub.bundle().at("/total").asInt(), recordsOf(stub)))
+            assertThat(List.of(stub.bundle().at("/total").asInt(), resourcesOf(stub)))
                     .containsExactly(expected.size(),
                             expected.subList(offset, Math.min(offset + 5, expected.size())));
         });
@@ -775,21 +763,21 @@ class PatientSourceFixturesTests {
      */
     @Test
     void theNumcSortAndFilterStubsCoverEverySortAndFilter() {
-        List<PatientSourceStubs.NumcStub> narrowed = PatientSourceStubs.numcHistories().stream()
+        List<PatientSourceStubs.HistoryStub> narrowed = PatientSourceStubs.numcHistories().stream()
                 .filter(PatientSourceFixturesTests::canned)
-                .filter(stub -> !inTheSourcesOrder(stub))
+                .filter(stub -> !inTheSourcesOrder(stub, NUMC_FILTER_PARAMETERS))
                 .toList();
-        List<PatientSourceStubs.NumcStub> sorted = narrowed.stream()
+        List<PatientSourceStubs.HistoryStub> sorted = narrowed.stream()
                 .filter(stub -> !pinnedIn(stub.query(), "_sort").isEmpty())
                 .toList();
-        List<PatientSourceStubs.NumcStub> filtered = narrowed.stream()
+        List<PatientSourceStubs.HistoryStub> filtered = narrowed.stream()
                 .filter(stub -> pinnedIn(stub.query(), "_sort").isEmpty())
                 .toList();
 
         assertThat(List.of(
                 sorted.stream().map(stub -> stub.path() + " " + pinnedIn(stub.query(), "_sort"))
                         .collect(Collectors.toSet()),
-                filtered.stream().map(PatientSourceStubs.NumcStub::path)
+                filtered.stream().map(PatientSourceStubs.HistoryStub::path)
                         .collect(Collectors.toSet()),
                 NUMC_FILTER_PARAMETERS.stream()
                         .filter(parameter -> filtered.stream()
@@ -824,6 +812,160 @@ class PatientSourceFixturesTests {
                         "unexpected-status", "not-a-searchset", "no-total", "no-id",
                         "invalid-id", "no-outcome", "unknown-type", "unknown-outcome",
                         "expiry-date-not-to-the-day");
+    }
+
+    // ---- the ARMC Histories -----------------------------------------------------------------
+
+    /** The ARMC Boards of every page of {@code patient}'s ARMC History, page after page. */
+    private static List<JsonNode> boardsOf(String patient) {
+        return PatientSourceStubs.armcHistories().stream()
+                .filter(PatientSourceFixturesTests::canned)
+                .filter(stub -> stub.path().equals("/Patient/" + patient + "/armc"))
+                .sorted(Comparator.comparing(stub -> stub.query().at("/_offset/equalTo")
+                        .asInt()))
+                .flatMap(stub -> resourcesOf(stub).stream())
+                .toList();
+    }
+
+    /** Every ARMC Board any ARMC History stub serves. */
+    private static List<JsonNode> everyArmcBoard() {
+        return PatientSourceStubs.armcHistories().stream()
+                .flatMap(stub -> resourcesOf(stub).stream())
+                .toList();
+    }
+
+    /**
+     * Two fixtures have ARMC Boards, each page its own stub — Tan Wei Ming's one page of two and
+     * Tan Hui Min's two of seven — and a fallback answers every fixture's other read with none.
+     */
+    @Test
+    void twoFixturesHaveAnArmcHistoryAndTheFallbackServesEveryFixture() {
+        List<String> exact = PatientSourceStubs.armcHistories().stream()
+                .filter(PatientSourceFixturesTests::canned)
+                .map(stub -> stub.path() + " " + stub.query().at("/_offset/equalTo").asString()
+                        + " of " + stub.bundle().at("/total").asInt())
+                .toList();
+        String fallback = PatientSourceStubs.armcHistories().stream()
+                .map(PatientSourceStubs.HistoryStub::path)
+                .filter(path -> path.contains("("))
+                .findFirst().orElseThrow();
+
+        assertThat(exact).containsExactlyInAnyOrder(
+                "/Patient/eq081-VQEgP8drUUqCWzHfw3/armc 0 of 2",
+                "/Patient/dev-patient-05/armc 0 of 7",
+                "/Patient/dev-patient-05/armc 5 of 7");
+        assertThat(fixtureIds()).allSatisfy(id ->
+                assertThat("/Patient/" + id + "/armc").matches(fallback));
+        assertThat("/Patient/fault-armc-no-id/armc").doesNotMatch(fallback);
+    }
+
+    /**
+     * Every canned page is matched on the whole page the backend asks for — five to a page, its
+     * offset and an accurate total — so a read of any other page falls to the fallback.
+     */
+    @Test
+    void everyCannedArmcPagePinsItsPage() {
+        assertThat(PatientSourceStubs.armcHistories()).filteredOn(PatientSourceFixturesTests::canned)
+                .hasSize(3)
+                .allSatisfy(stub -> assertThat(List.of(
+                        stub.query().at("/_count/equalTo").asString(),
+                        stub.query().at("/_offset/equalTo").isString(),
+                        stub.query().at("/_total/equalTo").asString()))
+                        .containsExactly("5", true, "accurate"));
+    }
+
+    /** Each page holds no more than five ARMC Boards, and a history's pages hold its total. */
+    @Test
+    void everyArmcHistoryPageHoldsAtMostFiveAndItsPagesHoldTheirTotal() {
+        assertThat(PatientSourceStubs.armcHistories())
+                .allSatisfy(stub -> assertThat(resourcesOf(stub)).hasSizeLessThanOrEqualTo(5));
+        assertThat(List.of(boardsOf("eq081-VQEgP8drUUqCWzHfw3").size(),
+                boardsOf("dev-patient-05").size())).containsExactly(2, 7);
+    }
+
+    /** Every code of both closed sets an ARMC Board has, as the two sets spell them on the wire. */
+    private static final Map<String, Set<String>> ARMC_CLOSED_SETS = Map.of(
+            "boardType", Set.of("aces"),
+            "outcome", Set.of("fit", "unfit"));
+
+    /**
+     * Tan Hui Min's history, over its two pages, holds every code of both closed sets, so a page
+     * reading it shows each label and each badge.
+     */
+    @Test
+    void theTwoPageArmcHistoryCoversEveryCodeOfBothClosedSets() {
+        List<JsonNode> boards = boardsOf("dev-patient-05");
+
+        ARMC_CLOSED_SETS.forEach((field, codes) -> assertThat(boards)
+                .extracting(board -> board.get(field).asString())
+                .as(field)
+                .containsOnlyElementsOf(codes)
+                .containsAll(codes));
+    }
+
+    /**
+     * Every ARMC Board is an {@code ARMC} of exactly its six elements and its id, but a board
+     * still open, which has no End Date: at least one fixture's board is open.
+     */
+    @Test
+    void everyArmcBoardHoldsItsElementsAndItsIdAloneAndOneIsStillOpen() {
+        Set<String> closed = Set.of("resourceType", "id", "boardType", "outcome", "startDate",
+                "endDate", "medicalOfficer1", "medicalOfficer2");
+        Set<String> open = new HashSet<>(closed);
+        open.remove("endDate");
+
+        assertThat(everyArmcBoard()).hasSize(9)
+                .allSatisfy(board -> assertThat(List.<Object>of(
+                        board.get("resourceType").asString(), Set.copyOf(board.propertyNames())))
+                        .isIn(List.of("ARMC", closed), List.of("ARMC", open)))
+                .filteredOn(board -> !board.has("endDate"))
+                .extracting(board -> board.get("id").asString())
+                .containsExactly("armc-tan-hui-min-1");
+    }
+
+    /** Every fixture's board ends on or after the day it starts, when it has ended. */
+    @Test
+    void everyArmcBoardEndsOnOrAfterItStarts() {
+        assertThat(everyArmcBoard()).filteredOn(board -> board.has("endDate"))
+                .allSatisfy(board -> assertThat(LocalDate.parse(board.get("endDate").asString()))
+                        .isAfterOrEqualTo(LocalDate.parse(board.get("startDate").asString())));
+    }
+
+    /** Every ARMC Board's id is in FHIR's id grammar and no other record's, an FFI's or NUMC's. */
+    @Test
+    void everyArmcBoardIdIsAFhirIdOfItsOwn() {
+        List<String> ids = everyArmcBoard().stream()
+                .map(board -> board.get("id").asString())
+                .toList();
+        Stream<String> others = Stream.concat(
+                PatientSourceStubs.ffiHistories().stream()
+                        .flatMap(stub -> resourcesOf(stub).stream()),
+                PatientSourceStubs.numcHistories().stream()
+                        .flatMap(stub -> resourcesOf(stub).stream()))
+                .map(record -> record.get("id").asString());
+
+        assertThat(ids).hasSize(9).doesNotHaveDuplicates()
+                .doesNotContainAnyElementsOf(others.toList())
+                .allSatisfy(id -> assertThat(id).matches("[A-Za-z0-9\\-.]{1,64}"));
+    }
+
+    /**
+     * The ARMC fault stubs, each by the failure it serves under a well-formed patient id no
+     * fixture uses, so it never shadows a fixture's history and the read reaches the source.
+     */
+    @Test
+    void theArmcFaultStubsServeEachFailureUnderAPatientIdOfItsOwn() {
+        assertThat(PatientSourceStubs.armcFaults())
+                .allSatisfy(fault -> assertThat(fault.id())
+                        .isEqualTo("fault-armc-" + fault.fault())
+                        .matches("[A-Za-z0-9\\-.]{1,64}")
+                        .isNotIn(fixtureIds()))
+                .extracting(PatientSourceStubs.FaultStub::fault)
+                .containsExactlyInAnyOrder("unreachable", "slow", "server-error",
+                        "unexpected-status", "not-a-searchset", "no-total", "no-id",
+                        "invalid-id", "no-outcome", "no-medical-officer-2",
+                        "unknown-board-type", "unknown-outcome", "end-before-start",
+                        "end-date-not-to-the-day");
     }
 
     /**

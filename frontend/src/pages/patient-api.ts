@@ -1,6 +1,6 @@
 /**
  * The endpoint the patient in context is read from — the patient Home's
- * Patient card and the top bar show, and whose id the FFI and NUMC pages read
+ * Patient card and the top bar show, and whose id the FFI, NUMC and ARMC pages read
  * their histories by — shared by those pages, so it sits beside them in `src/pages/`.
  *
  * Nothing here requests anything: the one reader of the patient in context
@@ -22,11 +22,11 @@ const NRIC_SYSTEM = "https://fhir.synapxe.sg/NamingSystem/nric";
  * `fhir5.Patient` fixtures through the decoder): the official
  * name's `text`, which is authoritative (its `family` and `given` parts are
  * optional and never read), the NRIC, the gender code and the birth date,
- * and the id the patient's FFI and NUMC Histories are read by. No age: age is derived where it is shown, never sent.
+ * and the id the patient's FFI, NUMC and ARMC Histories are read by. No age: age is derived where it is shown, never sent.
  */
 export interface PatientSummary {
   birthDate: string;
-  /** Its FHIR id, which the patient's other reads (its FFI and NUMC Histories) name it by. */
+  /** Its FHIR id, which the patient's other reads (its FFI, NUMC and ARMC Histories) name it by. */
   id: string;
   gender: PatientGender;
   name: string;

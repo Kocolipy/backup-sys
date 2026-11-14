@@ -71,6 +71,22 @@ describe("readObject", () => {
     expect(refusal(() => readObject(value, "Body"))).toBe("Body is not an object");
   });
 
+  // A field the backend leaves out when it has no value: absent is no value,
+  // but a field that is there must be a string — `null` included.
+  it("reads an optional string as its value, or as undefined when absent", () => {
+    expect([body().optionalString("name"), body().optionalString("missing")]).toStrictEqual([
+      "ada",
+      undefined,
+    ]);
+  });
+
+  it.each([
+    ["null", "nickname"],
+    ["a number", "count"],
+  ])("refuses %s as an optional string, naming it", (_, key) => {
+    expect(refusal(() => body().optionalString(key))).toBe(`Body.${key} is not a string`);
+  });
+
   it("refuses a missing field, naming it", () => {
     expect(refusal(() => body().string("missing"))).toBe("Body.missing is not a string");
     expect(refusal(() => body().nullableString("missing"))).toBe("Body.missing is not a string");

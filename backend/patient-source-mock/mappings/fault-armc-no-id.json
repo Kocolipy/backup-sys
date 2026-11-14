@@ -1,0 +1,44 @@
+{
+  "name": "Fault, ARMC History: an ARMC Board with no id",
+  "metadata": {
+    "fault": "no-id"
+  },
+  "request": {
+    "method": "GET",
+    "urlPath": "/Patient/fault-armc-no-id/armc"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/fhir+json"
+    },
+    "jsonBody": {
+      "resourceType": "Bundle",
+      "id": "armc-history",
+      "type": "searchset",
+      "total": 1,
+      "link": [
+        {
+          "relation": "self",
+          "url": "http://127.0.0.1:8104/Patient/fault-armc-no-id/armc?_offset=0&_count=5"
+        }
+      ],
+      "entry": [
+        {
+          "resource": {
+            "resourceType": "ARMC",
+            "boardType": "aces",
+            "outcome": "fit",
+            "startDate": "2015-03-16",
+            "endDate": "2015-04-27",
+            "medicalOfficer1": "Dr Fault One",
+            "medicalOfficer2": "Dr Fault Two"
+          },
+          "search": {
+            "mode": "match"
+          }
+        }
+      ]
+    }
+  }
+}

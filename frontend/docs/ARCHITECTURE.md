@@ -316,6 +316,22 @@ two pages share moves up to `src/pages/` itself, and imports no page folder
   that keeps its own draft, applies only on Apply or Enter in a date, refuses a
   bad range beneath its field with nothing sent, and resets to the page's own
   no-filter value. `pickerCopy` names a picker's parts from its column.
+- `armc.tsx` / `armc-api.ts` — ARMC, `/armc`, linked after NUMC for a session
+  holding `patient:read` and guarded by it. It renders through the shared
+  `ForPatientInContext` as NUMC does — "No patient in context" with none in
+  context or a `404` for the id there, "Loading ARMC records…" while the
+  patient is read — and, once the patient is read, that patient's ARMC
+  History, `GET /api/patient-armc/{patientId}`, five at a time through
+  `ARMC_HISTORY` and the shared paged listing, naming the range on a single
+  page too. `ARMC_HISTORY` reads a `404` as `absent`; a failure is "Couldn't
+  load ARMC records" on the page's line, with Try again; an empty history is
+  "No ARMC records". `decodeArmcBoard` is strict, each date read through
+  `calendarDate`, the End Date through `optionalString` — absent for a board
+  still open, shown as `—` — and each of an ARMC Board's two closed sets is a
+  `Record` of labels keyed by its codes. Read-only, in the source's own order:
+  no row action, and every column a `PlainHeading`, with no sort and no
+  filter. The Board Type is bold, both Medical Officers are shown as sent, and
+  the ARMC Outcome is a badge: FIT `success`, UNFIT `danger`.
 - `sort-heading.tsx` — the sortable column heading the accounts listing and
   the FFI and NUMC pages share: `aria-sort`, a direction icon, and a press that sorts
   its column ascending first, then toggles descending → ascending → …, never
@@ -348,17 +364,17 @@ two pages share moves up to `src/pages/` itself, and imports no page folder
   inside its page status, reads `GET /api/patient/{id}` through `PATIENT`
   (opting in to `absent`, a `403` reported as failure) for the EHR context's
   patient, decoding the R5 `Patient` (typed by `@types/fhir`'s `fhir5`) down to
-  the fields shown and the id the FFI and NUMC pages read by; with
+  the fields shown and the id the FFI, NUMC and ARMC pages read by; with
   none in context it reads nothing. A new id is a new path, so a new first read,
   and a late answer for the id before never lands. A failure is reported to the
   page's error line once, by this read. `usePatientInContext()` hands its view —
-  `none`, or the gated read's — to the top bar, the Patient card and the FFI
-  and NUMC pages, which only render it, so each patient change sends one request on every
+  `none`, or the gated read's — to the top bar, the Patient card and the FFI,
+  NUMC and ARMC pages, which only render it, so each patient change sends one request on every
   page. The read is
   a sibling of the layout's children, never their parent, so a patient coming
   into context or leaving it never remounts the page. It lives in `src/pages/`
   itself, a part the pages share, because that is the lowest layer the Shell,
-  the Patient card and the FFI and NUMC pages may all import:
+  the Patient card and the FFI, NUMC and ARMC pages may all import:
   `mb-pages-do-not-import-the-shell` rules out `src/shell/`, and
   `mb-pages-do-not-import-another-page` a page folder.
 - `for-patient-in-context.tsx` — the part of a page the patient in context

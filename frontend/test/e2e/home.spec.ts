@@ -16,6 +16,7 @@ test.describe("Home", () => {
       "Profile",
       "FFI",
       "NUMC",
+      "ARMC",
       "Accounts",
       "Audit logs",
     ]);

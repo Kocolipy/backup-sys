@@ -1,8 +1,8 @@
 ---
 type: Decision Record
 title: "ADR 0019: FFIs are the patient source's own, read through a FHIR-shaped page, and not audited"
-description: A patient's FFI History is the in-house patient source's own, read through it on every request at GET {base}/Patient/{id}/ffi and held by no table or cache; the source answers a FHIR-R4-shaped searchset Bundle of custom FFI objects that is documented as not FHIR-conformant, paged by ADR 0017's startIndex and count, sorted by Issue Date or Expiry Date and filtered on every column by the source, in its own order when no sort is chosen; and an FFI read, like a read of one Patient by id, appends no audit row. A patient's NUMC History is read on the same terms at GET {base}/Patient/{id}/numc, its NUMC Records of four elements and two closed sets, sorted by either date and filtered on every column by the source on D4's terms.
-tags: [patient, ffi, numc, paging, audit, integration]
+description: A patient's FFI History is the in-house patient source's own, read through it on every request at GET {base}/Patient/{id}/ffi and held by no table or cache; the source answers a FHIR-R4-shaped searchset Bundle of custom FFI objects that is documented as not FHIR-conformant, paged by ADR 0017's startIndex and count, sorted by Issue Date or Expiry Date and filtered on every column by the source, in its own order when no sort is chosen; and an FFI read, like a read of one Patient by id, appends no audit row. A patient's NUMC History is read on the same terms at GET {base}/Patient/{id}/numc, its NUMC Records of four elements and two closed sets, sorted by either date and filtered on every column by the source on D4's terms; and a patient's ARMC History likewise at GET {base}/Patient/{id}/armc, its ARMC Boards of six elements, the End Date the one optional, and two closed sets, paged in the source's order.
+tags: [patient, ffi, numc, armc, paging, audit, integration]
 ---
 
 # 19. FFIs are the patient source's own, read through a FHIR-shaped page, and not audited
@@ -15,9 +15,11 @@ Accepted. `GET /api/patient-ffi/{patientId}` reads a patient's FFI History, and
 the SPA's FFI page reads it five at a time for the patient in context;
 `GET /api/patient-numc/{patientId}` reads a patient's NUMC History, and the
 SPA's NUMC page reads it five at a time in the same way, sorted and filtered as
-the FFI page is (D5).
-`/docs/domain/ffi.md` and `/docs/domain/numc.md` are the behaviour in full;
-this file holds the decisions and their reasons.
+the FFI page is (D5); `GET /api/patient-armc/{patientId}` reads a patient's
+ARMC History, and the SPA's ARMC page reads it five at a time in the same way,
+in the source's order (D6).
+`/docs/domain/ffi.md`, `/docs/domain/numc.md` and `/docs/domain/armc.md` are
+the behaviour in full; this file holds the decisions and their reasons.
 
 ## Context
 
@@ -37,6 +39,12 @@ The source also holds each patient's NUMC Records: whether the Navy Underwater
 Medicine Centre found the patient fit for an underwater duty — what duty, what
 it found, when it was issued and when it runs to. They have the same shape of
 problem as FFIs, with fewer fields.
+
+It holds each patient's ARMC Boards too: the aeromedical fitness boards the
+Aeromedical Centre (ARMC) sat the patient on — what kind of board, what it
+found, when it started and, once it has, when it ended, and the two Medical
+Officers who sat on it. A board still open has no end yet, so its End Date is
+the first element of any of these histories that the source may leave out.
 
 A read of one Patient by the id the EHR context gave is the ordinary unit of
 care and is not audited (`/docs/domain/patient.md`); a search across Patients is,
@@ -134,26 +142,60 @@ Each rule a NUMC Record breaks is logged under a reason naming NUMC
 says which history broke; a failure of the call or of the searchset itself is
 the one every paged read shares.
 
+**D6. ARMC Boards are read on the same terms as FFIs.** A patient's ARMC
+History is the source's own, read through it on every read, held and cached by
+nothing, and not audited, as D1 to D3 decide for an FFI History, through the
+same port (`PatientStore`'s `findArmcHistory`), client, timeouts, failures and
+`SourceSearchset`. It differs in four things alone:
+
+- **The endpoint.** The source's `GET {base}/Patient/{id}/armc`, answering the
+  same FHIR-shaped, non-conformant `searchset` of custom `"resourceType": "ARMC"`
+  objects; our `GET /api/patient-armc/{patientId}`, plain JSON a page at a time,
+  paged as D2 pages an FFI History, the order the source's own.
+- **The six elements.** An ARMC Board has an ARMC Board Type, an ARMC Outcome,
+  a Start Date, an End Date, a Medical Officer #1 and a Medical Officer #2,
+  beside its own `id`. The two Medical Officers are names as the source gives
+  them, linked to no User or account; a missing or blank one is a failure of
+  the source.
+- **The one optional element.** The End Date may be absent — the board is still
+  open — and is left out of our answer then, never sent as `null`. When it is
+  there it is on or after the Start Date, a rule of the domain's `ArmcBoard`: a
+  board ending before it starts is a failure of the source, never a row shown.
+  The shared field reading (`SourceFields`) gains an optional calendar date for
+  it; every other date of every history stays required.
+- **The two sets.** ARMC Board Type (`aces`) and ARMC Outcome (`fit`,
+  `unfit`), each a Java enum, an enum of `openapi.yaml` and an SPA set held
+  set-equal, as D2's are. The ARMC Outcome is a set of its own, neither the FFI
+  Outcome nor the NUMC Outcome.
+
+Each rule an ARMC Board breaks is logged under a reason naming ARMC
+(`armc-no-id`, `no-armc-board-type`, `unknown-armc-outcome`,
+`armc-end-before-start`, …), so a fault record says which history broke. The
+ARMC History is not sorted or filtered: the page and its order are the
+source's alone.
+
 ## Consequences
 
-- **The FFI and NUMC pages depend on the source's availability.** A slow or
-  failing source is "Couldn't load FFIs" or "Couldn't load NUMC records" with
-  Try again, never an empty history.
+- **The FFI, NUMC and ARMC pages depend on the source's availability.** A slow
+  or failing source is "Couldn't load FFIs", "Couldn't load NUMC records" or
+  "Couldn't load ARMC records" with Try again, never an empty history.
 - **A real source must answer this contract**, or the adapter changes with it.
   It must filter, sort, page, count accurately, keep its own stable order and
-  send every field of every FFI and every element of every NUMC Record; a source
-  that cannot is no history source until its adapter changes.
+  send every field of every FFI, every element of every NUMC Record and every
+  required element of every ARMC Board; a source that cannot is no history
+  source until its adapter changes.
 - **A new code in any closed set is a contract change.** The source sending a
   code the service does not know is a `502`, not a row shown with a blank cell,
   until the enum, the document and the SPA set gain it together.
-- **No trail records who read whose FFIs or NUMC Records.** A deployment whose policy requires
+- **No trail records who read whose FFIs, NUMC Records or ARMC Boards.** A deployment whose policy requires
   every read of patient data to be recorded must revisit D3 together with the
   unaudited read by id (`/docs/domain/patient.md`).
 - **The local mock answers canned pages only**: Tan Wei Ming's four FFIs and
   each sort of them, Tan Hui Min's seven over two pages and one canned read of
   each filter; Tan Wei Ming's four NUMC Records and each sort of them, Tan Hui
-  Min's seven over two pages and one canned read of each filter; none for every
-  other fixture or read, and a `404` for any other id
+  Min's seven over two pages and one canned read of each filter; Tan Wei Ming's
+  two ARMC Boards and Tan Hui Min's seven over two pages, the first still open;
+  none for every other fixture or read, and a `404` for any other id
   (`backend/docs/configuration/patient-source.md`).
 
 ## Alternatives considered
@@ -176,7 +218,11 @@ the one every paged read shares.
 - **Fold NUMC Records into the FFI History**, as an FFI Type of their own.
   Rejected: a NUMC Record has no Higher Authority, Submitting MC or Status, and
   its Outcome is another set, so every FFI column would be blank or wrong for
-  it.
+  it. An ARMC Board is further still: it has a period and two Medical Officers,
+  and no Issue or Expiry Date.
+- **Send a still-open board's End Date as `null`**, as the application API
+  sends its other absent values. Rejected: the source leaves it out, and an
+  absent field keeps "still open" one shape from the source to the SPA.
 - **Sort and filter the page in the service.** Rejected: the service holds only
   the page the source answered, so its order and its count would be wrong across
   pages, as a Patient search's would (ADR 0018, D7).
