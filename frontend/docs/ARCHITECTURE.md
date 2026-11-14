@@ -333,21 +333,28 @@ two pages share moves up to `src/pages/` itself, and imports no page folder
   `MedicalCentre`, and `MEDICAL_CENTRE_LABELS`. An API module of data alone,
   in `src/pages/` because two pages' API modules read it
   (`lb-api-modules-are-data` lets one API module import another).
-- `history-api.ts` / `history-filter-popover.tsx` — what the FFI, NUMC and
-  ARMC histories share. `history-api.ts`, an API module of data alone, names
-  the sort the FFI and NUMC Histories take (`IssueOrExpirySort`, by
-  `issueDate` or `expiryDate`) and their two date ranges
-  (`ISSUE_AND_EXPIRY_DATES`, `IssueAndExpiryDates`), and reads any history's
-  date ranges (`HistoryDateRanges`, `HistoryDates`), which `checkDateRanges`
-  (`lib/date-range.ts`) checks for an inverted or impossible range:
+- `history-api.ts` / `history-filter-popover.tsx` — what the histories share,
+  naming no history's column. Each history's `*-api.ts` **declares its date
+  columns** (`FFI_DATE_COLUMNS`, `NUMC_DATE_COLUMNS`, `ARMC_DATE_COLUMNS`),
+  each a `DateColumn` (`lib/date-range.ts`): its name — the prefix of its
+  range's `<column>From` and `<column>To` parameters, and the `sortBy` that
+  sorts by it — its label, and its **precision**, `date` (a calendar date,
+  `YYYY-MM-DD`) or `date-time` (a date-time to the minute, `YYYY-MM-DDTHH:mm`,
+  Singapore's wall clock with no offset). The history's sort
+  (`ColumnSort<DateColumnOf<…>>`, `lib/sorting.ts`) and its ranges (`HistoryDates`) are typed
+  from that declaration. `history-api.ts`, an API module of data alone, reads
+  any history's declared columns: `noHistoryDates` leaves every end open,
   `countHistoryDates` counts each end set as one filter, and
-  `historyDateParameters` sends each end set as its own parameter, each of the
-  ranges it is handed. `HistoryFilterPopover` is the panel the three pages
-  open: the shared `FilterPopover` counting the filters applied, and a form —
-  named by the page, its fields laid out by the page around a `DateRangeFields`
-  it renders for each of the page's ranges — that keeps its own draft, applies only on Apply or Enter in a date, refuses a
-  bad range beneath its field with nothing sent, and resets to the page's own
-  no-filter value. `pickerCopy` names a picker's parts from its column.
+  `historyDateParameters` sends each end set as its own parameter, as its
+  control holds it, in the order the columns are declared.
+  `checkDateRanges` checks each range at its column's precision.
+  `HistoryFilterPopover` is the panel the history pages open: the shared
+  `FilterPopover` counting the filters applied, and a form — named by the
+  page, its fields laid out by the page around a `DateRangeFields` it renders
+  for each declared column, in its precision's control — that keeps its own
+  draft, applies only on Apply or Enter in a date, refuses a bad range
+  beneath its field with nothing sent, and resets to the page's own no-filter
+  value. `pickerCopy` names a picker's parts from its column.
 - `armc.tsx` / `armc-api.ts` — ARMC, `/armc`, linked after NUMC for a session
   holding `patient:read` and guarded by it. It renders through the shared
   `ForPatientInContext` as NUMC does — "No patient in context" with none in
@@ -368,8 +375,8 @@ two pages share moves up to `src/pages/` itself, and imports no page folder
   `PlainHeading`s, and with no column sorted `ARMC_HISTORY` sends no `sortBy`.
   `armc-filter-popover.tsx` holds the Filter panel at the history's top right,
   the shared `HistoryFilterPopover` laying out a `ChoiceToggle` for the
-  Outcome — All, FIT, UNFIT, as the Search page's Gender filter — and the two
-  date ranges, `ARMC_DATE_RANGES`. `ARMC_HISTORY` sends each filter only when
+  Outcome — All, FIT, UNFIT, as the Search page's Gender filter — and a range
+  for each of its two calendar-date columns, `ARMC_DATE_COLUMNS`. `ARMC_HISTORY` sends each filter only when
   set, the Outcome as one `outcome`, none for All. The filters and the sort are
   component state alone, never the URL; a change of either reads from the
   first page, and a new patient in context starts with neither. With a filter
@@ -395,11 +402,15 @@ two pages share moves up to `src/pages/` itself, and imports no page folder
   `MultiSelectPicker` is a searchable multi-select over a closed set, by label,
   with "Clear selection" first and last while anything is selected.
   `ChoiceToggle` is a one-of-several toggle row (All, or one value) that never
-  leaves the choice empty. `DateRangeFields` is a from–to pair of date fields,
-  both marked invalid with the refusal shown beneath. Each panel's form keeps
-  its own draft, Apply and Reset. A range is checked by `src/lib/date-range.ts`:
-  `dateRangeRefusal` refuses a date the calendar does not have and a from-date
-  after its to-date, both ends inclusive, as the backend does; and
+  leaves the choice empty. `DateRangeFields` is a from–to pair of fields in its
+  column's precision's native control — `<input type="date">` for a calendar
+  date, `<input type="datetime-local">` for a date-time, which holds no value
+  until a time is chosen beside the date — both marked invalid with the
+  refusal shown beneath. Each panel's form keeps its own draft, Apply and
+  Reset. A range is checked by `src/lib/date-range.ts`, at its column's
+  precision: `dateRangeRefusal` refuses an end not written at that precision
+  (`isCalendarDate`, `isMinuteDateTime` in `src/lib/time.ts`) and a from-end
+  after its to-end, both ends inclusive, as the backend does; and
   `checkDateRanges` checks each range a panel offers, naming the first refused.
 - `home.tsx` — the Patient card.
 - `patient-in-context.ts` / `patient-api.ts` — the **one reader of the patient in

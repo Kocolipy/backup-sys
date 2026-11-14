@@ -95,7 +95,9 @@ D4).
   parameters, `issue-date` or `expiry-date`, `-` first for descending, ties
   broken by id: `_sort=-expiry-date,_id`. **With no `sortBy`** — whatever
   `sortOrder` says — **no `_sort` is sent**, and the source's default order is
-  the order shown. The domain's `HistorySort` holds it, as for an FFI History.
+  the order shown. The domain's `HistorySort` holds it, as for an FFI History,
+  over the NUMC History's own declared columns, both calendar dates
+  (`NumcHistory.DATE_COLUMNS`; [ffi](ffi.md), "Sort and filters").
 - **The filters** narrow the history, combined with AND, each optional
   (`NumcFilter`):
 

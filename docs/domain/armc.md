@@ -114,8 +114,9 @@ it itself, as for an FFI or a NUMC History ([ffi](ffi.md), "Sort and filters";
   with no End Date falls in an End Date sort: no `_id` tie-break is sent.
   **With no `sortBy`** — whatever `sortOrder` says — **no `_sort` is sent**,
   and the source's default order is the order shown. The domain's
-  `HistorySort` holds it, as for an FFI or a NUMC History, with the ARMC
-  History's own columns (`HistorySort.StartOrEnd`).
+  `HistorySort` holds it, as for an FFI or a NUMC History, over the ARMC
+  History's own declared columns, both calendar dates
+  (`ArmcHistory.DATE_COLUMNS`; [ffi](ffi.md), "Sort and filters").
 - **The filters** narrow the history, combined with AND, each optional
   (`ArmcFilter`):
 
