@@ -1410,13 +1410,28 @@ paths:
   /api/patient-medication/{patientId}:
     get:
       tags: [Patient]
-      summary: Read a patient's Medication History, a page at a time
+      summary: Read a patient's Medication History, filtered and sorted, a page at a time
       description: |
-        The Medication Records of the patient held under `patientId`, one page
-        at a time, in the in-house patient source's own order, as the source
-        pages and counts them (ADR 0019, D7): the service reads them from the
-        source on every call and orders, pages, holds and caches nothing of its
-        own. No sort and no filter is asked of the source. Read-only.
+        The Medication Records of the patient held under `patientId` that the
+        filters narrow, one page at a time, in the order `sortBy` and
+        `sortOrder` name, as the in-house patient source filters, orders, pages
+        and counts them (ADR 0019, D4 and D7): the service reads them from the
+        source on every call and filters, orders, pages, holds and caches
+        nothing of its own. With no `sortBy`, whatever `sortOrder` says, no sort
+        is asked of the source, so the order is its own; with one, the source
+        orders by the whole date-time and breaks ties. Read-only.
+
+        **Filters** narrow the history, combined with AND, each optional: any
+        of the Dispense Statuses (`dispenseStatus`, repeated for each code), and
+        a range for the Start Date (`startDateFrom`, `startDateTo`) and for the
+        End Date (`endDateFrom`, `endDateTo`), each end a date-time to the
+        minute in Singapore time, `YYYY-MM-DDTHH:mm`, with no offset, both ends
+        inclusive. They reach the source as `dispense-status` once with its
+        codes joined by commas (FHIR's OR), and each end as the instant its
+        minute names, in UTC: `start-date=ge…` the from-minute's first instant
+        and `start-date=lt…` the first instant after the to-minute, and
+        `end-date` alike; the sort as `_sort=±start-date|±end-date`, the column
+        alone. The Dispensary and the free text take no filter.
 
         Each Medication Record is one prescription, with how it was dispensed
         and who prescribed it. Its Dispense Status and its Dispensary, a Medical
@@ -1433,7 +1448,7 @@ paths:
         coerced rather than refused. The page they resolve to is the source's
         to read — `count=0` and a page past the end included — and
         `totalResults` is the source's count of every Medication Record the
-        patient has.
+        filters select.
 
         Requires `patient:read`, a delegatable Permission a User holds through a
         Group that carries it, or as the Superuser. Outside `/api/patient`, so
@@ -1459,6 +1474,83 @@ paths:
           schema:
             type: string
             pattern: "^[A-Za-z0-9\\-.]{1,64}$"
+        - name: dispenseStatus
+          in: query
+          required: false
+          description: |
+            Only Medication Records with any of these Dispense Statuses, one
+            code to each repetition. Sent to the source once, as
+            `dispense-status`, the codes joined by commas.
+          style: form
+          explode: true
+          schema:
+            type: array
+            items:
+              $ref: "#/components/schemas/DispenseStatus"
+        - name: startDateFrom
+          in: query
+          required: false
+          description: |
+            Only Medication Records started at or after this minute, Singapore
+            time, the minute itself included. Sent as `start-date=ge…`, the
+            minute's first instant in UTC.
+          schema:
+            type: string
+            pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$"
+            example: "2025-07-14T16:20"
+        - name: startDateTo
+          in: query
+          required: false
+          description: |
+            Only Medication Records started at or before this minute, Singapore
+            time, the whole minute included; not before `startDateFrom`. Sent
+            as `start-date=lt…`, the first instant after the minute, in UTC.
+          schema:
+            type: string
+            pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$"
+            example: "2025-07-14T16:20"
+        - name: endDateFrom
+          in: query
+          required: false
+          description: |
+            Only Medication Records ended at or after this minute, Singapore
+            time, the minute itself included. Sent as `end-date=ge…`, the
+            minute's first instant in UTC.
+          schema:
+            type: string
+            pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$"
+            example: "2025-01-01T00:00"
+        - name: endDateTo
+          in: query
+          required: false
+          description: |
+            Only Medication Records ended at or before this minute, Singapore
+            time, the whole minute included; not before `endDateFrom`. Sent as
+            `end-date=lt…`, the first instant after the minute, in UTC.
+          schema:
+            type: string
+            pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$"
+            example: "2025-12-31T23:59"
+        - name: sortBy
+          in: query
+          required: false
+          description: |
+            The one column to sort by, by its whole date-time: `startDate` (the
+            source's `start-date`) or `endDate` (its `end-date`). With none, the
+            source's own order, whatever `sortOrder` says: no `_sort` is sent.
+            Ties are the source's to break.
+          schema:
+            type: string
+            enum: [startDate, endDate]
+        - name: sortOrder
+          in: query
+          required: false
+          description: |
+            The direction `sortBy` sorts in; `ascending` when `sortBy` is given
+            alone. Descending is sent with a leading `-`.
+          schema:
+            type: string
+            enum: [ascending, descending]
         - name: startIndex
           in: query
           required: false
@@ -1487,10 +1579,15 @@ paths:
                 $ref: "#/components/schemas/MedicationHistoryPage"
         "400":
           description: |
-            `patientId` is outside FHIR's id grammar, or `startIndex` or
-            `count` is not an integer. Refused before the patient source is
-            called, with the generic `invalid-request` `ApiError`, which quotes
-            nothing of the request.
+            `patientId` is outside FHIR's id grammar; a `dispenseStatus` is no
+            code of the Dispense Status, matched exactly; `sortBy` is neither
+            `startDate` nor `endDate`, or `sortOrder` neither `ascending` nor
+            `descending`; an end of a range is no date-time to the minute
+            `YYYY-MM-DDTHH:mm` — a date alone, seconds, an offset, or a day or
+            minute the calendar or clock has not; a from-end is after its
+            to-end; or `startIndex` or `count` is not an integer. Refused before
+            the patient source is called, with the generic `invalid-request`
+            `ApiError`, which quotes nothing of the request.
           content:
             application/json:
               schema:

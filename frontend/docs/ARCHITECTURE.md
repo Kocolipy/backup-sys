@@ -267,9 +267,18 @@ two pages share moves up to `src/pages/` itself, and imports no page folder
   date-time with an offset, each of the six optional elements through
   `optionalString` — absent when the source lacks it, shown as `—` — the
   Dispense Status a `Record` of labels keyed by its codes, and the Dispensary
-  one of `MEDICAL_CENTRES` (`medical-centre-api.ts`). Read-only, in the
-  source's own order: no row action, and every column a `PlainHeading`, with
-  no sort and no filter. The Medication is bold, every free-text element is
+  one of `MEDICAL_CENTRES` (`medical-centre-api.ts`). Read-only, with no row
+  action. It sorts and filters as NUMC and ARMC do: `MEDICATION_DATE_COLUMNS`
+  declares the Start Date and End Date as `date-time` columns on the shared
+  plumbing (`history-api.ts`, `@/lib/date-range`), the two `SortHeading`s
+  sort by them and every other column is a `PlainHeading`, and
+  `MedicationFilterPopover` (`medication-filter-popover.tsx`) lays out a
+  Dispense Status `MultiSelectPicker` and the two `datetime-local` ranges in
+  the shared `HistoryFilterPopover`; `MEDICATION_HISTORY` sends each
+  `dispenseStatus` in its set's order, each end as its Singapore minute and
+  the sort, and every change reads from the first page; a filtered history
+  with none is "No medication records match the filters". The Medication is
+  bold, every free-text element is
   shown as sent, both dates through `formatDateTime` (`src/lib/time.ts`) in
   Singapore time, and the Dispense Status is a badge: PENDING `muted`,
   DISPENSED `success`, UNCOLLECTED `danger`. Its twelve columns are wider than

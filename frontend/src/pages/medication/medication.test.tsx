@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -395,5 +395,384 @@ describe("Medication", () => {
     await userEvent.click(screen.getByRole("button", { name: "Try again" }));
 
     expect(medicationReads(requests())).toEqual([FIRST_PAGE, FIRST_PAGE]);
+  });
+});
+
+/** The read of Tan Wei Ming's history from `startIndex`, with `asked` — filters, a sort — before the page. */
+const historyPage = (startIndex: number, asked = "") =>
+  `GET /api/patient-medication/eq081-VQEgP8drUUqCWzHfw3?${asked === "" ? "" : `${asked}&`}startIndex=${startIndex}&count=5`;
+
+/** Five Medication Records of six, the first page of a history spanning two. */
+const FIVE_OF_SIX = page(
+  ["1", "2", "3", "4", "5"].map((n) => record(`medication-${n}`)),
+  1,
+  6,
+);
+
+const ONE_OF_SIX = page([record("medication-6")], 6, 6);
+
+/** The table's column heading named `name`, re-read: a new page is a new table. */
+const columnHeader = (name: string) => within(table()).getByRole("columnheader", { name });
+
+const sortButton = (name: string) => within(columnHeader(name)).getByRole("button", { name });
+
+/** Moves the history to its second page, and waits for it. */
+async function toSecondPage() {
+  await screen.findByText("Showing 1 to 5 of 6 medication records");
+  await userEvent.click(screen.getByRole("button", { name: "Page 2" }));
+  await screen.findByText("Showing 6 to 6 of 6 medication records");
+}
+
+describe("Medication, sorted", () => {
+  it("offers a sort on Start Date and End Date alone, neither sorted at first", async () => {
+    await renderMedication(page(FOUR_RECORDS, 1, 4));
+    await screen.findByRole("table", { name: "Medication History" });
+
+    expect(
+      within(table())
+        .getAllByRole("columnheader")
+        .map((header) => [
+          header.textContent,
+          header.getAttribute("aria-sort"),
+          within(header).queryByRole("button") !== null,
+        ]),
+    ).toEqual([
+      ["Medication", null, false],
+      ["Dosage", null, false],
+      ["Route", null, false],
+      ["Frequency", null, false],
+      ["Step", null, false],
+      ["Quantity", null, false],
+      ["Dispense Status", null, false],
+      ["Duration", null, false],
+      ["Start Date", "none", true],
+      ["End Date", "none", true],
+      ["Dispensary", null, false],
+      ["Prescribing Doctor", null, false],
+    ]);
+  });
+
+  // The press cycle is the sort heading's (sort-heading.test.tsx), the
+  // parameters MEDICATION_HISTORY's (medication-api.test.ts): here, each
+  // heading's wiring.
+  it.each([
+    ["Start Date", "startDate"],
+    ["End Date", "endDate"],
+  ] as const)("sorts by %s, ascending, from the first page", async (heading, by) => {
+    const { requests } = await renderMedication(FIVE_OF_SIX, {
+      [SECOND_PAGE]: ONE_OF_SIX,
+      [historyPage(1, `sortBy=${by}&sortOrder=ascending`)]: FIVE_OF_SIX,
+    });
+    await toSecondPage();
+
+    await userEvent.click(sortButton(heading));
+    await screen.findByText("Showing 1 to 5 of 6 medication records");
+
+    expect({
+      direction: columnHeader(heading).getAttribute("aria-sort"),
+      reads: medicationReads(requests()),
+    }).toEqual({
+      direction: "ascending",
+      reads: [FIRST_PAGE, SECOND_PAGE, historyPage(1, `sortBy=${by}&sortOrder=ascending`)],
+    });
+  });
+
+  it("holds the page, busy, and both sort headings still while a read is pending", async () => {
+    const next = deferred();
+    await renderMedication(FIVE_OF_SIX, { [SECOND_PAGE]: next.answer });
+    await screen.findByText("Showing 1 to 5 of 6 medication records");
+
+    await userEvent.click(screen.getByRole("button", { name: "Page 2" }));
+
+    expect({
+      busy: table().closest("[aria-busy]")?.getAttribute("aria-busy"),
+      rows: rows().length,
+      sortsDisabled: [sortButton("Start Date"), sortButton("End Date")].map((button) =>
+        button.hasAttribute("disabled"),
+      ),
+    }).toEqual({ busy: "true", rows: 5, sortsDisabled: [true, true] });
+    await next.settle(ONE_OF_SIX);
+  });
+});
+
+type User = ReturnType<typeof userEvent.setup>;
+
+/** The button that opens the filters, whatever it says is set. */
+const filterTrigger = () => screen.getByRole("button", { name: /^Filter/ });
+
+/** Opens the filters, unless they are open already. */
+async function openFilters(user: User) {
+  if (filterTrigger().getAttribute("aria-expanded") !== "true") await user.click(filterTrigger());
+}
+
+const filterPanel = () => screen.getByRole("form", { name: "Medication filters" });
+
+/** The Dispense Status multi-select's trigger in the open panel, whatever it says is selected. */
+const statusPicker = () =>
+  within(filterPanel()).getByRole("button", { name: /^Dispense Status: / });
+
+/** Opens the filters and the Dispense Status picker, toggles each of `labels`, and closes the picker. */
+async function pickStatuses(user: User, ...labels: string[]) {
+  await openFilters(user);
+  await user.click(statusPicker());
+  for (const label of labels) await user.click(screen.getByRole("option", { name: label }));
+  await user.keyboard("{Escape}");
+}
+
+/** A date-time range's field in the open panel: its group, then its end. */
+const dateField = (range: "Start Date" | "End Date", end: "From" | "To") =>
+  within(within(filterPanel()).getByRole("group", { name: range })).getByLabelText(
+    end,
+  ) as HTMLInputElement;
+
+/**
+ * Sets a date-time field of the open panel as its picker does: a whole
+ * `YYYY-MM-DDTHH:mm` or nothing.
+ */
+const setDateTime = (range: "Start Date" | "End Date", end: "From" | "To", value: string) =>
+  fireEvent.change(dateField(range, end), { target: { value } });
+
+async function apply(user: User) {
+  await openFilters(user);
+  await user.click(within(filterPanel()).getByRole("button", { name: "Apply" }));
+}
+
+describe("Medication, filtered", () => {
+  it("offers the three filters: a Dispense Status multi-select and two date-time ranges, none set", async () => {
+    const user = userEvent.setup();
+    await renderMedication(page(FOUR_RECORDS, 1, 4));
+    await screen.findByRole("table", { name: "Medication History" });
+
+    await openFilters(user);
+
+    expect({
+      count: filterTrigger().getAttribute("aria-label"),
+      dates: (["Start Date", "End Date"] as const).flatMap((range) =>
+        (["From", "To"] as const).map((end) => [
+          range,
+          end,
+          dateField(range, end).type,
+          dateField(range, end).value,
+        ]),
+      ),
+      pickers: within(filterPanel())
+        .getAllByRole("button", { name: /: / })
+        .map((trigger) => trigger.textContent),
+    }).toEqual({
+      count: "Filter",
+      dates: [
+        ["Start Date", "From", "datetime-local", ""],
+        ["Start Date", "To", "datetime-local", ""],
+        ["End Date", "From", "datetime-local", ""],
+        ["End Date", "To", "datetime-local", ""],
+      ],
+      pickers: ["Dispense Status: Any"],
+    });
+  });
+
+  it("lists the Dispense Statuses by their labels, in the set's order, its search named for its column", async () => {
+    const user = userEvent.setup();
+    await renderMedication(page(FOUR_RECORDS, 1, 4));
+    await screen.findByRole("table", { name: "Medication History" });
+    await openFilters(user);
+
+    await user.click(statusPicker());
+
+    expect([
+      screen.getByRole("combobox", { name: "Dispense Statuses" }).getAttribute("placeholder"),
+      ...screen.getAllByRole("option").map((option) => option.textContent),
+    ]).toEqual(["Search Dispense Statuses", "PENDING", "DISPENSED", "UNCOLLECTED"]);
+  });
+
+  it.each([
+    [["PENDING"], "dispenseStatus=pending"],
+    [["UNCOLLECTED", "PENDING"], "dispenseStatus=pending&dispenseStatus=uncollected"],
+  ] as const)(
+    "filters by the Dispense Statuses %j, each code chosen once, counted as one, from the first page, and closes",
+    async (labels, asked) => {
+      const user = userEvent.setup();
+      const { requests } = await renderMedication(FIVE_OF_SIX, {
+        [SECOND_PAGE]: ONE_OF_SIX,
+        [historyPage(1, asked)]: page([record("only")], 1, 1),
+      });
+      await toSecondPage();
+
+      await pickStatuses(user, ...labels);
+      await apply(user);
+      await screen.findByText("Showing 1 to 1 of 1 medication records");
+
+      expect({
+        count: filterTrigger().getAttribute("aria-label"),
+        open: screen.queryByRole("form", { name: "Medication filters" }),
+        read: medicationReads(requests()).slice(-1)[0],
+      }).toEqual({ count: "Filter, 1 set", open: null, read: historyPage(1, asked) });
+    },
+  );
+
+  it.each([
+    ["Start Date", "startDate", "2025-07-14T16:20", "2026-03-01T10:00"],
+    ["End Date", "endDate", "2025-01-01T00:00", "2025-12-31T23:59"],
+  ] as const)(
+    "filters by a date-time range over the %s, to the minute, and counts each end",
+    async (range, field, from, to) => {
+      const user = userEvent.setup();
+      const asked = `${field}From=${from}&${field}To=${to}`;
+      const { requests } = await renderMedication(page(FOUR_RECORDS, 1, 4), {
+        [historyPage(1, asked)]: page([record("only")], 1, 1),
+      });
+      await screen.findByRole("table", { name: "Medication History" });
+
+      await openFilters(user);
+      setDateTime(range, "From", from);
+      setDateTime(range, "To", to);
+      await apply(user);
+      await screen.findByText("Showing 1 to 1 of 1 medication records");
+
+      expect({
+        count: filterTrigger().getAttribute("aria-label"),
+        read: medicationReads(requests()).slice(-1)[0],
+      }).toEqual({ count: "Filter, 2 set", read: historyPage(1, asked) });
+    },
+  );
+
+  // A range of one minute is no refusal: both ends are inclusive.
+  it("reads a range of one minute, its from-end equal to its to-end", async () => {
+    const user = userEvent.setup();
+    const asked = "startDateFrom=2025-07-14T16:20&startDateTo=2025-07-14T16:20";
+    const { requests } = await renderMedication(page(FOUR_RECORDS, 1, 4), {
+      [historyPage(1, asked)]: page([record("only")], 1, 1),
+    });
+    await screen.findByRole("table", { name: "Medication History" });
+
+    await openFilters(user);
+    setDateTime("Start Date", "From", "2025-07-14T16:20");
+    setDateTime("Start Date", "To", "2025-07-14T16:20");
+    await apply(user);
+    await screen.findByText("Showing 1 to 1 of 1 medication records");
+
+    expect(medicationReads(requests()).slice(-1)[0]).toBe(historyPage(1, asked));
+  });
+
+  it("applies on Enter in a date-time, as on Apply", async () => {
+    const user = userEvent.setup();
+    const asked = "endDateTo=2025-12-31T23:59";
+    const { requests } = await renderMedication(page(FOUR_RECORDS, 1, 4), {
+      [historyPage(1, asked)]: page(FOUR_RECORDS, 1, 4),
+    });
+    await screen.findByRole("table", { name: "Medication History" });
+
+    await openFilters(user);
+    setDateTime("End Date", "To", "2025-12-31T23:59");
+    await user.type(dateField("End Date", "To"), "{Enter}");
+
+    await waitFor(() =>
+      expect(medicationReads(requests()).slice(-1)[0]).toBe(historyPage(1, asked)),
+    );
+  });
+
+  it("combines the filters with AND, and with the current sort", async () => {
+    const user = userEvent.setup();
+    const asked =
+      "dispenseStatus=dispensed&startDateFrom=2025-01-01T00:00" +
+      "&sortBy=startDate&sortOrder=ascending";
+    const { requests } = await renderMedication(page(FOUR_RECORDS, 1, 4), {
+      [historyPage(1, "sortBy=startDate&sortOrder=ascending")]: page(FOUR_RECORDS, 1, 4),
+      [historyPage(1, asked)]: page([record("only")], 1, 1),
+    });
+    await screen.findByRole("table", { name: "Medication History" });
+    await userEvent.click(sortButton("Start Date"));
+    // The heading is held still until the sorted read lands.
+    await waitFor(() => expect(sortButton("Start Date")).toBeEnabled());
+
+    await pickStatuses(user, "DISPENSED");
+    setDateTime("Start Date", "From", "2025-01-01T00:00");
+    await apply(user);
+    await screen.findByText("Showing 1 to 1 of 1 medication records");
+
+    expect({
+      count: filterTrigger().getAttribute("aria-label"),
+      read: medicationReads(requests()).slice(-1)[0],
+    }).toEqual({ count: "Filter, 2 set", read: historyPage(1, asked) });
+  });
+
+  it.each([
+    ["Start Date", "2025-07-14T16:21", "2025-07-14T16:20"],
+    ["End Date", "2026-01-01T00:00", "2025-12-31T23:59"],
+  ] as const)(
+    "refuses a from-end after its to-end over the %s beneath the range, and reads nothing",
+    async (range, from, to) => {
+      const user = userEvent.setup();
+      const { requests } = await renderMedication(page(FOUR_RECORDS, 1, 4));
+      await screen.findByRole("table", { name: "Medication History" });
+      const before = medicationReads(requests()).length;
+
+      await openFilters(user);
+      setDateTime(range, "From", from);
+      setDateTime(range, "To", to);
+      await user.click(within(filterPanel()).getByRole("button", { name: "Apply" }));
+
+      const refusal = within(within(filterPanel()).getByRole("group", { name: range })).getByText(
+        `The ${range} from-date must not be after its to-date.`,
+      );
+      expect({
+        count: filterTrigger().getAttribute("aria-label"),
+        describedBy: [dateField(range, "From"), dateField(range, "To")].map((input) =>
+          input.getAttribute("aria-describedby"),
+        ),
+        invalid: [dateField(range, "From"), dateField(range, "To")].map((input) =>
+          input.getAttribute("aria-invalid"),
+        ),
+        reads: medicationReads(requests()).length - before,
+      }).toEqual({
+        count: "Filter",
+        describedBy: [refusal.id, refusal.id],
+        invalid: ["true", "true"],
+        reads: 0,
+      });
+    },
+  );
+
+  it("clears every filter on Reset, reading the history unfiltered from its first page", async () => {
+    const user = userEvent.setup();
+    const asked = "dispenseStatus=uncollected&endDateFrom=2025-01-01T00:00";
+    const { requests } = await renderMedication(page(FOUR_RECORDS, 1, 4), {
+      [historyPage(1, asked)]: page([record("only")], 1, 1),
+    });
+    await screen.findByRole("table", { name: "Medication History" });
+    await pickStatuses(user, "UNCOLLECTED");
+    setDateTime("End Date", "From", "2025-01-01T00:00");
+    await apply(user);
+    await screen.findByText("Showing 1 to 1 of 1 medication records");
+
+    await openFilters(user);
+    await user.click(within(filterPanel()).getByRole("button", { name: "Reset" }));
+    await screen.findByText("Showing 1 to 4 of 4 medication records");
+
+    expect({
+      count: filterTrigger().getAttribute("aria-label"),
+      read: medicationReads(requests()).slice(-1)[0],
+    }).toEqual({ count: "Filter", read: FIRST_PAGE });
+  });
+
+  it("says No medication records match the filters for a filter matching none, and offers the filters still", async () => {
+    const user = userEvent.setup();
+    await renderMedication(page(FOUR_RECORDS, 1, 4), {
+      [historyPage(1, "endDateTo=2023-12-31T23:59")]: page([], 1, 0),
+    });
+    await screen.findByRole("table", { name: "Medication History" });
+
+    await openFilters(user);
+    setDateTime("End Date", "To", "2023-12-31T23:59");
+    await apply(user);
+
+    expect({
+      empty: (await screen.findByText(/^No medication records/)).textContent,
+      filter: filterTrigger().getAttribute("aria-label"),
+      table: screen.queryByRole("table"),
+    }).toEqual({
+      empty: "No medication records match the filters",
+      filter: "Filter, 1 set",
+      table: null,
+    });
   });
 });

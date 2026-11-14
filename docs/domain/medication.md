@@ -1,7 +1,7 @@
 ---
 type: Domain Rules
 title: Medication
-description: A patient's Medication History — the in-house patient source's own Medication Records, read through it at GET {base}/Patient/{id}/medication on the FFI History's terms, the six required and six optional elements, the free text shown as the source gives it, the Start Date and End Date as date-times with an offset shown in Singapore time, the Dispense Status and the Dispensary's Medical Centre carried as codes, the source's order and paging, the failures and their Medication log reasons, the logging rules, no caching, no auditing, the Medication page and its states, and the mock's Medication fixtures and fault stubs.
+description: A patient's Medication History — the in-house patient source's own Medication Records, read through it at GET {base}/Patient/{id}/medication on the FFI History's terms, the six required and six optional elements, the free text shown as the source gives it, the Start Date and End Date as date-times with an offset shown in Singapore time, the Dispense Status and the Dispensary's Medical Centre carried as codes, the source's order and paging, the sort by either date-time and the filters on the Dispense Status and a date-time range over either date, the failures and their Medication log reasons, the logging rules, no caching, no auditing, the Medication page and its states, and the mock's Medication fixtures and fault stubs.
 tags: [patient, medication]
 ---
 
@@ -20,7 +20,8 @@ It is read on the same terms as an FFI History (ADR 0019, D7): what the
 [FFI rules](ffi.md) say of the source's paged read, its client and timeouts,
 its failures, its logging, caching and auditing holds here too, and this file
 says only where a Medication History differs — the endpoint, the twelve
-elements, the date-times and the closed sets — and what is its own. The wire
+elements, the date-times, the closed sets, and its sort and filters — and what
+is its own. The wire
 contract is `backend/docs/openapi.yaml`. The SPA never reaches the source:
 SPA → `GET /api/patient-medication/{patientId}` → backend →
 `GET {base}/Patient/{id}/medication`.
@@ -95,8 +96,9 @@ only — not FHIR-conformant:
 - **The call.**
   `GET {base}/Patient/{id}/medication?_offset=…&_count=…&_total=accurate`, on
   the same client, base URL, timeouts and absent credential, the id sent
-  unchanged. Nothing else is sent: no `_sort` and no filter, so the source's
-  own order is the order shown.
+  unchanged, with each filter and the sort the read asks for
+  ([Sort and filters](#sort-and-filters)). With no sort asked for, no `_sort`
+  is sent, so the source's own order is the order shown.
 - **The answer.** A FHIR-R4-shaped `searchset` `Bundle` — its `total` and each
   `entry[].resource` — whose every resource is a custom
   `"resourceType": "Medication"` object of flat fields: `id`, `medication`,
@@ -114,24 +116,73 @@ only — not FHIR-conformant:
 - **No caching.** No Medication Record is kept in Redis or in memory: every
   read, of the same page too, is a call to the source.
 
+## Sort and filters
+
+The patient source sorts, filters, pages and counts a Medication History; the
+service checks the sort and the filters, passes them through and does none of
+it itself, as for an FFI, a NUMC or an ARMC History ([ffi](ffi.md), "Sort and
+filters"; [armc](armc.md), "Sort and filters"; ADR 0019, D4 and D7). Its two
+date columns are declared on the shared sort and range as **date-times**
+(`MedicationHistory.DATE_COLUMNS`, `MEDICATION_DATE_COLUMNS`; [ffi](ffi.md),
+"Sort and filters", the precisions).
+
+- **The sort.** One column at a time, by `sortBy` — `startDate` or `endDate`
+  — and `sortOrder` — `ascending` (the default with a `sortBy`) or
+  `descending`. It orders by the whole date-time, to the minute, not the day
+  alone, and is sent as `_sort` on the source's own search parameters,
+  `start-date` or `end-date`, `-` first for descending, the column alone:
+  `_sort=-start-date`. **The source breaks ties**: no `_id` tie-break is sent.
+  **With no `sortBy`** — whatever `sortOrder` says — **no `_sort` is sent**,
+  and the source's default order is the order shown. The domain's
+  `HistorySort` holds it, as for the other histories.
+- **The filters** narrow the history, combined with AND, each optional
+  (`MedicationFilter`):
+
+  | Column          | Our API                        | Sent to the source                                         |
+  | --------------- | ------------------------------ | ---------------------------------------------------------- |
+  | Dispense Status | `dispenseStatus`, repeated     | `dispense-status=<a>,<b>`                                  |
+  | Start Date      | `startDateFrom`, `startDateTo` | `start-date=ge<from>:00Z`, `start-date=lt<to + 1 min>:00Z` |
+  | End Date        | `endDateFrom`, `endDateTo`     | `end-date=ge<from>:00Z`, `end-date=lt<to + 1 min>:00Z`     |
+
+  The Dispense Statuses are any of their codes: they reach the source as one
+  parameter, joined by commas — FHIR's OR — in their [closed
+  set](#the-closed-sets)'s own order, each matched exactly; none chosen is no
+  filter. Each end of a date-time range is a minute in Singapore time,
+  `YYYY-MM-DDTHH:mm` with no offset, optional and **inclusive**: it is sent as
+  the instant it names in UTC, `ge` the from-minute's first instant and `lt`
+  the first instant after the to-minute, so a record starting at 16:20 is in a
+  range to 16:20, and in one from 16:20. A from-end may not be after its
+  to-end (`DateRange`); a range of one minute is a from-end equal to its
+  to-end. There is no filter on the Dispensary or on any free-text element: a
+  parameter naming one, or another history's — `outcome`, `issueDateFrom`,
+  `status` — is no parameter the read takes, and is not passed on.
+
+- **Checked as the request is read in.** A column or direction spelled any
+  other way, a Dispense Status outside its closed set — a label, another
+  case, a Java constant's name, or another set's code — an end that is no
+  date-time to the minute — a date alone, seconds, an offset, a day or minute
+  the calendar or the clock has not — and a from-end after its to-end are each
+  `400`, before the source is called.
+
 ## Our API
 
-`GET /api/patient-medication/{patientId}?startIndex=…&count=…`, outside the
+`GET /api/patient-medication/{patientId}?startIndex=…&count=…`, with any
+filters and sort, outside the
 `/api/patient` FHIR namespace: plain JSON, `{totalResults, startIndex,
 records: [{id, medication, dosage, route, frequency, step, quantity,
 dispenseStatus, duration, startDate, endDate, dispensary, prescribingDoctor}]}`,
 each code as the source sent it, the free text as the source gave it, each
 optional element absent when the source lacks it, and both date-times ISO-8601
-with the offset the source gave. It takes no sort and no filter. Errors are the
-application API's `ApiError`:
+with the offset the source gave. `totalResults` counts the Medication Records
+the filters select. Errors are the application API's `ApiError`:
 
-| Case                                                                        | Status |
-| --------------------------------------------------------------------------- | ------ |
-| `patientId` outside FHIR's id grammar, or a paging value that is no integer | `400`  |
-| No session                                                                  | `401`  |
-| Session lacks `patient:read`                                                | `403`  |
-| The source's `404` for the patient                                          | `404`  |
-| The source failing                                                          | `502`  |
+| Case                                                                                                                                                       | Status |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| `patientId` outside FHIR's id grammar, a sort or filter the read cannot take ([Sort and filters](#sort-and-filters)), or a paging value that is no integer | `400`  |
+| No session                                                                                                                                                 | `401`  |
+| Session lacks `patient:read`                                                                                                                               | `403`  |
+| The source's `404` for the patient                                                                                                                         | `404`  |
+| The source failing                                                                                                                                         | `502`  |
 
 The `400` is refused before the source is called. The `403` is refused by the
 handler's `@PreAuthorize`, the chain's backstop and the document's `security`,
@@ -180,8 +231,9 @@ record's id, Medication, dates or Prescribing Doctor.
 
 ## Not audited
 
-A Medication History read writes **no audit row**, as an FFI History read and a
-read of one Patient by id write none (ADR 0019, D3 and D7). A refused read is
+A Medication History read writes **no audit row**, sorted and filtered too, as
+an FFI History read and a read of one Patient by id write none (ADR 0019, D3
+and D7), and the log names none of a filter's values. A refused read is
 audited as `ACCESS_DENIED`, as every authorization refusal is.
 
 ## The Medication page
@@ -203,19 +255,48 @@ a session without it is offered no link and is routed to its landing page.
   Medication in bold, the free text as the source gave it and `—` for an
   absent optional element, the Dispense Status as its badge
   ([the elements](#the-elements)), both date-times in Singapore time as
-  `dd MMM yyyy HH:mm`, and the Dispensary by its Medical Centre's label. No
-  column sorts and nothing filters. The table is wider than its card: each
+  `dd MMM yyyy HH:mm`, and the Dispensary by its Medical Centre's label. The
+  table is wider than its card: each
   cell keeps to one line and the table scrolls sideways inside the card rather
   than squeezing its columns.
 - **The shared paged listing**: the numbered pager and "Showing x to y of N
   medication records", named on a single page too, the page shown held while
   the next loads.
+- **Sort.** As on the other history pages ([ffi](ffi.md), "The FFI page"):
+  only the Start Date and End Date headings sort, one at a time, each the
+  shared sortable column heading stating its direction with `aria-sort`, by
+  the whole date-time; every other heading is plain. The history opens in the
+  source's own order, which neither heading shows as sorted. The first press
+  on a heading sorts it ascending, and each later press toggles it descending
+  and ascending, never back to the source's order; another heading replaces
+  the sort, starting ascending. The source breaks ties. Both headings are
+  disabled while a read is pending.
+- **Filter.** A Filter button at the top right of the Medication History
+  opens a panel of the three filters, the button counting those applied
+  ("Filter, 2 set", a badge of 2 — the Dispense Statuses chosen as one, and
+  each end of a range one each): a Dispense Status multi-select, listing
+  PENDING, DISPENSED and UNCOLLECTED in that order, as the NUMC page's closed
+  sets are (`MultiSelectPicker`), none chosen being no filter; and a from–to
+  range of `<input type="datetime-local">` for Start Date and for End Date,
+  each end a Singapore minute, optional and inclusive, and holding no value
+  until a time is chosen beside the date. Nothing in the panel is sent until
+  Apply, or Enter in a date-time; Reset clears every filter and applies none.
+  A from-end after its to-end is refused beneath its range — "The End Date
+  from-date must not be after its to-date." — the panel stays open and nothing
+  is read. The panel is the other histories' (`HistoryFilterPopover`), with
+  the Medication History's own fields.
+- **Filters and sort read from the first page.** Applying filters, or any
+  change of sort, reads the history from its first page, the filters combined
+  with AND and with the current sort. Both live on the page alone: neither
+  reaches the URL or the browser history, and a new patient in context starts
+  with neither.
 - **No patient in context** — the tab holds none, or the source holds no
   patient under its id (its `404`, our `404`) — shows "No patient in context",
   as the other history pages do, and reads no Medication Records or reports
   nothing.
 - **A patient with no Medication Records** — a `200` with `total: 0` — shows
-  "No medication records".
+  "No medication records". A filter matching none of a patient's Medication
+  Records shows "No medication records match the filters".
 - **The source failing** shows "Couldn't load medication records" on the page's
   error line, and Try again, which reads the same page again.
 
@@ -256,10 +337,46 @@ patients, and the backend's tests read the same stub files
   the canned stubs do not name, with an empty searchset, `total: 0`.
 - **Any other well-formed id** is the source's `404` (`medication-not-found`).
 
-Each canned page is matched on the page the backend sends — `_count=5`,
-`_offset` and `_total=accurate` — so a read of any other page falls to the
-fallback. Each fixture is selectable on Patient Search (the name search `tan`
-finds both Tans).
+Each canned page is matched on the whole query the backend sends — `_count=5`,
+`_offset`, `_total=accurate`, the `_sort`, and each filter pinned to its exact
+value or, where the read uses none, to absent — so a filtered or sorted read
+never falls to an unfiltered page, and a read of any other page, filter or
+sort falls to the fallback. Each fixture is selectable on Patient Search (the
+name search `tan` finds both Tans).
+
+**Sort and filter stubs.** Beside the pages in the source's order:
+
+- **The sorts**, of Tan Wei Ming's six Medication Records, the first page of
+  five, `total: 6`: `medication-tan-wei-ming-by-start-date`
+  (`_sort=start-date`, earliest first: the sixth, fifth and fourth, then the
+  first and third, which start on the same minute, ahead of the second, a
+  minute later), `-by-start-date-descending` (`-start-date`: the second, then
+  the first and third, the fourth and the fifth), and `-by-end-date` and
+  `-by-end-date-descending` (`end-date`, the same two orders). Each tie keeps
+  the source's own order.
+- **The filters**, of Tan Hui Min's four, in the source's order:
+  `medication-tan-hui-min-pending`, `-dispensed` and `-uncollected`
+  (`dispense-status`, one code each, `total` 1, 2 and 1);
+  `-pending-or-uncollected` (`dispense-status=pending,uncollected`,
+  `total: 2`); `-started-to-14-jul-2025-16-20`
+  (`startDateTo=2025-07-14T16:20`, sent as
+  `start-date=lt2025-07-14T08:21:00Z`, `total: 3`, her second record, which
+  starts on that minute, among them); `-started-from-1-mar-2026-10-00`
+  (`startDateFrom=2026-03-01T10:00`, `start-date=ge2026-03-01T02:00:00Z`, her
+  first record alone, which starts on that minute and is given in UTC);
+  `-ended-2025` (`endDateFrom=2025-01-01T00:00` and
+  `endDateTo=2025-12-31T23:59`, `total: 2`); `-dispensed-started-from-2025`
+  (DISPENSED and `startDateFrom=2025-01-01T00:00`, two filters combined,
+  `total: 1`); and `-ended-to-2023` (`endDateTo=2023-12-31T23:59`, which no
+  Medication Record matches, `total: 0`).
+
+`PatientSourceFixturesTests` holds each sorted or filtered stub to the
+Medication Records its filters select from the history in the source's order,
+each date-time compared as an instant, in the order its sort names, ties as
+the source keeps them, and the stubs to covering each direction of each
+date-time, every filter and each Dispense Status, a from-bound and a to-bound
+each on a record's exact minute and keeping it, filters combined and a filter
+matching none.
 
 **Fault stubs.** Beside them, each failure above has a stub of its own under a
 well-formed patient id no fixture uses, `fault-medication-<failure>`, marked

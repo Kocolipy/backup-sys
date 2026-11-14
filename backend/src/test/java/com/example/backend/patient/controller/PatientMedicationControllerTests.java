@@ -21,6 +21,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.http.HttpMethod;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -36,7 +37,8 @@ import tools.jackson.databind.json.JsonMapper;
  * ({@link PatientSourceStubs}) — with the app-wide exception handler its failures go to: one page
  * of the patient's Medication History as plain JSON, its codes as the source sent them, its
  * date-times ISO-8601 with their offsets, and no field at all for an optional element the
- * source lacks, or the application API's {@code ApiError}. The filter chain is not in this
+ * source lacks, with each filter and the sort the read takes passed to the source, or the
+ * application API's {@code ApiError}. The filter chain is not in this
  * MockMvc: the Permission and its backstop are {@code AuthorizationContractTests}', the paging
  * coercion {@code PagingContractTests}', and what is logged and audited over the real chain
  * {@code MedicationHistoryIntegrationTests}'.
@@ -166,15 +168,217 @@ class PatientMedicationControllerTests {
                         "_total", List.of("accurate")));
     }
 
-    /** No sort and no filter reach the source: a parameter the read does not take is not passed on. */
+    /**
+     * Each filter reaches the source as its own search parameter: one case for each request
+     * parameter, beside the parameter the source is sent for it. A repeated Dispense Status is one
+     * parameter, its codes joined by commas — FHIR's OR — in its closed set's order; each end of a
+     * date-time range, a Singapore minute, is the instant it names in UTC, the to-end the first
+     * instant after its minute.
+     */
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', textBlock = """
+        dispenseStatus | pending                  | dispense-status | pending
+        dispenseStatus | uncollected,dispensed    | dispense-status | dispensed,uncollected
+        startDateFrom  | 2026-10-18T17:31         | start-date      | ge2026-10-18T09:31:00Z
+        startDateTo    | 2026-10-18T17:30         | start-date      | lt2026-10-18T09:31:00Z
+        endDateFrom    | 2025-01-01T00:00         | end-date        | ge2024-12-31T16:00:00Z
+        endDateTo      | 2025-12-31T23:59         | end-date        | lt2025-12-31T16:00:00Z
+        """)
+    void eachFilterIsForwardedToTheSource(String parameter, String value, String forwarded,
+            String sent) throws Exception {
+        MockHttpServletRequestBuilder filtered = records(TAN_WEI_MING);
+        for (String each : value.split(",")) {
+            filtered.param(parameter, each);
+        }
+
+        assertThat(reading(filtered).getStatus()).isEqualTo(200);
+        assertThat(sentToTheSource(TAN_WEI_MING)).containsEntry(forwarded, List.of(sent));
+    }
+
+    /** Every filter at once reaches the source, combined, with the sort. */
     @Test
-    void aParameterTheReadDoesNotTakeIsNotSentToTheSource() throws Exception {
-        assertThat(reading(records(TAN_WEI_MING).param("sortBy", "startDate")
-                .param("dispenseStatus", "pending")).getStatus()).isEqualTo(200);
+    void everyFilterAndTheSortAreForwardedTogether() throws Exception {
+        assertThat(reading(records(TAN_WEI_MING).param("dispenseStatus", "dispensed")
+                .param("startDateFrom", "2025-01-01T00:00").param("startDateTo", "2026-10-18T17:30")
+                .param("endDateTo", "2026-12-31T23:59")
+                .param("sortBy", "endDate").param("sortOrder", "descending")).getStatus())
+                .isEqualTo(200);
+
+        assertThat(sentToTheSource(TAN_WEI_MING)).isEqualTo(Map.ofEntries(
+                Map.entry("dispense-status", List.of("dispensed")),
+                Map.entry("start-date", List.of("ge2024-12-31T16:00:00Z", "lt2026-10-18T09:31:00Z")),
+                Map.entry("end-date", List.of("lt2026-12-31T16:00:00Z")),
+                Map.entry("_sort", List.of("-end-date")),
+                Map.entry("_offset", List.of("0")),
+                Map.entry("_count", List.of("5")),
+                Map.entry("_total", List.of("accurate"))));
+    }
+
+    /**
+     * The sort reaches the source as its {@code _sort}, the column alone: a column with no
+     * direction ascending. With no column — whatever the direction says — no {@code _sort} is
+     * sent, and the order is the source's own.
+     */
+    @ParameterizedTest
+    @CsvSource(nullValues = "-", value = {
+        "startDate, ascending, start-date",
+        "startDate, descending, -start-date",
+        "endDate, ascending, end-date",
+        "endDate, descending, -end-date",
+        "startDate, -, start-date",
+        "-, descending, -",
+        "-, -, -"})
+    void theSortIsForwardedToTheSource(String sortBy, String sortOrder, String sent)
+            throws Exception {
+        MockHttpServletRequestBuilder sorted = records(TAN_WEI_MING);
+        if (sortBy != null) {
+            sorted.param("sortBy", sortBy);
+        }
+        if (sortOrder != null) {
+            sorted.param("sortOrder", sortOrder);
+        }
+
+        assertThat(reading(sorted).getStatus()).isEqualTo(200);
+        assertThat(sentToTheSource(TAN_WEI_MING).get("_sort"))
+                .isEqualTo(sent == null ? null : List.of(sent));
+    }
+
+    /**
+     * A filter or sort the read cannot take is the application API's {@code 400}, refused before
+     * the source is called: a column but the two date-times — another history's dates, the
+     * Dispense Status and the Dispensary among them — a direction but ascending or descending, a
+     * Dispense Status outside its closed set — a label, another case, a Java constant's name or
+     * another set's code — and an end that is no date-time to the minute
+     * {@code YYYY-MM-DDTHH:mm}: a date alone, seconds, an offset, or a day or minute the
+     * calendar or the clock has not.
+     */
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', textBlock = """
+        sortBy         | issueDate
+        sortBy         | dispenseStatus
+        sortBy         | dispensary
+        sortBy         | start-date
+        sortBy         | StartDate
+        sortOrder      | asc
+        sortOrder      | DESCENDING
+        dispenseStatus | PENDING
+        dispenseStatus | Dispensed
+        dispenseStatus | UNCOLLECTED
+        dispenseStatus | collected
+        dispenseStatus | fit
+        startDateFrom  | 2026-10-18
+        startDateTo    | 2026-10-18T17:30:00
+        endDateFrom    | 2026-10-18T17:30+08:00
+        endDateTo      | 2026-10-18T09:30Z
+        endDateTo      | 2026-02-30T10:00
+        startDateFrom  | 2026-10-18T24:00
+        startDateTo    | 18/10/2026 17:30
+        """)
+    void aFilterOrSortTheReadCannotTakeIsRefused(String parameter, String value)
+            throws Exception {
+        MockHttpServletResponse response =
+                reading(records(TAN_WEI_MING).param(parameter, value));
+
+        assertThat(body(response)).isEqualTo(apiError(400, "invalid-request",
+                "The request could not be read or did not pass validation."));
+        SOURCE.verify(0, anyRequestedFor(anyUrl()));
+    }
+
+    /** One Dispense Status outside its set among good ones refuses the whole read. */
+    @Test
+    void oneCodeOutsideItsSetAmongOthersIsRefused() throws Exception {
+        assertThat(reading(records(TAN_WEI_MING).param("dispenseStatus", "pending")
+                .param("dispenseStatus", "collected")).getStatus()).isEqualTo(400);
+        SOURCE.verify(0, anyRequestedFor(anyUrl()));
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "startDateFrom, startDateTo, 2026-10-18T17:31, 2026-10-18T17:30",
+        "endDateFrom, endDateTo, 2026-01-01T00:00, 2025-12-31T23:59"})
+    void aFromEndAfterItsToEndIsRefused(String fromParameter, String toParameter, String from,
+            String to) throws Exception {
+        MockHttpServletResponse response = reading(records(TAN_WEI_MING)
+                .param(fromParameter, from).param(toParameter, to));
+
+        assertThat(body(response)).isEqualTo(apiError(400, "invalid-request",
+                "The request could not be read or did not pass validation."));
+        SOURCE.verify(0, anyRequestedFor(anyUrl()));
+    }
+
+    /** A range one minute long is a from-end equal to its to-end, and is no refusal. */
+    @Test
+    void aRangeOfOneMinuteIsRead() throws Exception {
+        assertThat(reading(records(TAN_WEI_MING)
+                .param("startDateFrom", "2026-10-18T17:30").param("startDateTo", "2026-10-18T17:30"))
+                .getStatus()).isEqualTo(200);
+        assertThat(sentToTheSource(TAN_WEI_MING)).containsEntry("start-date",
+                List.of("ge2026-10-18T09:30:00Z", "lt2026-10-18T09:31:00Z"));
+    }
+
+    /** A blank Dispense Status, as an empty field sends one, is no filter on its column. */
+    @Test
+    void aBlankDispenseStatusIsNoFilter() throws Exception {
+        assertThat(reading(records(TAN_WEI_MING).param("dispenseStatus", "")).getStatus())
+                .isEqualTo(200);
         assertThat(sentToTheSource(TAN_WEI_MING)).isEqualTo(Map.of(
                 "_offset", List.of("0"),
                 "_count", List.of("5"),
                 "_total", List.of("accurate")));
+    }
+
+    /**
+     * The Dispensary and the free text take no filter, and a Medication Record has no Issue
+     * Date, Outcome or Status: a filter on one is no parameter the read takes, and nothing of it
+     * is passed on.
+     */
+    @Test
+    void aFilterOnAColumnMedicationDoesNotFilterIsNotSentToTheSource() throws Exception {
+        assertThat(reading(records(TAN_WEI_MING).param("dispensary", "khatib-camp")
+                .param("medication", "Paracetamol").param("prescribingDoctor", "Dr Lim Wei Jie")
+                .param("issueDateFrom", "2024-01-01").param("outcome", "fit")
+                .param("status", "active")).getStatus()).isEqualTo(200);
+        assertThat(sentToTheSource(TAN_WEI_MING)).isEqualTo(Map.of(
+                "_offset", List.of("0"),
+                "_count", List.of("5"),
+                "_total", List.of("accurate")));
+    }
+
+    /** The ids of a page's Medication Records, in its order, beside its total. */
+    private List<Object> idsAndTotal(MockHttpServletResponse response) throws Exception {
+        JsonNode page = body(response);
+        return List.of(page.at("/totalResults").asInt(),
+                page.at("/records").valueStream().map(record -> record.at("/id").asString())
+                        .toList());
+    }
+
+    /**
+     * A canned sorted read, answered in the order the source sorted it by the whole date-time:
+     * latest Start Date first, the record a minute later ahead of the two tied.
+     */
+    @Test
+    void aSortedReadIsAnsweredInTheSourcesSortedOrder() throws Exception {
+        assertThat(idsAndTotal(reading(records(TAN_WEI_MING).param("sortBy", "startDate")
+                .param("sortOrder", "descending"))))
+                .containsExactly(6, List.of("medication-tan-wei-ming-2",
+                        "medication-tan-wei-ming-1", "medication-tan-wei-ming-3",
+                        "medication-tan-wei-ming-4", "medication-tan-wei-ming-5"));
+    }
+
+    /** A canned filtered read, answered as the source filtered it: a to-minute kept whole. */
+    @Test
+    void aFilteredReadIsAnsweredAsTheSourceFilteredIt() throws Exception {
+        assertThat(idsAndTotal(reading(records("dev-patient-05")
+                .param("startDateTo", "2025-07-14T16:20"))))
+                .containsExactly(3, List.of("medication-tan-hui-min-2",
+                        "medication-tan-hui-min-3", "medication-tan-hui-min-4"));
+    }
+
+    @Test
+    void aFilterTheSourceMatchesNothingWithIsAnEmptyPage() throws Exception {
+        assertThat(body(reading(records("dev-patient-05").param("endDateTo", "2023-12-31T23:59"))))
+                .isEqualTo(json.readTree("""
+                        {"totalResults": 0, "startIndex": 1, "records": []}"""));
     }
 
     @Test

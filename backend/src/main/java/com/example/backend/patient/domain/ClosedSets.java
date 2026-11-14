@@ -6,7 +6,7 @@ import java.util.TreeSet;
 
 /**
  * How a history's filter holds the codes of a closed set it narrows by ({@link FfiFilter},
- * {@link NumcFilter}): in the set's own order, whatever order they were given in, so the same
+ * {@link NumcFilter}, {@link MedicationFilter}): in the set's own order, whatever order they were given in, so the same
  * filters always reach the source alike.
  */
 final class ClosedSets {

@@ -485,8 +485,9 @@ class ApiContractFixtureTests {
 
     private static void patientMedication(List<Fixture> all) {
         add(all, "patient Medication History: a page of Medication Records, one with no optional"
-                + " element, a patient with none, an unknown patient, a malformed id, a paging"
-                + " value that is no integer, a failing source, and the refusals", t -> {
+                + " element, sorted and filtered, a patient with none, an unknown patient, a"
+                + " malformed id, a filter or sort it cannot take, a failing source, and the"
+                + " refusals", t -> {
             // patient:read is a Group's to confer, as for an FFI History. The histories are the
             // patient source's mock's (PatientSourceStubs): Tan Wei Ming has six Medication
             // Records, Tan Hui Min four, the last with no optional element, Siti Nurhaliza binte
@@ -497,11 +498,22 @@ class ApiContractFixtureTests {
             String path = "/api/patient-medication/eq081-VQEgP8drUUqCWzHfw3";
             t.expect(t.get(path + "?count=5").cookie(user), 200);
             t.expect(t.get("/api/patient-medication/dev-patient-05?count=5").cookie(user), 200);
+            t.expect(t.get(path + "?count=5&sortBy=startDate&sortOrder=descending").cookie(user),
+                    200);
+            t.expect(t.get("/api/patient-medication/dev-patient-05?count=5"
+                    + "&dispenseStatus=pending&dispenseStatus=uncollected").cookie(user), 200);
+            t.expect(t.get("/api/patient-medication/dev-patient-05?count=5"
+                    + "&startDateTo=2025-07-14T16:20").cookie(user), 200);
             t.expect(t.get("/api/patient-medication/erXuFYUfucBZaryVksYEcMg3?count=5")
                     .cookie(user), 200);
             t.expect(t.get("/api/patient-medication/not-a-uuid").cookie(user), 404);
             t.expect(t.get("/api/patient-medication/" + "x".repeat(65)).cookie(user), 400);
             t.expect(t.get(path + "?count=five").cookie(user), 400);
+            t.expect(t.get(path + "?dispenseStatus=collected").cookie(user), 400);
+            t.expect(t.get(path + "?sortBy=issueDate").cookie(user), 400);
+            t.expect(t.get(path + "?endDateTo=2025-12-31").cookie(user), 400);
+            t.expect(t.get(path + "?startDateFrom=2025-07-14T16:21&startDateTo=2025-07-14T16:20")
+                    .cookie(user), 400);
             // The patient source failing: the mock's Medication fault stub answering 503.
             t.expect(t.get("/api/patient-medication/fault-medication-server-error").cookie(user),
                     502);

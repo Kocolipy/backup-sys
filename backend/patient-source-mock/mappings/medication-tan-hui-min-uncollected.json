@@ -1,0 +1,67 @@
+{
+  "name": "Medication History: Tan Hui Min's UNCOLLECTED Medication Records",
+  "request": {
+    "method": "GET",
+    "urlPath": "/Patient/dev-patient-05/medication",
+    "queryParameters": {
+      "_count": {
+        "equalTo": "5"
+      },
+      "_offset": {
+        "equalTo": "0"
+      },
+      "_total": {
+        "equalTo": "accurate"
+      },
+      "_sort": {
+        "absent": true
+      },
+      "dispense-status": {
+        "equalTo": "uncollected"
+      },
+      "start-date": {
+        "absent": true
+      },
+      "end-date": {
+        "absent": true
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/fhir+json"
+    },
+    "jsonBody": {
+      "resourceType": "Bundle",
+      "id": "medication-history",
+      "type": "searchset",
+      "total": 1,
+      "link": [
+        {
+          "relation": "self",
+          "url": "http://127.0.0.1:8104/Patient/dev-patient-05/medication?dispense-status=uncollected&_offset=0&_count=5"
+        }
+      ],
+      "entry": [
+        {
+          "resource": {
+            "resourceType": "Medication",
+            "id": "medication-tan-hui-min-2",
+            "medication": "Lignocaine 2% gel",
+            "route": "Topical",
+            "quantity": "1 tube",
+            "dispenseStatus": "uncollected",
+            "startDate": "2025-07-14T16:20:00+08:00",
+            "endDate": "2025-07-21T16:20:00+08:00",
+            "dispensary": "mandai-hill-camp",
+            "prescribingDoctor": "Dr Nur Aisyah binte Rahman"
+          },
+          "search": {
+            "mode": "match"
+          }
+        }
+      ]
+    }
+  }
+}
