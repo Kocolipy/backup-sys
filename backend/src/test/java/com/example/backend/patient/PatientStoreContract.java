@@ -4,6 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.backend.paging.domain.PageRequest;
 import com.example.backend.patient.domain.AdministrativeGender;
+import com.example.backend.patient.domain.ArmcBoard;
+import com.example.backend.patient.domain.ArmcBoardType;
+import com.example.backend.patient.domain.ArmcHistory;
+import com.example.backend.patient.domain.ArmcOutcome;
 import com.example.backend.patient.domain.DateRange;
 import com.example.backend.patient.domain.Ffi;
 import com.example.backend.patient.domain.FfiHigherAuthority;
@@ -43,9 +47,10 @@ import org.junit.jupiter.params.provider.MethodSource;
  * development fixtures and its canned searches ({@code patient-source-mock/mappings},
  * /docs/domain/patient.md): each fixture by its id, exactly as the domain holds it, nothing under
  * an id no fixture holds, each documented search's page of matches with its Last visits and
- * its total, in the source's own order, and each FFI History and NUMC History the mock serves
- * (/docs/domain/ffi.md, "The patient source's FFI fixtures"; /docs/domain/numc.md, "The patient
- * source's NUMC fixtures"), page by page.
+ * its total, in the source's own order, and each FFI History, NUMC History and ARMC History the
+ * mock serves (/docs/domain/ffi.md, "The patient source's FFI fixtures"; /docs/domain/numc.md,
+ * "The patient source's NUMC fixtures"; /docs/domain/armc.md, "The patient source's ARMC
+ * fixtures"), page by page.
  *
  * <p>The expected Patients are written out here, not derived from the stub files, so a stub that
  * drifted from the fixture table in /docs/domain/patient.md fails here.
@@ -473,5 +478,65 @@ public abstract class PatientStoreContract {
     @Test
     void a_well_formed_id_no_patient_is_held_under_has_no_numc_history() {
         assertThat(numcHistory("not-a-uuid", FIRST_FIVE)).isEmpty();
+    }
+
+    // ---- the ARMC Histories ----------------------------------------------------------------
+
+    private static ArmcBoard armc(String id, ArmcOutcome outcome, String startDate,
+            String endDate, String medicalOfficer1, String medicalOfficer2) {
+        return new ArmcBoard(id, ArmcBoardType.ACES, outcome, LocalDate.parse(startDate),
+                endDate == null ? null : LocalDate.parse(endDate), medicalOfficer1,
+                medicalOfficer2);
+    }
+
+    /** Tan Wei Ming's two ARMC Boards, in the source's own order. */
+    @Test
+    void tan_wei_mings_armc_history_is_his_two_boards_in_the_sources_order() {
+        assertThat(patients().findArmcHistory(new PatientId("eq081-VQEgP8drUUqCWzHfw3"),
+                FIRST_FIVE)).contains(new ArmcHistory(2, List.of(
+                        armc("armc-tan-wei-ming-1", ArmcOutcome.FIT, "2024-01-01", "2024-02-10",
+                                "Medical Officer 1", "Medical Officer 2"),
+                        armc("armc-tan-wei-ming-2", ArmcOutcome.UNFIT, "2020-11-21",
+                                "2021-04-02", "Medical Officer 3", "Medical Officer 4"))));
+    }
+
+    /** Tan Hui Min's seven ARMC Boards over two pages of five: the first page, its first open. */
+    @Test
+    void tan_hui_mins_armc_history_reads_its_first_page_of_five_of_seven() {
+        assertThat(patients().findArmcHistory(new PatientId("dev-patient-05"), FIRST_FIVE))
+                .contains(new ArmcHistory(7, List.of(
+                        armc("armc-tan-hui-min-1", ArmcOutcome.FIT, "2025-06-02", null,
+                                "Dr Lim Wei Jie", "Dr Nur Aisyah binte Rahman"),
+                        armc("armc-tan-hui-min-2", ArmcOutcome.UNFIT, "2024-09-16",
+                                "2024-11-29", "Dr Rajesh Kumar", "Dr Lim Wei Jie"),
+                        armc("armc-tan-hui-min-3", ArmcOutcome.FIT, "2023-12-04", "2023-12-04",
+                                "Dr Chen Mei Ling", "Dr Rajesh Kumar"),
+                        armc("armc-tan-hui-min-4", ArmcOutcome.FIT, "2023-03-13", "2023-05-08",
+                                "Dr Nur Aisyah binte Rahman", "Dr Chen Mei Ling"),
+                        armc("armc-tan-hui-min-5", ArmcOutcome.UNFIT, "2022-07-25",
+                                "2022-10-03", "Dr Lim Wei Jie", "Dr Chen Mei Ling"))));
+    }
+
+    @Test
+    void tan_hui_mins_armc_history_reads_its_last_two_on_the_second_page() {
+        assertThat(patients().findArmcHistory(new PatientId("dev-patient-05"), NEXT_FIVE))
+                .contains(new ArmcHistory(7, List.of(
+                        armc("armc-tan-hui-min-6", ArmcOutcome.FIT, "2021-10-11", "2021-12-20",
+                                "Dr Rajesh Kumar", "Dr Nur Aisyah binte Rahman"),
+                        armc("armc-tan-hui-min-7", ArmcOutcome.UNFIT, "2020-05-18",
+                                "2020-08-24", "Dr Chen Mei Ling", "Dr Lim Wei Jie"))));
+    }
+
+    /** Siti Nurhaliza binte Ahmad, as every fixture but those two, has no ARMC Board. */
+    @Test
+    void a_patient_with_no_armc_boards_reads_an_empty_history_of_none() {
+        assertThat(patients().findArmcHistory(new PatientId("erXuFYUfucBZaryVksYEcMg3"),
+                FIRST_FIVE)).contains(new ArmcHistory(0, List.of()));
+    }
+
+    /** {@code not-a-uuid} is a well-formed id the source holds no patient under. */
+    @Test
+    void a_well_formed_id_no_patient_is_held_under_has_no_armc_history() {
+        assertThat(patients().findArmcHistory(new PatientId("not-a-uuid"), FIRST_FIVE)).isEmpty();
     }
 }

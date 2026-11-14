@@ -1,7 +1,7 @@
 ---
 type: Configuration Reference
 title: Patient source
-description: APP_PATIENT_SOURCE_BASE_URL and APP_PATIENT_SOURCE_READ_TIMEOUT — the in-house patient source the backend reads every Patient, FFI History and NUMC History from and passes every Patient search to, its required base URL, its timeouts, and the local WireMock mock compose runs on 127.0.0.1:8104, with its fixtures, its search set, its FFI Histories and its NUMC Histories.
+description: APP_PATIENT_SOURCE_BASE_URL and APP_PATIENT_SOURCE_READ_TIMEOUT — the in-house patient source the backend reads every Patient, FFI History, NUMC History and ARMC History from and passes every Patient search to, its required base URL, its timeouts, and the local WireMock mock compose runs on 127.0.0.1:8104, with its fixtures, its search set, its FFI Histories, its NUMC Histories and its ARMC Histories.
 tags: [patient, configuration]
 ---
 
@@ -15,11 +15,12 @@ tags: [patient, configuration]
 The backend reads every Patient from the in-house patient source at
 `GET {base}/Patient/{id}`, passes every Patient search to it at
 `GET {base}/Patient?…`, as FHIR R4, and reads every patient's FFI History at
-`GET {base}/Patient/{id}/ffi?…` and NUMC History at
-`GET {base}/Patient/{id}/numc?…`, on every read, with no cache and **no
+`GET {base}/Patient/{id}/ffi?…`, NUMC History at
+`GET {base}/Patient/{id}/numc?…` and ARMC History at
+`GET {base}/Patient/{id}/armc?…`, on every read, with no cache and **no
 credential** (ADR 0014, ADR 0018, ADR 0019; `/docs/domain/patient.md`, "The
 in-house patient source" and "Patient search"; `/docs/domain/ffi.md`;
-`/docs/domain/numc.md`). The SPA never reaches it.
+`/docs/domain/numc.md`; `/docs/domain/armc.md`). The SPA never reaches it.
 
 - **Required, with no default.** `application.yaml` names
   `app.patient-source.base-url` as `${APP_PATIENT_SOURCE_BASE_URL}` with no
@@ -177,6 +178,34 @@ seconds), `server-error` (`503`), `unexpected-status` (`400`),
 
 ```bash
 curl -s 'http://127.0.0.1:8104/Patient/eq081-VQEgP8drUUqCWzHfw3/numc?_offset=0&_count=5&_total=accurate'
+```
+
+### The ARMC Histories
+
+The backend reads a patient's ARMC History at
+`GET {base}/Patient/{id}/armc?_offset=…&_count=…&_total=accurate`, on the same
+base URL, client and timeouts, with no sort and no filter (ADR 0019, D6;
+`/docs/domain/armc.md`, "The source contract"). The mock answers a FHIR-shaped
+searchset of `ARMC` objects, matched on `_count=5`, `_offset` and
+`_total=accurate`:
+
+| Stub file                 | Read                                                      | Answers                                                  |
+| ------------------------- | --------------------------------------------------------- | -------------------------------------------------------- |
+| `armc-tan-wei-ming`       | `eq081-VQEgP8drUUqCWzHfw3`                                | Tan Wei Ming's 2 ARMC Boards, `total: 2`                 |
+| `armc-tan-hui-min-page-1` | `dev-patient-05`                                          | 5 of `total: 7`, the first still open, with no `endDate` |
+| `armc-tan-hui-min-page-2` | `dev-patient-05`, `_offset=5`                             | the last 2 of `total: 7`                                 |
+| `armc-fallback`           | any other read of a development fixture's, lower priority | no entry, `total: 0`                                     |
+| `armc-not-found`          | any other well-formed id, lowest priority                 | `404`, as a read by id of an unknown id                  |
+
+Beside them, `fault-armc-<failure>` answers each failure of an ARMC read under a
+patient id of its own — `unreachable` (the connection reset), `slow` (after 7
+seconds), `server-error` (`503`), `unexpected-status` (`400`),
+`not-a-searchset`, `no-total`, `no-id`, `invalid-id`, `no-outcome`,
+`no-medical-officer-2`, `unknown-board-type`, `unknown-outcome`,
+`end-before-start` and `end-date-not-to-the-day`.
+
+```bash
+curl -s 'http://127.0.0.1:8104/Patient/eq081-VQEgP8drUUqCWzHfw3/armc?_offset=0&_count=5&_total=accurate'
 ```
 
 A change to a stub file changes the backend's patient tests' fixtures too: they

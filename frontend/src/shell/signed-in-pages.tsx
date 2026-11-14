@@ -2,6 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   ClipboardCheck,
   IdCard,
+  Plane,
   ScrollText,
   Search as SearchIcon,
   Settings,
@@ -14,6 +15,8 @@ import type { Permission } from "@/auth/api";
 import { HOME_PATH, PATIENT_SEARCH_PAGE_PATH, SETTINGS_PATH } from "@/auth/session-route";
 import { Accounts } from "@/pages/accounts/accounts";
 import { ADMINISTRATION_PERMISSIONS } from "@/pages/accounts/accounts-api";
+import { ArmcBoards } from "@/pages/armc/armc";
+import { ARMC_HISTORY } from "@/pages/armc/armc-api";
 import { Audit } from "@/pages/audit/audit";
 import { AUDIT_EVENTS } from "@/pages/audit/audit-api";
 import { ChangePassword } from "@/pages/change-password/change-password";
@@ -151,6 +154,21 @@ const NUMC_PAGE: SignedInPage = {
 };
 
 /**
+ * ARMC: the ARMC History of the patient in context, linked after NUMC for a
+ * session holding `patient:read`, the Permission its read requires, and
+ * guarded by it as NUMC is, so a session without it is routed to its landing
+ * page and offered no link. Its title heads the page.
+ */
+const ARMC_PAGE: SignedInPage = {
+  element: <ArmcBoards />,
+  homeLink: "ARMC",
+  icon: Plane,
+  path: "/armc",
+  permissions: [ARMC_HISTORY.permission],
+  title: "ARMC",
+};
+
+/**
  * Every signed-in page, declared once: `App` turns each entry into a route
  * (behind its Permission guard, if any), `SignedInShell` reads the matching
  * entry for the title, and links each entry
@@ -162,6 +180,7 @@ export const SIGNED_IN_PAGES: readonly SignedInPage[] = [
   HOME_PAGE,
   FFI_PAGE,
   NUMC_PAGE,
+  ARMC_PAGE,
   ...PAGES_BEYOND_HOME,
   SETTINGS_PAGE,
 ];

@@ -223,10 +223,12 @@ page, which quoted the path.
   arrived whole and could not be read), or the domain rule a Patient broke
   (`no-nric`, `no-official-name`, `no-name-text`, `no-gender`,
   `no-birth-date`, `birth-date-not-to-the-day`, `another-resource`), or the
-  rule a page of a Patient search, an FFI History or a NUMC History broke
-  (listed in `/docs/domain/patient.md`, "Logging", `/docs/domain/ffi.md`,
-  "Failures", and `/docs/domain/numc.md`, "Failures", whose every rule a NUMC
-  Record breaks is a reason naming NUMC) — and its
+  rule a page of a Patient search, an FFI History, a NUMC History or an ARMC
+  History broke (listed in `/docs/domain/patient.md`, "Logging",
+  `/docs/domain/ffi.md`, "Failures", `/docs/domain/numc.md`, "Failures", whose
+  every rule a NUMC Record breaks is a reason naming NUMC, and
+  `/docs/domain/armc.md`, "Failures", whose every rule an ARMC Board breaks is
+  a reason naming ARMC, `armc-end-before-start` among them) — and its
   `error.category` is the fault's own, as ADR 0014's table has it for an
   outbound call: `network` and `server` with no follow-up, `data` with one.
 - A `4xx` that Spring MVC maps (validation, an unreadable body, an unbindable

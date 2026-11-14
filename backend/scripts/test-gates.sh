@@ -142,11 +142,13 @@ FAST_GATE=(
   com/example/backend/paging/domain/PageRequestTests
   com/example/backend/patient/PatientSourceFixturesTests
   com/example/backend/patient/application/PatientSearchServiceTests
+  com/example/backend/patient/controller/PatientArmcControllerTests
   com/example/backend/patient/controller/PatientControllerTests
   com/example/backend/patient/controller/PatientFfiControllerTests
   com/example/backend/patient/controller/PatientNumcControllerTests
   com/example/backend/patient/controller/PatientSearchControllerTests
   com/example/backend/patient/controller/PatientR5ConformanceTests
+  com/example/backend/patient/domain/ArmcBoardTests
   com/example/backend/patient/domain/FfiFilterTests
   com/example/backend/patient/domain/FfiTests
   com/example/backend/patient/domain/HistorySortTests
@@ -160,6 +162,7 @@ FAST_GATE=(
   com/example/backend/patient/domain/SortOrderTests
   com/example/backend/patient/domain/SourceCodeTests
   com/example/backend/patient/infrastructure/http/PatientSourceAdapterContractTests
+  com/example/backend/patient/infrastructure/http/PatientSourceArmcAdapterTests
   com/example/backend/patient/infrastructure/http/PatientSourceFfiAdapterTests
   com/example/backend/patient/infrastructure/http/PatientSourceNumcAdapterTests
   com/example/backend/patient/infrastructure/http/PatientSourceSearchAdapterTests

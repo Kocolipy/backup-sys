@@ -527,6 +527,48 @@ What a NUMC Record found, one of FIT, UNFIT, WAIVER GRANTED and WAIVER
 REJECTED. A set of its own, apart from an FFI's Outcome.
 _Avoid_: NUMC result, a bare "Outcome" (that is an FFI's)
 
+### ARMC
+
+Rules: [armc](docs/domain/armc.md). Decided in ADR 0019 (D6).
+
+**ARMC (Aeromedical Centre)**:
+The centre that sits a patient's aeromedical fitness boards. The Patient source
+holds each board it sat; the service holds none.
+
+**ARMC Board**:
+One aeromedical fitness board a patient sat, as the Patient source holds it
+for the ARMC: its ARMC Board Type, ARMC Outcome, Start Date, End Date, Medical
+Officer #1 and Medical Officer #2, every one required but the End Date. Read
+from the Patient source on every read, never held, and not audited.
+_Avoid_: ARMC Record, ARMC Assessment, aeromedical record
+
+**ARMC History**:
+Every ARMC Board of one patient, in the Patient source's own order, read five
+to a page on the ARMC page (`/armc`) for the patient in context, by a session
+holding `patient:read`.
+_Avoid_: ARMC list, ARMC log
+
+**ARMC Board Type**:
+The kind of aeromedical fitness board an ARMC Board is, one of a closed set:
+ACES.
+
+**ARMC Outcome**:
+What an ARMC Board found, one of FIT and UNFIT. A set of its own, apart from an
+FFI's Outcome and a NUMC Record's NUMC Outcome.
+_Avoid_: ARMC result, a bare "Outcome" (that is an FFI's)
+
+**Start Date**:
+The calendar date an ARMC Board started.
+
+**End Date**:
+The calendar date an ARMC Board ended, on or after its Start Date. An ARMC
+Board may have none: it is still open.
+
+**Medical Officer #1** / **Medical Officer #2**:
+The two Medical Officers who sat on an ARMC Board, each a name as the Patient
+source gives it. Neither is linked to a User or an account.
+_Avoid_: MO 1 / MO 2, board member
+
 ### Database
 
 Decided in ADR 0013. Every term here names a database principal, never the

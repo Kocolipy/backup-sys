@@ -245,10 +245,12 @@ The single most-used primitive — status pills everywhere
 takes one of five variants, each drawn from a theme token pair — the four soft
 pairs under Colors, or `muted` — and never from a raw Tailwind colour:
 
-- `success` — a positive state: an audit event's Success, an active User.
+- `success` — a positive state: an audit event's Success, an active User, a
+  FIT Outcome (an FFI's, NUMC's, ARMC's).
 - `warning` — a state to notice that is no fault: a Deactivated User, which
   reads "Deactivated", never "inactive".
-- `danger` — a refusal or failure: an audit event's Failure.
+- `danger` — a refusal or failure: an audit event's Failure, an UNFIT Outcome
+  (an FFI's, NUMC's, ARMC's).
 - `info` — a granted waiver: NUMC's WAIVER GRANTED.
 - `muted` — a state set aside, neither good nor bad: an FFI's Inactive, NUMC's
   WAIVER REJECTED.

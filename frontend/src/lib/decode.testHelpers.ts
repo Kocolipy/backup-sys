@@ -27,8 +27,9 @@ async function refused(decode: (value: unknown) => unknown, value: unknown, mess
  * The decoder sweep: one decoder's contract, applied to every field so no
  * field's check can be dropped unnoticed — a valid body decodes to itself, an
  * extra field is dropped (or, for a `strict` decoder, refused), every field the
- * type has is checked, and each field missing or wrong-typed, and a body that
- * is no object, is refused. Each refusal names the field that failed, so a
+ * type has is checked, and each field missing — but an `optional` one, which a
+ * body may leave out — or wrong-typed, and a body that is no object, is
+ * refused. Each refusal names the field that failed, so a
  * case cannot pass on some other field's failure. `decode` may answer a
  * promise, as a decoder of a `Response` does.
  */
@@ -37,8 +38,16 @@ export function describeDecoder(
   decode: (value: unknown) => unknown,
   valid: object,
   fields: Record<string, FieldCheck>,
-  { strict = false }: { strict?: boolean } = {},
+  {
+    optional = [],
+    strict = false,
+  }: {
+    /** The fields the wire may leave out: a body without one decodes without it. */
+    optional?: readonly string[];
+    strict?: boolean;
+  } = {},
 ) {
+  const required = Object.entries(fields).filter(([key]) => !optional.includes(key));
   describe(name, () => {
     it("decodes a valid body to the same value", async () => {
       expect(await decode(valid)).toStrictEqual(valid);
@@ -60,12 +69,15 @@ export function describeDecoder(
       expect(Object.keys(fields).sort()).toStrictEqual(Object.keys(valid).sort());
     });
 
-    it.each(Object.entries(fields))(
-      "refuses a body missing %s",
-      async (key, [, expected, missing]) => {
-        await refused(decode, without(valid, key), `${name}.${key} is not ${missing ?? expected}`);
-      },
-    );
+    it.each(required)("refuses a body missing %s", async (key, [, expected, missing]) => {
+      await refused(decode, without(valid, key), `${name}.${key} is not ${missing ?? expected}`);
+    });
+
+    if (optional.length > 0) {
+      it.each(optional)("decodes a body without its optional %s, adding nothing", async (key) => {
+        expect(await decode(without(valid, key))).toStrictEqual(without(valid, key));
+      });
+    }
 
     it.each(Object.entries(fields))("refuses a wrong-typed %s", async (key, [value, expected]) => {
       await refused(decode, { ...valid, [key]: value }, `${name}.${key} is not ${expected}`);

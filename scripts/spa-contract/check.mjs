@@ -79,6 +79,15 @@ export const VOCABULARIES = [
     module: "src/pages/numc/numc-api.ts",
     mirrors: [{ pointer: `#/components/schemas/${schema}`, relation: "equal" }],
   })),
+  // An ARMC Board's two closed sets, each carried as its code.
+  ...[
+    ["ARMC_BOARD_TYPES", "ArmcBoardType"],
+    ["ARMC_OUTCOMES", "ArmcOutcome"],
+  ].map(([set, schema]) => ({
+    set,
+    module: "src/pages/armc/armc-api.ts",
+    mirrors: [{ pointer: `#/components/schemas/${schema}`, relation: "equal" }],
+  })),
 ];
 
 /** The node a `#/a/b` JSON pointer names in `doc`, or `undefined`. */

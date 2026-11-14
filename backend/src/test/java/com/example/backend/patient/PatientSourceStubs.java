@@ -141,6 +141,16 @@ public final class PatientSourceStubs {
         return historyFaults(NUMC);
     }
 
+    /**
+     * Every ARMC fault stub: a stub whose {@code metadata.fault} names the failure an ARMC History
+     * read meets there — no answer, a status but a {@code 200} or a {@code 404}, or a page the
+     * service cannot hold — under a well-formed patient id no fixture uses
+     * (/docs/domain/armc.md, "The patient source's ARMC fixtures").
+     */
+    public static List<FaultStub> armcFaults() {
+        return historyFaults(ARMC);
+    }
+
     /** The fault stubs of the history under {@code segment}, each under its patient id. */
     private static List<FaultStub> historyFaults(String segment) {
         return faultStubs(segment).stream()
@@ -153,54 +163,45 @@ public final class PatientSourceStubs {
                 .toList();
     }
 
+    /** Every FFI History stub that is no fault stub ({@link #histories}). */
+    public static List<HistoryStub> ffiHistories() {
+        return histories(FFI);
+    }
+
+    /** Every NUMC History stub that is no fault stub ({@link #histories}). */
+    public static List<HistoryStub> numcHistories() {
+        return histories(NUMC);
+    }
+
+    /** Every ARMC History stub that is no fault stub ({@link #histories}). */
+    public static List<HistoryStub> armcHistories() {
+        return histories(ARMC);
+    }
+
     /**
-     * Every FFI History stub that is no fault stub: each development fixture's page as the patient
-     * id it answers for — or, for a stub answering several, its pattern — beside the searchset it
-     * serves.
+     * Every stub of the history under {@code segment} that is no fault stub: each development
+     * fixture's page as the patient id it answers for — or, for a stub answering several, its
+     * pattern — beside the searchset it serves.
      */
-    public static List<FfiStub> ffiHistories() {
+    private static List<HistoryStub> histories(String segment) {
         return stubs()
                 .filter(stub -> stub.at(FAULT).isMissingNode())
                 .filter(stub -> stub.at("/response/status").asInt() == 200)
-                .filter(stub -> path(stub).endsWith(FFI))
-                .map(stub -> new FfiStub(path(stub), stub.at("/request/queryParameters"),
+                .filter(stub -> path(stub).endsWith(segment))
+                .map(stub -> new HistoryStub(path(stub), stub.at("/request/queryParameters"),
                         stub.at("/response/jsonBody")))
                 .toList();
     }
 
     /**
-     * One FFI History stub.
+     * One stub of an FFI, NUMC or ARMC History.
      *
-     * @param path   the path it answers, {@code /Patient/{id}/ffi}, or the pattern of paths
+     * @param path   the path it answers, {@code /Patient/{id}/ffi}, {@code /numc} or {@code /armc},
+     *               or the pattern of paths
      * @param query  its query parameters' matchers — missing for one answering any page
      * @param bundle the searchset it answers
      */
-    public record FfiStub(String path, JsonNode query, JsonNode bundle) {
-    }
-
-    /**
-     * Every NUMC History stub that is no fault stub: each development fixture's page as the
-     * patient id it answers for — or, for a stub answering several, its pattern — beside the
-     * searchset it serves.
-     */
-    public static List<NumcStub> numcHistories() {
-        return stubs()
-                .filter(stub -> stub.at(FAULT).isMissingNode())
-                .filter(stub -> stub.at("/response/status").asInt() == 200)
-                .filter(stub -> path(stub).endsWith(NUMC))
-                .map(stub -> new NumcStub(path(stub), stub.at("/request/queryParameters"),
-                        stub.at("/response/jsonBody")))
-                .toList();
-    }
-
-    /**
-     * One NUMC History stub.
-     *
-     * @param path   the path it answers, {@code /Patient/{id}/numc}, or the pattern of paths
-     * @param query  its query parameters' matchers — missing for one answering any page
-     * @param bundle the searchset it answers
-     */
-    public record NumcStub(String path, JsonNode query, JsonNode bundle) {
+    public record HistoryStub(String path, JsonNode query, JsonNode bundle) {
     }
 
     /** The path a stub matches, exactly or by pattern. */
@@ -229,8 +230,11 @@ public final class PatientSourceStubs {
     /** The NUMC History's path segment, after the patient's id. */
     private static final String NUMC = "/numc";
 
+    /** The ARMC History's path segment, after the patient's id. */
+    private static final String ARMC = "/armc";
+
     /** Every history's path segment. */
-    private static final List<String> HISTORIES = List.of(FFI, NUMC);
+    private static final List<String> HISTORIES = List.of(FFI, NUMC, ARMC);
 
     /**
      * One fault stub.
@@ -264,7 +268,7 @@ public final class PatientSourceStubs {
          * an error body's diagnostics.
          */
         public List<String> ffiValues() {
-            return recordValues();
+            return recordValues(DATED_RECORD);
         }
 
         /**
@@ -272,14 +276,28 @@ public final class PatientSourceStubs {
          * dates, and an error body's diagnostics.
          */
         public List<String> numcValues() {
-            return recordValues();
+            return recordValues(DATED_RECORD);
         }
 
-        /** Each of a history page's records' id and dates, and an error body's diagnostics. */
-        private List<String> recordValues() {
+        /**
+         * What a record of an ARMC History's failure must not quote: each ARMC Board's id, dates
+         * and Medical Officers, and an error body's diagnostics.
+         */
+        public List<String> armcValues() {
+            return recordValues(List.of("id", "startDate", "endDate", "medicalOfficer1",
+                    "medicalOfficer2"));
+        }
+
+        /** The fields of an FFI or a NUMC Record no record of a failure may quote. */
+        private static final List<String> DATED_RECORD = List.of("id", "issueDate", "expiryDate");
+
+        /**
+         * Each of a history page's records' {@code fields}, and an error body's diagnostics.
+         */
+        private List<String> recordValues(List<String> fields) {
             JsonNode body = response.at("/jsonBody");
             List<String> values = new ArrayList<>();
-            body.at("/entry").forEach(entry -> List.of("id", "issueDate", "expiryDate").forEach(
+            body.at("/entry").forEach(entry -> fields.forEach(
                     field -> entry.at("/resource").optional(field)
                             .ifPresent(value -> values.add(value.asString()))));
             body.at("/issue").forEach(issue -> values.add(issue.at("/diagnostics").asString()));

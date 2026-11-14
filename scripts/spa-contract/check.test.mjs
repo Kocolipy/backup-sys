@@ -59,6 +59,8 @@ function document() {
         FfiStatus: { type: "string", enum: ["active", "inactive"] },
         NumcType: { type: "string", enum: ["submariner", "diving"] },
         NumcOutcome: { type: "string", enum: ["fit", "waiver-granted"] },
+        ArmcBoardType: { type: "string", enum: ["aces"] },
+        ArmcOutcome: { type: "string", enum: ["fit"] },
       },
     },
   };
@@ -95,6 +97,10 @@ function spa() {
       "src/pages/numc/numc-api.ts": {
         NUMC_TYPES: ["submariner", "diving"],
         NUMC_OUTCOMES: ["fit", "waiver-granted"],
+      },
+      "src/pages/armc/armc-api.ts": {
+        ARMC_BOARD_TYPES: ["aces"],
+        ARMC_OUTCOMES: ["fit"],
       },
       "src/pages/audit/audit-api.ts": {
         AUDIT_OPERATIONS: ["LOGIN_SUCCESS", "LOGOUT"],
@@ -226,6 +232,23 @@ describe("the SPA's vocabularies", () => {
       "the SPA gains a NUMC Outcome",
       (s) => s.modules["src/pages/numc/numc-api.ts"].NUMC_OUTCOMES.push("request-waiver"),
       `NUMC_OUTCOMES (src/pages/numc/numc-api.ts) has "request-waiver", which #/components/schemas/NumcOutcome lacks`,
+    ],
+    // One case per ARMC set, for the same reason.
+    ...[
+      ["ARMC_BOARD_TYPES", "ArmcBoardType", "aircrew"],
+      ["ARMC_OUTCOMES", "ArmcOutcome", "unfit"],
+    ].map(([set, schema, code]) => [
+      `the document gains a code of ${schema}`,
+      (_spa, doc) => schemas(doc)[schema].enum.push(code),
+      `${set} (src/pages/armc/armc-api.ts) lacks "${code}", which #/components/schemas/${schema} has`,
+    ]),
+    [
+      "the SPA gains an ARMC Outcome",
+      (s) =>
+        s.modules["src/pages/armc/armc-api.ts"].ARMC_OUTCOMES.push(
+          "waiver-granted",
+        ),
+      `ARMC_OUTCOMES (src/pages/armc/armc-api.ts) has "waiver-granted", which #/components/schemas/ArmcOutcome lacks`,
     ],
     [
       "the SPA gains an FFI Status",
@@ -469,6 +492,7 @@ export const TOKENS: PagedDeclaration<
       "src/pages/audit/audit-api.ts",
       "src/pages/ffi/ffi-api.ts",
       "src/pages/numc/numc-api.ts",
+      "src/pages/armc/armc-api.ts",
       "src/pages/tokens/tokens-api.ts",
     ]);
   });

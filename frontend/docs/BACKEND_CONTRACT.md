@@ -129,6 +129,16 @@ change, when the backend side moves. What the SPA has to honour:
   records" with Try again; the `{patientId}` is sent through
   `encodeURIComponent`, and each NUMC Record is decoded strictly, a Status
   among the fields it refuses.
+- **A patient's ARMC History answers plain JSON too, on the same terms.**
+  `GET /api/patient-armc/{patientId}` answers `application/json`, every
+  refusal or fault an `ApiError`. Its declaration (`ARMC_HISTORY`,
+  `src/pages/armc/armc-api.ts`) opts in to `absentOnNotFound`, so the `404` is
+  the ARMC page's "No patient in context" and the `502` "Couldn't load ARMC
+  records" with Try again; the `{patientId}` is sent through
+  `encodeURIComponent`, and each ARMC Board is decoded strictly. A board still
+  open has no `endDate` at all — the backend leaves it out rather than sending
+  `null` — and the decoder reads its absence as the board still open, and a
+  `null` one as a failure.
 - **A request body is JSON, and says so.** The backend reads a request body
   through its JSON converter only, so a body sent without
   `Content-Type: application/json` is refused `415` before any handler runs.
@@ -222,9 +232,10 @@ change, when the backend side moves. What the SPA has to honour:
   is not bound to the EHR context: `patient:read` reads any id. It is a
   delegatable Permission the backend issues only to a member of a Group that
   carries it and to the Superuser; a session without it is refused the read,
-  the Patient search, the FFI History and the NUMC History `403`, so the SPA
+  the Patient search, the FFI History, the NUMC History and the ARMC History
+  `403`, so the SPA
   sends none of them — the Patient card says the account has no access to
-  patients, and none of Patient Search, FFI or NUMC is linked or opened.
+  patients, and none of Patient Search, FFI, NUMC or ARMC is linked or opened.
 - **Logout answers `Clear-Site-Data: "cache","cookies","storage"`** — on a
   successful logout and on the `401` a logout with no live session gets. The
   browser drops anything in `localStorage` / `sessionStorage` along with the

@@ -33,11 +33,13 @@ tags:
       `PatientSourceAdapter`. A mock of it matches, filters, orders, pages and
       counts over its own Patients.
 
-      - **Four reads.** `GET /Patient/{id}` for one Patient (Home's Patient
+      - **Five reads.** `GET /Patient/{id}` for one Patient (Home's Patient
         card), `GET /Patient?…` for a Patient search (the Search page),
         `GET /Patient/{id}/ffi?…` for a patient's FFI History (the FFI page,
-        ADR 0019) and `GET /Patient/{id}/numc?…` for a patient's NUMC History
-        (the NUMC page, ADR 0019, D5). The backend calls nothing else on it.
+        ADR 0019), `GET /Patient/{id}/numc?…` for a patient's NUMC History
+        (the NUMC page, ADR 0019, D5) and `GET /Patient/{id}/armc?…` for a
+        patient's ARMC History (the ARMC page, ADR 0019, D6). The backend calls
+        nothing else on it.
       - **FHIR R4 JSON, no credential.** Every call is a `GET` with
         `Accept: application/fhir+json` and no `Authorization` header; the
         source answers `application/fhir+json` (`application/json` is read too).
@@ -601,6 +603,112 @@ paths:
               schema:
                 $ref: "#/components/schemas/OperationOutcome"
 
+  /Patient/{id}/armc:
+    servers:
+      - url: http://127.0.0.1:8104
+        description: The patient source's local mock (`APP_PATIENT_SOURCE_BASE_URL`)
+    get:
+      tags: [patient-source]
+      operationId: readArmcHistory
+      summary: Read one page of a patient's ARMC History — paged and counted by the source
+      description: |
+        The patient's ARMC Boards (Aeromedical Centre), each one aeromedical
+        fitness board the patient sat. The backend sends no sort and no
+        filter: it shows the page and the total the source answers, in the
+        source's own order. A mock must therefore:
+
+        1. **Count** every ARMC Board the patient has: that number is the
+           Bundle's `total`, whatever the page.
+        2. **Order** them in the source's own stable default order.
+        3. **Page**: skip `_offset` boards, then return up to `_count` of
+           them as the Bundle's entries, in that order.
+
+        **Worked example** over the fixtures: Tan Hui Min (`dev-patient-05`)
+        has seven ARMC Boards, so `total` is 7 on both of her pages of five,
+        the first board still open; Tan Wei Ming has two, on one page.
+
+        **FHIR-shaped paging only, not FHIR-conformant**: the answer borrows a
+        searchset `Bundle`'s shape, and its entries are a custom `ARMC` object
+        no FHIR version defines (ADR 0019, D6). The id is sent unchanged, as a
+        read by id's is. The backend sends parameters in no guaranteed order;
+        read them by name.
+
+        **Fault ids (mock only).** Beside the fixtures' histories, the mock
+        serves one failure of this read per patient id, none a fixture's:
+
+        | Id                                   | Answers                                                           |
+        | ------------------------------------ | ----------------------------------------------------------------- |
+        | `fault-armc-unreachable`             | the connection reset, no answer                                   |
+        | `fault-armc-slow`                    | `200` page after 7 seconds, past the read timeout                 |
+        | `fault-armc-server-error`            | `503`                                                             |
+        | `fault-armc-unexpected-status`       | `400`                                                             |
+        | `fault-armc-not-a-searchset`         | `200` Bundle of `type: collection`                                |
+        | `fault-armc-no-total`                | `200` searchset with no `total`                                   |
+        | `fault-armc-no-id`                   | `200` page whose ARMC Board has no `id`                           |
+        | `fault-armc-invalid-id`              | `200` page whose ARMC Board's `id` is outside FHIR's id grammar   |
+        | `fault-armc-no-outcome`              | `200` page whose ARMC Board has no `outcome`                      |
+        | `fault-armc-no-medical-officer-2`    | `200` page whose ARMC Board has no `medicalOfficer2`              |
+        | `fault-armc-unknown-board-type`      | `200` page whose ARMC Board's `boardType` is no code of its set   |
+        | `fault-armc-unknown-outcome`         | `200` page whose ARMC Board's `outcome` is a NUMC Outcome's       |
+        | `fault-armc-end-before-start`        | `200` page whose ARMC Board's `endDate` is before its `startDate` |
+        | `fault-armc-end-date-not-to-the-day` | `200` page whose ARMC Board's `endDate` is a month                |
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[A-Za-z0-9\-.]{1,64}$'
+          example: eq081-VQEgP8drUUqCWzHfw3
+        - name: _count
+          in: query
+          required: true
+          description: |
+            The most ARMC Boards to return. The ARMC page asks for 5; the
+            backend passes through anything from 0 to 200. `0` returns no
+            entries and still the full `total`.
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 200
+          example: 5
+        - name: _offset
+          in: query
+          required: true
+          description: |
+            How many ARMC Boards to skip, in the source's order: the page's
+            `startIndex - 1`. An offset at or past `total` returns no entries
+            and still the full `total`, never an error.
+          schema:
+            type: integer
+            minimum: 0
+          example: 0
+        - name: _total
+          in: query
+          required: true
+          description: Always `accurate`. The `total` must be the exact count, never an estimate.
+          schema:
+            type: string
+            const: accurate
+      responses:
+        "200":
+          description: |
+            One page of the patient's ARMC Boards, in the source's order, and
+            the `total` of every one. A patient with none is this answer with
+            `total: 0`.
+          content:
+            application/fhir+json:
+              schema:
+                $ref: "#/components/schemas/ArmcSearchset"
+        "404":
+          description: |
+            No patient under the id: the one answer the backend reads as "no
+            patient", shown as "No patient in context". The body is never read.
+          content:
+            application/fhir+json:
+              schema:
+                $ref: "#/components/schemas/OperationOutcome"
+
   /__admin/health:
     servers:
       - url: http://127.0.0.1:8104
@@ -962,6 +1070,102 @@ components:
           description: To the day. The backend derives nothing from it.
           type: string
           format: date
+
+    ArmcSearchset:
+      description: |
+        A FHIR-R4-shaped searchset `Bundle` of `ARMC` objects: FHIR's paging
+        shape, not a FHIR-conformant Bundle. The backend reads `resourceType`,
+        `type`, `total` and each entry's `resource`; `id`, `link` and `fullUrl`
+        may be sent and are ignored.
+      type: object
+      required: [resourceType, type, total]
+      properties:
+        resourceType:
+          const: Bundle
+        type:
+          const: searchset
+        total:
+          description: Every ARMC Board the patient has, not the page's size. Required.
+          type: integer
+          minimum: 0
+        entry:
+          description: The page, at most `_count` long. Left out, or empty, for a page with none.
+          type: array
+          items:
+            type: object
+            required: [resource]
+            properties:
+              resource:
+                $ref: "#/components/schemas/Armc"
+      example:
+        resourceType: Bundle
+        type: searchset
+        total: 2
+        entry:
+          - resource:
+              resourceType: ARMC
+              id: armc-tan-wei-ming-1
+              boardType: aces
+              outcome: fit
+              startDate: "2024-01-01"
+              endDate: "2024-02-10"
+              medicalOfficer1: Medical Officer 1
+              medicalOfficer2: Medical Officer 2
+
+    Armc:
+      description: |
+        One ARMC Board, a custom object no FHIR version defines, of flat
+        fields. Every field is required but `endDate`, which is left out for a
+        board still open, and each rule below is one the backend holds: a board
+        breaking any is the source failing, the backend's `502`. A field it
+        does not read is ignored.
+      type: object
+      required:
+        [
+          resourceType,
+          id,
+          boardType,
+          outcome,
+          startDate,
+          medicalOfficer1,
+          medicalOfficer2,
+        ]
+      properties:
+        resourceType:
+          const: ARMC
+        id:
+          description: The ARMC Board's own id, in FHIR's id grammar.
+          type: string
+          pattern: '^[A-Za-z0-9\-.]{1,64}$'
+        boardType:
+          description: The ARMC Board Type, by its code.
+          type: string
+          enum: [aces]
+        outcome:
+          description: |
+            The ARMC Outcome, by its code: a set of its own, so a NUMC
+            Outcome's `waiver-granted` or an FFI's `request-waiver` is outside
+            it.
+          type: string
+          enum: [fit, unfit]
+        startDate:
+          description: To the day.
+          type: string
+          format: date
+        endDate:
+          description: |
+            To the day, and on or after `startDate`. Left out for a board still
+            open; never `null`.
+          type: string
+          format: date
+        medicalOfficer1:
+          description: Medical Officer #1's name, as the source holds it. Not blank.
+          type: string
+          minLength: 1
+        medicalOfficer2:
+          description: Medical Officer #2's name, as the source holds it. Not blank.
+          type: string
+          minLength: 1
 
     OperationOutcome:
       description: The `404`'s body, which the backend never reads.

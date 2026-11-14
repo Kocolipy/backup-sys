@@ -31,11 +31,17 @@ const isInteger = (value: unknown): value is number => Number.isInteger(value);
  * Typed reads of one object's fields. Every read is strict: a missing field is
  * a wrong type like any other, and a nullable read accepts `null` but not an
  * absent key, because the backend serialises its `null`s rather than dropping
- * them.
+ * them. The one exception is an optional read, for a field the backend's
+ * contract leaves out when it has no value.
  */
 export interface ObjectReader {
   string(key: string): string;
   nullableString(key: string): string | null;
+  /**
+   * A string the backend leaves out when it has none: an absent key is
+   * `undefined`, and a key that is there must hold a string, never `null`.
+   */
+  optionalString(key: string): string | undefined;
   boolean(key: string): boolean;
   nullableBoolean(key: string): boolean | null;
   integer(key: string): number;
@@ -96,6 +102,7 @@ export function readObject(value: unknown, what: string): ObjectReader {
   return {
     string,
     nullableString: (key) => (value[key] === null ? null : string(key)),
+    optionalString: (key) => (key in value ? string(key) : undefined),
     boolean,
     nullableBoolean: (key) => (value[key] === null ? null : boolean(key)),
     integer,
