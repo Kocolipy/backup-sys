@@ -1,9 +1,9 @@
 package com.example.backend.patient.controller;
 
-import static com.example.backend.patient.controller.QueryParameters.DATE;
 import static com.example.backend.patient.controller.QueryParameters.codes;
-import static com.example.backend.patient.controller.QueryParameters.historySort;
 import static com.example.backend.patient.controller.QueryParameters.range;
+import static com.example.backend.patient.controller.QueryParameters.sort;
+import static com.example.backend.patient.controller.QueryParameters.sortOrder;
 import static com.example.backend.patient.controller.QueryParameters.spelled;
 
 import com.example.backend.paging.domain.PageParameter;
@@ -12,6 +12,7 @@ import com.example.backend.patient.application.FfiHistoryService;
 import com.example.backend.patient.controller.PatientController.NoSuchPatientException;
 import com.example.backend.patient.domain.FfiFilter;
 import com.example.backend.patient.domain.FfiHigherAuthority;
+import com.example.backend.patient.domain.FfiHistory;
 import com.example.backend.patient.domain.FfiOutcome;
 import com.example.backend.patient.domain.HistorySort;
 import com.example.backend.patient.domain.FfiStatus;
@@ -20,9 +21,7 @@ import com.example.backend.patient.domain.MedicalCentre;
 import com.example.backend.patient.domain.PatientId;
 import com.example.backend.patient.domain.SortOrder;
 import com.example.backend.patient.domain.SourceCode;
-import java.time.LocalDate;
 import java.util.List;
-import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.WebDataBinder;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -51,12 +50,13 @@ import org.springframework.web.bind.annotation.RestController;
  *       and {@code submittingMc}, each repeated for any of its codes, and {@code status}, to the
  *       members of their closed sets, matched exactly by code ({@link SourceCode#ofParameter}); and
  *       {@code issueDateFrom}, {@code issueDateTo}, {@code expiryDateFrom} and
- *       {@code expiryDateTo} to calendar dates, {@code YYYY-MM-DD}. Any other value is the
- *       binder's {@code 400}, as a from-date after its to-date is.
- *   <li>{@code sortBy} binds to {@code issueDate} or {@code expiryDate} and {@code sortOrder} to
- *       {@code ascending} or {@code descending} ({@link HistorySort}); any other value is the binder's
- *       {@code 400}. A {@code sortOrder} with no {@code sortBy} names a direction for no order, and
- *       the read takes the source's own.
+ *       {@code expiryDateTo} to the ranges over the history's two date columns
+ *       ({@link FfiHistory#DATE_COLUMNS}), calendar dates, {@code YYYY-MM-DD}. Any other value is
+ *       a {@code 400}, as a from-date after its to-date is.
+ *   <li>{@code sortBy} names one of those columns, {@code issueDate} or {@code expiryDate}, and
+ *       {@code sortOrder} binds to {@code ascending} or {@code descending} ({@link HistorySort});
+ *       any other value is a {@code 400}. A {@code sortOrder} with no {@code sortBy} names a
+ *       direction for no order, and the read takes the source's own.
  *   <li>{@code startIndex} and {@code count} are read by ADR 0017's rules
  *       ({@link PageRequest#of}): coerced, never refused, and a value that is no integer is the
  *       binder's {@code 400}. The page they come to is the source's to read — {@code count=0} and
@@ -81,16 +81,17 @@ public class PatientFfiController {
     }
 
     /**
-     * The Status and the sort read in their own spellings, which are no Java constant's name
-     * ({@link QueryParameters#historySort} for the sort): a value that spells none of them fails
-     * the binding, as a malformed date does. The repeated codes are read by
+     * The Status and the sort's direction read in their own spellings, which are no Java
+     * constant's name ({@link QueryParameters#sortOrder} for the direction): a value that spells
+     * none of them fails the binding. The column, the dates and the repeated codes are read by
+     * {@link QueryParameters#sort}, {@link QueryParameters#range} and
      * {@link QueryParameters#codes}.
      */
     @InitBinder
     void spellings(WebDataBinder binder) {
         binder.registerCustomEditor(FfiStatus.class,
                 spelled(code -> SourceCode.ofParameter(FfiStatus.class, code)));
-        historySort(binder);
+        sortOrder(binder);
     }
 
     @GetMapping("/{patientId}")
@@ -98,25 +99,26 @@ public class PatientFfiController {
     public FfiHistoryPage read(@PathVariable PatientId patientId,
             @RequestParam(required = false) List<String> type,
             @RequestParam(required = false) List<String> outcome,
-            @RequestParam(required = false) @DateTimeFormat(pattern = DATE) LocalDate issueDateFrom,
-            @RequestParam(required = false) @DateTimeFormat(pattern = DATE) LocalDate issueDateTo,
-            @RequestParam(required = false) @DateTimeFormat(pattern = DATE)
-            LocalDate expiryDateFrom,
-            @RequestParam(required = false) @DateTimeFormat(pattern = DATE) LocalDate expiryDateTo,
+            @RequestParam(required = false) DateParameter issueDateFrom,
+            @RequestParam(required = false) DateParameter issueDateTo,
+            @RequestParam(required = false) DateParameter expiryDateFrom,
+            @RequestParam(required = false) DateParameter expiryDateTo,
             @RequestParam(required = false) List<String> higherAuthority,
             @RequestParam(required = false) List<String> submittingMc,
             @RequestParam(required = false) FfiStatus status,
-            @RequestParam(required = false) HistorySort.IssueOrExpiry sortBy,
+            @RequestParam(required = false) String sortBy,
             @RequestParam(required = false) SortOrder sortOrder,
             @RequestParam(required = false) PageParameter startIndex,
             @RequestParam(required = false) PageParameter count) {
         FfiFilter filter = new FfiFilter(codes(FfiType.class, type),
-                codes(FfiOutcome.class, outcome), range(issueDateFrom, issueDateTo),
-                range(expiryDateFrom, expiryDateTo),
+                codes(FfiOutcome.class, outcome),
+                range(FfiHistory.ISSUE_DATE, issueDateFrom, issueDateTo),
+                range(FfiHistory.EXPIRY_DATE, expiryDateFrom, expiryDateTo),
                 codes(FfiHigherAuthority.class, higherAuthority),
                 codes(MedicalCentre.class, submittingMc), status);
+        HistorySort sort = sort(FfiHistory.DATE_COLUMNS, sortBy, sortOrder);
         PageRequest page = PageRequest.of(startIndex, count);
-        return ffis.find(patientId, filter, HistorySort.of(sortBy, sortOrder), page)
+        return ffis.find(patientId, filter, sort, page)
                 .map(history -> FfiHistoryPage.of(history, page.startIndex()))
                 .orElseThrow(NoSuchPatientException::new);
     }

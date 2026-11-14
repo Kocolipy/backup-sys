@@ -294,6 +294,15 @@ class PatientArmcControllerTests {
                 .containsEntry("end-date", List.of("ge2024-02-10", "le2024-02-10"));
     }
 
+    /** A date given twice is read as one value, its first, as any one-valued parameter is. */
+    @Test
+    void aDateGivenTwiceIsReadAsItsFirst() throws Exception {
+        assertThat(reading(boards(TAN_WEI_MING)
+                .param("startDateFrom", "2023-01-01", "2024-01-01")).getStatus()).isEqualTo(200);
+        assertThat(sentToTheSource(TAN_WEI_MING))
+                .containsEntry("start-date", List.of("ge2023-01-01"));
+    }
+
     /** A blank Outcome, as an empty field sends one, is no filter on its column. */
     @Test
     void aBlankOutcomeIsNoFilter() throws Exception {

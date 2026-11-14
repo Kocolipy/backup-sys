@@ -1,8 +1,8 @@
 package com.example.backend.patient.controller;
 
-import static com.example.backend.patient.controller.QueryParameters.DATE;
-import static com.example.backend.patient.controller.QueryParameters.historySort;
 import static com.example.backend.patient.controller.QueryParameters.range;
+import static com.example.backend.patient.controller.QueryParameters.sort;
+import static com.example.backend.patient.controller.QueryParameters.sortOrder;
 import static com.example.backend.patient.controller.QueryParameters.spelled;
 
 import com.example.backend.paging.domain.PageParameter;
@@ -10,13 +10,12 @@ import com.example.backend.paging.domain.PageRequest;
 import com.example.backend.patient.application.ArmcHistoryService;
 import com.example.backend.patient.controller.PatientController.NoSuchPatientException;
 import com.example.backend.patient.domain.ArmcFilter;
+import com.example.backend.patient.domain.ArmcHistory;
 import com.example.backend.patient.domain.ArmcOutcome;
 import com.example.backend.patient.domain.HistorySort;
 import com.example.backend.patient.domain.PatientId;
 import com.example.backend.patient.domain.SortOrder;
 import com.example.backend.patient.domain.SourceCode;
-import java.time.LocalDate;
-import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.WebDataBinder;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -44,12 +43,13 @@ import org.springframework.web.bind.annotation.RestController;
  *   <li>The filters bind to typed values: {@code outcome}, one code, to a member of the ARMC
  *       Outcome, matched exactly by code ({@link SourceCode#ofParameter}); and
  *       {@code startDateFrom}, {@code startDateTo}, {@code endDateFrom} and {@code endDateTo} to
+ *       the ranges over the history's two date columns ({@link ArmcHistory#DATE_COLUMNS}),
  *       calendar dates, {@code YYYY-MM-DD}. Any other value is a {@code 400}, as a from-date
  *       after its to-date is, and as an Outcome given twice is.
- *   <li>{@code sortBy} binds to {@code startDate} or {@code endDate} and {@code sortOrder} to
- *       {@code ascending} or {@code descending} ({@link HistorySort}); any other value is the
- *       binder's {@code 400}. A {@code sortOrder} with no {@code sortBy} names a direction for no
- *       order, and the read takes the source's own.
+ *   <li>{@code sortBy} names one of those columns, {@code startDate} or {@code endDate}, and
+ *       {@code sortOrder} binds to {@code ascending} or {@code descending} ({@link HistorySort});
+ *       any other value is a {@code 400}. A {@code sortOrder} with no {@code sortBy} names a
+ *       direction for no order, and the read takes the source's own.
  *   <li>{@code startIndex} and {@code count} are read by ADR 0017's rules
  *       ({@link PageRequest#of}): coerced, never refused, and a value that is no integer is the
  *       binder's {@code 400}. The page they come to is the source's to read — {@code count=0} and
@@ -74,33 +74,36 @@ public class PatientArmcController {
     }
 
     /**
-     * The Outcome and the sort read in their own spellings, which are no Java constant's name
-     * ({@link QueryParameters#historySort} for the sort): a value that spells none of them fails
-     * the binding, as a malformed date does.
+     * The Outcome and the sort's direction read in their own spellings, which are no Java
+     * constant's name ({@link QueryParameters#sortOrder} for the direction): a value that spells
+     * none of them fails the binding. The column and the dates are read by
+     * {@link QueryParameters#sort} and {@link QueryParameters#range}.
      */
     @InitBinder
     void spellings(WebDataBinder binder) {
         binder.registerCustomEditor(ArmcOutcome.class,
                 spelled(code -> SourceCode.ofParameter(ArmcOutcome.class, code)));
-        historySort(binder);
+        sortOrder(binder);
     }
 
     @GetMapping("/{patientId}")
     @PreAuthorize("hasAuthority('patient:read')")
     public ArmcHistoryPage read(@PathVariable PatientId patientId,
             @RequestParam(required = false) ArmcOutcome outcome,
-            @RequestParam(required = false) @DateTimeFormat(pattern = DATE) LocalDate startDateFrom,
-            @RequestParam(required = false) @DateTimeFormat(pattern = DATE) LocalDate startDateTo,
-            @RequestParam(required = false) @DateTimeFormat(pattern = DATE) LocalDate endDateFrom,
-            @RequestParam(required = false) @DateTimeFormat(pattern = DATE) LocalDate endDateTo,
-            @RequestParam(required = false) HistorySort.StartOrEnd sortBy,
+            @RequestParam(required = false) DateParameter startDateFrom,
+            @RequestParam(required = false) DateParameter startDateTo,
+            @RequestParam(required = false) DateParameter endDateFrom,
+            @RequestParam(required = false) DateParameter endDateTo,
+            @RequestParam(required = false) String sortBy,
             @RequestParam(required = false) SortOrder sortOrder,
             @RequestParam(required = false) PageParameter startIndex,
             @RequestParam(required = false) PageParameter count) {
-        ArmcFilter filter = new ArmcFilter(outcome, range(startDateFrom, startDateTo),
-                range(endDateFrom, endDateTo));
+        ArmcFilter filter = new ArmcFilter(outcome,
+                range(ArmcHistory.START_DATE, startDateFrom, startDateTo),
+                range(ArmcHistory.END_DATE, endDateFrom, endDateTo));
+        HistorySort sort = sort(ArmcHistory.DATE_COLUMNS, sortBy, sortOrder);
         PageRequest page = PageRequest.of(startIndex, count);
-        return boards.find(patientId, filter, HistorySort.of(sortBy, sortOrder), page)
+        return boards.find(patientId, filter, sort, page)
                 .map(history -> ArmcHistoryPage.of(history, page.startIndex()))
                 .orElseThrow(NoSuchPatientException::new);
     }

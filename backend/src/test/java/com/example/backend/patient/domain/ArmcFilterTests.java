@@ -15,28 +15,28 @@ import org.junit.jupiter.api.Test;
 class ArmcFilterTests {
 
     private static final DateRange OF_2023 =
-            new DateRange(LocalDate.of(2023, 1, 1), LocalDate.of(2023, 12, 31));
+            new DateRange<>(LocalDate.of(2023, 1, 1), LocalDate.of(2023, 12, 31));
 
     @Test
     void noFilterNarrowsNothing() {
         assertThat(Arrays.asList(ArmcFilter.NONE.outcome(), ArmcFilter.NONE.startDate(),
-                ArmcFilter.NONE.endDate())).containsExactly(null, DateRange.ANY, DateRange.ANY);
+                ArmcFilter.NONE.endDate())).containsExactly(null, DateRange.any(), DateRange.any());
     }
 
     /** Every filter at once, each kept as it was given. */
     @Test
     void everyFilterIsKept() {
-        ArmcFilter filter = new ArmcFilter(ArmcOutcome.UNFIT, OF_2023, DateRange.ANY);
+        ArmcFilter filter = new ArmcFilter(ArmcOutcome.UNFIT, OF_2023, DateRange.any());
 
         assertThat(Arrays.asList(filter.outcome(), filter.startDate(), filter.endDate()))
-                .containsExactly(ArmcOutcome.UNFIT, OF_2023, DateRange.ANY);
+                .containsExactly(ArmcOutcome.UNFIT, OF_2023, DateRange.any());
     }
 
     @Test
     void eachRangeIsRequiredItsAbsenceBeingAny() {
-        assertThatThrownBy(() -> new ArmcFilter(null, null, DateRange.ANY))
+        assertThatThrownBy(() -> new ArmcFilter(null, null, DateRange.any()))
                 .isInstanceOf(NullPointerException.class).hasMessage("startDate");
-        assertThatThrownBy(() -> new ArmcFilter(null, DateRange.ANY, null))
+        assertThatThrownBy(() -> new ArmcFilter(null, DateRange.any(), null))
                 .isInstanceOf(NullPointerException.class).hasMessage("endDate");
     }
 }

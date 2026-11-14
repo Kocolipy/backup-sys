@@ -167,13 +167,14 @@ class PatientSourceArmcAdapterTests {
      */
     @ParameterizedTest
     @CsvSource({
-        "START_DATE, ASCENDING, start-date",
-        "START_DATE, DESCENDING, -start-date",
-        "END_DATE, ASCENDING, end-date",
-        "END_DATE, DESCENDING, -end-date"})
-    void aSortIsTheSourcesOwnOnItsSearchParameterAlone(HistorySort.StartOrEnd field,
+        "startDate, ASCENDING, start-date",
+        "startDate, DESCENDING, -start-date",
+        "endDate, ASCENDING, end-date",
+        "endDate, DESCENDING, -end-date"})
+    void aSortIsTheSourcesOwnOnItsSearchParameterAlone(String field,
             SortOrder order, String sorted) {
-        reading(ArmcFilter.NONE, new HistorySort(field, order));
+        reading(ArmcFilter.NONE,
+                new HistorySort(HistorySort.column(ArmcHistory.DATE_COLUMNS, field), order));
 
         assertThat(sentQuery()).containsEntry("_sort", List.of(sorted));
     }
@@ -182,7 +183,7 @@ class PatientSourceArmcAdapterTests {
     @ParameterizedTest
     @CsvSource({"FIT, fit", "UNFIT, unfit"})
     void anOutcomeIsTheSourcesOutcomeParameter(ArmcOutcome outcome, String code) {
-        reading(new ArmcFilter(outcome, DateRange.ANY, DateRange.ANY), HistorySort.SOURCE_ORDER);
+        reading(new ArmcFilter(outcome, DateRange.any(), DateRange.any()), HistorySort.SOURCE_ORDER);
 
         assertThat(sentQuery()).isEqualTo(Map.of(
                 "outcome", List.of(code),
@@ -202,11 +203,11 @@ class PatientSourceArmcAdapterTests {
         "2023-01-01 | -          | ge2023-01-01",
         "-          | 2023-12-31 | le2023-12-31"})
     void aDateRangeIsItsSearchParameterForEachEnd(LocalDate from, LocalDate to, String ends) {
-        reading(new ArmcFilter(null, new DateRange(from, to), DateRange.ANY),
+        reading(new ArmcFilter(null, new DateRange<>(from, to), DateRange.any()),
                 HistorySort.SOURCE_ORDER);
         Map<String, List<String>> started = sentQuery();
         SOURCE.resetRequests();
-        reading(new ArmcFilter(null, DateRange.ANY, new DateRange(from, to)),
+        reading(new ArmcFilter(null, DateRange.any(), new DateRange<>(from, to)),
                 HistorySort.SOURCE_ORDER);
         Map<String, List<String>> ended = sentQuery();
 
@@ -220,9 +221,9 @@ class PatientSourceArmcAdapterTests {
     @Test
     void everyFilterNarrowsTheReadAtOnceWithTheSort() {
         reading(new ArmcFilter(ArmcOutcome.FIT,
-                        new DateRange(LocalDate.of(2023, 1, 1), LocalDate.of(2023, 12, 31)),
-                        new DateRange(null, LocalDate.of(2024, 6, 30))),
-                new HistorySort(HistorySort.StartOrEnd.END_DATE, SortOrder.DESCENDING));
+                        new DateRange<>(LocalDate.of(2023, 1, 1), LocalDate.of(2023, 12, 31)),
+                        new DateRange<>(null, LocalDate.of(2024, 6, 30))),
+                new HistorySort(ArmcHistory.END_DATE, SortOrder.DESCENDING));
 
         assertThat(sentQuery()).isEqualTo(Map.ofEntries(
                 Map.entry("outcome", List.of("fit")),

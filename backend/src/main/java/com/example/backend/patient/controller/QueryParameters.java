@@ -1,11 +1,11 @@
 package com.example.backend.patient.controller;
 
 import com.example.backend.patient.domain.DateRange;
+import com.example.backend.patient.domain.HistoryColumn;
 import com.example.backend.patient.domain.HistorySort;
 import com.example.backend.patient.domain.SortOrder;
 import com.example.backend.patient.domain.SourceCode;
 import java.beans.PropertyEditorSupport;
-import java.time.LocalDate;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -19,14 +19,13 @@ import org.springframework.web.server.ResponseStatusException;
  * How a history read through the patient source reads its filters and sort from the query
  * string, and a Patient search its gender, so each refuses alike, before the patient source is
  * called and quoting nothing the caller sent: a value no member of its set spells fails the
- * binding ({@link #spelled}), as a date that is no calendar date ({@link #DATE}) does, and a
- * from-date after its to-date, or a repeated code outside its closed set, is the same {@code 400}
- * ({@link #range}, {@link #codes}).
+ * binding ({@link #spelled}), and an end of a range not written at its column's precision, a
+ * from-end after its to-end, a column the history does not sort by, or a repeated code outside
+ * its closed set, is the same {@code 400} ({@link #range}, {@link #sort}, {@link #codes}).
+ * Each history passes its own declared date columns ({@link HistoryColumn}); nothing here names
+ * one.
  */
 final class QueryParameters {
-
-    /** A calendar date, exactly: four digits of year, two of month and two of day. */
-    static final String DATE = "yyyy-MM-dd";
 
     private QueryParameters() {
     }
@@ -45,26 +44,45 @@ final class QueryParameters {
     }
 
     /**
-     * Registers a history's sort on {@code binder} in its own spellings, which are no Java
-     * constant's name: {@code sortBy} through {@link HistorySort.IssueOrExpiry#of} or
-     * {@link HistorySort.StartOrEnd#of}, as the handler binds it, and {@code sortOrder} through
-     * {@link SortOrder#of}, so a value that spells none of them fails the binding.
+     * Registers a history's sort direction on {@code binder} in its own spellings, which are no
+     * Java constant's name: {@code sortOrder} through {@link SortOrder#of}, so a value that spells
+     * neither direction fails the binding. The column is read by {@link #sort}.
      */
-    static void historySort(WebDataBinder binder) {
-        binder.registerCustomEditor(HistorySort.IssueOrExpiry.class,
-                spelled(HistorySort.IssueOrExpiry::of));
-        binder.registerCustomEditor(HistorySort.StartOrEnd.class,
-                spelled(HistorySort.StartOrEnd::of));
+    static void sortOrder(WebDataBinder binder) {
         binder.registerCustomEditor(SortOrder.class, spelled(SortOrder::of));
     }
 
-    /** The range from {@code from} to {@code to}, or this request's {@code 400} for an inverted one. */
-    static DateRange range(LocalDate from, LocalDate to) {
+    /**
+     * The sort {@code sortBy} and {@code order} name ({@link HistorySort#of}), {@code sortBy}
+     * spelling one of the history's {@code columns} exactly, or none when blank; or this
+     * request's {@code 400} for any other column.
+     */
+    static HistorySort sort(List<HistoryColumn<?>> columns, String sortBy, SortOrder order) {
         try {
-            return new DateRange(from, to);
-        } catch (IllegalArgumentException inverted) {
-            throw new RefusedParameterException(inverted);
+            return HistorySort.of(HistorySort.column(columns, sortBy), order);
+        } catch (IllegalArgumentException unsorted) {
+            throw new RefusedParameterException(unsorted);
         }
+    }
+
+    /**
+     * The range over {@code column} from {@code from} to {@code to}, each end read at the
+     * column's precision ({@link com.example.backend.patient.domain.DatePrecision#parse}) — a
+     * calendar date {@code YYYY-MM-DD}, or a date-time to the minute {@code YYYY-MM-DDTHH:mm} —
+     * or this request's {@code 400} for an end written otherwise, or an inverted range.
+     */
+    static <T extends Comparable<? super T>> DateRange<T> range(HistoryColumn<T> column,
+            DateParameter from, DateParameter to) {
+        try {
+            return new DateRange<>(end(column, from), end(column, to));
+        } catch (IllegalArgumentException refused) {
+            throw new RefusedParameterException(refused);
+        }
+    }
+
+    private static <T extends Comparable<? super T>> T end(HistoryColumn<T> column,
+            DateParameter end) {
+        return end == null ? null : column.precision().parse(end.text());
     }
 
     /**
@@ -87,11 +105,12 @@ final class QueryParameters {
     }
 
     /**
-     * A value that bound but that the read cannot take — a from-date after its to-date, or a code
-     * outside its closed set: the caller's error, answered as a parameter that cannot be bound is
-     * — the application API's generic {@code 400}, with its one refusal record. The refusal
-     * travels as the cause, so the record names it as the reason; it carries no message of its own
-     * and nothing the caller sent.
+     * A value that bound but that the read cannot take — an end of a range not written at its
+     * column's precision, a from-end after its to-end, a column the history does not sort by, or
+     * a code outside its closed set: the caller's error, answered as a parameter that cannot be
+     * bound is — the application API's generic {@code 400}, with its one refusal record. The
+     * refusal travels as the cause, so the record names it as the reason; it carries no message
+     * of its own and nothing the caller sent.
      */
     static final class RefusedParameterException extends ResponseStatusException {
 
