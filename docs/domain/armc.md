@@ -1,7 +1,7 @@
 ---
 type: Domain Rules
 title: ARMC
-description: A patient's ARMC History — the in-house patient source's own ARMC Boards, read through it at GET {base}/Patient/{id}/armc on the FFI History's terms, the six elements with the End Date the one optional and on or after the Start Date, the two closed sets carried as codes, the source's order and paging, the failures and their ARMC log reasons, the logging rules, no caching, no auditing, the ARMC page and its states, and the mock's ARMC fixtures and fault stubs.
+description: A patient's ARMC History — the in-house patient source's own ARMC Boards, read through it at GET {base}/Patient/{id}/armc on the FFI History's terms, the six elements with the End Date the one optional and on or after the Start Date, the two closed sets carried as codes, the source's order and paging, the sort by either date and the filters the source applies — the open-board rule among them — the failures and their ARMC log reasons, the logging rules, no caching, no auditing, the ARMC page with its sort headings, Filter panel and states, and the mock's ARMC fixtures, sort and filter stubs and fault stubs.
 tags: [patient, armc]
 ---
 
@@ -10,7 +10,8 @@ tags: [patient, armc]
 **ARMC Board** — one aeromedical fitness board a patient sat, as the in-house
 patient source holds it for the Aeromedical Centre (ARMC). A patient's **ARMC
 History** is every ARMC Board the source holds for them, in the source's own
-order. The backend's `patient` module reads it from the source on every read
+order unless sorted by its Start Date or End Date, narrowed by its Outcome and
+either date. The backend's `patient` module reads it from the source on every read
 and serves it, read-only, at `GET /api/patient-armc/{patientId}` to a session
 holding `patient:read` ([authorization](authorization.md)), as plain JSON a
 page at a time. Nothing stores it.
@@ -19,7 +20,8 @@ It is read on the same terms as an FFI History (ADR 0019, D6): what the
 [FFI rules](ffi.md) say of the source's paged read, its client and timeouts, its
 failures, its logging, caching and auditing holds here too, and this file says
 only where an ARMC History differs — the endpoint, the six elements, the one
-optional element and the two closed sets — and what is its own. The wire
+optional element, the two closed sets and how it is sorted and filtered — and
+what is its own. The wire
 contract is `backend/docs/openapi.yaml`. The SPA never reaches the source:
 SPA → `GET /api/patient-armc/{patientId}` → backend →
 `GET {base}/Patient/{id}/armc`.
@@ -76,8 +78,9 @@ only — not FHIR-conformant:
 
 - **The call.** `GET {base}/Patient/{id}/armc?_offset=…&_count=…&_total=accurate`,
   on the same client, base URL, timeouts and absent credential, the id sent
-  unchanged. Nothing else is sent: no `_sort` and no filter, so the source's
-  own order is the order shown.
+  unchanged, with each filter and the sort the read asks for
+  ([Sort and filters](#sort-and-filters)). With no sort asked for, no `_sort`
+  is sent, so the source's own order is the order shown.
 - **The answer.** A FHIR-R4-shaped `searchset` `Bundle` — its `total` and each
   `entry[].resource` — whose every resource is a custom `"resourceType": "ARMC"`
   object of flat fields: `id`, `boardType`, `outcome`, `startDate`, `endDate`
@@ -94,23 +97,69 @@ only — not FHIR-conformant:
 - **No caching.** No ARMC Board is kept in Redis or in memory: every read, of
   the same page too, is a call to the source.
 
+## Sort and filters
+
+The patient source sorts, filters, pages and counts an ARMC History; the
+service checks the sort and the filters, passes them through and does none of
+it itself, as for an FFI or a NUMC History ([ffi](ffi.md), "Sort and filters";
+[numc](numc.md), "Sort and filters"; ADR 0019, D4 and D6).
+
+- **The sort.** One column at a time, by `sortBy` — `startDate` or `endDate`
+  — and `sortOrder` — `ascending` (the default with a `sortBy`) or
+  `descending`. It is sent as `_sort` on the source's own search parameters,
+  `start-date` or `end-date`, `-` first for descending, the column alone:
+  `_sort=-end-date`. **The source breaks ties**, and decides where a board
+  with no End Date falls in an End Date sort: no `_id` tie-break is sent.
+  **With no `sortBy`** — whatever `sortOrder` says — **no `_sort` is sent**,
+  and the source's default order is the order shown. The domain's
+  `HistorySort` holds it, as for an FFI or a NUMC History, with the ARMC
+  History's own columns (`HistorySort.StartOrEnd`).
+- **The filters** narrow the history, combined with AND, each optional
+  (`ArmcFilter`):
+
+  | Column       | Our API                        | Sent to the source                         |
+  | ------------ | ------------------------------ | ------------------------------------------ |
+  | ARMC Outcome | `outcome`, one code            | `outcome=<code>`                           |
+  | Start Date   | `startDateFrom`, `startDateTo` | `start-date=ge<from>`, `start-date=le<to>` |
+  | End Date     | `endDateFrom`, `endDateTo`     | `end-date=ge<from>`, `end-date=le<to>`     |
+
+  The Outcome is one code of its [closed set](#the-closed-sets), matched
+  exactly: a filter on it is that one Outcome, and none is every Outcome. Each
+  end of a date range is a calendar date, `YYYY-MM-DD`, optional and
+  inclusive; a from-date may not be after its to-date (`DateRange`). There is
+  no filter on the ARMC Board Type while ACES is its only code, and none on
+  the Medical Officers. A parameter of another history's — `type`,
+  `issueDateFrom`, `status` — is no parameter the read takes, and is not
+  passed on.
+
+- **A board with no End Date matches no End Date range.** The source applies
+  the rule: under any End Date bound — a from-date, a to-date or both — a
+  board still open is left out, whatever its Start Date. With no End Date
+  bound, an open board is narrowed by its other columns alone.
+- **Checked as the request is read in.** A column or direction spelled any
+  other way, an Outcome outside its closed set — a label, another case, a Java
+  constant's name, or another set's code, a NUMC Outcome's `waiver-granted`
+  among them — an Outcome given twice, a date that is no calendar date, and a
+  from-date after its to-date are each `400`, before the source is called.
+
 ## Our API
 
-`GET /api/patient-armc/{patientId}?startIndex=…&count=…`, outside the
+`GET /api/patient-armc/{patientId}?startIndex=…&count=…`, with any filters and
+sort, outside the
 `/api/patient` FHIR namespace: plain JSON, `{totalResults, startIndex,
 records: [{id, boardType, outcome, startDate, endDate, medicalOfficer1,
 medicalOfficer2}]}`, each code as the source sent it, both dates `YYYY-MM-DD`,
 `endDate` absent for a board still open, and both names as the source gave
-them. It takes no sort and no filter. Errors are the application API's
-`ApiError`:
+them. `totalResults` counts the ARMC Boards the filters select. Errors are the
+application API's `ApiError`:
 
-| Case                                                                        | Status |
-| --------------------------------------------------------------------------- | ------ |
-| `patientId` outside FHIR's id grammar, or a paging value that is no integer | `400`  |
-| No session                                                                  | `401`  |
-| Session lacks `patient:read`                                                | `403`  |
-| The source's `404` for the patient                                          | `404`  |
-| The source failing                                                          | `502`  |
+| Case                                                                                                                                                       | Status |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| `patientId` outside FHIR's id grammar, a sort or filter the read cannot take ([Sort and filters](#sort-and-filters)), or a paging value that is no integer | `400`  |
+| No session                                                                                                                                                 | `401`  |
+| Session lacks `patient:read`                                                                                                                               | `403`  |
+| The source's `404` for the patient                                                                                                                         | `404`  |
+| The source failing                                                                                                                                         | `502`  |
 
 The `400` is refused before the source is called. The `403` is refused by the
 handler's `@PreAuthorize`, the chain's backstop and the document's `security`,
@@ -158,9 +207,10 @@ dates or Medical Officers.
 
 ## Not audited
 
-An ARMC History read writes **no audit row**, as an FFI History read and a read
-of one Patient by id write none (ADR 0019, D3 and D6). A refused read is
-audited as `ACCESS_DENIED`, as every authorization refusal is.
+An ARMC History read writes **no audit row**, sorted and filtered too, as an
+FFI History read and a read of one Patient by id write none (ADR 0019, D3 and
+D6), and the log names none of a filter's values. A refused read is audited
+as `ACCESS_DENIED`, as every authorization refusal is.
 
 ## The ARMC page
 
@@ -178,15 +228,42 @@ is: a session without it is offered no link and is routed to its landing page.
   Medical Officer #2 — the ARMC Board Type by its label, in bold, the ARMC
   Outcome as its badge ([the elements](#the-elements)), both dates
   `dd MMM yyyy` and `—` for an absent End Date, and both names as the source
-  gave them. No column sorts and nothing filters.
+  gave them.
 - **The shared paged listing**: the numbered pager and "Showing x to y of N
   ARMC records", named on a single page too, the page shown held while the next
   loads.
+- **Sort.** As on the FFI and NUMC pages ([ffi](ffi.md), "The FFI page"): only
+  the Start Date and End Date headings sort, one at a time, each the shared
+  sortable column heading stating its direction with `aria-sort`; Board Type,
+  Outcome and both Medical Officers are plain. The history opens in the
+  source's own order, which neither heading shows as sorted. The first press on
+  a heading sorts it ascending, and each later press toggles it descending and
+  ascending, never back to the source's order; another heading replaces the
+  sort, starting ascending. The source breaks ties. Both headings are disabled
+  while a read is pending.
+- **Filter.** A Filter button at the top right of the ARMC History opens a
+  panel of the three filters, the button counting those applied ("Filter, 2
+  set", a badge of 2 — the Outcome and each end of a range one each): an
+  All / FIT / UNFIT toggle for the Outcome, one pressed at a time, built as the
+  Search page's Gender filter is (`ChoiceToggle`), All being no filter; and a
+  from–to range of `<input type="date">` for Start Date and for End Date, each
+  end optional and inclusive. Nothing in the panel is sent until Apply, or
+  Enter in a date; Reset clears every filter and applies none. A from-date
+  after its to-date is refused beneath its range — "The End Date from-date
+  must not be after its to-date." — the panel stays open and nothing is read.
+  The panel is the FFI and NUMC pages', shared (`HistoryFilterPopover`), with
+  the ARMC History's own fields.
+- **Filters and sort read from the first page.** Applying filters, or any
+  change of sort, reads the history from its first page, the filters combined
+  with AND and with the current sort. Both live on the page alone: neither
+  reaches the URL or the browser history, and a new patient in context starts
+  with neither.
 - **No patient in context** — the tab holds none, or the source holds no
   patient under its id (its `404`, our `404`) — shows "No patient in context",
   as the FFI and NUMC pages do, and reads no ARMC Boards or reports nothing.
 - **A patient with no ARMC Boards** — a `200` with `total: 0` — shows "No ARMC
-  records".
+  records". A filter matching none of a patient's ARMC Boards shows "No ARMC
+  records match the filters".
 - **The source failing** shows "Couldn't load ARMC records" on the page's error
   line, and Try again, which reads the same page again.
 
@@ -211,14 +288,39 @@ backend's tests read the same stub files (`PatientSourceStubs`).
   among the fixtures — and the third starts and ends on the same day.
 - **Every other fixture** has none — Siti Nurhaliza binte Ahmad
   (`erXuFYUfucBZaryVksYEcMg3`) is the one the tests read — answered by
-  `armc-fallback`, which also answers any page of a fixture's history the
-  canned stubs do not name, with an empty searchset, `total: 0`.
+  `armc-fallback`, which also answers any page, filter or sort of a fixture's
+  history the canned stubs do not name, with an empty searchset, `total: 0`.
 - **Any other well-formed id** is the source's `404` (`armc-not-found`).
 
-Each canned page is matched on the page the backend sends — `_count=5`,
-`_offset` and `_total=accurate` — so a read of any other page falls to the
-fallback. Each fixture is selectable on Patient Search (the name search `tan`
-finds both Tans).
+Each canned page is matched on the whole query the backend sends — `_count=5`,
+`_offset`, `_total=accurate`, the `_sort`, and each filter pinned to its exact
+value or, where the read uses none, to absent — so a filtered or sorted read
+never falls to an unfiltered page. Each fixture is selectable on Patient Search
+(the name search `tan` finds both Tans).
+
+**Sort and filter stubs.** Beside the pages in the source's order:
+
+- **The sorts**, of Tan Wei Ming's two ARMC Boards, whose own order is the
+  latest first: `armc-tan-wei-ming-by-start-date` (`_sort=start-date`,
+  earliest first: the UNFIT board of 2020, then the FIT board of 2024),
+  `-by-start-date-descending` (`-start-date`, the reverse), and
+  `-by-end-date` and `-by-end-date-descending` (`end-date`, the same two
+  orders).
+- **The filters**, of Tan Hui Min's seven, in the source's order:
+  `armc-tan-hui-min-fit` (`outcome=fit`, `total: 4`, the open board among
+  them); `-unfit` (`outcome=unfit`, `total: 3`); `-started-2023`
+  (`start-date=ge2023-01-01` and `le2023-12-31`, `total: 2`);
+  `-ended-from-2023` (`end-date=ge2023-01-01`, `total: 3`, which leaves out
+  the open board though it starts in 2025); `-fit-started-from-2023`
+  (`outcome=fit` and `start-date=ge2023-01-01`, two filters combined,
+  `total: 3`); and `-started-to-2019` (`start-date=le2019-12-31`, which no
+  ARMC Board matches, `total: 0`).
+
+`PatientSourceFixturesTests` holds each sorted or filtered stub to the ARMC
+Boards its filters select from the history in the source's order — an open
+board in no End Date range — in the order its sort names, and the stubs to
+covering each direction of each date, every filter, an End Date range leaving
+out an open board, filters combined and a filter matching none.
 
 **Fault stubs.** Beside them, each failure above has a stub of its own under a
 well-formed patient id no fixture uses, `fault-armc-<failure>`, marked with

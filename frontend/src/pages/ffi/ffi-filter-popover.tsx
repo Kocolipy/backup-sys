@@ -1,4 +1,5 @@
 import { ChoiceToggle } from "@/pages/choice-toggle";
+import { ISSUE_AND_EXPIRY_DATES } from "@/pages/history-api";
 import { HistoryFilterPopover, pickerCopy } from "@/pages/history-filter-popover";
 import { MultiSelectPicker } from "@/pages/multi-select-picker";
 
@@ -43,6 +44,7 @@ export function FfiFilterPopover({
       label="FFI filters"
       none={NO_FFI_FILTERS}
       onApply={onApply}
+      ranges={ISSUE_AND_EXPIRY_DATES}
     >
       {({ dateRanges, draft, edit }) => (
         <>

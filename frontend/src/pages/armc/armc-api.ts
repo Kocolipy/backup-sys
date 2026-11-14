@@ -5,27 +5,29 @@
  * Nothing here requests anything: the ARMC page sends {@link ARMC_HISTORY}
  * through `usePagedRead` (behind `useSessionRequest`), so a `401` still ends
  * the session in one place. This file says what a response looks like, names
- * each code of an ARMC Board's two closed sets, and declares the read — its
- * path, decoder and Permission — once.
+ * each code of an ARMC Board's two closed sets, says what the Filter panel's
+ * filters and the sort are and which of them may be sent, and declares the
+ * read — its path, decoder and Permission — once.
  */
 
 import type { ReadDeclaration } from "@/auth/declarations";
 import { calendarDate, jsonDecoder, readObject } from "@/lib/decode";
 import { pageDecoder, pagedPath, type Page, type PageAt } from "@/lib/paging";
+import { type ColumnSort, sortParameters } from "@/lib/sorting";
+import { countHistoryDates, historyDateParameters, type HistoryDates } from "@/pages/history-api";
 
-// An ARMC Board's two closed sets, each as the API carries it, by its codes.
-// Each is exported for the SPA–API contract check (`/scripts/spa-contract/`),
-// which holds it to its enum in `/backend/docs/openapi.yaml` from outside this
-// app's import graph, and nothing in `src/` but the decoder below reads them.
-// The ARMC Outcome is a set of its own, apart from an FFI's Outcome and a
-// NUMC Record's NUMC Outcome.
+// An ARMC Board's two closed sets, each as the API carries it, by its codes,
+// in the order the Filter panel lists the Outcome's. Each is exported for the
+// SPA–API contract check (`/scripts/spa-contract/`), which holds it to its enum
+// in `/backend/docs/openapi.yaml` from outside this app's import graph. The
+// ARMC Outcome is a set of its own, apart from an FFI's Outcome and a NUMC
+// Record's NUMC Outcome.
 
 /** An ARMC Board's ARMC Board Type: the kind of aeromedical fitness board. */
 // fallow-ignore-next-line unused-export
 export const ARMC_BOARD_TYPES = ["aces"] as const;
 
 /** An ARMC Board's ARMC Outcome. */
-// fallow-ignore-next-line unused-export
 export const ARMC_OUTCOMES = ["fit", "unfit"] as const;
 
 export type ArmcBoardType = (typeof ARMC_BOARD_TYPES)[number];
@@ -94,19 +96,72 @@ export const decodeArmcBoard = (value: unknown): ArmcBoard => {
   return decoded;
 };
 
+/** A column the ARMC History sorts by, as the backend's `sortBy` names it. */
+export type ArmcSortColumn = "startDate" | "endDate";
+
+/** How the ARMC History is sorted: one date, in one direction. */
+export type ArmcSort = ColumnSort<ArmcSortColumn>;
+
+/** The ARMC History's two date ranges, in the order the Filter panel lists them. */
+export const ARMC_DATE_RANGES = [
+  { label: "Start Date", range: "startDate" },
+  { label: "End Date", range: "endDate" },
+] as const;
+
 /**
- * The ARMC History of the patient `patientId`, a page at a time,
- * `GET /api/patient-armc/{patientId}`: the patient source's ARMC Boards, in
- * its own order, with no sort and no filter. A `404` is an ordinary answer —
- * the source holds no patient under the id — so it reads as `absent`.
+ * The Filter panel's filters, each as its control holds it: the ARMC Outcome,
+ * `all` for either, and the two date ranges ({@link HistoryDates}). Every
+ * Outcome the panel offers is one of its set's, so only the dates are checked
+ * before sending (`checkDateRanges`). The ARMC Board Type takes no filter
+ * while ACES is its one code.
+ */
+export interface ArmcFilters extends HistoryDates<(typeof ARMC_DATE_RANGES)[number]["range"]> {
+  outcome: "all" | ArmcOutcome;
+}
+
+/** No filter: every ARMC Board of the patient. */
+export const NO_ARMC_FILTERS: ArmcFilters = {
+  endDateFrom: "",
+  endDateTo: "",
+  outcome: "all",
+  startDateFrom: "",
+  startDateTo: "",
+};
+
+/** How many of `filters` narrow the history: the Outcome, when one is chosen, and each date set. */
+export function countArmcFilters(filters: ArmcFilters): number {
+  return (filters.outcome === "all" ? 0 : 1) + countHistoryDates(ARMC_DATE_RANGES, filters);
+}
+
+/** The query string `filters` and `sort` ask for, each filter only when set. */
+function historyQuery(filters: ArmcFilters, sort: ArmcSort | null): string {
+  return [
+    ...(filters.outcome === "all" ? [] : [`outcome=${filters.outcome}`]),
+    ...historyDateParameters(ARMC_DATE_RANGES, filters),
+    ...sortParameters(sort),
+  ].join("&");
+}
+
+/**
+ * The ARMC History of the patient `patientId` that `filters` narrow, a page
+ * at a time, in the order `sort` names, `GET /api/patient-armc/{patientId}`:
+ * the patient source's ARMC Boards, in its own order when `sort` is `null`.
+ * The source filters and sorts, and breaks the sort's ties; the backend passes
+ * both through. A `404` is an ordinary answer — the source holds no patient
+ * under the id — so it reads as `absent`.
  */
 export const ARMC_HISTORY: ReadDeclaration<
   Page<ArmcBoard>,
-  [patientId: string, at: PageAt],
+  [patientId: string, filters: ArmcFilters, sort: ArmcSort | null, at: PageAt],
   true
 > = {
   absentOnNotFound: true,
   decode: jsonDecoder(pageDecoder("ArmcHistoryPage", "records", decodeArmcBoard)),
-  path: (patientId, at) => pagedPath(`/api/patient-armc/${encodeURIComponent(patientId)}`, at),
+  path: (patientId, filters, sort, at) =>
+    pagedPath(
+      `/api/patient-armc/${encodeURIComponent(patientId)}`,
+      at,
+      historyQuery(filters, sort),
+    ),
   permission: "patient:read",
 };

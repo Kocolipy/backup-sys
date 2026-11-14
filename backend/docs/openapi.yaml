@@ -1208,14 +1208,26 @@ paths:
   /api/patient-armc/{patientId}:
     get:
       tags: [Patient]
-      summary: Read a patient's ARMC History, a page at a time
+      summary: Read a patient's ARMC History, filtered and sorted, a page at a time
       description: |
         The ARMC Boards (Aeromedical Centre) of the patient held under
-        `patientId`, one page at a time, in the in-house patient source's own
-        order, as the source pages and counts them (ADR 0019, D6): the service
-        reads them from the source on every call and orders, pages, holds and
-        caches nothing of its own. No sort and no filter is asked of the source.
-        Read-only.
+        `patientId` that the filters narrow, one page at a time, in the order
+        `sortBy` and `sortOrder` name, as the in-house patient source filters,
+        orders, pages and counts them (ADR 0019, D4 and D6): the service reads
+        them from the source on every call and filters, orders, pages, holds and
+        caches nothing of its own. With no `sortBy`, whatever `sortOrder` says,
+        no sort is asked of the source, so the order is its own; with one, the
+        source breaks ties. Read-only.
+
+        **Filters** narrow the history, combined with AND, each optional: one
+        ARMC Outcome (`outcome`), and a range for the Start Date
+        (`startDateFrom`, `startDateTo`) and for the End Date (`endDateFrom`,
+        `endDateTo`), each end a calendar date, inclusive. They reach the source
+        as `outcome`, `start-date=ge…`, `start-date=le…`, `end-date=ge…` and
+        `end-date=le…`, and the sort as `_sort=±start-date|±end-date`, the
+        column alone. A board still open, with no End Date, matches no End Date
+        range, so any End Date bound leaves it out. The ARMC Board Type takes no
+        filter while ACES is its one code.
 
         Each ARMC Board is one aeromedical fitness board the patient sat: its
         ARMC Board Type and ARMC Outcome are closed sets, carried as their
@@ -1228,8 +1240,8 @@ paths:
         `count` defaulting to 100 and capped at 200, an out-of-range value
         coerced rather than refused. The page they resolve to is the source's
         to read — `count=0` and a page past the end included — and
-        `totalResults` is the source's count of every ARMC Board the patient
-        has.
+        `totalResults` is the source's count of every ARMC Board the filters
+        select.
 
         Requires `patient:read`, a delegatable Permission a User holds through a
         Group that carries it, or as the Superuser. Outside `/api/patient`, so
@@ -1255,6 +1267,76 @@ paths:
           schema:
             type: string
             pattern: "^[A-Za-z0-9\\-.]{1,64}$"
+        - name: outcome
+          in: query
+          required: false
+          description: |
+            Only ARMC Boards with this ARMC Outcome, one code — an ARMC
+            Outcome's, never a NUMC Record's or an FFI's; given twice, the read
+            is refused. Sent to the source as `outcome`.
+          schema:
+            $ref: "#/components/schemas/ArmcOutcome"
+        - name: startDateFrom
+          in: query
+          required: false
+          description: |
+            Only ARMC Boards started on or after this day. Sent as
+            `start-date=ge…`.
+          schema:
+            type: string
+            format: date
+            example: "2023-01-01"
+        - name: startDateTo
+          in: query
+          required: false
+          description: |
+            Only ARMC Boards started on or before this day; not before
+            `startDateFrom`. Sent as `start-date=le…`.
+          schema:
+            type: string
+            format: date
+            example: "2023-12-31"
+        - name: endDateFrom
+          in: query
+          required: false
+          description: |
+            Only ARMC Boards ended on or after this day; a board still open is
+            left out. Sent as `end-date=ge…`.
+          schema:
+            type: string
+            format: date
+            example: "2023-01-01"
+        - name: endDateTo
+          in: query
+          required: false
+          description: |
+            Only ARMC Boards ended on or before this day, not before
+            `endDateFrom`; a board still open is left out. Sent as
+            `end-date=le…`.
+          schema:
+            type: string
+            format: date
+            example: "2024-12-31"
+        - name: sortBy
+          in: query
+          required: false
+          description: |
+            The one column to sort by: `startDate` (the source's `start-date`)
+            or `endDate` (its `end-date`). With none, the source's own order,
+            whatever `sortOrder` says: no `_sort` is sent. Ties, and where a
+            board still open falls by End Date, are the source's to decide.
+          schema:
+            type: string
+            enum: [startDate, endDate]
+        - name: sortOrder
+          in: query
+          required: false
+          description: |
+            The direction `sortBy` sorts in; `ascending` when `sortBy` is given
+            alone. Descending is sent with a leading `-`.
+          schema:
+            type: string
+            enum: [ascending, descending]
         - name: startIndex
           in: query
           required: false
@@ -1283,10 +1365,14 @@ paths:
                 $ref: "#/components/schemas/ArmcHistoryPage"
         "400":
           description: |
-            `patientId` is outside FHIR's id grammar, or `startIndex` or
-            `count` is not an integer. Refused before the patient source is
-            called, with the generic `invalid-request` `ApiError`, which quotes
-            nothing of the request.
+            `patientId` is outside FHIR's id grammar; `outcome` is no code of
+            the ARMC Outcome, matched exactly — a NUMC Outcome such as
+            `waiver-granted` among them — or is given twice; `sortBy` is neither
+            `startDate` nor `endDate`, or `sortOrder` neither `ascending` nor
+            `descending`; a date is no calendar date `YYYY-MM-DD`; a from-date
+            is after its to-date; or `startIndex` or `count` is not an integer.
+            Refused before the patient source is called, with the generic
+            `invalid-request` `ApiError`, which quotes nothing of the request.
           content:
             application/json:
               schema:

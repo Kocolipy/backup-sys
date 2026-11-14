@@ -46,11 +46,15 @@ final class QueryParameters {
 
     /**
      * Registers a history's sort on {@code binder} in its own spellings, which are no Java
-     * constant's name: {@code sortBy} through {@link HistorySort.Field#of} and {@code sortOrder}
-     * through {@link SortOrder#of}, so a value that spells none of them fails the binding.
+     * constant's name: {@code sortBy} through {@link HistorySort.IssueOrExpiry#of} or
+     * {@link HistorySort.StartOrEnd#of}, as the handler binds it, and {@code sortOrder} through
+     * {@link SortOrder#of}, so a value that spells none of them fails the binding.
      */
     static void historySort(WebDataBinder binder) {
-        binder.registerCustomEditor(HistorySort.Field.class, spelled(HistorySort.Field::of));
+        binder.registerCustomEditor(HistorySort.IssueOrExpiry.class,
+                spelled(HistorySort.IssueOrExpiry::of));
+        binder.registerCustomEditor(HistorySort.StartOrEnd.class,
+                spelled(HistorySort.StartOrEnd::of));
         binder.registerCustomEditor(SortOrder.class, spelled(SortOrder::of));
     }
 

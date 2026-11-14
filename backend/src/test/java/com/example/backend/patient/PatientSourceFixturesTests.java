@@ -478,25 +478,33 @@ class PatientSourceFixturesTests {
                 || List.of(pinned.getFirst().split(",")).contains(entry.get(field).asString());
     }
 
+    /** The field of an entry each date search parameter a {@code _sort} names sorts on. */
+    private static final Map<String, String> SORTED_FIELDS = Map.of(
+            "issue-date", "issueDate", "expiry-date", "expiryDate",
+            "start-date", "startDate", "end-date", "endDate");
+
     /**
-     * {@code entries} — FFIs or NUMC Records — as the {@code _sort} {@code sorts} pins orders
-     * them: by the date it names, {@code -} first for descending, ties by id; as they are with
-     * no sort pinned.
+     * {@code entries} — FFIs, NUMC Records or ARMC Boards — as the {@code _sort} {@code sorts}
+     * pins orders them: by the date it names, {@code -} first for descending, ties by id where it
+     * names {@code _id} after the date and otherwise left as the source keeps them; as they are
+     * with no sort pinned.
      */
     private static List<JsonNode> sortedAs(List<JsonNode> entries, List<String> sorts) {
         if (sorts.isEmpty()) {
             return entries;
         }
         String sort = sorts.getFirst();
-        String field = sort.startsWith("-issue-date") || sort.startsWith("issue-date")
-                ? "issueDate" : "expiryDate";
+        String[] keys = sort.replaceFirst("^-", "").split(",");
+        String field = SORTED_FIELDS.get(keys[0]);
         Comparator<String> direction = sort.startsWith("-")
                 ? Comparator.<String>reverseOrder()
                 : Comparator.<String>naturalOrder();
+        Comparator<JsonNode> order =
+                Comparator.comparing((JsonNode entry) -> entry.get(field).asString(), direction);
         return entries.stream()
-                .sorted(Comparator.comparing((JsonNode entry) -> entry.get(field).asString(),
-                                direction)
-                        .thenComparing(entry -> entry.get("id").asString()))
+                .sorted(keys.length > 1 && keys[1].equals("_id")
+                        ? order.thenComparing(entry -> entry.get("id").asString())
+                        : order)
                 .toList();
     }
 
@@ -816,10 +824,14 @@ class PatientSourceFixturesTests {
 
     // ---- the ARMC Histories -----------------------------------------------------------------
 
+    /** The filters an ARMC History read sends the source, each as its own search parameter. */
+    private static final List<String> ARMC_FILTER_PARAMETERS =
+            List.of("outcome", "start-date", "end-date");
+
     /** The ARMC Boards of every page of {@code patient}'s ARMC History, page after page. */
     private static List<JsonNode> boardsOf(String patient) {
         return PatientSourceStubs.armcHistories().stream()
-                .filter(PatientSourceFixturesTests::canned)
+                .filter(stub -> inTheSourcesOrder(stub, ARMC_FILTER_PARAMETERS))
                 .filter(stub -> stub.path().equals("/Patient/" + patient + "/armc"))
                 .sorted(Comparator.comparing(stub -> stub.query().at("/_offset/equalTo")
                         .asInt()))
@@ -827,9 +839,10 @@ class PatientSourceFixturesTests {
                 .toList();
     }
 
-    /** Every ARMC Board any ARMC History stub serves. */
+    /** Every ARMC Board of every fixture's ARMC History, each once, as its pages hold it. */
     private static List<JsonNode> everyArmcBoard() {
         return PatientSourceStubs.armcHistories().stream()
+                .filter(stub -> inTheSourcesOrder(stub, ARMC_FILTER_PARAMETERS))
                 .flatMap(stub -> resourcesOf(stub).stream())
                 .toList();
     }
@@ -841,7 +854,7 @@ class PatientSourceFixturesTests {
     @Test
     void twoFixturesHaveAnArmcHistoryAndTheFallbackServesEveryFixture() {
         List<String> exact = PatientSourceStubs.armcHistories().stream()
-                .filter(PatientSourceFixturesTests::canned)
+                .filter(stub -> inTheSourcesOrder(stub, ARMC_FILTER_PARAMETERS))
                 .map(stub -> stub.path() + " " + stub.query().at("/_offset/equalTo").asString()
                         + " of " + stub.bundle().at("/total").asInt())
                 .toList();
@@ -860,18 +873,24 @@ class PatientSourceFixturesTests {
     }
 
     /**
-     * Every canned page is matched on the whole page the backend asks for — five to a page, its
-     * offset and an accurate total — so a read of any other page falls to the fallback.
+     * Every canned read is matched on the whole page the backend asks for — five to a page, its
+     * offset and an accurate total — and pins the sort and each filter it does not use as absent,
+     * and each it uses to its exact values, so a read of any other page, or with a filter or sort
+     * no stub names, falls to the fallback rather than to an unfiltered page.
      */
     @Test
-    void everyCannedArmcPagePinsItsPage() {
+    void everyCannedArmcReadPinsItsPageItsSortAndEveryFilterItUsesOrNot() {
         assertThat(PatientSourceStubs.armcHistories()).filteredOn(PatientSourceFixturesTests::canned)
-                .hasSize(3)
+                .hasSize(13)
                 .allSatisfy(stub -> assertThat(List.of(
                         stub.query().at("/_count/equalTo").asString(),
                         stub.query().at("/_offset/equalTo").isString(),
                         stub.query().at("/_total/equalTo").asString()))
-                        .containsExactly("5", true, "accurate"));
+                        .containsExactly("5", true, "accurate"))
+                .allSatisfy(stub -> assertThat(Stream.concat(Stream.of("_sort"),
+                        ARMC_FILTER_PARAMETERS.stream()))
+                        .as("each matcher, absent or pinned")
+                        .allMatch(parameter -> pinsOrAbsent(stub.query().path(parameter))));
     }
 
     /** Each page holds no more than five ARMC Boards, and a history's pages hold its total. */
@@ -909,18 +928,31 @@ class PatientSourceFixturesTests {
      */
     @Test
     void everyArmcBoardHoldsItsElementsAndItsIdAloneAndOneIsStillOpen() {
+        assertThat(everyArmcBoard()).hasSize(9)
+                .allSatisfy(PatientSourceFixturesTests::holdsItsElementsAlone)
+                .filteredOn(board -> !board.has("endDate"))
+                .extracting(board -> board.get("id").asString())
+                .containsExactly("armc-tan-hui-min-1");
+    }
+
+    /** Every ARMC Board any stub answers, sorted or filtered too, holds its elements alone. */
+    @Test
+    void everyArmcBoardAnyStubAnswersHoldsItsElementsAlone() {
+        assertThat(PatientSourceStubs.armcHistories().stream()
+                .flatMap(stub -> resourcesOf(stub).stream()))
+                .isNotEmpty()
+                .allSatisfy(PatientSourceFixturesTests::holdsItsElementsAlone);
+    }
+
+    /** Whether {@code board} is an {@code ARMC} of exactly its elements and its id, the End Date optional. */
+    private static void holdsItsElementsAlone(JsonNode board) {
         Set<String> closed = Set.of("resourceType", "id", "boardType", "outcome", "startDate",
                 "endDate", "medicalOfficer1", "medicalOfficer2");
         Set<String> open = new HashSet<>(closed);
         open.remove("endDate");
-
-        assertThat(everyArmcBoard()).hasSize(9)
-                .allSatisfy(board -> assertThat(List.<Object>of(
-                        board.get("resourceType").asString(), Set.copyOf(board.propertyNames())))
-                        .isIn(List.of("ARMC", closed), List.of("ARMC", open)))
-                .filteredOn(board -> !board.has("endDate"))
-                .extracting(board -> board.get("id").asString())
-                .containsExactly("armc-tan-hui-min-1");
+        assertThat(List.<Object>of(board.get("resourceType").asString(),
+                Set.copyOf(board.propertyNames())))
+                .isIn(List.of("ARMC", closed), List.of("ARMC", open));
     }
 
     /** Every fixture's board ends on or after the day it starts, when it has ended. */
@@ -947,6 +979,96 @@ class PatientSourceFixturesTests {
         assertThat(ids).hasSize(9).doesNotHaveDuplicates()
                 .doesNotContainAnyElementsOf(others.toList())
                 .allSatisfy(id -> assertThat(id).matches("[A-Za-z0-9\\-.]{1,64}"));
+    }
+
+    // ---- the ARMC sort and filter stubs ---------------------------------------------------
+
+    /** {@code board}'s date {@code field}, or {@code null} for the End Date of a board still open. */
+    private static String dateOf(JsonNode board, String field) {
+        return board.has(field) ? board.get(field).asString() : null;
+    }
+
+    /**
+     * Every sorted or filtered ARMC read answers exactly the ARMC Boards its filters select from
+     * the patient's history in the source's own order — an Outcome is that one code, a date range
+     * keeps both ends, and a board with no End Date is in no End Date range — sorted as its
+     * {@code _sort} names, ties left as the source keeps them, or left in that order with none,
+     * paged by its offset, five to a page, with the total it selects: the source's behaviour, as
+     * /docs/domain/armc.md documents it. Each board is exactly as the unfiltered history holds
+     * it.
+     */
+    @Test
+    void everySortedOrFilteredArmcReadAnswersTheBoardsItsFiltersAndSortSelect() {
+        List<PatientSourceStubs.HistoryStub> narrowed = PatientSourceStubs.armcHistories().stream()
+                .filter(PatientSourceFixturesTests::canned)
+                .filter(stub -> !inTheSourcesOrder(stub, ARMC_FILTER_PARAMETERS))
+                .toList();
+
+        assertThat(narrowed).hasSize(10).allSatisfy(stub -> {
+            String patient = stub.path().replaceFirst("^/Patient/", "")
+                    .replaceFirst("/armc$", "");
+            JsonNode query = stub.query();
+            List<JsonNode> selected = boardsOf(patient).stream()
+                    .filter(board -> anyOf(board, "outcome", pinnedIn(query, "outcome")))
+                    .filter(board -> inRange(dateOf(board, "startDate"),
+                            pinnedIn(query, "start-date")))
+                    .filter(board -> inRange(dateOf(board, "endDate"),
+                            pinnedIn(query, "end-date")))
+                    .toList();
+            List<JsonNode> expected = sortedAs(selected, pinnedIn(query, "_sort"));
+            int offset = query.at("/_offset/equalTo").asInt();
+
+            assertThat(List.of(stub.bundle().at("/total").asInt(), resourcesOf(stub)))
+                    .containsExactly(expected.size(),
+                            expected.subList(offset, Math.min(offset + 5, expected.size())));
+        });
+    }
+
+    /**
+     * The sort and filter stubs cover each direction of each sortable column, on Tan Wei Ming,
+     * each sent as the column alone; every filter, on Tan Hui Min, each Outcome among them; an
+     * End Date range leaving out a board still open; two filters combined; and a filter that
+     * matches nothing.
+     */
+    @Test
+    void theArmcSortAndFilterStubsCoverEverySortAndFilter() {
+        List<PatientSourceStubs.HistoryStub> narrowed = PatientSourceStubs.armcHistories().stream()
+                .filter(PatientSourceFixturesTests::canned)
+                .filter(stub -> !inTheSourcesOrder(stub, ARMC_FILTER_PARAMETERS))
+                .toList();
+        List<PatientSourceStubs.HistoryStub> sorted = narrowed.stream()
+                .filter(stub -> !pinnedIn(stub.query(), "_sort").isEmpty())
+                .toList();
+        List<PatientSourceStubs.HistoryStub> filtered = narrowed.stream()
+                .filter(stub -> pinnedIn(stub.query(), "_sort").isEmpty())
+                .toList();
+
+        assertThat(List.of(
+                sorted.stream().map(stub -> stub.path() + " " + pinnedIn(stub.query(), "_sort"))
+                        .collect(Collectors.toSet()),
+                filtered.stream().map(PatientSourceStubs.HistoryStub::path)
+                        .collect(Collectors.toSet()),
+                ARMC_FILTER_PARAMETERS.stream()
+                        .filter(parameter -> filtered.stream()
+                                .anyMatch(stub -> !pinnedIn(stub.query(), parameter).isEmpty()))
+                        .toList(),
+                filtered.stream().flatMap(stub -> pinnedIn(stub.query(), "outcome").stream())
+                        .collect(Collectors.toSet()),
+                filtered.stream().anyMatch(stub -> !pinnedIn(stub.query(), "end-date").isEmpty()
+                        && boardsOf("dev-patient-05").stream()
+                                .anyMatch(board -> !board.has("endDate")
+                                        && !resourcesOf(stub).contains(board))),
+                filtered.stream().anyMatch(stub -> ARMC_FILTER_PARAMETERS.stream()
+                        .filter(parameter -> !pinnedIn(stub.query(), parameter).isEmpty())
+                        .count() > 1),
+                filtered.stream().anyMatch(stub -> stub.bundle().at("/total").asInt() == 0)))
+                .containsExactly(
+                        Set.of("/Patient/eq081-VQEgP8drUUqCWzHfw3/armc [start-date]",
+                                "/Patient/eq081-VQEgP8drUUqCWzHfw3/armc [-start-date]",
+                                "/Patient/eq081-VQEgP8drUUqCWzHfw3/armc [end-date]",
+                                "/Patient/eq081-VQEgP8drUUqCWzHfw3/armc [-end-date]"),
+                        Set.of("/Patient/dev-patient-05/armc"),
+                        ARMC_FILTER_PARAMETERS, Set.of("fit", "unfit"), true, true, true);
     }
 
     /**

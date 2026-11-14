@@ -1,6 +1,7 @@
 package com.example.backend.patient;
 
 import com.example.backend.paging.domain.PageRequest;
+import com.example.backend.patient.domain.ArmcFilter;
 import com.example.backend.patient.domain.ArmcHistory;
 import com.example.backend.patient.domain.FfiFilter;
 import com.example.backend.patient.domain.FfiHistory;
@@ -45,7 +46,8 @@ public abstract class RefusingPatientStore implements PatientStore {
     }
 
     @Override
-    public Optional<ArmcHistory> findArmcHistory(PatientId id, PageRequest page) {
+    public Optional<ArmcHistory> findArmcHistory(PatientId id, ArmcFilter filter,
+            HistorySort sort, PageRequest page) {
         throw refused("an ARMC History");
     }
 

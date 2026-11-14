@@ -543,9 +543,12 @@ from the Patient source on every read, never held, and not audited.
 _Avoid_: ARMC Record, ARMC Assessment, aeromedical record
 
 **ARMC History**:
-Every ARMC Board of one patient, in the Patient source's own order, read five
-to a page on the ARMC page (`/armc`) for the patient in context, by a session
-holding `patient:read`.
+Every ARMC Board of one patient, in the Patient source's own order unless
+sorted by its Start Date or End Date, narrowed by its ARMC Outcome and by a
+range of either date — a board with no End Date in no End Date range — read
+five to a page on the ARMC page (`/armc`) for the patient in context, by a
+session holding `patient:read`. The source sorts, breaking ties itself, and
+filters it, as it does an FFI History.
 _Avoid_: ARMC list, ARMC log
 
 **ARMC Board Type**:

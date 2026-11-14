@@ -49,4 +49,9 @@ in the same change, so the ledger lists live flakes only.
 
 ## Ledger
 
-None confirmed.
+### `frontend/test/e2e/patient-search.spec.ts` — `Patient Search › pages a name search to its second page, in the patient source's order`
+
+- **Command**: `make integration-test`
+- **Failure**: `Error: expect(locator).toHaveText(expected) failed` — `Locator: getByRole('heading', { level: 1 })`, `Expected: "Patient Search"`, `Error: element(s) not found`, at the `beforeEach`'s `await expect(page.getByRole("heading", { level: 1 })).toHaveText("Patient Search");` (`patient-search.spec.ts:42`).
+- **Evidence**: `2026-11-14`, `3632b85a` with an uncommitted ARMC History change that touches neither the Search page nor the shell; failing `make integration-test`, then passing `make integration-test`, no edit between.
+- **Suspected cause**: the first load of `/search` in the `medical-officer` project not rendering its heading within the 5-second `expect` timeout while every project runs at once; unknown beyond that.

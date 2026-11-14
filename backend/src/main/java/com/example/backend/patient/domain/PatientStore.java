@@ -42,9 +42,12 @@ public interface PatientStore {
             PageRequest page);
 
     /**
-     * The page {@code page} of the ARMC History of the patient held under {@code id}, in the
-     * source's own order, as the source pages and counts it (ADR 0019, D6), or none when the
-     * source holds no patient under it.
+     * The page {@code page} of the ARMC History of the patient held under {@code id} that
+     * {@code filter} narrows, in the order {@code sort} names — the source's own order for
+     * {@link HistorySort#SOURCE_ORDER} — as the source filters, orders, pages and counts it, ties
+     * broken as the source decides (ADR 0019, D6), or none when the source holds no patient under
+     * it.
      */
-    Optional<ArmcHistory> findArmcHistory(PatientId id, PageRequest page);
+    Optional<ArmcHistory> findArmcHistory(PatientId id, ArmcFilter filter, HistorySort sort,
+            PageRequest page);
 }

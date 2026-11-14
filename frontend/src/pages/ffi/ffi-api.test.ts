@@ -59,7 +59,7 @@ describeDecoder(
   { strict: true },
 );
 
-// Which dates may be sent is `checkHistoryDates`' (history-api.test.ts).
+// Which dates may be sent is `checkDateRanges`' (history-api.test.ts).
 describe("countFfiFilters", () => {
   it("counts none for no filter", () => {
     expect(countFfiFilters(NO_FFI_FILTERS)).toBe(0);

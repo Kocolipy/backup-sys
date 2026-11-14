@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -274,5 +274,395 @@ describe("ARMC", () => {
     await userEvent.click(screen.getByRole("button", { name: "Try again" }));
 
     expect(armcReads(requests())).toEqual([FIRST_PAGE, FIRST_PAGE]);
+  });
+});
+
+/** The read of Tan Wei Ming's history from `startIndex`, with `asked` — filters, a sort — before the page. */
+const historyPage = (startIndex: number, asked = "") =>
+  `GET /api/patient-armc/eq081-VQEgP8drUUqCWzHfw3?${asked === "" ? "" : `${asked}&`}startIndex=${startIndex}&count=5`;
+
+/** Five ARMC Boards of seven, the first page of a history spanning two. */
+const FIVE_OF_SEVEN = page(
+  ["1", "2", "3", "4", "5"].map((n) => board(`armc-${n}`)),
+  1,
+  7,
+);
+
+const TWO_OF_SEVEN = page([board("armc-6"), board("armc-7")], 6, 7);
+
+/** The table's column heading named `name`, re-read: a new page is a new table. */
+const columnHeader = (name: string) => within(table()).getByRole("columnheader", { name });
+
+const sortButton = (name: string) => within(columnHeader(name)).getByRole("button", { name });
+
+/** Moves the history to its second page, and waits for it. */
+async function toSecondPage() {
+  await screen.findByText("Showing 1 to 5 of 7 ARMC records");
+  await userEvent.click(screen.getByRole("button", { name: "Page 2" }));
+  await screen.findByText("Showing 6 to 7 of 7 ARMC records");
+}
+
+describe("ARMC, sorted", () => {
+  it("offers a sort on Start Date and End Date alone, neither sorted at first", async () => {
+    await renderArmc(page(TWO_BOARDS, 1, 2));
+    await screen.findByRole("table", { name: "ARMC History" });
+
+    expect(
+      within(table())
+        .getAllByRole("columnheader")
+        .map((header) => [
+          header.textContent,
+          header.getAttribute("aria-sort"),
+          within(header).queryByRole("button") !== null,
+        ]),
+    ).toEqual([
+      ["Board Type", null, false],
+      ["Outcome", null, false],
+      ["Start Date", "none", true],
+      ["End Date", "none", true],
+      ["Medical Officer #1", null, false],
+      ["Medical Officer #2", null, false],
+    ]);
+  });
+
+  // The press cycle is the sort heading's (sort-heading.test.tsx), the
+  // parameters ARMC_HISTORY's (armc-api.test.ts): here, each heading's wiring.
+  it.each([
+    ["Start Date", "startDate"],
+    ["End Date", "endDate"],
+  ] as const)("sorts by %s, ascending, from the first page", async (heading, by) => {
+    const { requests } = await renderArmc(FIVE_OF_SEVEN, {
+      [SECOND_PAGE]: TWO_OF_SEVEN,
+      [historyPage(1, `sortBy=${by}&sortOrder=ascending`)]: FIVE_OF_SEVEN,
+    });
+    await toSecondPage();
+
+    await userEvent.click(sortButton(heading));
+    await screen.findByText("Showing 1 to 5 of 7 ARMC records");
+
+    expect({
+      direction: columnHeader(heading).getAttribute("aria-sort"),
+      reads: armcReads(requests()),
+    }).toEqual({
+      direction: "ascending",
+      reads: [FIRST_PAGE, SECOND_PAGE, historyPage(1, `sortBy=${by}&sortOrder=ascending`)],
+    });
+  });
+
+  it("sorts descending on a second press, from the first page", async () => {
+    const { requests } = await renderArmc(page(TWO_BOARDS, 1, 2), {
+      [historyPage(1, "sortBy=endDate&sortOrder=ascending")]: page(TWO_BOARDS, 1, 2),
+      [historyPage(1, "sortBy=endDate&sortOrder=descending")]: page(TWO_BOARDS, 1, 2),
+    });
+    await screen.findByRole("table", { name: "ARMC History" });
+
+    await userEvent.click(sortButton("End Date"));
+    await waitFor(() => expect(sortButton("End Date")).toBeEnabled());
+    await userEvent.click(sortButton("End Date"));
+
+    await waitFor(() =>
+      expect(armcReads(requests()).slice(-1)[0]).toBe(
+        historyPage(1, "sortBy=endDate&sortOrder=descending"),
+      ),
+    );
+    expect(columnHeader("End Date").getAttribute("aria-sort")).toBe("descending");
+  });
+
+  it("holds the page, busy, and both sort headings still while a read is pending", async () => {
+    const next = deferred();
+    await renderArmc(FIVE_OF_SEVEN, { [SECOND_PAGE]: next.answer });
+    await screen.findByText("Showing 1 to 5 of 7 ARMC records");
+
+    await userEvent.click(screen.getByRole("button", { name: "Page 2" }));
+
+    expect({
+      busy: table().closest("[aria-busy]")?.getAttribute("aria-busy"),
+      rows: rows().length,
+      sortsDisabled: [sortButton("Start Date"), sortButton("End Date")].map((button) =>
+        button.hasAttribute("disabled"),
+      ),
+    }).toEqual({ busy: "true", rows: 5, sortsDisabled: [true, true] });
+    await next.settle(TWO_OF_SEVEN);
+  });
+});
+
+type User = ReturnType<typeof userEvent.setup>;
+
+/** The button that opens the filters, whatever it says is set. */
+const filterTrigger = () => screen.getByRole("button", { name: /^Filter/ });
+
+/** Opens the filters, unless they are open already. */
+async function openFilters(user: User) {
+  if (filterTrigger().getAttribute("aria-expanded") !== "true") await user.click(filterTrigger());
+}
+
+const filterPanel = () => screen.getByRole("form", { name: "ARMC filters" });
+
+/** Opens the filters and presses the Outcome choice `label`. */
+async function chooseOutcome(user: User, label: "All" | "FIT" | "UNFIT") {
+  await openFilters(user);
+  await user.click(within(filterPanel()).getByRole("radio", { name: label }));
+}
+
+/** A date range's field in the open panel: its group, then its end. */
+const dateField = (range: "Start Date" | "End Date", end: "From" | "To") =>
+  within(within(filterPanel()).getByRole("group", { name: range })).getByLabelText(
+    end,
+  ) as HTMLInputElement;
+
+/** Sets a date field of the open panel as a date picker does: a whole `YYYY-MM-DD` or nothing. */
+const setDate = (range: "Start Date" | "End Date", end: "From" | "To", value: string) =>
+  fireEvent.change(dateField(range, end), { target: { value } });
+
+async function apply(user: User) {
+  await openFilters(user);
+  await user.click(within(filterPanel()).getByRole("button", { name: "Apply" }));
+}
+
+describe("ARMC, filtered", () => {
+  it("offers the three filters: the Outcome, All by default, and two date ranges, none set", async () => {
+    const user = userEvent.setup();
+    await renderArmc(page(TWO_BOARDS, 1, 2));
+    await screen.findByRole("table", { name: "ARMC History" });
+
+    await openFilters(user);
+
+    expect({
+      count: filterTrigger().getAttribute("aria-label"),
+      dates: (["Start Date", "End Date"] as const).flatMap((range) =>
+        (["From", "To"] as const).map((end) => [
+          range,
+          end,
+          dateField(range, end).type,
+          dateField(range, end).value,
+        ]),
+      ),
+      outcomes: within(filterPanel())
+        .getAllByRole("radio")
+        .map((choice) => [choice.textContent, choice.getAttribute("aria-checked")]),
+      pickers: within(filterPanel()).queryAllByRole("button", { name: /: / }),
+    }).toEqual({
+      count: "Filter",
+      dates: [
+        ["Start Date", "From", "date", ""],
+        ["Start Date", "To", "date", ""],
+        ["End Date", "From", "date", ""],
+        ["End Date", "To", "date", ""],
+      ],
+      outcomes: [
+        ["All", "true"],
+        ["FIT", "false"],
+        ["UNFIT", "false"],
+      ],
+      pickers: [],
+    });
+  });
+
+  it.each([
+    ["FIT", "outcome=fit"],
+    ["UNFIT", "outcome=unfit"],
+  ] as const)(
+    "filters by the Outcome %s, counted as one, from the first page, and closes",
+    async (label, asked) => {
+      const user = userEvent.setup();
+      const { requests } = await renderArmc(FIVE_OF_SEVEN, {
+        [SECOND_PAGE]: TWO_OF_SEVEN,
+        [historyPage(1, asked)]: page([board("only")], 1, 1),
+      });
+      await toSecondPage();
+
+      await chooseOutcome(user, label);
+      await apply(user);
+      await screen.findByText("Showing 1 to 1 of 1 ARMC records");
+
+      expect({
+        count: filterTrigger().getAttribute("aria-label"),
+        open: screen.queryByRole("form", { name: "ARMC filters" }),
+        read: armcReads(requests()).slice(-1)[0],
+      }).toEqual({ count: "Filter, 1 set", open: null, read: historyPage(1, asked) });
+    },
+  );
+
+  it("sends no Outcome for All, counting none", async () => {
+    const user = userEvent.setup();
+    const { requests } = await renderArmc(page(TWO_BOARDS, 1, 2), {
+      [historyPage(1, "outcome=unfit")]: page([board("only")], 1, 1),
+    });
+    await screen.findByRole("table", { name: "ARMC History" });
+    await chooseOutcome(user, "UNFIT");
+    await apply(user);
+    await screen.findByText("Showing 1 to 1 of 1 ARMC records");
+
+    await chooseOutcome(user, "All");
+    await apply(user);
+    await screen.findByText("Showing 1 to 2 of 2 ARMC records");
+
+    expect({
+      count: filterTrigger().getAttribute("aria-label"),
+      read: armcReads(requests()).slice(-1)[0],
+    }).toEqual({ count: "Filter", read: FIRST_PAGE });
+  });
+
+  it.each([
+    ["Start Date", "startDate", "2023-01-01", "2023-12-31"],
+    ["End Date", "endDate", "2024-01-01", "2024-12-31"],
+  ] as const)("filters by a %s range, and counts each end", async (range, field, from, to) => {
+    const user = userEvent.setup();
+    const asked = `${field}From=${from}&${field}To=${to}`;
+    const { requests } = await renderArmc(page(TWO_BOARDS, 1, 2), {
+      [historyPage(1, asked)]: page([board("only")], 1, 1),
+    });
+    await screen.findByRole("table", { name: "ARMC History" });
+
+    await openFilters(user);
+    setDate(range, "From", from);
+    setDate(range, "To", to);
+    await apply(user);
+    await screen.findByText("Showing 1 to 1 of 1 ARMC records");
+
+    expect({
+      count: filterTrigger().getAttribute("aria-label"),
+      read: armcReads(requests()).slice(-1)[0],
+    }).toEqual({ count: "Filter, 2 set", read: historyPage(1, asked) });
+  });
+
+  it("applies on Enter in a date, as on Apply", async () => {
+    const user = userEvent.setup();
+    const asked = "endDateFrom=2023-01-01";
+    const { requests } = await renderArmc(page(TWO_BOARDS, 1, 2), {
+      [historyPage(1, asked)]: page(TWO_BOARDS, 1, 2),
+    });
+    await screen.findByRole("table", { name: "ARMC History" });
+
+    await openFilters(user);
+    setDate("End Date", "From", "2023-01-01");
+    await user.type(dateField("End Date", "From"), "{Enter}");
+
+    await waitFor(() => expect(armcReads(requests()).slice(-1)[0]).toBe(historyPage(1, asked)));
+  });
+
+  it("combines the filters with AND, and with the current sort", async () => {
+    const user = userEvent.setup();
+    const asked =
+      "outcome=fit&startDateFrom=2023-01-01&endDateTo=2024-12-31" +
+      "&sortBy=startDate&sortOrder=ascending";
+    const { requests } = await renderArmc(page(TWO_BOARDS, 1, 2), {
+      [historyPage(1, "sortBy=startDate&sortOrder=ascending")]: page(TWO_BOARDS, 1, 2),
+      [historyPage(1, asked)]: page([board("only")], 1, 1),
+    });
+    await screen.findByRole("table", { name: "ARMC History" });
+    await userEvent.click(sortButton("Start Date"));
+    // The heading is held still until the sorted read lands.
+    await waitFor(() => expect(sortButton("Start Date")).toBeEnabled());
+
+    await chooseOutcome(user, "FIT");
+    setDate("Start Date", "From", "2023-01-01");
+    setDate("End Date", "To", "2024-12-31");
+    await apply(user);
+    await screen.findByText("Showing 1 to 1 of 1 ARMC records");
+
+    expect({
+      count: filterTrigger().getAttribute("aria-label"),
+      read: armcReads(requests()).slice(-1)[0],
+    }).toEqual({ count: "Filter, 3 set", read: historyPage(1, asked) });
+  });
+
+  it.each([
+    ["Start Date", "2023-01-02", "2023-01-01"],
+    ["End Date", "2024-12-31", "2024-01-01"],
+  ] as const)(
+    "refuses a %s from-date after its to-date beneath the range, and reads nothing",
+    async (range, from, to) => {
+      const user = userEvent.setup();
+      const { requests } = await renderArmc(page(TWO_BOARDS, 1, 2));
+      await screen.findByRole("table", { name: "ARMC History" });
+      const before = armcReads(requests()).length;
+
+      await openFilters(user);
+      setDate(range, "From", from);
+      setDate(range, "To", to);
+      await user.click(within(filterPanel()).getByRole("button", { name: "Apply" }));
+
+      const refusal = within(within(filterPanel()).getByRole("group", { name: range })).getByText(
+        `The ${range} from-date must not be after its to-date.`,
+      );
+      expect({
+        count: filterTrigger().getAttribute("aria-label"),
+        describedBy: [dateField(range, "From"), dateField(range, "To")].map((input) =>
+          input.getAttribute("aria-describedby"),
+        ),
+        reads: armcReads(requests()).length - before,
+      }).toEqual({
+        count: "Filter",
+        describedBy: [refusal.id, refusal.id],
+        reads: 0,
+      });
+    },
+  );
+
+  it("reopens on the filters applied, forgetting a change never applied once the panel closes", async () => {
+    const user = userEvent.setup();
+    await renderArmc(page(TWO_BOARDS, 1, 2), {
+      [historyPage(1, "outcome=fit")]: page([board("only")], 1, 1),
+    });
+    await screen.findByRole("table", { name: "ARMC History" });
+    await chooseOutcome(user, "FIT");
+    await apply(user);
+    await screen.findByText("Showing 1 to 1 of 1 ARMC records");
+    await chooseOutcome(user, "UNFIT");
+    setDate("Start Date", "From", "2023-01-01");
+
+    await user.keyboard("{Escape}");
+    await openFilters(user);
+
+    expect({
+      count: filterTrigger().getAttribute("aria-label"),
+      fit: within(filterPanel()).getByRole("radio", { name: "FIT" }).getAttribute("aria-checked"),
+      startedFrom: dateField("Start Date", "From").value,
+    }).toEqual({ count: "Filter, 1 set", fit: "true", startedFrom: "" });
+  });
+
+  it("clears every filter on Reset, reading the history unfiltered from its first page", async () => {
+    const user = userEvent.setup();
+    const asked = "outcome=unfit&endDateFrom=2023-01-01";
+    const { requests } = await renderArmc(page(TWO_BOARDS, 1, 2), {
+      [historyPage(1, asked)]: page([board("only")], 1, 1),
+    });
+    await screen.findByRole("table", { name: "ARMC History" });
+    await chooseOutcome(user, "UNFIT");
+    setDate("End Date", "From", "2023-01-01");
+    await apply(user);
+    await screen.findByText("Showing 1 to 1 of 1 ARMC records");
+
+    await openFilters(user);
+    await user.click(within(filterPanel()).getByRole("button", { name: "Reset" }));
+    await screen.findByText("Showing 1 to 2 of 2 ARMC records");
+
+    expect({
+      count: filterTrigger().getAttribute("aria-label"),
+      read: armcReads(requests()).slice(-1)[0],
+    }).toEqual({ count: "Filter", read: FIRST_PAGE });
+  });
+
+  it("says No ARMC records match the filters for a filter matching none, and offers the filters still", async () => {
+    const user = userEvent.setup();
+    await renderArmc(page(TWO_BOARDS, 1, 2), {
+      [historyPage(1, "startDateTo=2019-12-31")]: page([], 1, 0),
+    });
+    await screen.findByRole("table", { name: "ARMC History" });
+
+    await openFilters(user);
+    setDate("Start Date", "To", "2019-12-31");
+    await apply(user);
+
+    expect({
+      empty: (await screen.findByText(/^No ARMC records/)).textContent,
+      filter: filterTrigger().getAttribute("aria-label"),
+      table: screen.queryByRole("table"),
+    }).toEqual({
+      empty: "No ARMC records match the filters",
+      filter: "Filter, 1 set",
+      table: null,
+    });
   });
 });

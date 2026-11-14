@@ -1,0 +1,95 @@
+{
+  "name": "ARMC History: Tan Hui Min's UNFIT ARMC Boards",
+  "request": {
+    "method": "GET",
+    "urlPath": "/Patient/dev-patient-05/armc",
+    "queryParameters": {
+      "_count": {
+        "equalTo": "5"
+      },
+      "_offset": {
+        "equalTo": "0"
+      },
+      "_total": {
+        "equalTo": "accurate"
+      },
+      "_sort": {
+        "absent": true
+      },
+      "outcome": {
+        "equalTo": "unfit"
+      },
+      "start-date": {
+        "absent": true
+      },
+      "end-date": {
+        "absent": true
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/fhir+json"
+    },
+    "jsonBody": {
+      "resourceType": "Bundle",
+      "id": "armc-history",
+      "type": "searchset",
+      "total": 3,
+      "link": [
+        {
+          "relation": "self",
+          "url": "http://127.0.0.1:8104/Patient/dev-patient-05/armc?outcome=unfit&_offset=0&_count=5"
+        }
+      ],
+      "entry": [
+        {
+          "resource": {
+            "resourceType": "ARMC",
+            "id": "armc-tan-hui-min-2",
+            "boardType": "aces",
+            "outcome": "unfit",
+            "startDate": "2024-09-16",
+            "endDate": "2024-11-29",
+            "medicalOfficer1": "Dr Rajesh Kumar",
+            "medicalOfficer2": "Dr Lim Wei Jie"
+          },
+          "search": {
+            "mode": "match"
+          }
+        },
+        {
+          "resource": {
+            "resourceType": "ARMC",
+            "id": "armc-tan-hui-min-5",
+            "boardType": "aces",
+            "outcome": "unfit",
+            "startDate": "2022-07-25",
+            "endDate": "2022-10-03",
+            "medicalOfficer1": "Dr Lim Wei Jie",
+            "medicalOfficer2": "Dr Chen Mei Ling"
+          },
+          "search": {
+            "mode": "match"
+          }
+        },
+        {
+          "resource": {
+            "resourceType": "ARMC",
+            "id": "armc-tan-hui-min-7",
+            "boardType": "aces",
+            "outcome": "unfit",
+            "startDate": "2020-05-18",
+            "endDate": "2020-08-24",
+            "medicalOfficer1": "Dr Chen Mei Ling",
+            "medicalOfficer2": "Dr Lim Wei Jie"
+          },
+          "search": {
+            "mode": "match"
+          }
+        }
+      ]
+    }
+  }
+}
