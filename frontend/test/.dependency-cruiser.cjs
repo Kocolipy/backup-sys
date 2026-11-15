@@ -98,7 +98,7 @@ module.exports = {
     {
       name: "mb-patient-in-context-has-one-reader",
       comment:
-        "patient-in-context.ts is the one reader of the patient in context (docs/ARCHITECTURE.md): it reads PATIENT once per patient change and hands its view to the top bar, the Patient card and the Medication, FFI, NUMC and ARMC pages, which only render it. A second importer of patient-api.ts could send that read again on every page. A type-only import, such as patient-card.tsx's PatientSummary, sends nothing.",
+        "patient-in-context.ts is the one reader of the patient in context (docs/PAGES.md): it reads PATIENT once per patient change and hands its view to the top bar, the Patient card and the Medication, FFI, NUMC and ARMC pages, which only render it. A second importer of patient-api.ts could send that read again on every page. A type-only import, such as patient-card.tsx's PatientSummary, sends nothing.",
       severity: "error",
       from: {
         path: "^src/",

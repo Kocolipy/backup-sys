@@ -69,9 +69,8 @@ These rules are review-blocking, and `npm run test:arch` enforces them:
   `test/arch/designTokens.test.ts` is what catches a literal color.
 
 `src/components/ui/` is the in-house shadcn library in source form.
-`docs/DESIGN.md` documents the visual language it was built against, but the
-token _values_ live only in `src/index.css`: a DESIGN.md change that is not
-also an `index.css` change never reaches the page.
+`docs/DESIGN.md` says what each token is for and how each component behaves;
+the token _values_ live only in `src/index.css`.
 
 ## Backend contract
 

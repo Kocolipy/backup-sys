@@ -14,8 +14,8 @@ function Table({ className, ...props }: React.ComponentProps<"table">) {
 }
 
 function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {
-  // DESIGN.md, Table: the header row sits on a tinted surface-container (`accent`), which a
-  // hover does not change.
+  // DESIGN.md, Table: the header row sits on a tinted surface (`accent`), which a hover does
+  // not change.
   return (
     <thead
       data-slot="table-header"

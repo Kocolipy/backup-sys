@@ -9,7 +9,7 @@ current directory, which is where `cleanup.sh` deletes it from. The local
 artefacts — `parameters.json`, `*-outputs.txt`, the `*.pem` key — are
 gitignored.
 
-## Quick Start (5 Minutes)
+## Quick Start
 
 ```bash
 cd infra
@@ -30,8 +30,7 @@ what it does, step by step.
 > does not create one, and the application has no rate limiter of its own. See
 > [Edge throttling](docs/edge-throttling.md).
 
-> **Cost:** SQL Server Standard Edition, licence-included, costs far more than
-> the database instance it replaces. Read
+> **Cost:** SQL Server Standard Edition, licence-included, is expensive. Read
 > [Engine, edition and cost](docs/database-engine.md) before deploying.
 
 ---

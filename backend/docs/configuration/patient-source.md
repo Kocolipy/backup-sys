@@ -57,7 +57,7 @@ subset of it.
 `compose.yaml`'s `patient-source` service is WireMock (`wiremock/wiremock`,
 pinned by tag and digest, the same release as the backend's test dependency)
 serving `patient-source-mock/mappings` on **`127.0.0.1:8104`**: FHIR R4
-`Patient/{id}` for the twelve development fixtures, a `404` for any other
+`Patient/{id}` for the development fixtures, a `404` for any other
 well-formed id, and the search set below. It has no profile, so `make infra-up` and
 `make integration-test` start it beside SQL Server and Redis, healthy when
 WireMock's `/__admin/health` answers. `.env.example` points the backend at it:

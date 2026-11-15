@@ -4864,7 +4864,7 @@ components:
           description: One-based index of this page's first match, as coerced.
         patients:
           type: array
-          description: This page's matches, in the source's order — the order asked for, newest Last visit first by default.
+          description: This page's matches, in the patient source's own stable order.
           items:
             $ref: "#/components/schemas/PatientMatch"
     PatientMatch:

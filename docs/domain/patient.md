@@ -413,16 +413,11 @@ reaches a deployed environment. The backend holds no fixture of its own.
 - **Search stubs.** Each documented search has a canned stub answering a
   searchset Bundle whose entries are the fixtures themselves, exactly as their
   own stubs serve them, in the mock's one stable order — newest Last visit
-  first, ties by id, Tan Boon Huat, with none, last — matched on the query the
-  backend sends — the search, `_count=5`, `_offset`, `_total=accurate`, and the
-  `gender` filter pinned to its exact value or, where the search uses none, to
-  absent, so a filtered search never falls to an unfiltered stub:
-  - `search-name-tan-page-1` and `-page-2`, the name search `tan` (any case)
-    over its two pages of the seven fixtures with a name containing it,
-    `total: 7`; `search-nric`, the NRIC `S9212345A`, `total: 1`; and
-    `search-no-match`, the name search `nobody`, `total: 0`.
-  - **The gender filters** on the name search `tan`: `search-name-tan-male`
-    (`total: 3`) and `-female` (`total: 4`).
+  first, ties by id, a Patient with none last — matched on the query the
+  backend sends, with the `gender` filter pinned to its exact value or, where
+  the search uses none, to absent, so a filtered search never falls to an
+  unfiltered stub. `backend/docs/configuration/patient-source.md` ("The search
+  set") lists each stub and what it answers.
 
   The FFI Histories of the fixtures, and the FFI fault stubs, are
   [ffi](ffi.md)'s ("The patient source's FFI fixtures"); their NUMC Histories,

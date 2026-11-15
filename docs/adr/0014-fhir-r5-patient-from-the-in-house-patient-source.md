@@ -107,13 +107,17 @@ own: no table, no grant on one, no seeded fixtures.
 - **One call per read, nothing cached.** No Patient is kept in Redis or in
   memory: every read calls the source, so what the card shows is what the source
   holds now, and Restricted data rests nowhere in this service.
-- **One outbound client, with fixed timeouts.** The client is built from Spring Boot's `RestClient.Builder`, so a call is observed as every
-  client's is (`http.client.requests`, under the URI template, never the id), on
-  the JDK client, which follows no redirect, with 2 seconds to connect and 5 to
-  answer, and no retry. Nothing here logs.
+- **One outbound client, with bounded timeouts.** The client is built from
+  Spring Boot's `RestClient.Builder`, so a call is observed as every client's
+  is (`http.client.requests`, under the URI template, never the id), on the JDK
+  client, which follows no redirect, with a fixed connect timeout, a read
+  timeout a deployment may set (`APP_PATIENT_SOURCE_READ_TIMEOUT`), and no
+  retry. Nothing here logs.
 - **Required configuration.** `APP_PATIENT_SOURCE_BASE_URL` has no default
   (`application.yaml` names it with no fallback): a start without it, or with
   anything but an absolute http or https URL, fails.
+  `backend/docs/configuration/patient-source.md` has both variables and the
+  timeouts' values.
 
 ### A mock for local runs and E2E, sharing its stubs with the tests
 

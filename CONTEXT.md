@@ -398,8 +398,7 @@ _Avoid_: role revocation
 **Dormancy job**:
 The daily scheduled job that locks dormant Users and revokes every Group
 membership of those dormant for longer. It never writes `active` and never deletes.
-_Avoid_: inactivity deactivation, dormant-authority revocation (the two jobs it
-replaced)
+_Avoid_: inactivity deactivation, dormant-authority revocation
 
 **Audit retention job**:
 The daily scheduled job that deletes audit events older than the retention period.
@@ -421,27 +420,26 @@ _Avoid_: patient record, demographics, subject (a Patient is no User)
 
 **Patient source**:
 The in-house system the backend reads every Patient from, by its EHR's FHIR id
-or by a Patient search, on every read: assumed FHIR R4 and unauthorised until
-its contract is known, and mocked by WireMock for local runs and E2E. The SPA
-never reaches it.
+or by a Patient search, on every read: FHIR R4, called with no credential, and
+mocked by WireMock for local runs and E2E. The SPA never reaches it.
 _Avoid_: patient service, patient API, FHIR server (the EHR's FHIR API is
 another system)
 
 **Patient card**:
 Home's card showing the EHR context's patient — name, NRIC, gender, date of
 birth and age — or "No patient in context" when the tab holds no EHR context,
-its EHR context names no patient, or the Patient source holds none under its id. With no patient in context it reads nothing, and for a session without `patient:read` it reads nothing and says the account has no access to patients. The Patient source failing is the card's failed state, never "No patient in context".
+its EHR context names no patient, or the Patient source holds none under its
+id. The Patient source failing is the card's failed state, never "No patient in
+context".
 
 **Patient search**:
 Finding Patients by a name, of at least three characters, or by a full NRIC,
 typed into the Search page's one box — a page only a session holding
 `patient:read` opens or is linked to: the Patient source's own search, passed
-through and read five to a page, in the source's own stable order, and
-narrowed by gender. The source orders and filters; the service does neither.
-Every search the source answers is audited as `PATIENT_SEARCH`, by its kind,
-whether it used the gender filter and its count, and never its query or the
-filter's value; a read of one Patient
-by id is not. Selecting a result puts that Patient into the EHR context.
+through in the source's own stable order and narrowed by gender. Every search
+the source answers is audited as `PATIENT_SEARCH`, never with its query; a read
+of one Patient by id is not. Selecting a result puts that Patient into the EHR
+context.
 _Avoid_: patient lookup, patient list, patient query (no search lists every
 Patient)
 
@@ -464,18 +462,16 @@ and not audited.
 _Avoid_: fitness record, medical clearance, certificate
 
 **FFI History**:
-Every FFI of one patient, in the Patient source's own order unless sorted by
-its Issue Date or Expiry Date, narrowed by any filter on its columns, read five
-to a page on the FFI page (`/ffi`) for the patient in context, by a session
-holding `patient:read`. The source sorts and filters it, as it does a Patient
-search.
+Every FFI of one patient, shown on the FFI page (`/ffi`) for the patient in
+context, in the Patient source's own order unless sorted by a Date Column. The
+source sorts and filters it; the service does neither.
 _Avoid_: FFI list, FFI log
 
 **Date Column**:
 A date a history declares it sorts by and narrows by a from–to range: its
 name, its label, the Patient source's search parameter, and its Precision. The
-FFI and NUMC Histories' are the Issue Date and Expiry Date, the ARMC History's
-the Start Date and End Date.
+FFI and NUMC Histories' are the Issue Date and Expiry Date, the ARMC and
+Medication Histories' the Start Date and End Date.
 _Avoid_: date field, sortable date
 
 **Precision**:
@@ -532,11 +528,9 @@ audited.
 _Avoid_: NUMC Assessment, dive medical, underwater fitness record
 
 **NUMC History**:
-Every NUMC Record of one patient, in the Patient source's own order unless
-sorted by its Issue Date or Expiry Date, narrowed by any filter on its columns,
-read five to a page on the NUMC page (`/numc`) for the patient in context, by a
-session holding `patient:read`. The source sorts and filters it, as it does an
-FFI History.
+Every NUMC Record of one patient, shown on the NUMC page (`/numc`) for the
+patient in context, sorted and filtered by the Patient source as an FFI
+History is.
 _Avoid_: NUMC list, NUMC log
 
 **NUMC Type**:
@@ -564,12 +558,9 @@ from the Patient source on every read, never held, and not audited.
 _Avoid_: ARMC Record, ARMC Assessment, aeromedical record
 
 **ARMC History**:
-Every ARMC Board of one patient, in the Patient source's own order unless
-sorted by its Start Date or End Date, narrowed by its ARMC Outcome and by a
-range of either date — a board with no End Date in no End Date range — read
-five to a page on the ARMC page (`/armc`) for the patient in context, by a
-session holding `patient:read`. The source sorts, breaking ties itself, and
-filters it, as it does an FFI History.
+Every ARMC Board of one patient, shown on the ARMC page (`/armc`) for the
+patient in context, sorted and filtered by the Patient source as an FFI
+History is.
 _Avoid_: ARMC list, ARMC log
 
 **ARMC Board Type**:
@@ -610,13 +601,9 @@ never held, and not audited.
 _Avoid_: prescription record, medication order, drug record
 
 **Medication History**:
-Every Medication Record of one patient, in the Patient source's own order
-unless sorted by its Start Date or End Date, by the whole date-time, narrowed by
-any of its Dispense Statuses and by a range of either date-time, to the minute
-in Singapore time, both ends inclusive — read five to a page on the Medication
-page (`/medication`) for the patient in context, by a session holding
-`patient:read`. The source sorts, breaking ties itself, and filters it, as it
-does an ARMC History.
+Every Medication Record of one patient, shown on the Medication page
+(`/medication`) for the patient in context, sorted and filtered by the Patient
+source as an FFI History is.
 _Avoid_: medication list, medication log, prescription history
 
 **Dispense Status**:
@@ -647,8 +634,8 @@ _Avoid_: database role (the roles are what a login is a member of), `SET ROLE`,
 a bare "login" (that is the sign-in operation)
 
 **Owner login**:
-The database login that owns the schema and runs migrations; only the migrate
-step holds it, never the running service.
+The database login that runs migrations, a member of `db_owner`; only the
+migrate step holds it, never the running service.
 _Avoid_: admin user, master user (that is RDS's own)
 
 **App login**:

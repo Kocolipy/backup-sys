@@ -38,15 +38,16 @@ their written copy. Why each rule is what it is lives in
 | `GROUP_PERMISSIONS_CHANGE`       | `user-administration`  | `authorization.group_permissions_change`  |
 | `SESSION_START`                  | `session-start`        | —                                         |
 | `SESSION_END`                    | `session-end`          | —                                         |
-| `AUDIT_RETENTION`                | — (exception, above)   | `audit.retention`                         |
-| `AUDIT_APPEND`                   | — (exception, above)   | `audit.append`                            |
-| `HTTP_REQUEST`                   | — (exception, above)   | `http.request`                            |
-| `HTTP_REQUEST_REFUSAL`           | — (exception, above)   | `http.request.refusal`                    |
-| `HTTP_REQUEST_FAULT`             | — (exception, above)   | `http.request.fault`                      |
+| `AUDIT_RETENTION`                | — (ADR 0003)           | `audit.retention`                         |
+| `AUDIT_APPEND`                   | — (ADR 0003)           | `audit.append`                            |
+| `HTTP_REQUEST`                   | — (ADR 0003)           | `http.request`                            |
+| `HTTP_REQUEST_REFUSAL`           | — (ADR 0003)           | `http.request.refusal`                    |
+| `HTTP_REQUEST_FAULT`             | — (ADR 0003)           | `http.request.fault`                      |
 | `APPLICATION_STARTUP`            | `application-startup`  | —                                         |
 | `APPLICATION_SHUTDOWN`           | `application-shutdown` | —                                         |
 
-`event.kind` is `event` on every record.
+`event.kind` is `event` on every record. An operation with no `event.action`
+is one of ADR 0003's exceptions ("Operations with no event.action").
 
 ## Shapes
 
@@ -77,7 +78,7 @@ classification (`http.request.refusal`).
 | request record, 5xx no handler recorded            | the status   | `application`                                          | none                                      |
 | request record, FHIR-path 4xx the handler answered | the status   | `data`                                                 | none                                      |
 | app-wide handler, unexpected exception             | the status   | the mapping for a database failure, else `application` | whole; redacted for a data-access failure |
-| app-wide handler, upstream fault (`502`)           | `502`        | the fault's: `network`, `server` or `data`             | whole, its own cause redacted             |
+| app-wide handler, upstream fault (`502`)           | `502`        | the fault's: `network`, `server`, `cert/auth` or `data` | whole, its own cause redacted             |
 
 ## Records
 
@@ -223,17 +224,11 @@ page, which quoted the path.
   arrived whole and could not be read), or the domain rule a Patient broke
   (`no-nric`, `no-official-name`, `no-name-text`, `no-gender`,
   `no-birth-date`, `birth-date-not-to-the-day`, `another-resource`), or the
-  rule a page of a Patient search, an FFI History, a NUMC History, an ARMC
-  History or a Medication History broke (listed in `/docs/domain/patient.md`,
-  "Logging", `/docs/domain/ffi.md`, "Failures", `/docs/domain/numc.md`,
-  "Failures", whose every rule a NUMC Record breaks is a reason naming NUMC,
-  `/docs/domain/armc.md`, "Failures", whose every rule an ARMC Board breaks is
-  a reason naming ARMC, `armc-end-before-start` among them, and
-  `/docs/domain/medication.md`, "Failures", whose every rule a Medication
-  Record breaks is a reason naming Medication or an element of its own,
-  `medication-end-before-start` and `unknown-dispensary` among them) — and its
-  `error.category` is the fault's own, as ADR 0014's table has it for an
-  outbound call: `network` and `server` with no follow-up, `data` with one.
+  rule a page of a Patient search or of a history broke, each history's under
+  a reason naming it (`/docs/domain/patient.md`, "Logging", and "Failures" in
+  each history's file in `/docs/domain/`) — and its `error.category` is the
+  fault's own, as ADR 0014's table has it for an outbound call: `network` and
+  `server` with no follow-up, `cert/auth` and `data` with one.
 - A `4xx` that Spring MVC maps (validation, an unreadable body, an unbindable
   parameter) is one `WARN` `http.request.refusal`, classified `data` with no
   follow-up. Its `event.reason` is the exception's type, never its message, which

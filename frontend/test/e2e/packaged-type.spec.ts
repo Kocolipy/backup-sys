@@ -68,7 +68,7 @@ test("the page title renders on headline-lg and a card title on headline-sm", as
     pageTitle: await typeOf(page.getByRole("heading", { level: 1, name: "Profile" })),
     cardTitle: await typeOf(page.getByRole("heading", { level: 3, name: "Patient" })),
   }).toEqual({
-    // DESIGN.md: IBM Plex Sans 28/36, 700, -0.02em (of 28px).
+    // headline-lg: IBM Plex Sans 28/36, 700, -0.02em (of 28px).
     pageTitle: {
       family: '"IBM Plex Sans"',
       size: "28px",
@@ -76,7 +76,7 @@ test("the page title renders on headline-lg and a card title on headline-sm", as
       weight: "700",
       letterSpacing: "-0.56px",
     },
-    // DESIGN.md: IBM Plex Sans 16/24, 600, no tracking.
+    // headline-sm: IBM Plex Sans 16/24, 600, no tracking.
     cardTitle: {
       family: '"IBM Plex Sans"',
       size: "16px",

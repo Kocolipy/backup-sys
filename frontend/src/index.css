@@ -74,26 +74,24 @@
    the in-house component library replaces src/components/ui/, these are the
    names it will expect to find.
 
-   Every value below is converted from the navy/mint palette documented in
-   frontend/docs/DESIGN.md (the component library's own design doc), not
-   generic shadcn gray — see that file's Colors section for the named
-   source token behind each one. DESIGN.md documents no dark-mode palette
-   (it's a light-only clinical system), so `.dark` repeats the same literal
-   values as `:root` throughout, same as the original `--popover*` /
-   `--sidebar*` migration this one extends to every remaining token.
+   Every value below is converted from the component library's navy/mint
+   palette, not generic shadcn gray; each line of the mapping names the
+   palette's source token and its value. frontend/docs/DESIGN.md says what
+   each token is for. The palette is light-only (a clinical system), so
+   `.dark` repeats the same literal values as `:root` throughout.
 
    Mapping (light value, reused verbatim in dark):
    - background/foreground  <- background (#f9f9ff) / on-background (#111c2c)
    - card/card-foreground    <- surface-container-lowest (#fff) / on-surface
    - popover/popover-foreground <- surface-container-lowest / on-surface
    - primary/primary-foreground <- primary (#00327d) / on-primary (#fff)
-   - secondary/secondary-foreground <- secondary (#006d43) / white — DESIGN.md
-     has no "on-secondary"; white is used for the same reason on-primary is:
+   - secondary/secondary-foreground <- secondary (#006d43) / white — the
+     palette has no "on-secondary"; white is used for the same reason on-primary is:
      secondary is dark enough that only white text clears contrast.
    - muted/muted-foreground  <- surface-container-low / on-surface-variant
    - accent/accent-foreground <- surface-container / on-surface
    - destructive/destructive-foreground <- error (#ba1a1a) / white (same
-     on-primary reasoning as secondary above; DESIGN.md's on-error-container
+     on-primary reasoning as secondary above; the palette's on-error-container
      is for text on the light error-container tint, not a solid error fill)
    - success-soft/success-soft-foreground <- secondary-container (#75f8b3) /
      on-secondary-container (#007147), the mint status-badge pair (4.6:1)
@@ -102,27 +100,26 @@
    - danger-soft/danger-soft-foreground <- error-container (#ffdad6) /
      on-error-container (#93000a), the error-tint pair (7.2:1)
    - info-soft/info-soft-foreground <- #dbeafe / #1e40af, the blue status
-     badge pair (7.1:1); outside DESIGN.md's palette
+     badge pair (7.1:1); outside the palette
    - male-soft/male-soft-foreground <- #dbeafe / #1e40af, the blue gender
-     badge pair (7.1:1); outside DESIGN.md's palette
+     badge pair (7.1:1); outside the palette
    - female-soft/female-soft-foreground <- #fce7f3 / #9d174d, the pink gender
-     badge pair (6.7:1); outside DESIGN.md's palette
-   - border/input            <- outline-variant (#c3c6d5) — DESIGN.md reserves
-     outline/outline-variant for hairline borders
+     badge pair (6.7:1); outside the palette
+   - border/input            <- outline-variant (#c3c6d5) — the palette
+     reserves outline/outline-variant for hairline borders
    - ring                    <- primary-container (#0047ab) — same value as
      --sidebar-ring, chosen for visible contrast against light surfaces
    - sidebar/sidebar-foreground <- surface-container-lowest (#fff) / on-surface,
-     same values as card/card-foreground — the sidebar is a light surface, not
-     the dark rail the original migration left it as
+     same values as card/card-foreground — the sidebar is a light surface
    - sidebar-accent/sidebar-accent-foreground <- surface-container / primary —
      same value as accent, but with primary (not on-surface) for the active
      row's text so it reads as the brand-coloured nav indicator
    - sidebar-border/sidebar-ring <- same values as border/ring
    ------------------------------------------------------------------------- */
 :root {
-  /* 0.25rem base -> radius-md: 2px (DESIGN.md's tight DEFAULT, tightest
-     chrome), radius-lg: 4px (DESIGN.md's lg, cards/inputs), radius-xl: 8px
-     (DESIGN.md's xl, dialogs/larger panels) via the @theme formula below. */
+  /* 0.25rem base -> radius-md: 2px (the tightest chrome), radius-lg: 4px
+     (cards/inputs), radius-xl: 8px (dialogs/larger panels) via the @theme
+     formula below. */
   --radius: 0.25rem;
 
   --background: oklch(0.985 0.006 260);
@@ -217,8 +214,8 @@
   --font-headline: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
-  /* DESIGN.md's named type scale, one `text-<level>` utility per level, each
-     setting the level's size, line height, weight and letter spacing (a
+  /* The design's named type scale (frontend/docs/DESIGN.md, Typography), one
+     `text-<level>` utility per level, each setting the level's size, line height, weight and letter spacing (a
      `leading-*`, `font-*` or `tracking-*` beside it still overrides that one
      property). Reach for these rather than generic `text-sm`/`text-lg`. The
      family is not part of a text utility, so pair each level with its face:

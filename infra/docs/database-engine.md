@@ -28,11 +28,10 @@ tags: [rds, sql-server, cost]
   region (`describe-orderable-db-instance-options`) before creating anything.
 
 **It is expensive.** The smallest Standard Edition instance carries the instance
-price **and** the per-vCPU SQL Server licence, for four vCPUs at least:
-`db.t3.xlarge` was US$1.109 an hour (≈ US$810 a month) in ap-southeast-1,
-single-AZ, on demand, on 2026-10-15 — before storage, backups, Performance Insights beyond
-its free tier, and Multi-AZ (which doubles the instance price). Take the current
-price for the class you choose before sign-off:
+price **and** the per-vCPU SQL Server licence, for four vCPUs at least — before
+storage, backups, Performance Insights beyond its free tier, and Multi-AZ (which
+doubles the instance price). Take the current price for the class you choose
+before sign-off:
 
 ```bash
 aws pricing get-products --region us-east-1 --service-code AmazonRDS \
@@ -61,37 +60,25 @@ snapshot that is itself billed until you delete it.
   (`CharacterSetName`), so `master` and `tempdb`
   compare names as the database does. It is fixed at creation; changing it
   replaces the instance.
-- **The seed lock does not depend on the server collation.** On the pinned
-  Linux image (SQL Server 2022 CU27, `MSSQL_COLLATION`), a server collated
-  `Latin1_General_100_BIN2_UTF8` or `Latin1_General_100_BIN2` cannot load the
-  internal extended procedures behind `sp_getapplock` (`sys.xp_userlock`) and a
-  T-SQL `sp_executesql`: error 17750, "Could not load the DLL (server
-  internal)". The seed lock is a row lock on `scim_seed_locks` (`V1`), and
-  the bootstrap uses `EXEC (@ddl)` instead of `sys.sp_executesql` (ADR 0013,
-  "Collation and the seed lock").
-- **Untested risk: Flyway on the Windows build.** Flyway guards every
-  migration with `sp_getapplock`. On a BIN2_UTF8 server on the Linux image it
-  fails with 17750. RDS runs SQL Server on Windows, and no RDS instance was
-  created to check whether the defect exists there.
+- **The server collation is the one setting the suite does not reproduce.**
+  On the Linux image the local and test servers run, a server collated
+  `BIN2_UTF8` cannot take the application lock Flyway guards every migration
+  with, so those servers keep their default collation and only their databases
+  are `Latin1_General_100_BIN2_UTF8`. RDS runs the Windows build, on which the
+  defect is untested (ADR 0013, "Collation and the seed lock", has the
+  measurement and why the service's own seed lock is unaffected).
 - **What a failed first migrate looks like.** If the Windows build has the
   same defect, the failure is loud, not silent:
   - `backend-migrate.service` fails, so `backend.service`, which `Requires=`
     it, never starts.
   - The deploy's health check and smoke fail.
   - `sudo journalctl -u backend-migrate` shows `FlywaySqlException: Unable to
-acquire SQL Server application lock` with `Error Code : 17750`.
+    acquire SQL Server application lock` with `Error Code : 17750`.
   - On a later deploy, `deploy.sh` prints that journal and stops with the
     service still stopped.
-  - The way out is a server collation that does not fail. On the Linux image,
-    `Latin1_General_100_CI_AS_SC_UTF8` and `Latin1_General_100_CS_AS_SC_UTF8`
-    take the lock, and RDS's default does too. Changing `CharacterSetName`
-    replaces the instance, which costs nothing on a stack that never migrated.
-- **Local and test servers keep their default server collation.** Their
-  databases are still `Latin1_General_100_BIN2_UTF8`. The compose server and
-  the test containers run that Linux image, where a BIN2_UTF8 server would fail
-  every Flyway migration. Replacing Flyway's lock was considered and declined.
-  So the deployed server's collation is the one setting the suite does not
-  reproduce.
+  - The way out is a server collation that takes the lock (ADR 0013 names
+    them). Changing `CharacterSetName` replaces the instance, which costs
+    nothing on a stack that never migrated.
 - **The server's time zone is UTC**, stated (`Timezone: UTC`) rather than
   defaulted: storage is UTC only (ADR 0013, "Storage is UTC only").
 

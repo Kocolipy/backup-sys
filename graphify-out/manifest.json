@@ -1854,9 +1854,9 @@
     "semantic_hash": ""
   },
   "frontend/src/lib/utils.ts": {
-    "mtime": 1794193904.90379,
-    "seen": 1794726155.16255,
-    "ast_hash": "d3bc7ee5bb66e3c7ca129eb1f456f4e4",
+    "mtime": 1794730281.4435222,
+    "seen": 1794730657.3100224,
+    "ast_hash": "b6cec79b4744a28bf80de35868353056",
     "semantic_hash": ""
   },
   "frontend/src/main.tsx": {
@@ -1878,9 +1878,9 @@
     "semantic_hash": ""
   },
   "frontend/test/.dependency-cruiser.cjs": {
-    "mtime": 1794723831.0349681,
-    "seen": 1794726155.1626494,
-    "ast_hash": "4f3ec79ee0dbd1f7d5d6a9cc7321234b",
+    "mtime": 1794730376.5204203,
+    "seen": 1794730657.3161736,
+    "ast_hash": "89d882dd8e4880a5579c9875d1224aee",
     "semantic_hash": ""
   },
   "frontend/test/arch/designTokens.test.ts": {
@@ -2076,9 +2076,9 @@
     "semantic_hash": ""
   },
   "CONTEXT.md": {
-    "mtime": 1794720332.656691,
-    "seen": 1794726155.1627228,
-    "ast_hash": "8c0c38863f0dbdc42059c3b007a2aade",
+    "mtime": 1794730806.9079707,
+    "seen": 1794730917.9604218,
+    "ast_hash": "b2cdf11448b274ce54b78f316450c71a",
     "semantic_hash": ""
   },
   "README.md": {
@@ -2106,9 +2106,9 @@
     "semantic_hash": ""
   },
   "backend/docs/openapi.yaml": {
-    "mtime": 1794720332.656691,
-    "seen": 1794726155.1627402,
-    "ast_hash": "5ba5f4484f367b09254b41c8493b772e",
+    "mtime": 1794730444.6704178,
+    "seen": 1794730657.3190339,
+    "ast_hash": "d20906a969facc1b74f3ad3d42ef0696",
     "semantic_hash": ""
   },
   "backend/ops/prometheus/alerts.yaml": {
@@ -2124,9 +2124,9 @@
     "semantic_hash": ""
   },
   "backend/src/main/resources/application.yaml": {
-    "mtime": 1794228159.2272623,
-    "seen": 1794726155.1627436,
-    "ast_hash": "1e2a59977a22d1ef62bb1e21d72b165f",
+    "mtime": 1794730574.2671957,
+    "seen": 1794730657.319092,
+    "ast_hash": "9c338132c4d9b258b957b34fad386d33",
     "semantic_hash": ""
   },
   "backend/src/main/resources/logging.yaml": {
@@ -2196,9 +2196,9 @@
     "semantic_hash": ""
   },
   "frontend/AGENTS.md": {
-    "mtime": 1794720332.664691,
-    "seen": 1794726155.1627812,
-    "ast_hash": "0103f405283e932cd34b18afde963559",
+    "mtime": 1794730281.4435651,
+    "seen": 1794730657.3204048,
+    "ast_hash": "b149d0634693cf51be15c389a0950f84",
     "semantic_hash": ""
   },
   "frontend/README.md": {
@@ -2208,9 +2208,9 @@
     "semantic_hash": ""
   },
   "frontend/docs/ARCHITECTURE.md": {
-    "mtime": 1794723831.0349681,
-    "seen": 1794726155.162783,
-    "ast_hash": "b8771e11f1362b1684ff1e0d3deb756a",
+    "mtime": 1794730369.2209234,
+    "seen": 1794730657.3204544,
+    "ast_hash": "9fb7417e9770b2583d87c9e6626e1683",
     "semantic_hash": ""
   },
   "frontend/docs/TESTING_GUIDE.md": {
@@ -2232,9 +2232,9 @@
     "semantic_hash": ""
   },
   "infra/README.md": {
-    "mtime": 1794206354.7791145,
-    "seen": 1794726155.1627898,
-    "ast_hash": "590592ede52bcf7fdea345977f6932dd",
+    "mtime": 1794730630.9255354,
+    "seen": 1794730657.3207214,
+    "ast_hash": "c4313b0e250b4e839b1168414fa83862",
     "semantic_hash": ""
   },
   "infra/infrastructure.yaml": {
@@ -4506,15 +4506,15 @@
     "semantic_hash": ""
   },
   "backend/docs/ARCHITECTURE.md": {
-    "mtime": 1794702582.9772446,
-    "seen": 1794726155.1627269,
-    "ast_hash": "57bf8f3613a4e395cabff2cd3580abbf",
+    "mtime": 1794730444.6717546,
+    "seen": 1794730657.3187287,
+    "ast_hash": "2beeea924fab427bc42b77aee2ed6084",
     "semantic_hash": ""
   },
   "backend/docs/TESTING_GUIDE.md": {
-    "mtime": 1794228159.2198374,
-    "seen": 1794726155.1627285,
-    "ast_hash": "903d7829471270996b9d2e8ca0f9ed28",
+    "mtime": 1794730638.0362704,
+    "seen": 1794730657.3187318,
+    "ast_hash": "bc0489274a3ccef557af5c2964fb7990",
     "semantic_hash": ""
   },
   "backend/docs/configuration/audit.md": {
@@ -4524,9 +4524,9 @@
     "semantic_hash": ""
   },
   "backend/docs/configuration/database.md": {
-    "mtime": 1794193904.733834,
-    "seen": 1794726155.162731,
-    "ast_hash": "c866d5d6bdbccc0d3bca3b70b7cc0d45",
+    "mtime": 1794730464.4733748,
+    "seen": 1794730657.3187878,
+    "ast_hash": "235ded65a140f4b93fff4aeeef83305f",
     "semantic_hash": ""
   },
   "backend/docs/configuration/dormancy.md": {
@@ -4590,9 +4590,9 @@
     "semantic_hash": ""
   },
   "infra/docs/database-engine.md": {
-    "mtime": 1794193905.0469065,
-    "seen": 1794726155.162793,
-    "ast_hash": "a40b829dcae17cc2c6ca7686f6d77bf6",
+    "mtime": 1794730464.4732811,
+    "seen": 1794730657.3207982,
+    "ast_hash": "1e6ff248c40be0b1fb0e12dc5cdb72a0",
     "semantic_hash": ""
   },
   "infra/docs/database-monitoring.md": {
@@ -4794,9 +4794,9 @@
     "semantic_hash": ""
   },
   "docs/domain/patient.md": {
-    "mtime": 1794702582.9852445,
-    "seen": 1794726155.162778,
-    "ast_hash": "f211e361f3855cd844db4988b23fe4f0",
+    "mtime": 1794730594.5782745,
+    "seen": 1794730657.320308,
+    "ast_hash": "d14016df475153df5d2d4c0d23cf0574",
     "semantic_hash": ""
   },
   "backend/src/test/java/com/example/backend/patient/controller/PatientR5ConformanceTests.java": {
@@ -5784,9 +5784,9 @@
     "semantic_hash": ""
   },
   "frontend/src/components/ui/table.tsx": {
-    "mtime": 1794362479.1441846,
-    "seen": 1794726155.162529,
-    "ast_hash": "04098deea6a8e916b641a98a294d882f",
+    "mtime": 1794730281.44349,
+    "seen": 1794730657.3093143,
+    "ast_hash": "25dd7f3ab65e86350a0df43a8a3837d2",
     "semantic_hash": ""
   },
   "frontend/src/components/ui/tabs.tsx": {
@@ -5826,9 +5826,9 @@
     "semantic_hash": ""
   },
   "frontend/docs/DESIGN.md": {
-    "mtime": 1794702582.9852445,
-    "seen": 1794726155.1627846,
-    "ast_hash": "0954300ac530db70cbca93d3f3998b9d",
+    "mtime": 1794730260.3580506,
+    "seen": 1794730657.3205326,
+    "ast_hash": "f63f26212a0b919fe5eb767c6d183db8",
     "semantic_hash": ""
   },
   "docs/agents/test-design.md": {
@@ -6078,15 +6078,15 @@
     "semantic_hash": ""
   },
   "frontend/src/type-scale.test.ts": {
-    "mtime": 1794193904.918486,
-    "seen": 1794726155.1626463,
-    "ast_hash": "b6778632c847e8efd09992db1dcaddbb",
+    "mtime": 1794730281.4432914,
+    "seen": 1794730657.3159864,
+    "ast_hash": "4913f9593d8d6daddc4fd50f65c98789",
     "semantic_hash": ""
   },
   "frontend/test/e2e/packaged-type.spec.ts": {
-    "mtime": 1794362479.1441846,
-    "seen": 1794726155.1626809,
-    "ast_hash": "bd02a118e5fb998fe6009f887d899501",
+    "mtime": 1794730281.4434528,
+    "seen": 1794730657.3172429,
+    "ast_hash": "b48f23ac6c767c2b742357bac732430b",
     "semantic_hash": ""
   },
   "frontend/src/pages/audit/audit-operation-labels.ts": {
@@ -6132,9 +6132,9 @@
     "semantic_hash": ""
   },
   "backend/docs/LOG_RECORDS.md": {
-    "mtime": 1794702582.9772446,
-    "seen": 1794726155.1627276,
-    "ast_hash": "70ce801764497bac85ddb5d78ad3a4a1",
+    "mtime": 1794730464.4715776,
+    "seen": 1794730657.3187306,
+    "ast_hash": "717d183e6fe2bd3bfc4c73f843be898e",
     "semantic_hash": ""
   },
   "backend/docs/index.md": {
@@ -6150,9 +6150,9 @@
     "semantic_hash": ""
   },
   "docs/adr/index.md": {
-    "mtime": 1794720332.660691,
-    "seen": 1794726155.1627634,
-    "ast_hash": "79edb71403c68f3328a8089dbcf93fee",
+    "mtime": 1794730425.8460512,
+    "seen": 1794730657.3196945,
+    "ast_hash": "6668c5cd0c049e1bf9276c9de88a7071",
     "semantic_hash": ""
   },
   "docs/agents/index.md": {
@@ -6168,9 +6168,9 @@
     "semantic_hash": ""
   },
   "frontend/docs/index.md": {
-    "mtime": 1794228159.2432623,
-    "seen": 1794726155.1627867,
-    "ast_hash": "896be8537fe77b79a5c2549feebe83d3",
+    "mtime": 1794730369.2210162,
+    "seen": 1794730657.3206353,
+    "ast_hash": "a949bcde5f62c0b1e8e4c65b6724d506",
     "semantic_hash": ""
   },
   "scripts/spa-contract/README.md": {
@@ -6300,15 +6300,15 @@
     "semantic_hash": ""
   },
   "backend/docs/configuration/patient-source.md": {
-    "mtime": 1794702582.9772446,
-    "seen": 1794726155.1627355,
-    "ast_hash": "988dc0ebe92c8e4b0ce0f20e9c08d8f6",
+    "mtime": 1794730594.5797088,
+    "seen": 1794730657.318894,
+    "ast_hash": "ddb539fd476cb071c9483f355efb3f14",
     "semantic_hash": ""
   },
   "docs/adr/0014-fhir-r5-patient-from-the-in-house-patient-source.md": {
-    "mtime": 1794318184.693408,
-    "seen": 1794726155.162759,
-    "ast_hash": "b340849af37e6796cc69267ab8916b9e",
+    "mtime": 1794730444.6697154,
+    "seen": 1794730657.3196347,
+    "ast_hash": "9f055da9a0482ffef0c3d086be9b7f3c",
     "semantic_hash": ""
   },
   "backend/patient-source-mock/mappings/fault-no-birth-date.json": {
@@ -6792,9 +6792,9 @@
     "semantic_hash": ""
   },
   "docs/adr/0018-patient-search-is-the-patient-sources-own.md": {
-    "mtime": 1794702579.6412463,
-    "seen": 1794726155.1627617,
-    "ast_hash": "0a8388cea15bea437105a3a2cd90378d",
+    "mtime": 1794730444.6692743,
+    "seen": 1794730657.3196864,
+    "ast_hash": "e222fe0ce7d1f5f1d25f0912e5883738",
     "semantic_hash": ""
   },
   "backend/patient-source-mock/mappings/search-name-tan-female.json": {
@@ -7170,15 +7170,9 @@
     "semantic_hash": ""
   },
   "backend/patient-source-mock/README.md": {
-    "mtime": 1794702582.9772446,
-    "seen": 1794726155.162742,
-    "ast_hash": "c61486fef68c0bcb2d3d17e221a0b6b7",
-    "semantic_hash": ""
-  },
-  "docs/adr/0019-ffis-are-the-patient-sources-own.md": {
-    "mtime": 1794720332.660691,
-    "seen": 1794726155.1627624,
-    "ast_hash": "36478713e486654b204f83cbecfaedcd",
+    "mtime": 1794730604.75964,
+    "seen": 1794730657.3190637,
+    "ast_hash": "015a134edb77f727ef1c8a840806da4e",
     "semantic_hash": ""
   },
   "docs/domain/ffi.md": {
@@ -8451,6 +8445,18 @@
     "mtime": 1794725512.9315243,
     "seen": 1794726155.1625798,
     "ast_hash": "186b87d8501a37dc62e622168472d5ed",
+    "semantic_hash": ""
+  },
+  "docs/adr/0019-patient-histories-are-the-patient-sources-own.md": {
+    "mtime": 1794730444.6674318,
+    "seen": 1794730657.3196912,
+    "ast_hash": "0c7a681fe9f386e075a00c059a3e6ae6",
+    "semantic_hash": ""
+  },
+  "frontend/docs/PAGES.md": {
+    "mtime": 1794730376.8345861,
+    "seen": 1794730657.3205976,
+    "ast_hash": "186a7bcdcbec249e7ed9ea2d232a6b12",
     "semantic_hash": ""
   }
 }
