@@ -201,15 +201,13 @@ and compare mapped routes with documented operations — so a new route or statu
 needs both its documentation and a fixture that produces it
 (`docs/api-contract-check.md`).
 
-The SPA mirrors the Permission, token-Permission, `AuditOperation` and
-`lockCause` enums, an FFI's four closed sets of its own (`FfiType`,
-`FfiOutcome`, `FfiHigherAuthority`, `FfiStatus`), a NUMC Record's two
-(`NumcType`, `NumcOutcome`), an ARMC Board's two (`ArmcBoardType`,
-`ArmcOutcome`), a Medication Record's `DispenseStatus`, `MedicalCentre` — the
-set an FFI's Submitting MC and a Medication Record's Dispensary share — and
-each called operation's `security`; `VOCABULARIES` in
-`/scripts/spa-contract/check.mjs` lists exactly what the root's contract check
-compares.
+The SPA mirrors part of the document by hand — closed sets, each called
+operation's `security`, the shape of each response it decodes and the query
+parameters it sends — and the root's contract check holds that copy to
+`docs/openapi.yaml`, so a change to any of them runs `make verify-contract`
+beside this app's gate. Which closed sets it compares is the table in
+`/scripts/spa-contract/README.md` and `VOCABULARIES` in
+`/scripts/spa-contract/check.mjs`.
 
 `docs/openapi.yaml` is larger than one read holds: search it for the path or
 schema you are changing.

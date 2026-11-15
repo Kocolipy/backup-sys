@@ -6,14 +6,15 @@
 // `@/` and every import resolve exactly as they do in the app, and parses the
 // document with the frontend's pinned js-yaml. Both come from
 // frontend/node_modules: run `npm ci` in frontend/ first. Exits 1, listing
-// every mismatch, when the two disagree. `make verify-contract` runs it.
+// every mismatch, when the two disagree, and otherwise prints what it held.
+// `make verify-contract` runs it.
 
 import { readdir, readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { discover, findMismatches, VOCABULARIES } from "./check.mjs";
+import { discover, holdContract, VOCABULARIES } from "./check.mjs";
 
 const [frontendDir, documentPath] = process.argv
   .slice(2)
@@ -75,7 +76,7 @@ try {
 const { load } = await importFromFrontend("js-yaml");
 const doc = load(await readFile(documentPath, "utf8"));
 
-const findings = findMismatches({ modules, declared }, doc);
+const { findings, held } = await holdContract({ modules, declared }, doc);
 const declarationCount = Object.values(declared).flat().length;
 if (findings.length > 0) {
   console.error(`The SPA disagrees with ${documentPath}:`);
@@ -83,5 +84,6 @@ if (findings.length > 0) {
   process.exit(1);
 }
 console.log(
-  `SPA–API contract holds: ${VOCABULARIES.length} vocabularies and ${declarationCount} request declarations agree with ${path.basename(documentPath)}`,
+  `SPA–API contract holds: ${VOCABULARIES.length} vocabularies and ${declarationCount} request declarations agree with ${path.basename(documentPath)}; ` +
+    `${held.decoders} decoders read all ${held.samples} response samples, and ${held.querying} declarations send ${held.parameters} documented query parameters`,
 );

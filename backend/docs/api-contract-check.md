@@ -30,8 +30,11 @@ go through the real filter chain, SQL Server and Redis.
 
 `OpenApiContractTests` shows the checker reporting each kind of drift on a planted response or a
 planted vocabulary, and fails if the document starts using a schema keyword the validator does not
-implement. The SPA mirrors the same enums, held to the document by the root's SPA–API contract
-check (`/scripts/spa-contract/README.md`, "The vocabulary chain").
+implement. The SPA mirrors part of the document by hand — its closed sets, each request's
+Permission or Superuser requirement, the query parameters each request sends and the shape of
+each response it decodes — and the root's SPA–API contract check holds that copy to the document
+(`/scripts/spa-contract/README.md`), so the SPA is held to the service through it. A change to a
+response schema or a query parameter therefore also runs `make verify-contract`.
 
 ## Running it
 

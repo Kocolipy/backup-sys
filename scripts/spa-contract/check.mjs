@@ -1,8 +1,10 @@
-// The SPA–API contract check: holds the vocabulary the SPA mirrors by hand against
-// the API document, backend/docs/openapi.yaml. Pure — it is handed the SPA's
-// evaluated modules and the parsed document, and returns every disagreement as
-// one readable line. `discover` picks, from the SPA's source text, the modules to
-// evaluate; ./main.mjs does the loading; ./check.test.mjs pins this.
+// The SPA–API contract check: holds what the SPA mirrors by hand — its closed
+// sets, each request declaration's requirement, the query parameters it sends
+// and the shape of each response it decodes — against the API document,
+// backend/docs/openapi.yaml. Pure — it is handed the SPA's evaluated modules and
+// the parsed document, and returns every disagreement as one readable line.
+// `discover` picks, from the SPA's source text, the modules to evaluate;
+// ./main.mjs does the loading; ./check.test.mjs pins this.
 
 /**
  * Each closed set the SPA decodes strictly, the module that exports it, and
@@ -160,18 +162,37 @@ function vocabularyMismatches(spa, doc) {
   return findings;
 }
 
+/** What a stand-in argument reads as wherever it becomes text. */
+const STAND_IN = "ARG";
+
 /**
  * A stand-in for any argument a declaration's path is built from: it reads as
- * `ARG` wherever it becomes text, and any property of it is another stand-in,
- * so `(id) => \`/x/${id}\`` and `(query) => \`/x?${query.search}\`` both
- * resolve without the check knowing an argument's type.
+ * `ARG` wherever it becomes text (and as 1 wherever it becomes a number), and
+ * any property of it is another stand-in, so `(id) => \`/x/${id}\`` and
+ * `(query) => \`/x?${query.search}\`` both resolve without the check knowing
+ * an argument's type.
+ *
+ * It is set wherever a path asks: it is no `null` and no `""`, calling it
+ * answers another stand-in, which is truthy, and iterating it yields one
+ * stand-in — so `sort === null`, `search === ""`, `chosen.includes(code)` and
+ * `for (const code of chosen)` all take the branch that sends a parameter, and
+ * every optional query parameter a path can send is sent.
  */
 function placeholder() {
   return new Proxy(function stand() {}, {
-    get: (_target, key) =>
-      key === Symbol.toPrimitive || key === "toString" || key === "valueOf"
-        ? () => "ARG"
-        : placeholder(),
+    apply: () => placeholder(),
+    get: (_target, key) => {
+      if (key === Symbol.toPrimitive) {
+        return (hint) => (hint === "number" ? 1 : STAND_IN);
+      }
+      if (key === "toString" || key === "valueOf") return () => STAND_IN;
+      if (key === Symbol.iterator) {
+        return function* one() {
+          yield placeholder();
+        };
+      }
+      return placeholder();
+    },
   });
 }
 
@@ -288,7 +309,296 @@ function unevaluatedDeclarations(spa) {
   );
 }
 
-function declarationMismatches(spa, doc) {
+/** `node`, or the node its `$ref` names when it is a reference. */
+const dereferenced = (doc, node) =>
+  typeof node?.$ref === "string" ? resolve(doc, node.$ref) : node;
+
+// ---- query parameters ----------------------------------------------------------------
+
+/** The name of each query parameter `path` sends, each once, in the order it first sends it. */
+function queryNamesOf(path) {
+  const query = path.includes("?") ? path.slice(path.indexOf("?") + 1) : "";
+  const names = query
+    .split("&")
+    .filter((part) => part !== "")
+    .map((part) => part.split("=")[0]);
+  return [...new Set(names)];
+}
+
+/** Every `in: query` parameter `doc` documents for the operation, the path item's own included. */
+function documentedQueryParameters(doc, template, method) {
+  const item = doc.paths[template];
+  return [
+    ...(item.parameters ?? []),
+    ...(item[method.toLowerCase()].parameters ?? []),
+  ]
+    .map((parameter) => dereferenced(doc, parameter))
+    .filter((parameter) => parameter?.in === "query");
+}
+
+/**
+ * Each query parameter the declaration's path sends that its operation does
+ * not document, each one the operation requires that the path never sends,
+ * and a name the path builds from its arguments, which the check cannot hold.
+ */
+function queryMismatches(doc, { label, method }, path, template, held) {
+  const operation = `${method} ${template}`;
+  const documented = documentedQueryParameters(doc, template, method);
+  const documentedNames = documented.map(({ name }) => name);
+  const sent = queryNamesOf(path);
+  const findings = [];
+  for (const name of sent) {
+    if (name.includes(STAND_IN)) {
+      findings.push(
+        `${label} builds a query parameter's name from its arguments, so the check cannot hold what it sends to ${operation}`,
+      );
+    } else if (!documentedNames.includes(name)) {
+      findings.push(
+        `${label} sends query parameter "${name}" to ${operation}, which openapi.yaml does not document`,
+      );
+    } else {
+      held.parameters += 1;
+    }
+  }
+  for (const { name } of documented.filter(
+    ({ name, required }) => required === true && !sent.includes(name),
+  )) {
+    findings.push(
+      `${label} never sends query parameter "${name}", which ${operation} requires`,
+    );
+  }
+  if (sent.length > 0 && findings.length === 0) held.querying += 1;
+  return findings;
+}
+
+// ---- response shapes -----------------------------------------------------------------
+
+/**
+ * The keywords the sampler builds a sample from. A schema holding any other —
+ * an annotation aside — cannot be sampled faithfully, so it fails the check,
+ * naming the keyword, rather than being sampled as if it were not there.
+ */
+const SAMPLED_KEYWORDS = new Set([
+  "$ref",
+  "type",
+  "enum",
+  "format",
+  "pattern",
+  "minLength",
+  "maxLength",
+  "minimum",
+  "maximum",
+  "properties",
+  "required",
+  "additionalProperties",
+  "items",
+  "minItems",
+  "maxItems",
+]);
+
+/** Keywords that say nothing about which values a schema allows. */
+const ANNOTATIONS = new Set([
+  "description",
+  "title",
+  "example",
+  "examples",
+  "readOnly",
+  "writeOnly",
+  "deprecated",
+]);
+
+/** The sample of each string `format` the sampler implements: values the SPA's decoders accept. */
+const STRING_FORMATS = {
+  date: "2024-02-29",
+  "date-time": "2024-02-29T08:30:00+08:00",
+  uuid: "3f2c1d4e-5b6a-4c7d-8e9f-0a1b2c3d4e5f",
+};
+
+const INTEGER_FORMATS = new Set(["int32", "int64"]);
+
+/** The two samples built of every success body: what each holds. */
+const SAMPLES = [
+  { name: "every-property", full: true },
+  { name: "required-only", full: false },
+];
+
+/** A schema the sampler cannot build a sample of, and why. */
+class Unsampleable extends Error {}
+
+/**
+ * A value `schema` allows. The `full` sample holds every property, a nullable
+ * one set and every boolean `true`; the other only the required properties,
+ * a nullable one `null` and every boolean `false`. Both take an enum's first
+ * member, an array of one item (or `minItems`), and the format's sample, the
+ * pattern checked, of a string.
+ */
+function sampleOf(doc, schema, full, at) {
+  if (schema === null || typeof schema !== "object") {
+    throw new Unsampleable(`there is no schema at ${at}`);
+  }
+  for (const keyword of Object.keys(schema)) {
+    if (!SAMPLED_KEYWORDS.has(keyword) && !ANNOTATIONS.has(keyword)) {
+      throw new Unsampleable(
+        `the sampler does not implement "${keyword}" (at ${at})`,
+      );
+    }
+  }
+  if (typeof schema.$ref === "string") {
+    return sampleOf(doc, resolve(doc, schema.$ref), full, schema.$ref);
+  }
+  const types = [schema.type ?? []].flat();
+  const nullable = types.includes("null") || schema.enum?.includes(null);
+  if (nullable && !full) return null;
+  if (Array.isArray(schema.enum)) {
+    return schema.enum.find((value) => value !== null) ?? null;
+  }
+  const kinds = types.filter((type) => type !== "null");
+  if (kinds.length === 0) return nullable ? null : unsampleable("a schema with no type", at);
+  if (kinds.length > 1) return unsampleable(`a type of several kinds`, at);
+  switch (kinds[0]) {
+    case "object":
+      return objectSample(doc, schema, full, at);
+    case "array":
+      return arraySample(doc, schema, full, at);
+    case "string":
+      return stringSample(schema, at);
+    case "integer":
+      return integerSample(schema, at);
+    case "boolean":
+      return full;
+    default:
+      return unsampleable(`type "${kinds[0]}"`, at);
+  }
+}
+
+function unsampleable(what, at) {
+  throw new Unsampleable(`the sampler does not implement ${what} (at ${at})`);
+}
+
+function objectSample(doc, schema, full, at) {
+  const properties = schema.properties ?? {};
+  const required = schema.required ?? [];
+  const missing = required.find((name) => !(name in properties));
+  if (missing !== undefined) {
+    throw new Unsampleable(`required "${missing}" has no schema (at ${at})`);
+  }
+  const names = full ? Object.keys(properties) : required;
+  return Object.fromEntries(
+    names.map((name) => [
+      name,
+      sampleOf(doc, properties[name], full, `${at}/properties/${name}`),
+    ]),
+  );
+}
+
+function arraySample(doc, schema, full, at) {
+  const length = Math.min(
+    Math.max(1, schema.minItems ?? 0),
+    schema.maxItems ?? Infinity,
+  );
+  return Array.from({ length }, () =>
+    sampleOf(doc, schema.items, full, `${at}/items`),
+  );
+}
+
+function stringSample(schema, at) {
+  if (schema.format !== undefined && !(schema.format in STRING_FORMATS)) {
+    unsampleable(`format "${schema.format}"`, at);
+  }
+  let value = STRING_FORMATS[schema.format] ?? "sample";
+  value = value.padEnd(schema.minLength ?? 0, "x");
+  if (schema.maxLength !== undefined) value = value.slice(0, schema.maxLength);
+  if (
+    schema.pattern !== undefined &&
+    !new RegExp(schema.pattern, "u").test(value)
+  ) {
+    throw new Unsampleable(
+      `the sampler's "${value}" does not match the pattern "${schema.pattern}" (at ${at})`,
+    );
+  }
+  return value;
+}
+
+function integerSample(schema, at) {
+  if (schema.format !== undefined && !INTEGER_FORMATS.has(schema.format)) {
+    unsampleable(`format "${schema.format}"`, at);
+  }
+  return Math.min(schema.minimum ?? 1, schema.maximum ?? Infinity);
+}
+
+/** Each body the operation's `2xx` responses document, `$ref` followed: its status, media type and schema. */
+function successBodies(doc, operation) {
+  return Object.entries(operation.responses ?? {})
+    .filter(([status]) => /^2/.test(status))
+    .flatMap(([status, response]) =>
+      Object.entries(dereferenced(doc, response)?.content ?? {}).map(
+        ([mediaType, { schema }]) => ({ status, mediaType, schema }),
+      ),
+    );
+}
+
+/**
+ * The declaration's `decode` run over both samples of each body its
+ * operation's success responses document, under that body's own media type:
+ * the first sample it refuses, or why there is nothing to run it over.
+ */
+async function responseMismatches(
+  doc,
+  { label, method, value },
+  template,
+  held,
+) {
+  const operation = `${method} ${template}`;
+  if (value.decode === undefined) {
+    return method === "GET"
+      ? [
+          `${label} reads ${operation} with no decoder, so the check cannot hold its response`,
+        ]
+      : [];
+  }
+  if (typeof value.decode !== "function") {
+    return [`${label} has a decode that is not a function`];
+  }
+  const bodies = successBodies(doc, doc.paths[template][method.toLowerCase()]);
+  if (bodies.length === 0) {
+    return [
+      `${label} decodes a body, but ${operation} documents no success body`,
+    ];
+  }
+  let decoded = 0;
+  for (const { status, mediaType, schema } of bodies) {
+    const response = `${operation} ${status} ${mediaType}`;
+    for (const { name, full } of SAMPLES) {
+      let sample;
+      try {
+        sample = sampleOf(doc, schema, full, response);
+      } catch (error) {
+        if (!(error instanceof Unsampleable)) throw error;
+        return [`${label} cannot be held to ${response}: ${error.message}`];
+      }
+      try {
+        await value.decode(
+          new Response(JSON.stringify(sample), {
+            headers: { "content-type": mediaType },
+          }),
+        );
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        return [
+          `${label} refuses the ${name} sample of ${response}: ${reason}`,
+        ];
+      }
+      decoded += 1;
+    }
+  }
+  held.samples += decoded;
+  held.decoders += 1;
+  return [];
+}
+
+// ---- the declarations ----------------------------------------------------------------
+
+async function declarationMismatches(spa, doc, held) {
   const declarations = declarationsOf(spa);
   if (declarations.length === 0) {
     return [
@@ -296,7 +606,8 @@ function declarationMismatches(spa, doc) {
     ];
   }
   const findings = unevaluatedDeclarations(spa);
-  for (const { label, method, value, required } of declarations) {
+  for (const declaration of declarations) {
+    const { label, method, value, required } = declaration;
     const path = pathOf(value);
     if (path === null) {
       findings.push(
@@ -319,6 +630,10 @@ function declarationMismatches(spa, doc) {
         `${label} requires ${requires} for ${method} ${template}, but openapi.yaml requires ${describeSecurity(security)}`,
       );
     }
+    findings.push(
+      ...queryMismatches(doc, declaration, path, template, held),
+      ...(await responseMismatches(doc, declaration, template, held)),
+    );
   }
   return findings;
 }
@@ -362,17 +677,27 @@ export function discover(sources) {
 }
 
 /**
- * Every way the SPA, as `spa` holds it, disagrees with `doc`, the parsed API
- * document; empty when they agree.
+ * The SPA, as `spa` holds it, held to `doc`, the parsed API document:
+ * `findings` lists every way they disagree, empty when they agree, and `held`
+ * counts what agreed — the `decoders` that read every sample of their
+ * response, the `samples` they read, the declarations `querying` with every
+ * query parameter they send documented, and those `parameters`.
  *
  * `spa.modules` maps a source path under `frontend/` to that module's exports;
  * `spa.declared` maps a source path to the names of the request declarations
  * its source exports, read off the text, so a declaration that does not
  * evaluate to one is reported rather than skipped.
  */
-export function findMismatches(spa, doc) {
-  return [
+export async function holdContract(spa, doc) {
+  const held = { decoders: 0, samples: 0, querying: 0, parameters: 0 };
+  const findings = [
     ...vocabularyMismatches(spa, doc),
-    ...declarationMismatches(spa, doc),
+    ...(await declarationMismatches(spa, doc, held)),
   ];
+  return { findings, held };
+}
+
+/** Every way the SPA, as `spa` holds it, disagrees with `doc`: {@link holdContract}'s `findings`. */
+export async function findMismatches(spa, doc) {
+  return (await holdContract(spa, doc)).findings;
 }
