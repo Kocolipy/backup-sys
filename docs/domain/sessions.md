@@ -70,9 +70,17 @@ tell which; both present as an expired session.
 
 **Idle sign-out** — the SPA's own end of an idle session, timed by the
 `idleTimeoutSeconds` the backend reports rather than a constant of the SPA's.
-Only user input counts as activity, never a request, and it is shared across tabs;
-a warning a minute before the limit offers to stay signed in, and staying is a real
-request that renews the backend's clock too. At the limit the SPA logs out and
+Only user input counts as activity, never a request: input renews the backend's
+Idle timeout with a request of its own, at most once a minute (once a quarter of
+a limit under four minutes), and the SPA counts its limit from the last renewal
+it knows of rather than from the last input, so it never signs out later than
+the backend would. No timer or poll renews, so an
+unattended page still signs out at the limit. Every tab holds the same session, so a
+renewal in one tab is shared with the others; input that renewed nothing is not. A
+warning a minute before the limit offers to stay signed in, and staying is a
+renewal too; passive input while the warning is open does nothing, and another
+tab's renewal dismisses it. A renewal never extends the absolute session lifetime.
+At the limit the SPA logs out and
 returns to login with the sign-in reason `inactive` — the code's name for it, not
 the glossary's. `/frontend/docs/BACKEND_CONTRACT.md` is the contract.
 

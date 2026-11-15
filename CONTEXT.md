@@ -86,7 +86,9 @@ The maximum age of a session from the Login that signed it in, however active it
 is; a session nobody signed in to counts from its creation.
 
 **Idle sign-out**:
-The SPA ending an idle session on its own, after warning the User.
+The SPA ending an idle session on its own, after warning the User. Only user
+input keeps the session: it renews the backend's Idle timeout, and the SPA counts
+its limit from the last renewal.
 _Avoid_: inactivity sign-out
 
 **One session per User**:
