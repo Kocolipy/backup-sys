@@ -9,20 +9,20 @@ tags: [testing, vitest, stryker, semgrep, fallow]
 
 ## Running the suites
 
-| Command                 | What it runs                                           | Typical use                           |
-| ----------------------- | ------------------------------------------------------ | ------------------------------------- |
-| `npm test`              | vitest, single pass, everything but `test/e2e`         | after every change                    |
-| `npm run test:watch`    | vitest in watch mode                                   | while writing a test                  |
-| `npm test <path>`       | one file                                               | narrowing a failure                   |
-| `npm test -- -t "name"` | one test by name                                       | narrowing further                     |
-| `npm run typecheck`     | `tsc -b` over all three projects                       | after every change                    |
-| `npm run test:arch`     | dependency-cruiser + `test/arch`                       | after every change                    |
-| `npm run test:coverage` | vitest with v8 coverage                                | checking a gap, not a gate            |
-| `npm run test:e2e`      | Playwright against `npm run dev`, and the packaged JAR | once an implementation is complete    |
-| `npm run test:security` | Semgrep, local ruleset                                 | once an implementation is complete    |
-| `npx fallow audit`      | dead code / complexity / duplication in the changeset  | once an implementation is complete    |
-| `npm run test:mutation` | Stryker over the whole repo                            | deliberately, outside the loop        |
-| scoped Stryker          | Stryker over the source one test covers                | after writing or changing a unit test |
+| Command                 | What it runs                                                   | Typical use                           |
+| ----------------------- | -------------------------------------------------------------- | ------------------------------------- |
+| `npm test`              | vitest, single pass, everything but `test/e2e` and `test/arch` | after every change                    |
+| `npm run test:watch`    | vitest in watch mode                                           | while writing a test                  |
+| `npm test <path>`       | one file                                                       | narrowing a failure                   |
+| `npm test -- -t "name"` | one test by name                                               | narrowing further                     |
+| `npm run typecheck`     | `tsc -b` over all three projects                               | after every change                    |
+| `npm run test:arch`     | dependency-cruiser + `test/arch`                               | after every change                    |
+| `npm run test:coverage` | vitest with v8 coverage                                        | checking a gap, not a gate            |
+| `npm run test:e2e`      | Playwright against `npm run dev`, and the packaged JAR         | once an implementation is complete    |
+| `npm run test:security` | Semgrep, local ruleset                                         | once an implementation is complete    |
+| `npx fallow audit`      | dead code / complexity / duplication in the changeset          | once an implementation is complete    |
+| `npm run test:mutation` | Stryker over the whole repo                                    | deliberately, outside the loop        |
+| scoped Stryker          | Stryker over the source one test covers                        | after writing or changing a unit test |
 
 The baseline gate, the conditional gates and their triggers are in AGENTS.md
 under "Testing".
