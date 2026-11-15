@@ -286,6 +286,13 @@ export const UNFILTERED_AUDIT_QUERY: AuditQuery = {
   to: null,
 };
 
+/** Every filter {@link auditSearch} sends by its own name, beside each `operation`. */
+const SEARCHED_FIELDS = [
+  "outcome",
+  ...ID_FIELDS.map(({ key }) => key),
+  ...DATE_FIELDS.map(({ key }) => key),
+] as const;
+
 /**
  * The query string `query` asks for: each operation as its own `operation`
  * parameter, then each other filter set, by its own name; an unset one is
@@ -294,7 +301,7 @@ export const UNFILTERED_AUDIT_QUERY: AuditQuery = {
 function auditSearch(query: AuditQuery): string {
   const params = new URLSearchParams();
   for (const operation of query.operations) params.append("operation", operation);
-  for (const key of ["outcome", "actorId", "resourceId", "from", "to"] as const) {
+  for (const key of SEARCHED_FIELDS) {
     const value = query[key];
     if (value !== null) params.set(key, value);
   }
