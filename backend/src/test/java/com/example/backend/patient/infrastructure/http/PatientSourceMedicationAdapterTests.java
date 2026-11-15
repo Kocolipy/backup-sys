@@ -1,6 +1,5 @@
 package com.example.backend.patient.infrastructure.http;
 
-import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.okJson;
@@ -21,9 +20,6 @@ import com.example.backend.patient.domain.MedicationRecord;
 import com.example.backend.patient.domain.PatientId;
 import com.example.backend.patient.domain.SortOrder;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
-import com.github.tomakehurst.wiremock.verification.LoggedRequest;
-import java.io.PrintWriter;
-import java.io.StringWriter;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
@@ -54,7 +50,9 @@ import org.springframework.web.client.RestClient;
  * Medication Record, its six optional
  * elements the ones it may lack, and what a failure of that call is, each Medication Record's
  * under a reason naming Medication. What the mock's Medication Histories hold is
- * {@code PatientStoreContract}'s.
+ * {@code PatientStoreContract}'s. What every history shares — the page's call, the statuses that
+ * are no page, the timeout, the fault stubs they have in common — is
+ * {@code PatientSourceHistoriesAdapterTests}'.
  */
 class PatientSourceMedicationAdapterTests {
 
@@ -167,21 +165,6 @@ class PatientSourceMedicationAdapterTests {
     }
 
     /**
-     * The read asks the source for the patient's Medication History from the page's zero-based
-     * offset, for the page's count, with an accurate total — and, with no filter and no column to
-     * sort by, nothing else: no {@code _sort}, so the order is the source's own.
-     */
-    @Test
-    void aReadAsksTheSourceForThePageAndItsTotalInTheSourcesOrder() {
-        reading(MedicationFilter.NONE, HistorySort.SOURCE_ORDER);
-
-        assertThat(sentQuery()).isEqualTo(Map.of(
-                "_offset", List.of("5"),
-                "_count", List.of("5"),
-                "_total", List.of("accurate")));
-    }
-
-    /**
      * Each sort is the source's {@code _sort} on its own search parameter — {@code start-date}
      * or {@code end-date}, descending with a leading {@code -} — and the column alone: the source
      * breaks ties, so no {@code _id} follows it.
@@ -271,31 +254,6 @@ class PatientSourceMedicationAdapterTests {
                 Map.entry("_total", List.of("accurate"))));
     }
 
-    /** As every read of the source, it presents nothing, and asks for FHIR JSON. */
-    @Test
-    void aReadPresentsNoCredentialAndAsksForFhirJson() {
-        answering(page());
-
-        reading();
-
-        LoggedRequest sent = SOURCE.findAll(getRequestedFor(urlPathEqualTo(PROBE_PATH)))
-                .getFirst();
-        assertThat(List.of(sent.containsHeader("Authorization"), sent.containsHeader("Cookie"),
-                sent.getHeader("Accept")))
-                .containsExactly(false, false, "application/fhir+json");
-    }
-
-    /** Nothing is cached: the same read twice is two calls to the source. */
-    @Test
-    void everyReadIsACallToTheSource() {
-        answering(page());
-
-        reading();
-        reading();
-
-        SOURCE.verify(2, getRequestedFor(urlPathEqualTo(PROBE_PATH)));
-    }
-
     // ---- the answer ----------------------------------------------------------------------
 
     /**
@@ -354,50 +312,12 @@ class PatientSourceMedicationAdapterTests {
 
     // ---- a failure of the source ---------------------------------------------------------
 
-    /** Only a {@code 200} is a page and only a {@code 404} no patient: any other status is a fault. */
-    @ParameterizedTest
-    @CsvSource({
-        "400, unexpected-status, DATA",
-        "401, unexpected-status, DATA",
-        "302, unexpected-status, DATA",
-        "500, server-error, SERVER",
-        "503, server-error, SERVER"})
-    void aStatusButAPageOrNoPatientIsAFault(int status, String reason, ErrorCategory category) {
-        SOURCE.stubFor(get(urlPathEqualTo(PROBE_PATH)).atPriority(1)
-                .willReturn(aResponse().withStatus(status)));
-
-        assertThat(faultReading(adapter()))
-                .isEqualTo(new Fault("The patient source answered " + status, reason, category));
-    }
-
-    @Test
-    void aReadUnansweredWithinTheReadTimeoutTimesOut() {
-        SOURCE.stubFor(get(urlPathEqualTo(PROBE_PATH)).atPriority(1)
-                .willReturn(okJson(page()).withFixedDelay(1000)));
-        PatientSourceAdapter impatient = new PatientSourceAdapter(RestClient.builder(),
-                SOURCE.baseUrl(), Duration.ofSeconds(2), Duration.ofMillis(100));
-
-        assertThat(faultReading(impatient)).isEqualTo(new Fault(
-                "The patient source did not answer in time", "timed-out", ErrorCategory.NETWORK));
-    }
-
     /**
-     * Each fault stub of a Medication History, by the failure it serves, but the slow one, whose
-     * wait is the production read timeout's (the case above times out the same way, sooner).
+     * Each fault stub of a Medication History that is its own, by the failure it serves: the
+     * stubs every history serves are {@code PatientSourceHistoriesAdapterTests}'.
      */
     static Stream<Arguments> faultStubs() {
         return Stream.of(
-                Arguments.of("fault-medication-unreachable", new Fault(
-                        "The patient source could not be reached", "unreachable",
-                        ErrorCategory.NETWORK)),
-                Arguments.of("fault-medication-server-error", new Fault(
-                        "The patient source answered 503", "server-error", ErrorCategory.SERVER)),
-                Arguments.of("fault-medication-unexpected-status",
-                        data("The patient source answered 400", "unexpected-status")),
-                Arguments.of("fault-medication-not-a-searchset", data(
-                        "The patient source's page is no searchset", "not-a-searchset")),
-                Arguments.of("fault-medication-no-total",
-                        data("The patient source's page has no total", "no-total")),
                 Arguments.of("fault-medication-no-id", data(
                         "The patient source's Medication Record has no id",
                         "medication-no-id")),
@@ -433,10 +353,11 @@ class PatientSourceMedicationAdapterTests {
         assertThat(faultReading(adapter(), patient)).isEqualTo(expected);
     }
 
-    /** The cases above and the slow stub are every Medication fault stub the stub files hold. */
+    /** The cases above, the shared stubs and the slow one are every Medication fault stub the files hold. */
     @Test
     void everyMedicationFaultStubIsReadAbove() {
-        Stream<String> covered = Stream.concat(Stream.of("fault-medication-slow"),
+        Stream<String> covered = Stream.concat(
+                PatientSourceHistoriesAdapterTests.sharedFaultStubs("medication").stream(),
                 faultStubs().map(arguments -> (String) arguments.get()[0]));
 
         assertThat(PatientSourceStubs.medicationFaults())
@@ -524,38 +445,4 @@ class PatientSourceMedicationAdapterTests {
                 "medication-end-before-start"));
     }
 
-    /**
-     * An entry holding no Medication Record — nothing at all, an ARMC Board or a Patient — is
-     * another resource.
-     */
-    @ParameterizedTest
-    @CsvSource(delimiter = '|', textBlock = """
-        {"resourceType": "Bundle", "type": "searchset", "total": 1, "entry": [{}]}
-        {"resourceType": "Bundle", "type": "searchset", "total": 1, "entry": [{"resource": {"resourceType": "ARMC", "id": "x"}}]}
-        {"resourceType": "Bundle", "type": "searchset", "total": 1, "entry": [{"resource": {"resourceType": "Patient", "id": "x"}}]}
-        """)
-    void anEntryHoldingNoRecordIsAFault(String body) {
-        answering(body);
-
-        assertThat(faultReading(adapter())).isEqualTo(
-                data("The patient source answered with another resource", "another-resource"));
-    }
-
-    /**
-     * A failed read names nothing it asked for or got: not the patient's id, nor anything of the
-     * answer, in its message, its cause or anything a record of it would print.
-     */
-    @Test
-    void aFailedReadSaysNothingOfThePatientOrTheAnswer() {
-        answering(page(record("dispensary", "lapsed-camp")));
-
-        Throwable fault = catchThrowable(() ->
-                unfiltered(adapter(), PROBE_PATIENT));
-
-        StringWriter printed = new StringWriter();
-        fault.printStackTrace(new PrintWriter(printed));
-        assertThat(printed.toString())
-                .doesNotContain(PROBE_PATIENT, "probe-medication-K4t8", "Probe Amoxicillin",
-                        "2017-02-13", "2017-02-15", "Dr Probe Lee", "lapsed-camp");
-    }
 }
