@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # The SPA–API contract check — the one gate that belongs to neither app. It holds
-# the vocabulary the SPA mirrors by hand (PERMISSIONS, TOKEN_PERMISSIONS,
-# AUDIT_OPERATIONS, LOCK_CAUSES, and the Permission or Superuser requirement
-# of every request declaration) to backend/docs/openapi.yaml, which the
-# backend's own contract tests hold to the running service.
+# what the SPA mirrors by hand — its closed sets, each request declaration's
+# Permission or Superuser requirement, the query parameters it sends and the
+# shape of each response it decodes (scripts/spa-contract/README.md) — to
+# backend/docs/openapi.yaml, which the backend's own contract tests hold to the
+# running service.
 #
 # It lives here, not in either app, because it reads both: an app may not
 # reach outside itself (root AGENTS.md, "Paths"). It runs on the frontend's
@@ -20,5 +21,5 @@ require_node
 log "testing the SPA–API contract check"
 node --test --test-reporter=spec "$ROOT_DIR/scripts/spa-contract/check.test.mjs"
 
-log "holding the SPA's mirrored vocabulary to backend/docs/openapi.yaml"
+log "holding what the SPA mirrors to backend/docs/openapi.yaml"
 node "$ROOT_DIR/scripts/spa-contract/main.mjs" "$FRONTEND_DIR" "$BACKEND_DIR/docs/openapi.yaml"
