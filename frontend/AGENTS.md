@@ -79,11 +79,14 @@ also an `index.css` change never reaches the page.
 request, reads a status, or touches the CSRF token, the session window, logout
 or the CSP — and update it in the same change when the backend side moves.
 
-The closed sets decoded strictly from the API, and every declaration's
-`permission`, are held to `/backend/docs/openapi.yaml` by the root's
-`make verify-contract`, which `npm run verify` does not run. A declaration's
-`path` must build its absolute path from its arguments alone, so the check can
-find its operation.
+The root's `make verify-contract`, which `npm run verify` does not run, holds
+to `/backend/docs/openapi.yaml` the closed sets decoded strictly from the API,
+every declaration's `permission`, the query parameters each declaration's
+`path` sends, and each declaration's `decode`, run over sample bodies built
+from its operation's success response (`/scripts/spa-contract/README.md`). A
+declaration's `path` must build its absolute path and every query parameter's
+name from its arguments alone, so the check can find its operation and see
+each parameter it can send.
 
 ## Testing
 

@@ -5247,19 +5247,34 @@ components:
       description: |
         One recorded event, exactly as stored. There is no property a password,
         bearer value, hash, `userName`, profile value or literal filter value
-        could occupy.
+        could occupy. Every property is always present: one with no value is
+        `null`, never left out.
       required:
         [
           id,
           occurredAt,
           operation,
           outcome,
+          actorId,
+          subjectId,
           resourceType,
+          resourceId,
           changedPaths,
           statusClass,
+          errorCode,
+          httpMethod,
+          httpPath,
+          requestId,
+          resultCount,
+          filterShape,
           permissions,
+          loginMethod,
+          mfaFactor,
+          tokenId,
+          replacementTokenId,
           permissionsBefore,
           permissionsAfter,
+          superuserChanged,
           groupIds,
         ]
       properties:
