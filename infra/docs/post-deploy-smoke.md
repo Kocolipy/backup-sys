@@ -11,6 +11,12 @@ tags: [smoke, verification, secrets]
 first failure. `deploy.sh` runs it after deploying the JAR; run it yourself after
 any later deploy.
 
+The checks on the instance run there as root through Systems Manager Run
+Command, which keeps each command's output in the account's command history.
+So the instance reads its own secrets, and the checks that compare secret
+values with its files (steps 5 and 6) return their verdict alone: neither a
+secret nor the text searched for one leaves the instance.
+
 `./smoke.sh --leaks-only <stack> [region]` runs steps 0 and 6 alone, step 6 over the sources
 that exist before the service does — the rendered UserData, the `cfn-init`
 metadata and logs, the cloud-init logs, the env files and the database

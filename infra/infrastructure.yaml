@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "Spring Boot Backend Infrastructure - ALB, EC2, RDS for SQL Server 2022 Standard Edition, ElastiCache Redis (ap-southeast-1)"
+Description: "Spring Boot Backend Infrastructure - ALB, EC2, RDS for SQL Server 2022, ElastiCache Redis (ap-southeast-1)"
 
 Parameters:
   # Network Configuration (Existing VPC Required)
@@ -24,19 +24,9 @@ Parameters:
     Type: AWS::EC2::Subnet::Id
 
   # EC2 Configuration
-  CreateKeyPair:
-    Description: Create new EC2 Key Pair (recommended)
-    Type: String
-    Default: "true"
-    AllowedValues:
-      - "true"
-      - "false"
-
-  KeyName:
-    Description: EC2 Key Pair name (will be created if CreateKeyPair is true, or use existing if false)
-    Type: String
-    Default: "spring-backend-key"
-
+  # The instance has no key pair and no inbound port 22: operators reach it
+  # through Systems Manager (Session Manager for a shell, Run Command for the
+  # scripts in infra/), which its role's AmazonSSMManagedInstanceCore allows.
   InstanceType:
     Description: EC2 instance type
     Type: String
@@ -47,26 +37,45 @@ Parameters:
       - t3.medium
       - t3.large
 
-  # No default: the instance has a public IP and its role reads the RDS master
-  # secret, so who may reach port 22 is the operator's explicit choice — their
-  # own address as a /32, ideally. deploy.sh asks for it and refuses a /0 range
-  # unless the operator confirms it (infra/docs/parameters.md, "Parameters Reference").
-  SSHLocation:
-    Description: CIDR range that can SSH to the EC2 instance (no default; e.g. your public IP as x.x.x.x/32)
+  # The bucket deploy.sh stages this template in, and the application JAR
+  # under <stack>/jar/: the instance's role may read that prefix alone, and the
+  # instance fetches each JAR from it (infra/README.md, "Application Deployment").
+  ArtifactBucket:
+    Description: S3 bucket holding the application JAR under <stack>/jar/ (deploy.sh fills it)
     Type: String
-    AllowedPattern: (\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})
-    ConstraintDescription: Must be a valid IP CIDR range (x.x.x.x/x)
+    AllowedPattern: "^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$"
+    ConstraintDescription: an S3 bucket name
 
   # RDS Configuration
-  # Standard Edition, licence-included, runs on none of the small classes (no
-  # db.t3.micro to db.t3.large, no Graviton): these are the classes RDS offers
-  # it on, cheapest first. A cost change against the previous stack's
-  # db.t3.micro; see infra/docs/database-engine.md, "Engine, edition and cost".
+  # Standard Edition is production's (ADR 0013, "Scope"). Web and Express are
+  # the small, cheap editions for a trial stack: Express caps a database at
+  # 10 GB, and Web is licensed for public web workloads only
+  # (infra/docs/database-engine.md, "Engine, edition and cost").
+  DBEngine:
+    Description: >-
+      RDS for SQL Server 2022 edition, licence-included: sqlserver-se
+      (Standard, production), sqlserver-web (Web) or sqlserver-ex (Express)
+    Type: String
+    Default: sqlserver-se
+    AllowedValues:
+      - sqlserver-se
+      - sqlserver-web
+      - sqlserver-ex
+
+  # Each edition runs on its own classes: Express from db.t3.micro, Web from
+  # db.t3.small, and Standard on none of the small ones (db.t3.xlarge or
+  # db.m5.large at least). deploy.sh checks the pair is orderable before
+  # creating anything; see infra/docs/database-engine.md, "Engine, edition and
+  # cost".
   DBInstanceClass:
-    Description: RDS for SQL Server Standard Edition instance class (licence-included)
+    Description: RDS instance class, one the chosen edition (DBEngine) runs on
     Type: String
     Default: db.t3.xlarge
     AllowedValues:
+      - db.t3.micro
+      - db.t3.small
+      - db.t3.medium
+      - db.t3.large
       - db.t3.xlarge
       - db.t3.2xlarge
       - db.m5.large
@@ -230,22 +239,9 @@ Mappings:
       UrlOptions: encrypt=true;trustStore=/opt/backend/rds-truststore.p12;trustStoreType=PKCS12
 
 Conditions:
-  ShouldCreateKeyPair: !Equals [!Ref CreateKeyPair, "true"]
   HasAlarmEmail: !Not [!Equals [!Ref AlarmEmail, ""]]
 
 Resources:
-  # ============================================
-  # EC2 Key Pair (Optional - CloudFormation managed)
-  # ============================================
-  EC2KeyPair:
-    Type: AWS::EC2::KeyPair
-    Condition: ShouldCreateKeyPair
-    Properties:
-      KeyName: !Ref KeyName
-      Tags:
-        - Key: Name
-          Value: !Sub ${AWS::StackName}-KeyPair
-
   # ============================================
   # Security Groups
   # ============================================
@@ -281,11 +277,6 @@ Resources:
       GroupDescription: Security group for EC2 instance
       VpcId: !Ref VpcId
       SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: !Ref SSHLocation
-          Description: SSH access
         - IpProtocol: tcp
           FromPort: 8080
           ToPort: 8080
@@ -553,7 +544,7 @@ Resources:
           Value: !Sub ${AWS::StackName}-app-bootstrap
 
   # ============================================
-  # RDS for SQL Server 2022, Standard Edition
+  # RDS for SQL Server 2022 (the edition is DBEngine)
   # ============================================
   # IM8 dp-3: rds.force_ssl makes the server encrypt every session: a client
   # that asks for no encryption is encrypted anyway, and one that cannot do TLS
@@ -564,8 +555,8 @@ Resources:
   DBParameterGroup:
     Type: AWS::RDS::DBParameterGroup
     Properties:
-      Description: !Sub ${AWS::StackName} SQL Server 2022 SE, TLS 1.2+ enforced
-      Family: sqlserver-se-16.0
+      Description: !Sub ${AWS::StackName} SQL Server 2022, TLS 1.2+ enforced
+      Family: !Sub ${DBEngine}-16.0
       Parameters:
         rds.force_ssl: "1"
         rds.tls10: disabled
@@ -618,9 +609,9 @@ Resources:
           ignore_checks: [E3691]
     Properties:
       DBInstanceIdentifier: !Sub ${AWS::StackName}-sqlserver
-      # Standard Edition, licence-included: the licence is in the hourly price,
-      # so there is nothing to bring (ADR 0013, "Scope").
-      Engine: sqlserver-se
+      # Licence-included: the licence is in the hourly price, so there is
+      # nothing to bring. Standard Edition is production's (ADR 0013, "Scope").
+      Engine: !Ref DBEngine
       LicenseModel: license-included
       # The major version only: RDS picks its current default 16.00 (SQL Server
       # 2022) build, and applies minor versions (cumulative updates) in the
@@ -753,6 +744,15 @@ Resources:
                 Condition:
                   StringEquals:
                     kms:ViaService: !Sub secretsmanager.${AWS::Region}.amazonaws.com
+        # Each deploy's JAR, which the instance fetches itself (infra/lib.sh,
+        # ship_jar): this stack's prefix of the artifact bucket, read only.
+        - PolicyName: FetchTheApplicationJar
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: s3:GetObject
+                Resource: !Sub arn:${AWS::Partition}:s3:::${ArtifactBucket}/${AWS::StackName}/jar/*
         # cfn-init (UserData) reads the instance's own AWS::CloudFormation::Init
         # metadata: the database bootstrap's files, none of them a secret.
         - PolicyName: ReadTheInstancesInitMetadata
@@ -991,7 +991,6 @@ Resources:
     Properties:
       InstanceType: !Ref InstanceType
       ImageId: !FindInMap [AWSRegionAMI, "ap-southeast-1", AMI]
-      KeyName: !Ref KeyName
       IamInstanceProfile: !Ref EC2InstanceProfile
       NetworkInterfaces:
         - AssociatePublicIpAddress: true
@@ -1379,33 +1378,20 @@ Outputs:
       Name: !Sub ${AWS::StackName}-EC2-ID
 
   EC2PublicIP:
-    Description: EC2 Instance Public IP (for SSH)
+    Description: EC2 Instance Public IP (outbound only; no inbound port but the ALB's 8080)
     Value: !GetAtt EC2Instance.PublicIp
 
   EC2PublicDNS:
     Description: EC2 Instance Public DNS
     Value: !GetAtt EC2Instance.PublicDnsName
 
-  KeyPairName:
-    Description: EC2 Key Pair Name
-    Value: !Ref KeyName
+  ArtifactBucket:
+    Description: The bucket the instance fetches the application JAR from (<stack>/jar/)
+    Value: !Ref ArtifactBucket
 
-  KeyPairId:
-    Description: EC2 Key Pair ID (if created by CloudFormation)
-    Value:
-      !If [
-        ShouldCreateKeyPair,
-        !GetAtt EC2KeyPair.KeyPairId,
-        "Using existing key pair",
-      ]
-
-  GetPrivateKeyCommand:
-    Description: Command to retrieve private key (if created by CloudFormation)
-    Value: !If
-      - ShouldCreateKeyPair
-      - !Sub |
-        aws ssm get-parameter --name /ec2/keypair/${EC2KeyPair.KeyPairId} --with-decryption --query Parameter.Value --output text --region ap-southeast-1 > ${KeyName}.pem && chmod 400 ${KeyName}.pem
-      - "N/A - Using existing key pair"
+  SessionManagerCommand:
+    Description: A shell on the instance, through Systems Manager Session Manager
+    Value: !Sub aws ssm start-session --target ${EC2Instance} --region ${AWS::Region}
 
   DBEndpoint:
     Description: RDS for SQL Server endpoint
@@ -1486,10 +1472,6 @@ Outputs:
   RedisPort:
     Description: ElastiCache Redis Port
     Value: !GetAtt RedisCluster.RedisEndpoint.Port
-
-  SSHCommand:
-    Description: SSH Command to connect to EC2 instance
-    Value: !Sub ssh -i ${KeyName}.pem ec2-user@${EC2Instance.PublicIp}
 
   Region:
     Description: AWS Region

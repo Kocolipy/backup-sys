@@ -1,7 +1,7 @@
 ---
 type: Deployment Reference
 title: Database engine and cost
-description: RDS for SQL Server 2022 Standard Edition — edition, instance classes, cost, collation and time zone.
+description: RDS for SQL Server 2022 — editions, instance classes, cost, collation and time zone.
 tags: [rds, sql-server, cost]
 ---
 
@@ -9,29 +9,45 @@ tags: [rds, sql-server, cost]
 
 ## Engine, edition and cost
 
-- **Engine:** `sqlserver-se`, version `16.00` — SQL Server 2022 — which RDS
-  resolves to its current default build. `deploy.sh` asks RDS for that build
-  before creating anything (`describe-db-engine-versions --default-only`), and
+- **Engine:** SQL Server 2022, version `16.00`, which RDS resolves to its
+  current default build. `deploy.sh` asks RDS for that build before creating
+  anything (`describe-db-engine-versions --default-only`), and
   `AutoMinorVersionUpgrade` applies newer builds (cumulative updates) in the
   maintenance window, Sunday 04:00–05:00 UTC (ADR 0013, "Database patching").
-- **Edition: Standard Edition, licence-included.** The SQL Server licence is part
-  of the hourly instance price; there is nothing to bring or to track. It is the
-  edition ADR 0013 chose ("Scope") — Express caps a database at 10 GB, and
-  Developer Edition may not serve production — and choosing it is a
-  stakeholder sign-off.
-- **Instance classes:** Standard Edition does not run on the small classes —
-  no `db.t3.micro` to `db.t3.large` and no Graviton (`db.t4g.*`) — so
-  `DBInstanceClass` allows only classes RDS offers it on: `db.t3.xlarge`
-  (default, 4 vCPU / 16 GiB) and `db.t3.2xlarge`, `db.m5`/`db.m6i` `large` to
-  `2xlarge`, and `db.r5`/`db.r6i` `large` and `xlarge`. `deploy.sh` checks the
-  one you choose is orderable for Standard Edition, licence-included, in the
-  region (`describe-orderable-db-instance-options`) before creating anything.
+- **Edition: `DBEngine`, licence-included.** The SQL Server licence is part of
+  the hourly instance price; there is nothing to bring or to track.
 
-**It is expensive.** The smallest Standard Edition instance carries the instance
+  | `DBEngine`               | Edition  | For                  | Smallest class | Limits                                                    |
+  | ------------------------ | -------- | -------------------- | -------------- | --------------------------------------------------------- |
+  | `sqlserver-se` (default) | Standard | production           | `db.t3.xlarge` | costly: the licence is billed per vCPU                    |
+  | `sqlserver-web`          | Web      | a trial stack        | `db.t3.small`  | licensed for public, internet-accessible web workloads only |
+  | `sqlserver-ex`           | Express  | a trial stack        | `db.t3.micro`  | a database is capped at 10 GB; the engine uses 1 GB of memory and 4 cores at most |
+
+  **Standard Edition is production's**, the edition ADR 0013 chose ("Scope"),
+  and choosing it is a stakeholder sign-off. Web and Express exist here so
+  that a trial stack does not pay Standard's licence: the template, the
+  bootstrap and the smoke are the same for all three, and the parameter
+  group's family follows the edition (`<DBEngine>-16.0`). The edition is fixed
+  when the instance is created; changing `DBEngine` on a stack replaces the
+  instance.
+- **Instance classes:** each edition runs on its own. Standard Edition does not
+  run on the small classes — no `db.t3.micro` to `db.t3.large` and no Graviton
+  (`db.t4g.*`) — only on `db.t3.xlarge` (the default, 4 vCPU / 16 GiB) and
+  `db.t3.2xlarge`, `db.m5`/`db.m6i` `large` to `2xlarge`, and `db.r5`/`db.r6i`
+  `large` and `xlarge`. Express runs on `db.t3.micro` to `db.t3.xlarge`, and
+  Web on `db.t3.small` upwards. `DBInstanceClass` allows all of them, so the
+  template does not stop a pair RDS does not offer: `deploy.sh` checks that
+  the class you choose is orderable for the edition, licence-included, in the
+  region, with storage encryption, Enhanced Monitoring and Performance
+  Insights (`describe-orderable-db-instance-options`), before creating
+  anything.
+
+**Standard Edition is expensive.** Its smallest instance carries the instance
 price **and** the per-vCPU SQL Server licence, for four vCPUs at least — before
 storage, backups, Performance Insights beyond its free tier, and Multi-AZ (which
-doubles the instance price). Take the current price for the class you choose
-before sign-off:
+doubles the instance price). Take the current price for the edition and class
+you choose before sign-off (`databaseEdition` is `Standard`, `Web` or
+`Express`):
 
 ```bash
 aws pricing get-products --region us-east-1 --service-code AmazonRDS \

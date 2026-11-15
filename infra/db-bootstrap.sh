@@ -15,7 +15,6 @@
 # instance reads the secrets itself, and its output holds none.
 #
 # Usage: ./db-bootstrap.sh [--expect-no-op] <stack-name> [region]
-#   KEY_FILE  the instance's SSH key (default: <KeyPairName>.pem beside this script)
 #
 # Never run with command tracing (bash -x): see lib.sh.
 set -euo pipefail
@@ -34,7 +33,7 @@ main() {
   [[ -n $stack ]] || die "usage: $0 [--expect-no-op] <stack-name> [region]"
   require_cmd aws
   require_cmd jq
-  require_cmd ssh
+  require_cmd base64
 
   load_stack_outputs "$stack" "$region"
   wait_for_boot

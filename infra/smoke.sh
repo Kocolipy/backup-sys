@@ -28,7 +28,10 @@
 #                    service's log file
 #
 # Runs on the operator's machine with the operator's AWS credentials; the
-# database checks run on the instance over SSH, which reads its own secrets.
+# checks on the instance run there as root through Systems Manager Run Command
+# (lib.sh, "The instance"), and the instance reads its own secrets: a check
+# that compares secret values with the instance's files sends back its verdict
+# alone.
 # On a fresh stack the SCIM step replaces the Bootstrap Admin's seeded password
 # and writes the new one back to its secret (AppBootstrapSecretArn), staged as
 # AWSPENDING until the change has succeeded. See infra/docs/post-deploy-smoke.md, "Post-deploy
@@ -40,7 +43,6 @@
 #                 cloud-init and cfn-init logs, the env files and the database
 #                 bootstrap's journal. deploy.sh runs this when the JAR is not
 #                 deployed.
-#   KEY_FILE  the instance's SSH key (default: <KeyPairName>.pem beside this script)
 #
 # Never run with command tracing (bash -x): see lib.sh.
 set -euo pipefail
@@ -144,10 +146,52 @@ collect_secret_values() {
   done
 }
 
-# check_secret_leaks [boot-only]: with boot-only, only the sources the boot
-# writes; the service's log file and journal do not exist before it runs.
+# on_instance <function> [argument...]: runs one of this file's functions on
+# the instance, as root, with the functions and the state it uses: the stack's
+# outputs, the region and the Bootstrap Admin's secret ARN, none of them a
+# secret. The instance reads the secrets itself, with its role.
+on_instance() {
+  local outputs
+  outputs=$(jq -c 'map({OutputKey, OutputValue})' <<<"$STACK_OUTPUTS")
+  local STACK_OUTPUTS=$outputs
+  {
+    printf 'set -euo pipefail\nRED="" GREEN="" YELLOW="" NC=""\n'
+    declare -p STACK_OUTPUTS REGION ADMIN_SECRET_ARN
+    declare -f print_info print_warn print_error die stack_output secret_string json_field \
+      scan_for_secrets collect_secret_values instance_secret_leaks instance_service_environment
+    printf '%q ' "$@"
+  } | remote
+}
+
+# instance_secret_leaks [boot-only]: runs on the instance (on_instance). Scans
+# the files and journals there; with boot-only, only the sources the boot
+# writes: the service's log file and journal do not exist before it runs.
+instance_secret_leaks() {
+  local boot_only=${1:-} source
+  collect_secret_values
+  for source in /var/log/cloud-init-output.log /var/log/cloud-init.log /var/log/cfn-init.log \
+    /var/log/cfn-init-cmd.log /opt/backend/.env /opt/backend/migrate.env /opt/backend/db-bootstrap.env; do
+    # shellcheck disable=SC2094 # the first argument only names the source in messages
+    scan_for_secrets "$source" "${SECRET_VALUES[@]}" <"$source"
+  done
+  journalctl -u backend-db-bootstrap --no-pager |
+    scan_for_secrets "the database bootstrap's journal" "${SECRET_VALUES[@]}"
+  if [[ -z $boot_only ]]; then
+    # shellcheck disable=SC2094 # as above
+    scan_for_secrets /var/log/backend/backend.json "${SECRET_VALUES[@]}" </var/log/backend/backend.json
+    journalctl -u backend --no-pager |
+      scan_for_secrets "the backend service's journal" "${SECRET_VALUES[@]}"
+    journalctl -u backend-migrate --no-pager |
+      scan_for_secrets "the migrate step's journal" "${SECRET_VALUES[@]}"
+  fi
+  SECRET_VALUES=()
+}
+
+# check_secret_leaks [boot-only]: the rendered UserData and the cfn-init
+# metadata are read back from AWS and scanned here; the instance's files and
+# journals are scanned on the instance (instance_secret_leaks).
 check_secret_leaks() {
-  local boot_only=${1:-} instance_id source
+  local boot_only=${1:-} instance_id
   collect_secret_values
   instance_id=$(stack_output EC2InstanceId)
   aws ec2 describe-instance-attribute --instance-id "$instance_id" --attribute userData \
@@ -156,21 +200,8 @@ check_secret_leaks() {
   aws cloudformation describe-stack-resource --stack-name "$STACK" --logical-resource-id EC2Instance \
     --region "$REGION" --query StackResourceDetail.Metadata --output text |
     scan_for_secrets "the instance's cfn-init metadata" "${SECRET_VALUES[@]}"
-  for source in /var/log/cloud-init-output.log /var/log/cloud-init.log /var/log/cfn-init.log \
-    /var/log/cfn-init-cmd.log /opt/backend/.env /opt/backend/migrate.env /opt/backend/db-bootstrap.env; do
-    remote "sudo cat $source" | scan_for_secrets "$source" "${SECRET_VALUES[@]}"
-  done
-  remote "sudo journalctl -u backend-db-bootstrap --no-pager" |
-    scan_for_secrets "the database bootstrap's journal" "${SECRET_VALUES[@]}"
-  if [[ -z $boot_only ]]; then
-    remote "sudo cat /var/log/backend/backend.json" |
-      scan_for_secrets /var/log/backend/backend.json "${SECRET_VALUES[@]}"
-    remote "sudo journalctl -u backend --no-pager" |
-      scan_for_secrets "the backend service's journal" "${SECRET_VALUES[@]}"
-    remote "sudo journalctl -u backend-migrate --no-pager" |
-      scan_for_secrets "the migrate step's journal" "${SECRET_VALUES[@]}"
-  fi
   SECRET_VALUES=()
+  on_instance instance_secret_leaks "$boot_only" || die "secret-leak check: failed on the instance (above)"
 }
 
 # The running service holds no owner or master credential (ADR 0013, ac-1):
@@ -179,16 +210,15 @@ check_secret_leaks() {
 # secret — their ARNs or their passwords. Only the migrate step
 # (backend-migrate.service) and the database bootstrap
 # (backend-db-bootstrap.service) are given those. The environment holds the app
-# and retention passwords, so it is held in a local variable for the check and
-# never printed.
-check_service_holds_no_owner_credential() {
+# and retention passwords, so it never leaves the instance: the check runs
+# there (on_instance), holds it in a local variable and never prints it.
+instance_service_environment() {
   local json master_json environ owner_arn master_arn
   owner_arn=$(stack_output DBOwnerSecretArn)
   master_arn=$(stack_output DBMasterSecretArn)
   json=$(secret_string "$owner_arn" "$REGION")
   master_json=$(secret_string "$master_arn" "$REGION")
-  # shellcheck disable=SC2016 # expanded on the instance, not here
-  environ=$(remote 'sudo cat "/proc/$(systemctl show -p MainPID --value backend)/environ" | tr "\0" "\n"')
+  environ=$(tr '\0' '\n' <"/proc/$(systemctl show -p MainPID --value backend)/environ")
   [[ -n $environ ]] || die "owner credential check: the backend service's environment could not be read"
   if grep -q '^DATABASE_OWNER_' <<<"$environ"; then
     die "owner credential check: the backend service's environment has a DATABASE_OWNER_ variable"
@@ -202,6 +232,10 @@ check_service_holds_no_owner_credential() {
   print_info "owner credential check: the service runs without the owner and the master logins"
 }
 
+check_service_holds_no_owner_credential() {
+  on_instance instance_service_environment || die "owner credential check: failed on the instance (above)"
+}
+
 # The driver-scoped trust store left the JVM's default trust alone (ADR 0013):
 # the running service's JVM has no javax.net.ssl.trustStore, and the same JDK,
 # with its default trust store, fetches a public AWS HTTPS endpoint (the
@@ -209,7 +243,7 @@ check_service_holds_no_owner_credential() {
 check_jvm_default_trust() {
   local out line
   # shellcheck disable=SC2016 # expanded on the instance, not here
-  if ! out=$(remote 'sudo bash -s' 2>&1 <<'SCRIPT'
+  if ! out=$(remote 2>&1 <<'SCRIPT'
 set -euo pipefail
 pid=$(systemctl show -p MainPID --value backend)
 jcmd="$(dirname "$(readlink -f /usr/bin/java)")/jcmd"
@@ -261,7 +295,7 @@ SCRIPT
 check_file_ownership() {
   local out line
   # shellcheck disable=SC2016 # expanded on the instance, not here
-  if ! out=$(remote 'sudo bash -s' 2>&1 <<'SCRIPT'
+  if ! out=$(remote 2>&1 <<'SCRIPT'
 set -euo pipefail
 paths=(/opt/backend /opt/backend/db-bootstrap.sh /opt/backend/db-bootstrap.env
   /opt/backend/db-bootstrap.sql /opt/backend/secret.sh /opt/backend/start.sh
@@ -306,7 +340,7 @@ main() {
   STACK=${1:-}
   REGION=${2:-ap-southeast-1}
   [[ -n $STACK ]] || die "usage: $0 [--leaks-only] <stack-name> [region]"
-  for cmd in aws jq ssh base64; do require_cmd "$cmd"; done
+  for cmd in aws jq base64; do require_cmd "$cmd"; done
 
   load_stack_outputs "$STACK" "$REGION"
   ADMIN_SECRET_ARN=$(stack_output AppBootstrapSecretArn)

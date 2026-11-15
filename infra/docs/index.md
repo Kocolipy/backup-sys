@@ -14,7 +14,7 @@ The reference behind `infra/README.md`'s runbook, one file per concern.
 
 What the stack does for IM8 as-8, ck-2/ck-4, dp-3 and lm-16 on RDS for SQL Server (ADR 0013, "IM8 controls" and "App-Standards requirements").
 
-- [Database engine and cost](database-engine.md) - RDS for SQL Server 2022 Standard Edition — edition, instance classes, cost, collation and time zone.
+- [Database engine and cost](database-engine.md) - RDS for SQL Server 2022 — editions, instance classes, cost, collation and time zone.
 - [Database credentials](database-credentials.md) - Every credential in Secrets Manager, which process reads which secret, and file ownership on the instance.
 - [Boot, database bootstrap and migrate step](database-boot.md) - What UserData runs at boot, the idempotent bootstrap, and the migrate step that keeps the owner login out of the service.
 - [Database encryption](database-encryption.md) - The customer-managed KMS key and TLS to the database, and how the smoke proves both.

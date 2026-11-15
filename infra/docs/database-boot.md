@@ -30,7 +30,7 @@ never `set -x`:
    seeded (ADR 0013, "Admin and fixture seeding stay the service's"); the Bootstrap
    Admin and the Admin group are seeded by the service itself.
 
-Steps 3 and 4 need the JAR, which does not exist at boot: `deploy.sh` copies it
+Steps 3 and 4 need the JAR, which does not exist at boot: `deploy.sh` ships it to the instance, through S3,
 once the stack is up and starts them then. The units chain the order: the
 service `Requires=` the migrate step, which `Requires=` the bootstrap, so every
 start of the service after a deploy runs the bootstrap again (a no-op) and the
@@ -148,7 +148,7 @@ On the instance:
   `/opt/backend/.env` does not even name the owner secret; only `migrate.env`,
   which the service never loads, does.
 
-**A deploy runs the migrate step and then the service.** `deploy.sh` copies the
+**A deploy runs the migrate step and then the service.** `deploy.sh` ships the
 JAR, stops the service, `systemctl restart backend-migrate`s (which re-runs the
 bootstrap and then the migrations against the new JAR) and starts the service
 only if that succeeded. A failed migration prints the journal and ends the

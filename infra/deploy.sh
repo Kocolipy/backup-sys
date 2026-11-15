@@ -3,7 +3,9 @@
 # AWS CloudFormation Deployment Script for Spring Boot Backend
 #
 # Prompts for no password: every credential is generated into Secrets Manager
-# by the stack (infra/docs/database-credentials.md, "Database credentials"). The stack's instance
+# by the stack (infra/docs/database-credentials.md, "Database credentials"). The instance has no
+# key pair and no inbound port 22: this script reaches it through Systems
+# Manager Run Command (lib.sh, "The instance"). The stack's instance
 # bootstraps the database itself at boot; this script waits for that boot,
 # re-runs the bootstrap to prove it a no-op (db-bootstrap.sh --expect-no-op),
 # and runs the post-deploy smoke (smoke.sh), which fails the deploy on a leaked
@@ -27,7 +29,7 @@ check_prerequisites() {
     print_info "Checking prerequisites..."
 
     local cmd
-    for cmd in aws jq curl ssh scp openssl base64; do
+    for cmd in aws jq curl openssl base64; do
         require_cmd "$cmd"
     done
 
@@ -90,40 +92,8 @@ get_inputs() {
     [ -n "$PRIVATE_SUBNET_2_ID" ] || die "Private Subnet 2 ID is required"
 
     echo
-    # EC2 Key Pair Configuration
-    print_info "EC2 Key Pair Configuration"
-    read -r -p "Create new EC2 Key Pair? (y/n, default: y): " CREATE_KEY_PAIR
-    CREATE_KEY_PAIR=${CREATE_KEY_PAIR:-y}
-
-    if [[ $CREATE_KEY_PAIR =~ ^[Yy]$ ]]; then
-        CREATE_KEY_PAIR_VALUE="true"
-        read -r -p "Enter Key Pair name (default: spring-backend-key): " KEY_NAME
-        KEY_NAME=${KEY_NAME:-spring-backend-key}
-        print_info "CloudFormation will create the key pair; this script retrieves its private key."
-    else
-        CREATE_KEY_PAIR_VALUE="false"
-        read -r -p "Enter existing Key Pair name: " KEY_NAME
-        [ -n "$KEY_NAME" ] || die "Key Pair name is required"
-    fi
-
-    echo
     read -r -p "Enter EC2 instance type (default: t3.small): " INSTANCE_TYPE
     INSTANCE_TYPE=${INSTANCE_TYPE:-t3.small}
-
-    # Required, with no default: the instance has a public IP and its role reads
-    # the RDS master secret, so port 22 is open only to the range named here —
-    # your own public IP as a /32, ideally. A /0 range (the whole internet) is
-    # refused unless confirmed.
-    read -r -p "Enter the CIDR allowed to SSH to the instance (your public IP as x.x.x.x/32): " SSH_LOCATION
-    [ -n "$SSH_LOCATION" ] || die "the SSH CIDR is required; there is no default"
-    [[ $SSH_LOCATION =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}/[0-9]{1,2}$ ]] ||
-        die "the SSH CIDR must look like x.x.x.x/n, e.g. 203.0.113.10/32"
-    if [[ $SSH_LOCATION == */0 ]]; then
-        print_warn "${SSH_LOCATION} opens SSH to the whole internet"
-        local confirm_open
-        read -r -p "Type 'open to the internet' to allow it: " confirm_open
-        [ "$confirm_open" = "open to the internet" ] || die "refused ${SSH_LOCATION}; give a narrower CIDR"
-    fi
 
     # Database configuration. No password: the master user's is RDS-managed and
     # the three logins' are generated, all in Secrets Manager.
@@ -131,12 +101,35 @@ get_inputs() {
     read -r -p "Enter database name (default: backend): " DB_NAME
     DB_NAME=${DB_NAME:-backend}
 
-    # RDS for SQL Server Standard Edition, licence-included: it runs on none of
-    # the small classes, and costs far more than the previous stack's
-    # db.t3.micro did (docs/database-engine.md, "Engine, edition and cost").
-    print_warn "SQL Server Standard Edition (licence-included) bills its licence by the hour: see docs/database-engine.md, \"Engine, edition and cost\""
-    read -r -p "Enter RDS instance class (default: db.t3.xlarge, the smallest SE runs on): " DB_INSTANCE_CLASS
-    DB_INSTANCE_CLASS=${DB_INSTANCE_CLASS:-db.t3.xlarge}
+    # The edition sets the price and the classes on offer: Standard Edition is
+    # production's (ADR 0013, "Scope") and bills its licence by the hour; Web
+    # and Express are the small editions for a trial stack
+    # (docs/database-engine.md, "Engine, edition and cost").
+    local edition default_class
+    read -r -p "Enter SQL Server edition: standard, web or express (default: standard): " edition
+    case ${edition:-standard} in
+        standard)
+            DB_ENGINE=sqlserver-se
+            DB_EDITION_NAME="Standard Edition"
+            default_class=db.t3.xlarge
+            print_warn "SQL Server Standard Edition (licence-included) bills its licence by the hour: see docs/database-engine.md, \"Engine, edition and cost\""
+            ;;
+        web)
+            DB_ENGINE=sqlserver-web
+            DB_EDITION_NAME="Web Edition"
+            default_class=db.t3.small
+            print_warn "SQL Server Web Edition is licensed for public, internet-accessible web workloads only"
+            ;;
+        express)
+            DB_ENGINE=sqlserver-ex
+            DB_EDITION_NAME="Express Edition"
+            default_class=db.t3.micro
+            print_warn "SQL Server Express Edition caps a database at 10 GB: a trial stack's edition, not production's"
+            ;;
+        *) die "the edition must be standard, web or express" ;;
+    esac
+    read -r -p "Enter RDS instance class (default: ${default_class}, the smallest ${DB_EDITION_NAME} runs on): " DB_INSTANCE_CLASS
+    DB_INSTANCE_CLASS=${DB_INSTANCE_CLASS:-$default_class}
 
     local default_admin
     default_admin=$(default_key_admin_arn)
@@ -159,30 +152,42 @@ get_inputs() {
 
 # The engine and class RDS will actually be asked for: the template names the
 # major version 16.00 (SQL Server 2022), which RDS resolves to its default
-# build, and the instance class must be orderable for Standard Edition,
-# licence-included, in this region. Checked before anything is created.
+# build, and the instance class must be orderable for the chosen edition,
+# licence-included, in this region, with what the template turns on: storage
+# encryption, Enhanced Monitoring and Performance Insights. Checked before
+# anything is created.
 check_engine_and_class() {
-    local version
-    version=$(aws rds describe-db-engine-versions --engine sqlserver-se --engine-version 16.00 \
+    local version option feature
+    version=$(aws rds describe-db-engine-versions --engine "${DB_ENGINE}" --engine-version 16.00 \
         --default-only --region "${AWS_REGION}" --query 'DBEngineVersions[0].EngineVersion' --output text)
     [[ -n $version && $version != None ]] ||
-        die "RDS offers no default SQL Server 2022 (16.00) Standard Edition build in ${AWS_REGION}"
+        die "RDS offers no default SQL Server 2022 (16.00) ${DB_EDITION_NAME} build in ${AWS_REGION}"
     print_info "RDS resolves engine version 16.00 to ${version}"
-    [[ $(aws rds describe-orderable-db-instance-options --engine sqlserver-se --engine-version "$version" \
+    option=$(aws rds describe-orderable-db-instance-options --engine "${DB_ENGINE}" --engine-version "$version" \
         --license-model license-included --db-instance-class "${DB_INSTANCE_CLASS}" --region "${AWS_REGION}" \
-        --query 'length(OrderableDBInstanceOptions)' --output text) != 0 ]] ||
-        die "${DB_INSTANCE_CLASS} is not orderable for SQL Server Standard Edition, licence-included, in ${AWS_REGION}"
-    print_info "${DB_INSTANCE_CLASS} is orderable for SQL Server Standard Edition, licence-included"
+        --query 'OrderableDBInstanceOptions[0]' --output json)
+    [[ -n $option && $option != null ]] ||
+        die "${DB_INSTANCE_CLASS} is not orderable for SQL Server ${DB_EDITION_NAME}, licence-included, in ${AWS_REGION}"
+    for feature in SupportsStorageEncryption SupportsEnhancedMonitoring SupportsPerformanceInsights; do
+        [[ $(jq -r --arg f "$feature" '.[$f]' <<<"$option") == true ]] ||
+            die "${DB_INSTANCE_CLASS} on SQL Server ${DB_EDITION_NAME} reports ${feature}=false, and the template turns that feature on"
+    done
+    print_info "${DB_INSTANCE_CLASS} is orderable for SQL Server ${DB_EDITION_NAME}, licence-included, with storage encryption, Enhanced Monitoring and Performance Insights"
 }
 
 # The template is larger than create-stack's 51,200-byte --template-body
 # limit, so it goes to S3 and the stack is created from its URL. The bucket is
 # CFN_TEMPLATE_BUCKET, or one this script creates once per account and region
-# with every public access blocked. The template holds no secret.
-stage_template() {
-    local account bucket key
+# with every public access blocked. The template holds no secret. The same
+# bucket holds each deploy's JAR, under <stack>/jar/ (lib.sh, ship_jar).
+resolve_artifact_bucket() {
+    local account
     account=$(aws sts get-caller-identity --query Account --output text)
-    bucket=${CFN_TEMPLATE_BUCKET:-cfn-templates-${account}-${AWS_REGION}}
+    ARTIFACT_BUCKET=${CFN_TEMPLATE_BUCKET:-cfn-templates-${account}-${AWS_REGION}}
+}
+
+stage_template() {
+    local bucket=$ARTIFACT_BUCKET key
     if ! aws s3api head-bucket --bucket "$bucket" --region "${AWS_REGION}" 2>/dev/null; then
         print_info "Creating the template bucket ${bucket}"
         aws s3api create-bucket --bucket "$bucket" --region "${AWS_REGION}" \
@@ -208,10 +213,9 @@ create_parameters_file() {
         --arg PublicSubnet2Id "$PUBLIC_SUBNET_2_ID" \
         --arg PrivateSubnet1Id "$PRIVATE_SUBNET_1_ID" \
         --arg PrivateSubnet2Id "$PRIVATE_SUBNET_2_ID" \
-        --arg CreateKeyPair "$CREATE_KEY_PAIR_VALUE" \
-        --arg KeyName "$KEY_NAME" \
         --arg InstanceType "$INSTANCE_TYPE" \
-        --arg SSHLocation "$SSH_LOCATION" \
+        --arg ArtifactBucket "$ARTIFACT_BUCKET" \
+        --arg DBEngine "$DB_ENGINE" \
         --arg DBName "$DB_NAME" \
         --arg DBInstanceClass "$DB_INSTANCE_CLASS" \
         --arg KeyAdminArn "$KEY_ADMIN_ARN" \
@@ -236,7 +240,7 @@ deploy_stack() {
         --region "${AWS_REGION}"
 
     print_info "Stack creation initiated. Waiting for completion..."
-    print_warn "This may take 15-20 minutes..."
+    print_warn "This may take 20-40 minutes: RDS for SQL Server is slow to create..."
 
     aws cloudformation wait stack-create-complete \
         --stack-name "${STACK_NAME}" \
@@ -250,13 +254,13 @@ display_outputs() {
     print_info "Retrieving stack outputs..."
 
     load_stack_outputs "${STACK_NAME}" "${AWS_REGION}"
+    EC2_ID=$(stack_output EC2InstanceId)
     EC2_IP=$(stack_output EC2PublicIP)
     ALB_DNS=$(stack_output LoadBalancerDNS)
     ALB_URL=$(stack_output LoadBalancerURL)
     DB_ENDPOINT=$(stack_output DBEndpoint)
     REDIS_ENDPOINT=$(stack_output RedisEndpoint)
-    SSH_COMMAND=$(stack_output SSHCommand)
-    KEY_RETRIEVE_CMD=$(stack_output GetPrivateKeyCommand)
+    SESSION_COMMAND=$(stack_output SessionManagerCommand)
     ADMIN_SECRET_ARN=$(stack_output AppBootstrapSecretArn)
     ALARM_TOPIC_ARN=$(stack_output AlarmTopicArn)
 
@@ -265,15 +269,15 @@ display_outputs() {
     echo
     echo "Load Balancer DNS: ${ALB_DNS}"
     echo "Application URL: ${ALB_URL}"
-    echo "EC2 Instance IP (SSH): ${EC2_IP}"
+    echo "EC2 Instance: ${EC2_ID} (${EC2_IP})"
     echo "Database Endpoint: ${DB_ENDPOINT}"
     echo "Redis Endpoint: ${REDIS_ENDPOINT}"
     echo "Bootstrap Admin secret: ${ADMIN_SECRET_ARN}"
     echo "Alarm topic: ${ALARM_TOPIC_ARN}"
     echo
 
-    echo "SSH Command:"
-    echo "  ${SSH_COMMAND}"
+    echo "Shell on the instance (Session Manager):"
+    echo "  ${SESSION_COMMAND}"
     echo
 
     # Save to file
@@ -284,20 +288,14 @@ Deployed: $(date)
 
 Load Balancer DNS: ${ALB_DNS}
 Application URL: ${ALB_URL}
-EC2 Instance IP: ${EC2_IP}
+EC2 Instance: ${EC2_ID} (${EC2_IP})
 Database Endpoint: ${DB_ENDPOINT}
 Redis Endpoint: ${REDIS_ENDPOINT}
 Bootstrap Admin secret: ${ADMIN_SECRET_ARN}
 Alarm topic: ${ALARM_TOPIC_ARN}
 
-$(if [ "$CREATE_KEY_PAIR_VALUE" = "true" ]; then
-echo "Retrieve Private Key Command:"
-echo "${KEY_RETRIEVE_CMD}"
-echo ""
-fi)
-
-SSH Command:
-${SSH_COMMAND}
+Shell on the instance (Session Manager; needs the AWS CLI's Session Manager plugin):
+${SESSION_COMMAND}
 
 Next Steps (deploy.sh does 1-3 when you answer yes to the JAR prompt):
 1. The database and its logins were bootstrapped by the instance at boot; to
@@ -305,37 +303,13 @@ Next Steps (deploy.sh does 1-3 when you answer yes to the JAR prompt):
 2. Build the integrated JAR (SPA + backend), from the repo root: make package
    (equivalently: scripts/package.sh — 'cd backend && ./mvnw clean package' is
    backend-only and produces a JAR with no SPA)
-3. Copy JAR to EC2: scp -i ${KEY_NAME}.pem ../backend/target/backend-0.0.1-SNAPSHOT.jar ec2-user@${EC2_IP}:/tmp/backend.jar
-   then on the instance: sudo mv /tmp/backend.jar /opt/backend/backend.jar && sudo chown root:root /opt/backend/backend.jar && sudo chmod 0644 /opt/backend/backend.jar
-   and: sudo systemctl stop backend && sudo systemctl restart backend-migrate && sudo systemctl start backend && sudo systemctl enable backend
-   (the migrate step re-runs the database bootstrap, then the migrations as the owner login; if it fails, do not start the service)
+3. Ship the JAR to the instance, migrate and start: see README.md, "Application Deployment"
+   (the migrate step re-runs the database bootstrap, then the migrations as the owner login; if it fails, the service is not started)
 4. Post-deploy smoke (health, TLS, SCIM, alarms, secret leaks): ./smoke.sh ${STACK_NAME} ${AWS_REGION}
 5. The Bootstrap Admin's password: aws secretsmanager get-secret-value --secret-id ${ADMIN_SECRET_ARN} --query SecretString --output text
 EOF
 
     print_info "Outputs saved to ${STACK_NAME}-outputs.txt"
-}
-
-# The private key of a key pair CloudFormation created, written once, owner-only.
-retrieve_ssh_key() {
-    KEY_FILE="${SCRIPT_DIR}/${KEY_NAME}.pem"
-    export KEY_FILE
-    if [ -f "$KEY_FILE" ]; then
-        print_info "Using SSH key ${KEY_FILE}"
-        return 0
-    fi
-    [ "$CREATE_KEY_PAIR_VALUE" = "true" ] ||
-        die "SSH key ${KEY_FILE} not found: place the existing key pair's private key there"
-
-    print_info "Retrieving the stack's SSH private key into ${KEY_FILE}"
-    (
-        umask 077
-        aws ssm get-parameter \
-            --name "/ec2/keypair/$(stack_output KeyPairId)" \
-            --with-decryption --query Parameter.Value --output text \
-            --region "${AWS_REGION}" > "$KEY_FILE"
-    )
-    chmod 400 "$KEY_FILE"
 }
 
 # The instance bootstraps the database at boot (UserData). Wait for that
@@ -401,37 +375,10 @@ deploy_jar() {
         print_warn "unzip not installed — cannot verify the SPA is inside ${JAR_FILE}"
     fi
 
-    print_info "Copying JAR to EC2 instance..."
+    print_info "Shipping the JAR to the instance, migrating the schema (migrate step), then starting the application..."
 
-    scp -i "$KEY_FILE" \
-        -o StrictHostKeyChecking=accept-new \
-        "${JAR_FILE}" \
-        "ec2-user@${EC2_IP}:/tmp/backend.jar"
-
-    print_info "Migrating the schema (migrate step), then starting the application..."
-
-    # The migrate step runs first — after the database bootstrap, which its unit
-    # requires — as the owner login, against the new JAR; the service is stopped
-    # while it runs and is started only once it succeeded. A failed migration
-    # ends this script with the service still stopped, so a schema the new JAR
-    # does not match is never served (infra/docs/database-boot.md, "Migrate step").
-    ssh -i "$KEY_FILE" \
-        -o StrictHostKeyChecking=accept-new \
-        "ec2-user@${EC2_IP}" << 'ENDSSH'
-set -euo pipefail
-sudo mv /tmp/backend.jar /opt/backend/backend.jar
-sudo chown root:root /opt/backend/backend.jar && sudo chmod 0644 /opt/backend/backend.jar
-sudo systemctl stop backend
-if ! sudo systemctl restart backend-migrate; then
-    sudo journalctl -u backend-db-bootstrap -u backend-migrate -n 50 --no-pager || true
-    echo "the migrate step failed; the service was not started" >&2
-    exit 1
-fi
-sudo systemctl start backend
-sudo systemctl enable backend
-sleep 5
-sudo systemctl status backend --no-pager
-ENDSSH
+    ship_jar "${STACK_NAME}" "${AWS_REGION}" "${JAR_FILE}" ||
+        die "the JAR was not deployed: the instance's output is above"
 
     print_info "Application deployed and started!"
 }
@@ -447,11 +394,11 @@ main() {
     check_prerequisites
     get_inputs
     check_engine_and_class
+    resolve_artifact_bucket
     create_parameters_file
     stage_template
     deploy_stack
     display_outputs
-    retrieve_ssh_key
     bootstrap_database
     prompt_jar_deployment
 

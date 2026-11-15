@@ -63,37 +63,107 @@ json_field() {
 
 # --- The instance --------------------------------------------------------------
 #
+# The instance has no key pair and no inbound port 22. Everything here reaches
+# it through Systems Manager Run Command, which its role allows
+# (AmazonSSMManagedInstanceCore) and the operator's credentials invoke
+# (ssm:SendCommand, ssm:GetCommandInvocation, ssm:DescribeInstanceInformation).
+#
 # The database is in private subnets and is reached from the instance only:
 # the database bootstrap and the TLS check run there, as root, with the
 # instance role's access to the secrets they need, so no database credential
-# is ever sent to the instance from here. The SSH key is KEY_FILE, or
-# <KeyPairName>.pem beside these scripts.
+# is ever sent to the instance from here.
+#
+# Run Command keeps each command's text, and the start of its output, in the
+# account's command history. So a script sent to the instance holds no secret
+# value, prints none, and prints little: a check that compares secret values
+# with the instance's files runs on the instance and prints its verdict alone.
 INFRA_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# remote <command>: runs <command> on the instance as ec2-user, from the
-# outputs load_stack_outputs read; stdin and stdout are ours.
+# How long remote waits for one script to finish on the instance, in seconds.
+REMOTE_TIMEOUT=${REMOTE_TIMEOUT:-1800}
+
+# remote [script]: runs a bash script on the instance as root, from the outputs
+# load_stack_outputs read. The script is the argument, or stdin when there is
+# none. Prints the script's stdout on stdout and its stderr on stderr, and
+# returns its exit status. Run Command returns the first 24,000 characters of
+# stdout and 8,000 of stderr.
 remote() {
-  local key_file
-  key_file=${KEY_FILE:-$INFRA_DIR/$(stack_output KeyPairName).pem}
-  [[ -r $key_file ]] ||
-    die "SSH key $key_file not found: retrieve it (README, \"SSH Key Management\") or set KEY_FILE"
-  ssh -i "$key_file" -o StrictHostKeyChecking=accept-new -o BatchMode=yes -o ConnectTimeout=15 \
-    "ec2-user@$(stack_output EC2PublicIP)" "$1"
+  local script instance region params id invocation status code out err waited=0
+  if (($# > 0)); then script=$1; else script=$(cat); fi
+  instance=$(stack_output EC2InstanceId)
+  region=$(stack_output Region)
+  # The script travels base64-encoded, so no quoting of its own is disturbed.
+  params=$(jq -nc --arg s "$(printf '%s' "$script" | base64 | tr -d '\n')" \
+    '{commands: ["printf %s \($s) | base64 -d | bash -s"]}')
+  if ! id=$(aws ssm send-command --instance-ids "$instance" --document-name AWS-RunShellScript \
+    --comment "infra scripts" --parameters "$params" --region "$region" \
+    --query Command.CommandId --output text); then
+    print_error "Systems Manager did not accept a command for instance $instance"
+    return 255
+  fi
+  status=Pending
+  while [[ $status == Pending || $status == InProgress || $status == Delayed || $status == Cancelling ]]; do
+    if ((waited >= REMOTE_TIMEOUT)); then
+      print_error "command $id did not finish on instance $instance within $REMOTE_TIMEOUT s"
+      return 255
+    fi
+    sleep 3
+    waited=$((waited + 3))
+    # The invocation is not there for a moment after send-command.
+    if invocation=$(aws ssm get-command-invocation --command-id "$id" --instance-id "$instance" \
+      --region "$region" --output json 2>/dev/null); then
+      status=$(jq -r .Status <<<"$invocation")
+    fi
+  done
+  out=$(jq -r '.StandardOutputContent // empty' <<<"$invocation")
+  err=$(jq -r '.StandardErrorContent // empty' <<<"$invocation")
+  [[ -z $out ]] || printf '%s\n' "$out"
+  [[ -z $err ]] || printf '%s\n' "$err" >&2
+  [[ $status != Success ]] || return 0
+  code=$(jq -r .ResponseCode <<<"$invocation")
+  ((code > 0 && code < 256)) || code=1
+  return "$code"
 }
 
-# wait_for_boot: waits until the instance's UserData has finished, and fails
-# when it failed (the database bootstrap included), showing the end of its log.
+# wait_for_boot: waits until the instance is managed by Systems Manager and its
+# UserData has finished, and fails when it failed (the database bootstrap
+# included), showing the end of its log. It polls with short commands: UserData
+# updates the instance's packages, which can restart the agent under a long one.
 wait_for_boot() {
-  local waited=0
-  until remote true 2>/dev/null; do
-    ((waited < 300)) || die "the instance did not accept SSH within 300 s"
+  local instance region waited=0 state
+  instance=$(stack_output EC2InstanceId)
+  region=$(stack_output Region)
+  until [[ $(aws ssm describe-instance-information --region "$region" \
+    --filters "Key=InstanceIds,Values=$instance" \
+    --query 'InstanceInformationList[0].PingStatus' --output text 2>/dev/null) == Online ]]; do
+    ((waited < 600)) ||
+      die "instance $instance did not register with Systems Manager within 600 s (it needs its role's AmazonSSMManagedInstanceCore and a route to the Systems Manager endpoints)"
     sleep 10
     waited=$((waited + 10))
   done
-  if ! remote 'sudo cloud-init status --wait >/dev/null; test -f /var/log/user-data-complete.log'; then
-    remote 'sudo tail -n 40 /var/log/cloud-init-output.log' || true
-    die "the instance's boot (UserData) failed; the end of its log is above"
-  fi
+  waited=0
+  while :; do
+    state=$(remote 2>/dev/null <<'SCRIPT' || true
+if [[ -f /var/log/user-data-complete.log ]]; then
+  echo complete
+elif cloud-init status 2>/dev/null | grep -Eq '^status: (done|error|degraded)'; then
+  echo failed
+else
+  echo running
+fi
+SCRIPT
+    )
+    case $state in
+    complete) break ;;
+    failed)
+      remote 'tail -n 40 /var/log/cloud-init-output.log' || true
+      die "the instance's boot (UserData) failed; the end of its log is above"
+      ;;
+    esac
+    ((waited < 1800)) || die "the instance's boot (UserData) did not finish within 1800 s"
+    sleep 15
+    waited=$((waited + 15))
+  done
   print_info "the instance has booted, and its database bootstrap has run"
 }
 
@@ -103,16 +173,60 @@ wait_for_boot() {
 # is a no-op.
 DB_BOOTSTRAP_CHANGES=""
 rerun_db_bootstrap() {
-  local since out
-  since=$(remote 'date +%s')
-  if ! remote 'sudo systemctl start backend-db-bootstrap.service'; then
-    remote "sudo journalctl -u backend-db-bootstrap.service --no-pager -o cat --since @$since" || true
+  local out
+  if ! out=$(remote <<'SCRIPT'
+since=$(date +%s)
+systemctl start backend-db-bootstrap.service
+status=$?
+journalctl -u backend-db-bootstrap.service --no-pager -o cat --since "@$since"
+exit "$status"
+SCRIPT
+  ); then
+    printf '%s\n' "$out"
     die "the database bootstrap failed; its output is above"
   fi
-  out=$(remote "sudo journalctl -u backend-db-bootstrap.service --no-pager -o cat --since @$since")
   printf '%s\n' "$out"
   # shellcheck disable=SC2034 # read by db-bootstrap.sh, which sources this file
   DB_BOOTSTRAP_CHANGES=$(grep -c 'db-init: change:' <<<"$out" || true)
+}
+
+# ship_jar <stack> <region> <jar>: puts <jar> in the stack's artifact bucket, under the
+# prefix the instance's role may read, and has the instance fetch it, check its
+# SHA-256, install it root-owned, run the migrate step and start the service.
+#
+# The migrate step runs first — after the database bootstrap, which its unit
+# requires — as the owner login, against the new JAR; the service is stopped
+# while it runs and is started only once it succeeded. A failed migration
+# returns non-zero with the service still stopped, so a schema the new JAR does
+# not match is never served (infra/docs/database-boot.md, "Migrate step").
+ship_jar() {
+  local stack=$1 region=$2 jar=$3 bucket key digest
+  bucket=$(stack_output ArtifactBucket)
+  key="$stack/jar/backend-$(date +%Y%m%d%H%M%S).jar"
+  digest=$(openssl dgst -sha256 -r "$jar" | cut -d' ' -f1)
+  aws s3 cp "$jar" "s3://$bucket/$key" --region "$region" --only-show-errors ||
+    die "cannot upload $jar to s3://$bucket/$key"
+  print_info "JAR staged at s3://$bucket/$key; the instance fetches it from there"
+  remote <<SCRIPT
+set -euo pipefail
+new=\$(mktemp /opt/backend/backend.jar.XXXXXX)
+trap 'rm -f "\$new"' EXIT
+aws s3 cp 's3://$bucket/$key' "\$new" --region '$region' --only-show-errors
+echo '$digest  '"\$new" | sha256sum -c --quiet
+chown root:root "\$new"
+chmod 0644 "\$new"
+systemctl stop backend
+mv -f "\$new" /opt/backend/backend.jar
+if ! systemctl restart backend-migrate; then
+  journalctl -u backend-db-bootstrap -u backend-migrate -n 50 --no-pager || true
+  echo "the migrate step failed; the service was not started" >&2
+  exit 1
+fi
+systemctl start backend
+systemctl enable backend
+sleep 5
+systemctl status backend --no-pager
+SCRIPT
 }
 
 # db_tls_check_script: the sqlcmd half of the TLS check, which
@@ -175,12 +289,15 @@ check_tls_enforced() {
     --region "$region" --query 'DBInstances[0].DBParameterGroups[0].ParameterApplyStatus' --output text)
   [[ $status == in-sync ]] || die "TLS: the instance's parameter group is '$status', not in-sync (reboot it)"
   print_info "TLS: $group forces encryption with TLS 1.0 and 1.1 off, applied to the instance"
-  if ! out=$(remote "python3 -I - '$(stack_output DBEndpoint)' '$(stack_output DBPort)'" \
-    <"$INFRA_DIR/tds-plaintext-probe.py" 2>&1); then
+  if ! out=$({
+    printf "python3 -I - '%s' '%s' <<'PROBE'\n" "$(stack_output DBEndpoint)" "$(stack_output DBPort)"
+    cat "$INFRA_DIR/tds-plaintext-probe.py"
+    printf '\nPROBE\n'
+  } | remote 2>&1); then
     die "TLS: $out"
   fi
   print_info "TLS: $out"
-  if ! out=$(db_tls_check_script | remote 'sudo bash -s' 2>&1); then
+  if ! out=$(db_tls_check_script | remote 2>&1); then
     die "TLS: $out"
   fi
   while IFS= read -r line; do print_info "TLS: $line"; done <<<"$out"

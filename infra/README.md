@@ -1,13 +1,16 @@
 # AWS CloudFormation Deployment Guide
 
 Deploy the Spring Boot backend to AWS ap-southeast-1 with an ALB, EC2, **RDS for
-SQL Server 2022 Standard Edition**, and Redis.
+SQL Server 2022**, and Redis.
 
-Run every command below from `infra/`: `deploy.sh` finds the template, the key
-and the repo from its own location, but writes `<stack>-outputs.txt` to the
-current directory, which is where `cleanup.sh` deletes it from. The local
-artefacts — `parameters.json`, `*-outputs.txt`, the `*.pem` key — are
-gitignored.
+Run every command below from `infra/`: `deploy.sh` finds the template and the
+repo from its own location, but writes `<stack>-outputs.txt` to the current
+directory, which is where `cleanup.sh` deletes it from. The local artefacts —
+`parameters.json`, `*-outputs.txt` — are gitignored.
+
+The instance has **no SSH**: no key pair and no inbound port 22. Operators reach
+it through AWS Systems Manager — Session Manager for a shell, Run Command for
+the scripts here ([Instance access](#instance-access)).
 
 ## Quick Start
 
@@ -21,7 +24,8 @@ cd infra
 ./deploy.sh
 ```
 
-The script prompts for VPC IDs and sizing — **never for a password**: every
+The script prompts for VPC IDs, the SQL Server edition and sizing — **never for
+a password**: every
 credential is generated into Secrets Manager by the stack
 ([Database credentials](docs/database-credentials.md)). "Deployment" below has
 what it does, step by step.
@@ -30,8 +34,10 @@ what it does, step by step.
 > does not create one, and the application has no rate limiter of its own. See
 > [Edge throttling](docs/edge-throttling.md).
 
-> **Cost:** SQL Server Standard Edition, licence-included, is expensive. Read
-> [Engine, edition and cost](docs/database-engine.md) before deploying.
+> **Cost:** SQL Server Standard Edition, licence-included — production's
+> edition — is expensive. A trial stack can take Express or Web Edition on a
+> small class instead. Read [Engine, edition and cost](docs/database-engine.md)
+> before deploying.
 
 ---
 
@@ -46,8 +52,9 @@ Internet → ALB (HTTP:80) → EC2 (8080) → RDS for SQL Server (1433) + Redis
 
 - Application Load Balancer (internet-facing)
 - EC2 instance (Amazon Linux 2023 + Java 25, and `sqlcmd` for the database
-  bootstrap)
-- RDS for SQL Server 2022 Standard Edition, licence-included (encrypted under a
+  bootstrap), managed through Systems Manager
+- RDS for SQL Server 2022, licence-included — Standard Edition in production,
+  Web or Express for a trial stack (`DBEngine`) — (encrypted under a
   customer-managed KMS key, TLS 1.2+ forced, Enhanced Monitoring and Performance
   Insights, automated backups)
 - Secrets Manager secrets for every database credential, the driver's trust
@@ -73,8 +80,11 @@ incident touches.
 
 2. **AWS CLI** configured, as a principal that may create the stack's
    resources (IAM, KMS, RDS, Secrets Manager, CloudWatch, SNS included), read RDS
-   engine versions and orderable options, and create and write the S3 bucket the
-   template is staged in — this principal becomes the database key's
+   engine versions and orderable options, create and write the S3 bucket the
+   template and the JAR are staged in, and run commands on the instance through
+   Systems Manager (`ssm:SendCommand`, `ssm:GetCommandInvocation`,
+   `ssm:DescribeInstanceInformation`; `ssm:StartSession` for a shell) — this
+   principal becomes the database key's
    administrator (`KeyAdminArn`):
 
    ```bash
@@ -82,9 +92,10 @@ incident touches.
    # Set region: ap-southeast-1
    ```
 
-   Plus `jq`, `curl`, `ssh`/`scp`, `openssl` and `base64` on the machine you
-   deploy from. No database client: everything that talks to the database runs
-   on the instance.
+   Plus `jq`, `curl`, `openssl` and `base64` on the machine you deploy from,
+   and the AWS CLI's Session Manager plugin if you want a shell on the instance
+   (the scripts do not need it). No database client: everything that talks to
+   the database runs on the instance.
 
 3. **Application built** — the _integrated_ JAR, `make package` from the repo
    root (a plain `./mvnw clean package` serves no SPA). `./deploy.sh` runs it
@@ -100,23 +111,22 @@ incident touches.
 ./deploy.sh
 ```
 
-It prompts for no password. It requires the CIDR allowed to SSH to the
-instance — your own public IP as `x.x.x.x/32`; there is no default — and refuses
-a `/0` range (the whole internet) unless you type the confirmation it asks for.
-In order, it:
+It prompts for no password, and asks for the SQL Server edition — `standard`
+(the default, production's), `web` or `express` — then for an instance class,
+defaulting to the smallest that edition runs on. In order, it:
 
-1. checks that RDS resolves SQL Server `16.00` Standard Edition and that the
-   instance class you chose is orderable for it, licence-included;
+1. checks that RDS resolves SQL Server `16.00` in the edition you chose and that
+   the instance class is orderable for it, licence-included, with storage
+   encryption, Enhanced Monitoring and Performance Insights;
 2. stages the template in S3 and creates the stack from it, and waits for it;
 3. writes `<stack>-outputs.txt` (no secret value in it);
-4. retrieves the SSH key into `<KeyName>.pem` (mode `0400`) when the stack created
-   the key pair;
-5. waits for the instance's boot — which installed `sqlcmd` and ran the database
-   bootstrap — to finish, failing on a failed boot, then re-runs the bootstrap
-   and fails unless the re-run changed nothing:
-   `./db-bootstrap.sh --expect-no-op <stack>`;
-6. on a yes to the JAR prompt, builds and deploys the integrated JAR, runs the
-   migrate step, starts the service, and runs `./smoke.sh <stack>`, failing the
+4. waits for the instance to register with Systems Manager, then for its boot
+   — which installed `sqlcmd` and ran the database bootstrap — to finish,
+   failing on a failed boot, then re-runs the bootstrap and fails unless the
+   re-run changed nothing: `./db-bootstrap.sh --expect-no-op <stack>`;
+5. on a yes to the JAR prompt, builds the integrated JAR, stages it in S3 for
+   the instance to fetch, runs the migrate step, starts the service, and runs
+   `./smoke.sh <stack>`, failing the
    deploy on any failed check; on a no, runs `./smoke.sh --leaks-only <stack>`,
    failing the deploy on a leaked secret.
 
@@ -138,13 +148,14 @@ aws secretsmanager get-secret-value --secret-id <AppBootstrapSecretArn> \
 
 # 2. Configure parameters (no secret goes in it)
 cp parameters.template.json parameters.json
-# Edit parameters.json: VPC and subnet IDs, SSHLocation — the CIDR allowed to
-# reach port 22, your own public IP as x.x.x.x/32 (the X.X.X.X/32 placeholder
-# fails the template's pattern, and there is no default) — and KeyAdminArn —
-# your deploying role's or user's ARN (aws sts get-caller-identity; for an
-# assumed role, the role's ARN from aws iam get-role, path included)
+# Edit parameters.json: VPC and subnet IDs, ArtifactBucket — the bucket of step
+# 3, which the instance fetches the JAR from — DBEngine and DBInstanceClass
+# (docs/database-engine.md) and KeyAdminArn — your deploying role's or user's
+# ARN (aws sts get-caller-identity; for an assumed role, the role's ARN from
+# aws iam get-role, path included)
 
 # 3. Stage the template in S3: it is larger than --template-body accepts
+#    (create the bucket first if it is not there, with public access blocked)
 BUCKET=cfn-templates-$(aws sts get-caller-identity --query Account --output text)-ap-southeast-1
 aws s3 cp infrastructure.yaml s3://$BUCKET/spring-backend/infrastructure.yaml
 
@@ -161,8 +172,7 @@ aws cloudformation wait stack-create-complete \
   --stack-name spring-backend \
   --region ap-southeast-1
 
-# 6. Retrieve the SSH key (below), then confirm the boot's database bootstrap
-#    and that a re-run is a no-op
+# 6. Confirm the boot's database bootstrap and that a re-run is a no-op
 ./db-bootstrap.sh --expect-no-op spring-backend
 
 # 7. Deploy the application (below), then the post-deploy smoke
@@ -171,86 +181,65 @@ aws cloudformation wait stack-create-complete \
 
 ---
 
-## SSH Key Management
+## Instance access
 
-### CloudFormation Creates Key (Recommended)
+The instance has no key pair, and its security group opens no port 22: the only
+inbound rule is the ALB's to port 8080. Its role carries
+`AmazonSSMManagedInstanceCore`, and the Systems Manager agent on Amazon Linux
+2023 registers it at boot, over its outbound internet route.
 
-Set in `parameters.json`:
-
-```json
-{
-  "ParameterKey": "CreateKeyPair",
-  "ParameterValue": "true"
-}
-```
-
-**Retrieve private key after deployment:**
+**A shell** — Session Manager, which needs the
+[Session Manager plugin](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html)
+for the AWS CLI on your machine (or use the console: EC2 → the instance →
+Connect → Session Manager):
 
 ```bash
-KEY_PAIR_ID=$(aws cloudformation describe-stacks \
+INSTANCE_ID=$(aws cloudformation describe-stacks \
   --stack-name spring-backend \
   --region ap-southeast-1 \
-  --query 'Stacks[0].Outputs[?OutputKey==`KeyPairId`].OutputValue' \
+  --query 'Stacks[0].Outputs[?OutputKey==`EC2InstanceId`].OutputValue' \
   --output text)
 
-aws ssm get-parameter \
-  --name /ec2/keypair/${KEY_PAIR_ID} \
-  --with-decryption \
-  --query Parameter.Value \
-  --output text > spring-backend-key.pem
-
-chmod 400 spring-backend-key.pem
+aws ssm start-session --target $INSTANCE_ID --region ap-southeast-1
 ```
 
-### Use Existing Key
+The session is `ssm-user`, which may `sudo`. The stack's
+`SessionManagerCommand` output is the same command, filled in.
 
-Set in `parameters.json`:
-
-```json
-{
-  "ParameterKey": "CreateKeyPair",
-  "ParameterValue": "false"
-},
-{
-  "ParameterKey": "KeyName",
-  "ParameterValue": "my-existing-key"
-}
-```
+**The scripts** — `deploy.sh`, `deploy-jar.sh`, `db-bootstrap.sh` and
+`smoke.sh` — run their steps on the instance as root through Run Command
+(`AWS-RunShellScript`), with your AWS credentials and no plugin. Run Command
+keeps each command's text and the start of its output in the account's command
+history, so the scripts send no secret value to the instance and bring none
+back: the instance reads its own secrets, and a check that compares them with
+its files returns its verdict alone.
 
 ---
 
-## Deploy Application
+## Application Deployment
 
 The instance bootstraps the database at boot, so the JAR can be deployed as soon
 as the stack is up and the boot has finished (`./db-bootstrap.sh <stack>` waits
 for it). Starting the migrate step re-runs the bootstrap first.
 
 ```bash
-# Get EC2 IP
-EC2_IP=$(aws cloudformation describe-stacks \
-  --stack-name spring-backend \
-  --region ap-southeast-1 \
-  --query 'Stacks[0].Outputs[?OutputKey==`EC2PublicIP`].OutputValue' \
-  --output text)
+# Build the integrated JAR (SPA + backend), from the repo root
+(cd .. && make package)
 
-# Copy JAR (paths assume you're in the infra/ directory)
-scp -i spring-backend-key.pem \
-  ../backend/target/backend-0.0.1-SNAPSHOT.jar \
-  ec2-user@$EC2_IP:/tmp/backend.jar
-
-# Migrate (as the owner login), then start the application only if that succeeded
-ssh -i spring-backend-key.pem ec2-user@$EC2_IP << 'ENDSSH'
-set -euo pipefail
-sudo mv /tmp/backend.jar /opt/backend/backend.jar
-sudo chown root:root /opt/backend/backend.jar && sudo chmod 0644 /opt/backend/backend.jar
-sudo systemctl restart backend-migrate
-sudo systemctl start backend
-sudo systemctl enable backend
-ENDSSH
+# Ship it, migrate (as the owner login), and start the application only if
+# that succeeded
+./deploy-jar.sh spring-backend
 
 # Then check it: health, TLS, SCIM and fixtures, alarms and secret leaks
 ./smoke.sh spring-backend
 ```
+
+`deploy-jar.sh` uploads the JAR to `s3://<ArtifactBucket>/<stack>/jar/`, the one
+prefix the instance's role may read. The instance fetches it, checks its
+SHA-256 against the one computed on your machine, installs it as
+`/opt/backend/backend.jar` (`root:root 0644`), runs the migrate step with the
+service stopped, and starts the service only if the migration succeeded. The
+uploaded JARs stay in the bucket until you delete them.
 
 ---
 
@@ -317,7 +306,7 @@ Singapore time (`+08:00`). Search CloudWatch Logs Insights by `trace.id` to read
 one request end to end.
 
 ```bash
-ssh -i spring-backend-key.pem ec2-user@$EC2_IP
+aws ssm start-session --target $INSTANCE_ID --region ap-southeast-1
 sudo journalctl -u backend -f              # stdout
 sudo journalctl -u backend-db-bootstrap    # the database bootstrap's runs
 sudo tail -f /var/log/backend/backend.json # the file the agent ships
@@ -326,7 +315,9 @@ sudo tail -f /var/log/backend/backend.json # the file the agent ships
 ### Restart Application
 
 ```bash
-ssh -i spring-backend-key.pem ec2-user@$EC2_IP "sudo systemctl restart backend"
+aws ssm send-command --instance-ids $INSTANCE_ID --region ap-southeast-1 \
+  --document-name AWS-RunShellScript \
+  --parameters 'commands=["systemctl restart backend"]'
 ```
 
 ### Update Application
@@ -338,21 +329,10 @@ ssh -i spring-backend-key.pem ec2-user@$EC2_IP "sudo systemctl restart backend"
 # Confirm the SPA is in the artefact (package.sh already asserts this)
 unzip -Z1 ../backend/target/backend-0.0.1-SNAPSHOT.jar BOOT-INF/classes/static/index.html
 
-# Copy and restart (from infra/)
-scp -i spring-backend-key.pem \
-  ../backend/target/backend-0.0.1-SNAPSHOT.jar \
-  ec2-user@$EC2_IP:/tmp/backend.jar
-
-# The migrate step (after the database bootstrap, a no-op) runs against the new
-# JAR first; the service starts only if it succeeded (see `docs/database-boot.md`, "Migrate step").
-ssh -i spring-backend-key.pem ec2-user@$EC2_IP << 'ENDSSH'
-set -euo pipefail
-sudo systemctl stop backend
-sudo mv /tmp/backend.jar /opt/backend/backend.jar
-sudo chown root:root /opt/backend/backend.jar && sudo chmod 0644 /opt/backend/backend.jar
-sudo systemctl restart backend-migrate
-sudo systemctl start backend
-ENDSSH
+# Ship and restart (from infra/). The migrate step (after the database
+# bootstrap, a no-op) runs against the new JAR first; the service starts only
+# if it succeeded (see `docs/database-boot.md`, "Migrate step").
+./deploy-jar.sh spring-backend
 ```
 
 ### Check ALB Target Health
@@ -394,7 +374,7 @@ aws cloudformation describe-stacks --stack-name spring-backend \
 Check application status:
 
 ```bash
-ssh -i spring-backend-key.pem ec2-user@$EC2_IP
+aws ssm start-session --target $INSTANCE_ID --region ap-southeast-1
 sudo systemctl status backend
 sudo journalctl -u backend -n 100
 ```
@@ -422,7 +402,7 @@ aws elbv2 describe-target-health --target-group-arn $TG_ARN
 ### Database Connection Error
 
 ```bash
-ssh -i spring-backend-key.pem ec2-user@$EC2_IP
+aws ssm start-session --target $INSTANCE_ID --region ap-southeast-1
 
 # The URL and the secret ARNs the start script reads (no password is in here)
 sudo grep -E '^(DATABASE_|AWS_REGION)' /opt/backend/.env
@@ -448,10 +428,16 @@ line). Its journal on the instance is `sudo journalctl -u backend-db-bootstrap`.
 - `Login failed for user`: the login's password differs from its secret — re-run
   `./db-bootstrap.sh <stack>`.
 
-### Can't Retrieve SSH Key
+### Can't Reach the Instance through Systems Manager
 
-- Verify `CreateKeyPair: true` in parameters
-- The private key stays readable in SSM (`/ec2/keypair/<KeyPairId>`) for as
-  long as the key pair exists, so re-run the retrieval above; deleting the stack
-  deletes both
-- If the key pair is gone, deploy a new stack or use an existing key
+`deploy.sh` stops with "did not register with Systems Manager", or
+`start-session` answers `TargetNotConnected`:
+
+- The instance needs an outbound route to the Systems Manager endpoints: its
+  subnet (public subnet 1) must route `0.0.0.0/0` to the Internet Gateway.
+- Its role must carry `AmazonSSMManagedInstanceCore` (the stack attaches it).
+- `aws ssm describe-instance-information --region ap-southeast-1` lists the
+  instance with `PingStatus: Online` once the agent has registered, which takes
+  a minute or two after launch.
+- `start-session` failing with `SessionManagerPlugin is not found`: install the
+  Session Manager plugin, or connect from the EC2 console.

@@ -49,7 +49,7 @@ print_info "Stack status: ${STACK_STATUS}"
 echo
 print_warn "WARNING: This will delete the following resources:"
 echo "  - EC2 Instance and its data"
-echo "  - The RDS for SQL Server instance (Standard Edition, licence-included, billed"
+echo "  - The RDS for SQL Server instance (licence-included, billed"
 echo "    by the hour until deleted); RDS takes a final snapshot (<stack>-sqlserver)"
 echo "  - Its parameter group (rds.force_ssl), subnet group and monitoring role"
 echo "  - The database and application secrets, the RDS-managed master secret and the"

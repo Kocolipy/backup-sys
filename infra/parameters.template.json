@@ -20,20 +20,16 @@
     "ParameterValue": "subnet-WWWWWWWW"
   },
   {
-    "ParameterKey": "CreateKeyPair",
-    "ParameterValue": "true"
-  },
-  {
-    "ParameterKey": "KeyName",
-    "ParameterValue": "spring-backend-key"
-  },
-  {
     "ParameterKey": "InstanceType",
     "ParameterValue": "t3.small"
   },
   {
-    "ParameterKey": "SSHLocation",
-    "ParameterValue": "X.X.X.X/32"
+    "ParameterKey": "ArtifactBucket",
+    "ParameterValue": "cfn-templates-123456789012-ap-southeast-1"
+  },
+  {
+    "ParameterKey": "DBEngine",
+    "ParameterValue": "sqlserver-se"
   },
   {
     "ParameterKey": "DBInstanceClass",

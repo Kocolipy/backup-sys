@@ -78,7 +78,7 @@ VM.system_properties`), and the same JDK, as the service user and with its
 values and is in sync on the instance; then, on the instance:
 
 - **a client that cannot do TLS is refused** — `tds-plaintext-probe.py`
-  (standard-library Python, piped to the instance's `python3`) speaks TDS
+  (standard-library Python, run by the instance's `python3`) speaks TDS
   itself: a PRELOGIN saying `ENCRYPT_NOT_SUP`, then a plaintext LOGIN7 for a
   login that does not exist with a random password, so no credential travels in
   the clear. It passes only when the server drops that login unanswered; a

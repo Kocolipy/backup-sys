@@ -14,11 +14,10 @@ tags: [cloudformation, parameters]
 | PublicSubnet2Id      | Public subnet 2                                 | Yes      | -                       |
 | PrivateSubnet1Id     | Private subnet 1                                | Yes      | -                       |
 | PrivateSubnet2Id     | Private subnet 2                                | Yes      | -                       |
-| CreateKeyPair        | Create key pair                                 | No       | true                    |
-| KeyName              | Key pair name                                   | No       | spring-backend-key      |
 | InstanceType         | EC2 type                                        | No       | t3.small                |
-| SSHLocation          | CIDR allowed to SSH to the instance             | Yes      | - (your IP as a /32)    |
-| DBInstanceClass      | SQL Server SE class (see "Engine, edition…")    | No       | db.t3.xlarge            |
+| ArtifactBucket       | S3 bucket the instance fetches the JAR from     | Yes      | - (deploy.sh fills it)  |
+| DBEngine             | SQL Server edition (see "Engine, edition…")     | No       | sqlserver-se            |
+| DBInstanceClass      | A class the edition runs on (same section)      | No       | db.t3.xlarge            |
 | DBAllocatedStorage   | RDS storage, GB (20–100)                        | No       | 20                      |
 | DBName               | Database the bootstrap creates                  | No       | backend                 |
 | DBMasterUsername     | RDS master username (password RDS-managed)      | No       | dbmaster                |
