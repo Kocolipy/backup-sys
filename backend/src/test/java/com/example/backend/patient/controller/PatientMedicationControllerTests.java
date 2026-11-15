@@ -22,7 +22,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
-import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.http.HttpMethod;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.test.web.servlet.MockMvc;
@@ -41,7 +40,8 @@ import tools.jackson.databind.json.JsonMapper;
  * application API's {@code ApiError}. The filter chain is not in this
  * MockMvc: the Permission and its backstop are {@code AuthorizationContractTests}', the paging
  * coercion {@code PagingContractTests}', and what is logged and audited over the real chain
- * {@code MedicationHistoryIntegrationTests}'.
+ * {@code PatientHistoriesIntegrationTests}'. The rules every history shares are
+ * {@code PatientHistoriesControllerTests}'; this class holds what the Medication History declares.
  */
 class PatientMedicationControllerTests {
 
@@ -130,17 +130,6 @@ class PatientMedicationControllerTests {
                         "2026-03-01T02:00:00Z");
     }
 
-    /** The second page is the source's, sent from its zero-based offset: the last one of six. */
-    @Test
-    void theSecondPageIsTheSourcesSecondPage() throws Exception {
-        JsonNode page = body(reading(records(TAN_WEI_MING).param("startIndex", "6")));
-
-        assertThat(List.of(page.at("/totalResults").asInt(), page.at("/startIndex").asInt(),
-                page.at("/records").valueStream().map(record -> record.at("/id").asString())
-                        .toList(), page.at("/records/0/step").asString()))
-                .containsExactly(6, 6, List.of("medication-tan-wei-ming-6"), "1");
-    }
-
     /** The one Medication History read the source was sent, every value of each query parameter. */
     private static Map<String, List<String>> sentToTheSource(String patientId) {
         LoggedRequest sent = SOURCE.findAll(
@@ -149,23 +138,6 @@ class PatientMedicationControllerTests {
         Map<String, List<String>> query = new TreeMap<>();
         sent.getQueryParams().forEach((name, value) -> query.put(name, value.values()));
         return query;
-    }
-
-    /**
-     * Paging is coerced, never refused (ADR 0017), and the page it comes to is the source's to
-     * read — {@code count=0} and a page past the end included, as ADR 0018's D3 has it.
-     */
-    @Test
-    void aPageOfNoneIsStillTheSourcesToAnswer() throws Exception {
-        MockHttpServletResponse response = reading(request(HttpMethod.GET,
-                "/api/patient-medication/erXuFYUfucBZaryVksYEcMg3")
-                .param("startIndex", "-4").param("count", "0"));
-
-        assertThat(List.of(response.getStatus(), sentToTheSource("erXuFYUfucBZaryVksYEcMg3")))
-                .containsExactly(200, Map.of(
-                        "_offset", List.of("0"),
-                        "_count", List.of("0"),
-                        "_total", List.of("accurate")));
     }
 
     /**
@@ -292,20 +264,6 @@ class PatientMedicationControllerTests {
         SOURCE.verify(0, anyRequestedFor(anyUrl()));
     }
 
-    @ParameterizedTest
-    @CsvSource({
-        "startDateFrom, startDateTo, 2026-10-18T17:31, 2026-10-18T17:30",
-        "endDateFrom, endDateTo, 2026-01-01T00:00, 2025-12-31T23:59"})
-    void aFromEndAfterItsToEndIsRefused(String fromParameter, String toParameter, String from,
-            String to) throws Exception {
-        MockHttpServletResponse response = reading(records(TAN_WEI_MING)
-                .param(fromParameter, from).param(toParameter, to));
-
-        assertThat(body(response)).isEqualTo(apiError(400, "invalid-request",
-                "The request could not be read or did not pass validation."));
-        SOURCE.verify(0, anyRequestedFor(anyUrl()));
-    }
-
     /** A range one minute long is a from-end equal to its to-end, and is no refusal. */
     @Test
     void aRangeOfOneMinuteIsRead() throws Exception {
@@ -314,17 +272,6 @@ class PatientMedicationControllerTests {
                 .getStatus()).isEqualTo(200);
         assertThat(sentToTheSource(TAN_WEI_MING)).containsEntry("start-date",
                 List.of("ge2026-10-18T09:30:00Z", "lt2026-10-18T09:31:00Z"));
-    }
-
-    /** A blank Dispense Status, as an empty field sends one, is no filter on its column. */
-    @Test
-    void aBlankDispenseStatusIsNoFilter() throws Exception {
-        assertThat(reading(records(TAN_WEI_MING).param("dispenseStatus", "")).getStatus())
-                .isEqualTo(200);
-        assertThat(sentToTheSource(TAN_WEI_MING)).isEqualTo(Map.of(
-                "_offset", List.of("0"),
-                "_count", List.of("5"),
-                "_total", List.of("accurate")));
     }
 
     /**
@@ -344,98 +291,12 @@ class PatientMedicationControllerTests {
                 "_total", List.of("accurate")));
     }
 
-    /** The ids of a page's Medication Records, in its order, beside its total. */
-    private List<Object> idsAndTotal(MockHttpServletResponse response) throws Exception {
-        JsonNode page = body(response);
-        return List.of(page.at("/totalResults").asInt(),
-                page.at("/records").valueStream().map(record -> record.at("/id").asString())
-                        .toList());
-    }
-
-    /**
-     * A canned sorted read, answered in the order the source sorted it by the whole date-time:
-     * latest Start Date first, the record a minute later ahead of the two tied.
-     */
+    /** A record's step is the source's, read from the second page's one record. */
     @Test
-    void aSortedReadIsAnsweredInTheSourcesSortedOrder() throws Exception {
-        assertThat(idsAndTotal(reading(records(TAN_WEI_MING).param("sortBy", "startDate")
-                .param("sortOrder", "descending"))))
-                .containsExactly(6, List.of("medication-tan-wei-ming-2",
-                        "medication-tan-wei-ming-1", "medication-tan-wei-ming-3",
-                        "medication-tan-wei-ming-4", "medication-tan-wei-ming-5"));
-    }
+    void aRecordsStepIsTheSources() throws Exception {
+        JsonNode page = body(reading(records(TAN_WEI_MING).param("startIndex", "6")));
 
-    /** A canned filtered read, answered as the source filtered it: a to-minute kept whole. */
-    @Test
-    void aFilteredReadIsAnsweredAsTheSourceFilteredIt() throws Exception {
-        assertThat(idsAndTotal(reading(records("dev-patient-05")
-                .param("startDateTo", "2025-07-14T16:20"))))
-                .containsExactly(3, List.of("medication-tan-hui-min-2",
-                        "medication-tan-hui-min-3", "medication-tan-hui-min-4"));
-    }
-
-    @Test
-    void aFilterTheSourceMatchesNothingWithIsAnEmptyPage() throws Exception {
-        assertThat(body(reading(records("dev-patient-05").param("endDateTo", "2023-12-31T23:59"))))
-                .isEqualTo(json.readTree("""
-                        {"totalResults": 0, "startIndex": 1, "records": []}"""));
-    }
-
-    @Test
-    void aPatientWithNoRecordsIsAnEmptyPageOfNone() throws Exception {
-        assertThat(body(reading(records("erXuFYUfucBZaryVksYEcMg3"))))
-                .isEqualTo(json.readTree("""
-                        {"totalResults": 0, "startIndex": 1, "records": []}"""));
-    }
-
-    /** The source holding no patient under the id is the application API's {@code 404}. */
-    @Test
-    void aPatientTheSourceDoesNotHoldIsNotFound() throws Exception {
-        MockHttpServletResponse response = reading(records("not-a-uuid"));
-
-        assertThat(List.of(response.getStatus(), body(response))).containsExactly(404,
-                apiError(404, "request-refused", "The request was refused."));
-    }
-
-    /**
-     * A patient id outside FHIR's id grammar is the {@code 400} of a path that cannot be bound,
-     * refused before the source is called; the answer quotes none of it.
-     */
-    @ParameterizedTest
-    @ValueSource(strings = {"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-        "%3Cimg%20src=x%3E", "probe_patient"})
-    void aPatientIdOutsideTheGrammarIsRefusedWithoutCallingTheSource(String patientId)
-            throws Exception {
-        MockHttpServletResponse response = reading(records(patientId));
-
-        assertThat(body(response)).isEqualTo(apiError(400, "invalid-request",
-                "The request could not be read or did not pass validation."));
-        SOURCE.verify(0, anyRequestedFor(anyUrl()));
-    }
-
-    @Test
-    void aPagingValueThatIsNoIntegerIsRefused() throws Exception {
-        assertThat(reading(records(TAN_WEI_MING).param("startIndex", "two")).getStatus())
-                .isEqualTo(400);
-        SOURCE.verify(0, anyRequestedFor(anyUrl()));
-    }
-
-    /**
-     * The source failing — here, a page whose record ends before it starts — is the application
-     * API's {@code 502}, not a FHIR outcome, quoting nothing of the failure.
-     */
-    @Test
-    void aFailingSourceIsABadGatewayApiError() throws Exception {
-        MockHttpServletResponse response = reading(records("fault-medication-end-before-start"));
-
-        assertThat(List.of(response.getStatus(), response.getContentType(), body(response)))
-                .containsExactly(502, "application/json", apiError(502, "server-error",
-                        "The request could not be completed because of a server-side failure."));
-    }
-
-    @Test
-    void aSourceAnsweringAnErrorIsABadGateway() throws Exception {
-        assertThat(reading(records("fault-medication-server-error")).getStatus()).isEqualTo(502);
+        assertThat(page.at("/records/0/step").asString()).isEqualTo("1");
     }
 
     /** A row is Restricted data: printed, it names the Medication Record by id alone. */

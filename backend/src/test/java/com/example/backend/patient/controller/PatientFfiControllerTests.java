@@ -22,7 +22,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
-import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.http.HttpMethod;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.test.web.servlet.MockMvc;
@@ -39,7 +38,8 @@ import tools.jackson.databind.json.JsonMapper;
  * application API's {@code ApiError}. The filter chain is not in this MockMvc: the Permission and
  * its backstop are {@code AuthorizationContractTests}', the paging coercion
  * {@code PagingContractTests}', and what is logged and audited over the real chain
- * {@code FfiHistoryIntegrationTests}'.
+ * {@code PatientHistoriesIntegrationTests}'. The rules every history shares are
+ * {@code PatientHistoriesControllerTests}'; this class holds what the FFI History declares.
  */
 class PatientFfiControllerTests {
 
@@ -113,16 +113,6 @@ class PatientFfiControllerTests {
                 }"""));
     }
 
-    /** The second page is the source's, sent from its zero-based offset: the last two of seven. */
-    @Test
-    void theSecondPageIsTheSourcesSecondPage() throws Exception {
-        JsonNode page = body(reading(ffis("dev-patient-05").param("startIndex", "6")));
-
-        assertThat(List.of(page.at("/totalResults").asInt(), page.at("/startIndex").asInt(),
-                page.at("/ffis").valueStream().map(ffi -> ffi.at("/id").asString()).toList()))
-                .containsExactly(7, 6, List.of("ffi-tan-hui-min-6", "ffi-tan-hui-min-7"));
-    }
-
     /** The one FFI History read the source was sent, every value of each query parameter. */
     private static Map<String, List<String>> sentToTheSource(String patientId) {
         LoggedRequest sent = SOURCE.findAll(
@@ -130,23 +120,6 @@ class PatientFfiControllerTests {
         Map<String, List<String>> query = new TreeMap<>();
         sent.getQueryParams().forEach((name, value) -> query.put(name, value.values()));
         return query;
-    }
-
-    /**
-     * Paging is coerced, never refused (ADR 0017), and the page it comes to is the source's to
-     * read — {@code count=0} and a page past the end included, as ADR 0018's D3 has it.
-     */
-    @Test
-    void aPageOfNoneIsStillTheSourcesToAnswer() throws Exception {
-        MockHttpServletResponse response = reading(request(HttpMethod.GET,
-                "/api/patient-ffi/erXuFYUfucBZaryVksYEcMg3")
-                .param("startIndex", "-4").param("count", "0"));
-
-        assertThat(List.of(response.getStatus(), sentToTheSource("erXuFYUfucBZaryVksYEcMg3")))
-                .containsExactly(200, Map.of(
-                        "_offset", List.of("0"),
-                        "_count", List.of("0"),
-                        "_total", List.of("accurate")));
     }
 
     /**
@@ -273,17 +246,6 @@ class PatientFfiControllerTests {
         SOURCE.verify(0, anyRequestedFor(anyUrl()));
     }
 
-    /** A blank code, as an empty field sends one, is no filter on its column. */
-    @ParameterizedTest
-    @ValueSource(strings = {"type", "outcome", "higherAuthority", "submittingMc", "status"})
-    void aBlankCodeIsNoFilter(String parameter) throws Exception {
-        assertThat(reading(ffis(TAN_WEI_MING).param(parameter, "")).getStatus()).isEqualTo(200);
-        assertThat(sentToTheSource(TAN_WEI_MING)).isEqualTo(Map.of(
-                "_offset", List.of("0"),
-                "_count", List.of("5"),
-                "_total", List.of("accurate")));
-    }
-
     /** A blank code beside a good one leaves the good one alone. */
     @Test
     void aBlankCodeBesideAnotherIsThatOneAlone() throws Exception {
@@ -300,20 +262,6 @@ class PatientFfiControllerTests {
         SOURCE.verify(0, anyRequestedFor(anyUrl()));
     }
 
-    @ParameterizedTest
-    @CsvSource({
-        "issueDateFrom, issueDateTo, 2024-01-02, 2024-01-01",
-        "expiryDateFrom, expiryDateTo, 2025-12-31, 2025-01-01"})
-    void aFromDateAfterItsToDateIsRefused(String fromParameter, String toParameter, String from,
-            String to) throws Exception {
-        MockHttpServletResponse response = reading(ffis(TAN_WEI_MING)
-                .param(fromParameter, from).param(toParameter, to));
-
-        assertThat(body(response)).isEqualTo(apiError(400, "invalid-request",
-                "The request could not be read or did not pass validation."));
-        SOURCE.verify(0, anyRequestedFor(anyUrl()));
-    }
-
     /** A range one day long is a from-date equal to its to-date, and is no refusal. */
     @Test
     void aRangeOfOneDayIsRead() throws Exception {
@@ -322,92 +270,6 @@ class PatientFfiControllerTests {
                 .getStatus()).isEqualTo(200);
         assertThat(sentToTheSource(TAN_WEI_MING))
                 .containsEntry("expiry-date", List.of("ge2024-11-21", "le2024-11-21"));
-    }
-
-    /** The ids of a page's FFIs, in its order, beside its total. */
-    private List<Object> idsAndTotal(MockHttpServletResponse response) throws Exception {
-        JsonNode page = body(response);
-        return List.of(page.at("/totalResults").asInt(),
-                page.at("/ffis").valueStream().map(ffi -> ffi.at("/id").asString()).toList());
-    }
-
-    /** A canned sorted read, answered in the order the source sorted it: earliest Issue Date first. */
-    @Test
-    void aSortedReadIsAnsweredInTheSourcesSortedOrder() throws Exception {
-        assertThat(idsAndTotal(reading(ffis(TAN_WEI_MING).param("sortBy", "issueDate"))))
-                .containsExactly(4, List.of("ffi-tan-wei-ming-4", "ffi-tan-wei-ming-1",
-                        "ffi-tan-wei-ming-3", "ffi-tan-wei-ming-2"));
-    }
-
-    /** A canned filtered read over two pages: its second page is the source's, its total six. */
-    @Test
-    void aFilteredReadIsAnsweredAsTheSourceFilteredIt() throws Exception {
-        assertThat(idsAndTotal(reading(ffis("dev-patient-05")
-                .param("issueDateFrom", "2023-01-01").param("startIndex", "6"))))
-                .containsExactly(6, List.of("ffi-tan-hui-min-6"));
-    }
-
-    @Test
-    void aFilterTheSourceMatchesNothingWithIsAnEmptyPage() throws Exception {
-        assertThat(body(reading(ffis("dev-patient-05").param("expiryDateTo", "2022-12-31"))))
-                .isEqualTo(json.readTree("""
-                        {"totalResults": 0, "startIndex": 1, "ffis": []}"""));
-    }
-
-    @Test
-    void aPatientWithNoFfisIsAnEmptyPageOfNone() throws Exception {
-        assertThat(body(reading(ffis("erXuFYUfucBZaryVksYEcMg3")))).isEqualTo(json.readTree("""
-                {"totalResults": 0, "startIndex": 1, "ffis": []}"""));
-    }
-
-    /** The source holding no patient under the id is the application API's {@code 404}. */
-    @Test
-    void aPatientTheSourceDoesNotHoldIsNotFound() throws Exception {
-        MockHttpServletResponse response = reading(ffis("not-a-uuid"));
-
-        assertThat(List.of(response.getStatus(), body(response))).containsExactly(404,
-                apiError(404, "request-refused", "The request was refused."));
-    }
-
-    /**
-     * A patient id outside FHIR's id grammar is the {@code 400} of a path that cannot be bound,
-     * refused before the source is called; the answer quotes none of it.
-     */
-    @ParameterizedTest
-    @ValueSource(strings = {"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-        "%3Cimg%20src=x%3E", "probe_patient"})
-    void aPatientIdOutsideTheGrammarIsRefusedWithoutCallingTheSource(String patientId)
-            throws Exception {
-        MockHttpServletResponse response = reading(ffis(patientId));
-
-        assertThat(body(response)).isEqualTo(apiError(400, "invalid-request",
-                "The request could not be read or did not pass validation."));
-        SOURCE.verify(0, anyRequestedFor(anyUrl()));
-    }
-
-    @Test
-    void aPagingValueThatIsNoIntegerIsRefused() throws Exception {
-        assertThat(reading(ffis(TAN_WEI_MING).param("startIndex", "two")).getStatus())
-                .isEqualTo(400);
-        SOURCE.verify(0, anyRequestedFor(anyUrl()));
-    }
-
-    /**
-     * The source failing — here, a page whose FFI has an Outcome outside its set — is the
-     * application API's {@code 502}, not a FHIR outcome, quoting nothing of the failure.
-     */
-    @Test
-    void aFailingSourceIsABadGatewayApiError() throws Exception {
-        MockHttpServletResponse response = reading(ffis("fault-ffi-unknown-higher-authority"));
-
-        assertThat(List.of(response.getStatus(), response.getContentType(), body(response)))
-                .containsExactly(502, "application/json", apiError(502, "server-error",
-                        "The request could not be completed because of a server-side failure."));
-    }
-
-    @Test
-    void aSourceAnsweringAnErrorIsABadGateway() throws Exception {
-        assertThat(reading(ffis("fault-ffi-server-error")).getStatus()).isEqualTo(502);
     }
 
     /** A row is Restricted data: printed, it names the FFI by id alone. */
