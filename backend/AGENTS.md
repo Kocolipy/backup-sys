@@ -112,23 +112,16 @@ errors.
 mock: WireMock answering FHIR R4 `Patient/{id}` for the development
 fixtures, a failure of the source for each fault stub (`metadata.fault`),
 `404` for any other well-formed id, and `Patient?…` for each canned Patient
-search, with an empty searchset for any other, `Patient/{id}/ffi?…` for
-each fixture's FFI History, with a failure for each `fault-ffi-*` stub, and
-`Patient/{id}/numc?…` for each fixture's NUMC History, with a failure for each
-`fault-numc-*` stub, `Patient/{id}/armc?…` for each fixture's ARMC History,
-with a failure for each `fault-armc-*` stub, and `Patient/{id}/medication?…`
-for each fixture's Medication History, with a failure for each
-`fault-medication-*` stub. Compose
+search, with an empty searchset for any other. Each patient history has the same
+shape beneath `Patient/{id}/<history>?…`: a page for each fixture's read and a
+failure for each `fault-<history>-*` stub. `patient-source-mock/README.md` lists
+every stub file and `/docs/domain/index.md` the histories. Compose
 runs it beside SQL
 Server and Redis (`patient-source`, no profile), so `make infra-up` and `make
 integration-test` start it; nothing under `/infra/` builds or deploys it. The
 backend's patient tests serve the same files in process, so a change to a stub
 is a change to the tests' fixtures: `/docs/domain/patient.md` ("The patient
-source's fixtures"), `/docs/domain/ffi.md` ("The patient source's FFI
-fixtures"), `/docs/domain/numc.md` ("The patient source's NUMC fixtures"),
-`/docs/domain/armc.md` ("The patient source's ARMC fixtures") and
-`/docs/domain/medication.md` ("The patient source's Medication fixtures") have
-the rules they hold, and
+source's fixtures") and each history's domain file have the rules they hold, and
 `docs/configuration/patient-source.md` the setting and the port.
 
 ## Architecture constraints
