@@ -133,10 +133,11 @@ public class ContainerTestConfiguration {
     private static final String JVM_TOKEN = UUID.randomUUID().toString().substring(0, 8);
 
     /**
-     * Every context's patient-source read timeout: well past the mock's answer, well short of its
-     * slow fault stubs, which wait past the deployed default.
+     * Every context's patient-source read timeout: well past the in-process mock's answer, which
+     * takes milliseconds, and far short of its slow fault stubs, which wait past the deployed
+     * default. Each case reading a slow stub waits all of it, so it is kept that short.
      */
-    static final String PATIENT_SOURCE_READ_TIMEOUT = "1s";
+    static final String PATIENT_SOURCE_READ_TIMEOUT = "300ms";
 
     /** The owner login: owns each context's database and runs its migrations. */
     public static final String OWNER_LOGIN = "backend_owner";

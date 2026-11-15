@@ -34,8 +34,15 @@ public final class EcsLogCapture implements AutoCloseable {
     /** The message of the record written once per request as its dispatch unwinds. */
     private static final String REQUEST_RECORD = "HTTP request completed";
 
-    /** How long the capture must stay unchanged, after the request records, to have settled. */
-    private static final Duration QUIET_FOR = Duration.ofMillis(100);
+    /**
+     * How long the capture must stay unchanged, after the request records, to have settled. Short,
+     * because the request record is the last a request writes: the window is a margin for a record
+     * that lands after it nonetheless, and every wait for request records pays all of it.
+     */
+    private static final Duration QUIET_FOR = Duration.ofMillis(30);
+
+    /** How often a wait looks at the capture again. */
+    private static final Duration POLL = Duration.ofMillis(10);
 
     /** The longest the capture is given to settle after the request records, however busy. */
     private static final Duration SETTLE_AT_MOST = Duration.ofMillis(250);
@@ -116,14 +123,14 @@ public final class EcsLogCapture implements AutoCloseable {
                 .filter(record -> REQUEST_RECORD.equals(record.at("/message").asText()))
                 .count() < count
                 && System.nanoTime() < deadline) {
-            Thread.sleep(20);
+            Thread.sleep(POLL);
         }
         long settled = System.nanoTime() + SETTLE_AT_MOST.toNanos();
         int size = encoded.size();
         long quietSince = System.nanoTime();
         while (System.nanoTime() - quietSince < QUIET_FOR.toNanos()
                 && System.nanoTime() < settled) {
-            Thread.sleep(20);
+            Thread.sleep(POLL);
             if (encoded.size() != size) {
                 size = encoded.size();
                 quietSince = System.nanoTime();
