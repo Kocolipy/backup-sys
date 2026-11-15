@@ -20,6 +20,22 @@
     "ParameterValue": "subnet-WWWWWWWW"
   },
   {
+    "ParameterKey": "ImageId",
+    "ParameterValue": "ami-XXXXXXXXXXXXXXXXX"
+  },
+  {
+    "ParameterKey": "JavaPackage",
+    "ParameterValue": "java-25-openjdk-devel"
+  },
+  {
+    "ParameterKey": "MssqlRepoBaseUrl",
+    "ParameterValue": ""
+  },
+  {
+    "ParameterKey": "MssqlRepoGpgKeyUrl",
+    "ParameterValue": ""
+  },
+  {
     "ParameterKey": "InstanceType",
     "ParameterValue": "t3.small"
   },

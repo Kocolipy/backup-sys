@@ -45,14 +45,15 @@ what it does, step by step.
 
 ```
 Internet → ALB (HTTP:80) → EC2 (8080) → RDS for SQL Server (1433) + Redis
-           (public)         (public)     (private subnets)
+           (public)         (private)    (private subnets)
 ```
 
 **Components:**
 
 - Application Load Balancer (internet-facing)
-- EC2 instance (Amazon Linux 2023 + Java 25, and `sqlcmd` for the database
-  bootstrap), managed through Systems Manager
+- EC2 instance (the organisation's RHEL 9 image + Java 25, and `sqlcmd` for the
+  database bootstrap), in a private subnet with no public IP and no internet
+  access, managed through Systems Manager
 - RDS for SQL Server 2022, licence-included — Express Edition by default, for
   a trial stack; Standard Edition in production (`DBEngine`) — (encrypted under a
   customer-managed KMS key, TLS 1.2+ forced, Enhanced Monitoring and Performance
@@ -72,13 +73,32 @@ incident touches.
 ## Prerequisites
 
 1. **Existing VPC in ap-southeast-1** with:
-   - 2 public subnets (different AZs) for ALB; the instance's (public subnet 1)
-     reaches the internet through the Internet Gateway, to install the SQL
-     Server tools and fetch the RDS CA bundle at boot
-   - 2 private subnets (different AZs) for RDS/Redis
-   - Internet Gateway attached
+   - 2 public subnets (different AZs) for the ALB, and an Internet Gateway
+     attached for it
+   - 2 private subnets (different AZs) for the instance (private subnet 1),
+     RDS and Redis. The instance has no public IP and needs no route to the
+     internet
+   - VPC endpoints the instance reaches from private subnet 1, which the stack
+     does not create: the interface endpoints `ssm`, `ssmmessages`,
+     `ec2messages`, `secretsmanager`, `logs` and `cloudformation`, with private
+     DNS on and 443 allowed from that subnet, and the `s3` gateway endpoint on
+     that subnet's route table
 
-2. **AWS CLI** configured, as a principal that may create the stack's
+2. **The organisation's RHEL 9 image** (`ImageId`, x86_64), with:
+   - the Systems Manager agent installed and enabled (stock RHEL 9 has none);
+   - its `dnf` repositories pointed at the internal mirror, which must offer
+     `jq`, `python3`, a Java 25 JDK (`JavaPackage`, default
+     `java-25-openjdk-devel`) and, unless the image already has the AWS CLI,
+     `awscli2`;
+   - Microsoft's `msodbcsql18` and `mssql-tools18`, either in those
+     repositories or in a mirror of Microsoft's RHEL 9 repository you name
+     with `MssqlRepoBaseUrl` and `MssqlRepoGpgKeyUrl`.
+
+   Nothing is downloaded from the internet at boot. The CloudWatch agent comes
+   from AWS's regional S3 bucket through the gateway endpoint, and the RDS CA
+   bundle from the stack's artifact bucket, where `deploy.sh` stages it.
+
+3. **AWS CLI** configured, as a principal that may create the stack's
    resources (IAM, KMS, RDS, Secrets Manager, CloudWatch, SNS included), read RDS
    engine versions and orderable options, create and write the S3 bucket the
    template and the JAR are staged in, and run commands on the instance through
@@ -97,7 +117,7 @@ incident touches.
    (the scripts do not need it). No database client: everything that talks to
    the database runs on the instance.
 
-3. **Application built** — the _integrated_ JAR, `make package` from the repo
+4. **Application built** — the _integrated_ JAR, `make package` from the repo
    root (a plain `./mvnw clean package` serves no SPA). `./deploy.sh` runs it
    for you when you answer yes to the JAR prompt.
 
@@ -113,12 +133,16 @@ incident touches.
 
 It prompts for no password, and asks for the SQL Server edition — `express`
 (the default, for a trial stack) or `standard` (production's) — then for an instance class,
-defaulting to the smallest that edition runs on. In order, it:
+defaulting to the smallest that edition runs on. It also asks for the RHEL 9
+image ID, the Java package's name and, optionally, the internal mirror of
+Microsoft's repository. In order, it:
 
 1. checks that RDS resolves SQL Server `16.00` in the edition you chose and that
    the instance class is orderable for it, licence-included, with storage
    encryption, Enhanced Monitoring and Performance Insights;
-2. stages the template in S3 and creates the stack from it, and waits for it;
+2. stages the template and the region's RDS CA bundle in S3 (it downloads the
+   bundle on your machine; `RDS_CA_BUNDLE=<file>` names a copy you already
+   have), creates the stack from the template, and waits for it;
 3. writes `<stack>-outputs.txt` (no secret value in it);
 4. waits for the instance to register with Systems Manager, then for its boot
    — which installed `sqlcmd` and ran the database bootstrap — to finish,
@@ -148,7 +172,9 @@ aws secretsmanager get-secret-value --secret-id <AppBootstrapSecretArn> \
 
 # 2. Configure parameters (no secret goes in it)
 cp parameters.template.json parameters.json
-# Edit parameters.json: VPC and subnet IDs, ArtifactBucket — the bucket of step
+# Edit parameters.json: VPC and subnet IDs, ImageId — your organisation's
+# RHEL 9 image — MssqlRepoBaseUrl and MssqlRepoGpgKeyUrl if the image's
+# repositories lack Microsoft's packages, ArtifactBucket — the bucket of step
 # 3, which the instance fetches the JAR from — DBEngine and DBInstanceClass
 # (docs/database-engine.md) and KeyAdminArn — your deploying role's or user's
 # ARN (aws sts get-caller-identity; for an assumed role, the role's ARN from
@@ -158,6 +184,11 @@ cp parameters.template.json parameters.json
 #    (create the bucket first if it is not there, with public access blocked)
 BUCKET=cfn-templates-$(aws sts get-caller-identity --query Account --output text)-ap-southeast-1
 aws s3 cp infrastructure.yaml s3://$BUCKET/spring-backend/infrastructure.yaml
+
+#    and the region's RDS CA bundle, which the instance cannot fetch itself
+curl -fsS -o rds-ca-bundle.pem \
+  https://truststore.pki.rds.amazonaws.com/ap-southeast-1/ap-southeast-1-bundle.pem
+aws s3 cp rds-ca-bundle.pem s3://$BUCKET/spring-backend/boot/rds-ca-bundle.pem
 
 # 4. Deploy stack
 aws cloudformation create-stack \
@@ -185,8 +216,8 @@ aws cloudformation wait stack-create-complete \
 
 The instance has no key pair, and its security group opens no port 22: the only
 inbound rule is the ALB's to port 8080. Its role carries
-`AmazonSSMManagedInstanceCore`, and the Systems Manager agent on Amazon Linux
-2023 registers it at boot, over its outbound internet route.
+`AmazonSSMManagedInstanceCore`, and the Systems Manager agent in the image
+registers it at boot, through the VPC's Systems Manager endpoints.
 
 **A shell** — Session Manager, which needs the
 [Session Manager plugin](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html)
@@ -433,8 +464,11 @@ line). Its journal on the instance is `sudo journalctl -u backend-db-bootstrap`.
 `deploy.sh` stops with "did not register with Systems Manager", or
 `start-session` answers `TargetNotConnected`:
 
-- The instance needs an outbound route to the Systems Manager endpoints: its
-  subnet (public subnet 1) must route `0.0.0.0/0` to the Internet Gateway.
+- The instance has no internet route, so the VPC needs the `ssm`,
+  `ssmmessages` and `ec2messages` interface endpoints, with private DNS on and
+  a security group that allows 443 from private subnet 1.
+- The image must have the Systems Manager agent installed and enabled; stock
+  RHEL 9 does not.
 - Its role must carry `AmazonSSMManagedInstanceCore` (the stack attaches it).
 - `aws ssm describe-instance-information --region ap-southeast-1` lists the
   instance with `PingStatus: Online` once the agent has registered, which takes

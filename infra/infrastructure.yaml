@@ -27,6 +27,47 @@ Parameters:
   # The instance has no key pair and no inbound port 22: operators reach it
   # through Systems Manager (Session Manager for a shell, Run Command for the
   # scripts in infra/), which its role's AmazonSSMManagedInstanceCore allows.
+  #
+  # It runs in private subnet 1 with no public IP and no route to the internet.
+  # Its packages come from the repositories its image is configured with (the
+  # organisation's internal mirror), and it reaches AWS through the VPC's
+  # endpoints (infra/README.md, "Prerequisites").
+  ImageId:
+    Description: >-
+      The organisation's RHEL 9 (x86_64) image, with its package repositories
+      pointed at the internal mirror
+    Type: AWS::EC2::Image::Id
+
+  JavaPackage:
+    Description: The Java 25 JDK package, as the image's repositories name it
+    Type: String
+    Default: java-25-openjdk-devel
+    AllowedPattern: "^[A-Za-z0-9][A-Za-z0-9._+-]*$"
+    ConstraintDescription: a package name
+
+  # msodbcsql18 and mssql-tools18 are Microsoft's, not Red Hat's. Leave both
+  # empty when the image's repositories already offer them; otherwise name the
+  # internal mirror's copy of Microsoft's RHEL 9 repository and of its signing
+  # key, and UserData adds the repository with signature checking on.
+  MssqlRepoBaseUrl:
+    Description: >-
+      Base URL of the internal mirror of Microsoft's RHEL 9 "prod" repository
+      (empty when the image's repositories already offer msodbcsql18 and
+      mssql-tools18)
+    Type: String
+    Default: ""
+    AllowedPattern: "^(https://[^\\s'\"]+)?$"
+    ConstraintDescription: an https URL, or empty
+
+  MssqlRepoGpgKeyUrl:
+    Description: >-
+      URL of Microsoft's package signing key on the internal mirror (required
+      with MssqlRepoBaseUrl)
+    Type: String
+    Default: ""
+    AllowedPattern: "^(https://[^\\s'\"]+)?$"
+    ConstraintDescription: an https URL, or empty
+
   InstanceType:
     Description: EC2 instance type
     Type: String
@@ -219,12 +260,15 @@ Parameters:
         3653,
       ]
 
-Mappings:
-  # Amazon Linux 2023 AMI ID for ap-southeast-1 (Singapore)
-  AWSRegionAMI:
-    ap-southeast-1:
-      AMI: ami-0dc2d3e4c0f9ebd18
+Rules:
+  # A repository added by hand is signature-checked, so it needs its key.
+  MssqlRepositoryHasItsKey:
+    RuleCondition: !Not [!Equals [!Ref MssqlRepoBaseUrl, ""]]
+    Assertions:
+      - Assert: !Not [!Equals [!Ref MssqlRepoGpgKeyUrl, ""]]
+        AssertDescription: MssqlRepoGpgKeyUrl is required with MssqlRepoBaseUrl
 
+Mappings:
   # The driver-scoped RDS CA trust store (ADR 0013): where UserData builds it,
   # and the JDBC URL options that hand it to the SQL Server driver alone. The one
   # copy of both: the instance's DATABASE_URL and the DatabaseConnectionString
@@ -750,8 +794,17 @@ Resources:
               - Effect: Allow
                 Action: s3:GetObject
                 Resource: !Sub arn:${AWS::Partition}:s3:::${ArtifactBucket}/${AWS::StackName}/jar/*
-        # cfn-init (UserData) reads the instance's own AWS::CloudFormation::Init
-        # metadata: the database bootstrap's files, none of them a secret.
+        # The RDS CA bundle, which deploy.sh stages there because the instance
+        # cannot reach the internet to fetch it.
+        - PolicyName: FetchTheBootFiles
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: s3:GetObject
+                Resource: !Sub arn:${AWS::Partition}:s3:::${ArtifactBucket}/${AWS::StackName}/boot/*
+        # UserData reads the instance's own AWS::CloudFormation::Init metadata:
+        # the database bootstrap's files, none of them a secret.
         - PolicyName: ReadTheInstancesInitMetadata
           PolicyDocument:
             Version: "2012-10-17"
@@ -787,8 +840,8 @@ Resources:
   # ============================================
   EC2Instance:
     Type: AWS::EC2::Instance
-    # The database bootstrap's files, written by cfn-init (UserData) before the
-    # bootstrap runs. Held here rather than in UserData, which EC2 caps at 16 KB.
+    # The database bootstrap's files, which UserData reads back from this
+    # metadata and writes before the bootstrap runs. Held here rather than in UserData, which EC2 caps at 16 KB.
     # None holds a secret: the env file names ARNs, and db-bootstrap.sh reads
     # the secrets itself. Its SQL is backend/scripts/local-db-init.sql's, line
     # for line (check-bootstrap-parity.sh).
@@ -987,14 +1040,14 @@ Resources:
                 }
     Properties:
       InstanceType: !Ref InstanceType
-      ImageId: !FindInMap [AWSRegionAMI, "ap-southeast-1", AMI]
+      ImageId: !Ref ImageId
       IamInstanceProfile: !Ref EC2InstanceProfile
       NetworkInterfaces:
-        - AssociatePublicIpAddress: true
+        - AssociatePublicIpAddress: false
           DeviceIndex: "0"
           GroupSet:
             - !Ref EC2SecurityGroup
-          SubnetId: !Ref PublicSubnet1Id
+          SubnetId: !Ref PrivateSubnet1Id
       BlockDeviceMappings:
         - DeviceName: /dev/xvda
           Ebs:
@@ -1013,18 +1066,37 @@ Resources:
             # 2. the database bootstrap, 3. the migrate step, 4. the service. 3 and 4
             # need the JAR deploy.sh copies; starting the service runs 2 and 3 first.
             set -euo pipefail
+            # Every package comes from the repositories the image is configured
+            # with: the instance has no route to the internet.
             dnf update -y
-            dnf install -y java-25-amazon-corretto-devel jq awscli-2
+            dnf install -y ${JavaPackage} jq python3
+            command -v aws >/dev/null 2>&1 || dnf install -y awscli2
+            # A hardened image may run a host firewall: the ALB reaches the service on 8080.
+            if systemctl is-active --quiet firewalld; then
+              firewall-cmd --permanent --add-port=8080/tcp
+              firewall-cmd --reload
+            fi
 
-            # 1. sqlcmd on the ODBC Driver 18, from Microsoft's signed RHEL 9 repository.
-            # ACCEPT_EULA accepts their licence terms, which installing them requires.
-            curl -fsS --proto '=https' -o /etc/yum.repos.d/mssql-release.repo \
-              https://packages.microsoft.com/config/rhel/9/prod.repo
+            # 1. sqlcmd on the ODBC Driver 18: Microsoft's signed packages, from the
+            # internal mirror. ACCEPT_EULA accepts their licence terms, which
+            # installing them requires.
+            if [[ -n '${MssqlRepoBaseUrl}' ]]; then
+              cat > /etc/yum.repos.d/mssql-release.repo << 'EOF'
+            [mssql-release]
+            name=Microsoft SQL Server tools (internal mirror)
+            baseurl=${MssqlRepoBaseUrl}
+            enabled=1
+            gpgcheck=1
+            gpgkey=${MssqlRepoGpgKeyUrl}
+            EOF
+            fi
             ACCEPT_EULA=Y dnf install -y msodbcsql18 mssql-tools18
             test -x /opt/mssql-tools18/bin/sqlcmd
 
+            # The CloudWatch agent, from AWS's bucket in this region, which the VPC's
+            # S3 gateway endpoint reaches.
             curl -fsS --proto '=https' -o /tmp/amazon-cloudwatch-agent.rpm \
-              https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
+              https://amazoncloudwatch-agent-${AWS::Region}.s3.${AWS::Region}.amazonaws.com/redhat/amd64/latest/amazon-cloudwatch-agent.rpm
             rpm -U /tmp/amazon-cloudwatch-agent.rpm
             rm /tmp/amazon-cloudwatch-agent.rpm
 
@@ -1040,20 +1112,33 @@ Resources:
             chown springboot:springboot /var/log/backend
             chmod 0750 /var/log/backend
 
-            # 2. The database bootstrap's files, root's alone (/opt/backend/db-bootstrap.*,
-            # written by cfn-init from this resource's metadata), and the secret helper
-            # every script here sources (/opt/backend/secret.sh); the bootstrap's unit
-            # follows. No RemainAfterExit: every start runs it, and the migrate step
-            # requires it, so each deploy re-runs it (a no-op) before migrating.
-            dnf install -y aws-cfn-bootstrap
-            /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource EC2Instance \
-              --region ${AWS::Region} --role ${EC2Role}
+            # 2. The database bootstrap's files, root's alone (/opt/backend/db-bootstrap.*),
+            # and the secret helper every script here sources (/opt/backend/secret.sh),
+            # read back from this resource's metadata and written with the owner and
+            # mode it names; the bootstrap's unit follows. No RemainAfterExit: every
+            # start runs it, and the migrate step requires it, so each deploy re-runs
+            # it (a no-op) before migrating.
+            aws cloudformation describe-stack-resource --region ${AWS::Region} \
+              --stack-name ${AWS::StackName} --logical-resource-id EC2Instance \
+              --query StackResourceDetail.Metadata --output text | python3 -I -c '
+            import grp, json, os, pwd, sys
+            files = json.load(sys.stdin)["AWS::CloudFormation::Init"]["config"]["files"]
+            for path, spec in files.items():
+                with os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w") as out:
+                    out.write(spec["content"])
+                os.chown(path, pwd.getpwnam(spec["owner"]).pw_uid, grp.getgrnam(spec["group"]).gr_gid)
+                os.chmod(path, int(spec["mode"], 8) & 0o7777)
+            '
+            test -s /opt/backend/db-bootstrap.sh
 
-            # The RDS CA bundle every database connection validates the server against
+            # The RDS CA bundle every database connection            # The RDS CA bundle every database connection validates the server against
             # (IM8 dp-3): sqlcmd's per process (SSL_CERT_FILE), the JVM's as the trust
             # store below. The OS and JVM default trust stores are not changed.
-            curl -fsS --proto '=https' -o /opt/backend/rds-ca-bundle.pem \
-              https://truststore.pki.rds.amazonaws.com/${AWS::Region}/${AWS::Region}-bundle.pem
+            # It is AWS's public bundle for the region, which deploy.sh stages in the
+            # artifact bucket: the instance cannot fetch it from the internet.
+            aws s3 cp s3://${ArtifactBucket}/${AWS::StackName}/boot/rds-ca-bundle.pem \
+              /opt/backend/rds-ca-bundle.pem --region ${AWS::Region} --only-show-errors
+            grep -q 'BEGIN CERTIFICATE' /opt/backend/rds-ca-bundle.pem
             chmod 0644 /opt/backend/rds-ca-bundle.pem
 
             # The driver-scoped trust store (ADR 0013): the bundle's certificates in a
@@ -1063,7 +1148,7 @@ Resources:
             ca_certs=$(mktemp -d)
             awk -v dir="$ca_certs" '/-----BEGIN CERTIFICATE-----/ { n++ } n > 0 { print > (dir "/rds-ca-" n ".pem") }' \
               /opt/backend/rds-ca-bundle.pem
-            # shellcheck source=/dev/null # written by cfn-init above
+            # shellcheck source=/dev/null # written from the metadata above
             . /opt/backend/secret.sh
             DB_TRUST_STORE_PASSWORD=$(AWS_REGION=${AWS::Region} secret ${DBTrustStoreSecret} password)
             rm -f "$trust_store"
@@ -1164,7 +1249,7 @@ Resources:
             cat > /opt/backend/migrate.sh << 'EOF'
             #!/bin/bash
             set -euo pipefail
-            # shellcheck source=/dev/null # written by cfn-init
+            # shellcheck source=/dev/null # written from the instance's metadata
             . /opt/backend/secret.sh
             DATABASE_OWNER_USERNAME=$(secret "$DATABASE_OWNER_SECRET_ARN" username)
             DATABASE_OWNER_PASSWORD=$(secret "$DATABASE_OWNER_SECRET_ARN" password)
@@ -1252,6 +1337,10 @@ Resources:
             [Install]
             WantedBy=multi-user.target
             EOF
+            # Under SELinux, systemd runs only files labelled as executables.
+            if command -v selinuxenabled >/dev/null 2>&1 && selinuxenabled; then
+              chcon -t bin_t /opt/backend/db-bootstrap.sh /opt/backend/start.sh /opt/backend/migrate.sh
+            fi
             # Not enabled yet: deploy.sh enables the service with the JAR.
             systemctl daemon-reload
 
@@ -1374,13 +1463,9 @@ Outputs:
     Export:
       Name: !Sub ${AWS::StackName}-EC2-ID
 
-  EC2PublicIP:
-    Description: EC2 Instance Public IP (outbound only; no inbound port but the ALB's 8080)
-    Value: !GetAtt EC2Instance.PublicIp
-
-  EC2PublicDNS:
-    Description: EC2 Instance Public DNS
-    Value: !GetAtt EC2Instance.PublicDnsName
+  EC2PrivateIP:
+    Description: EC2 Instance Private IP (it has no public one)
+    Value: !GetAtt EC2Instance.PrivateIp
 
   ArtifactBucket:
     Description: The bucket the instance fetches the application JAR from (<stack>/jar/)

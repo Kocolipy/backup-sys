@@ -6,7 +6,7 @@
 #                    (also under --leaks-only)
 #   1. health        /actuator/health through the ALB answers 200
 #      JVM trust     the service's JVM keeps the JDK's default trust store, and
-#                    that JDK fetches a public AWS HTTPS endpoint over it
+#                    that JDK validates a public AWS HTTPS endpoint over it
 #   2. TLS          the parameter group forces encryption with TLS 1.0 and 1.1
 #                    off; on the instance, a client that cannot do TLS is
 #                    refused (tds-plaintext-probe.py), a session asking for no
@@ -22,8 +22,8 @@
 #                    owner or the master secret: only the migrate step and the
 #                    database bootstrap are given them
 #   6. secret leaks  no secret value appears in the rendered UserData (read back
-#                    from EC2) or the instance's cfn-init metadata, the
-#                    cloud-init and cfn-init logs, the env files, the bootstrap's,
+#                    from EC2) or the instance's boot-file metadata, the
+#                    cloud-init logs, the env files, the bootstrap's,
 #                    the migrate step's and the service's journals, or the
 #                    service's log file
 #
@@ -39,8 +39,8 @@
 #
 # Usage: ./smoke.sh [--leaks-only] <stack-name> [region]
 #   --leaks-only  steps 0 and 6 alone, step 6 over the sources that exist before the JAR is
-#                 deployed: the rendered UserData and the cfn-init metadata, the
-#                 cloud-init and cfn-init logs, the env files and the database
+#                 deployed: the rendered UserData and the boot-file metadata, the
+#                 cloud-init logs, the env files and the database
 #                 bootstrap's journal. deploy.sh runs this when the JAR is not
 #                 deployed.
 #
@@ -169,8 +169,8 @@ on_instance() {
 instance_secret_leaks() {
   local boot_only=${1:-} source
   collect_secret_values
-  for source in /var/log/cloud-init-output.log /var/log/cloud-init.log /var/log/cfn-init.log \
-    /var/log/cfn-init-cmd.log /opt/backend/.env /opt/backend/migrate.env /opt/backend/db-bootstrap.env; do
+  for source in /var/log/cloud-init-output.log /var/log/cloud-init.log \
+    /opt/backend/.env /opt/backend/migrate.env /opt/backend/db-bootstrap.env; do
     # shellcheck disable=SC2094 # the first argument only names the source in messages
     scan_for_secrets "$source" "${SECRET_VALUES[@]}" <"$source"
   done
@@ -187,7 +187,7 @@ instance_secret_leaks() {
   SECRET_VALUES=()
 }
 
-# check_secret_leaks [boot-only]: the rendered UserData and the cfn-init
+# check_secret_leaks [boot-only]: the rendered UserData and the boot-file
 # metadata are read back from AWS and scanned here; the instance's files and
 # journals are scanned on the instance (instance_secret_leaks).
 check_secret_leaks() {
@@ -199,7 +199,7 @@ check_secret_leaks() {
     scan_for_secrets "the rendered UserData" "${SECRET_VALUES[@]}"
   aws cloudformation describe-stack-resource --stack-name "$STACK" --logical-resource-id EC2Instance \
     --region "$REGION" --query StackResourceDetail.Metadata --output text |
-    scan_for_secrets "the instance's cfn-init metadata" "${SECRET_VALUES[@]}"
+    scan_for_secrets "the instance's boot-file metadata" "${SECRET_VALUES[@]}"
   SECRET_VALUES=()
   on_instance instance_secret_leaks "$boot_only" || die "secret-leak check: failed on the instance (above)"
 }
@@ -238,8 +238,10 @@ check_service_holds_no_owner_credential() {
 
 # The driver-scoped trust store left the JVM's default trust alone (ADR 0013):
 # the running service's JVM has no javax.net.ssl.trustStore, and the same JDK,
-# with its default trust store, fetches a public AWS HTTPS endpoint (the
-# region's RDS CA bundle). Runs on the instance, as the service user.
+# with its default trust store, completes a TLS handshake with a public AWS
+# HTTPS endpoint the instance reaches without the internet (the region's
+# Secrets Manager, through its VPC endpoint). Any HTTP answer passes: the
+# handshake is the check. Runs on the instance, as the service user.
 check_jvm_default_trust() {
   local out line
   # shellcheck disable=SC2016 # expanded on the instance, not here
@@ -253,7 +255,7 @@ if sudo -u springboot "$jcmd" "$pid" VM.system_properties | grep -q '^javax\.net
 fi
 echo "the service's JVM keeps the JDK's default trust store (no javax.net.ssl.trustStore)"
 region=$(sed -n 's/^AWS_REGION=//p' /opt/backend/.env)
-urls=("https://truststore.pki.rds.amazonaws.com/$region/$region-bundle.pem")
+urls=("https://secretsmanager.$region.amazonaws.com/")
 dir=$(mktemp -d)
 chmod 0755 "$dir"
 cat >"$dir/DefaultTrust.java" <<'JAVA'
@@ -268,10 +270,7 @@ public class DefaultTrust {
         for (String url : urls) {
             int status = client.send(HttpRequest.newBuilder(URI.create(url)).build(),
                     HttpResponse.BodyHandlers.discarding()).statusCode();
-            System.out.println("the JDK's default trust store fetched " + url + ": " + status);
-            if (status >= 400) {
-                System.exit(1);
-            }
+            System.out.println("the JDK's default trust store validated " + url + " (HTTP " + status + ")");
         }
     }
 }

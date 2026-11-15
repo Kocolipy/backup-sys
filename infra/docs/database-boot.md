@@ -13,12 +13,15 @@ UserData runs once, when the instance is created, with `set -euo pipefail` and
 never `set -x`:
 
 1. **The SQL Server command-line tools.** `sqlcmd` on the Microsoft ODBC Driver
-   18 (`mssql-tools18`, `msodbcsql18`) from Microsoft's signed RHEL 9 package
-   repository; `ACCEPT_EULA=Y` accepts their licence terms, which installing
-   them requires. Then `cfn-init` writes the database bootstrap's three files and
-   the secret-reading helper (`/opt/backend/secret.sh`) from the instance's
-   `AWS::CloudFormation::Init` metadata, and UserData builds the RDS CA bundle
-   and the driver-scoped trust store
+   18 (`mssql-tools18`, `msodbcsql18`), Microsoft's signed RHEL 9 packages, from
+   the internal mirror the image's repositories name (or `MssqlRepoBaseUrl`);
+   `ACCEPT_EULA=Y` accepts their licence terms, which installing them requires.
+   The instance has no route to the internet, so every package comes from
+   that mirror. Then UserData reads the instance's
+   `AWS::CloudFormation::Init` metadata back from CloudFormation and writes the
+   database bootstrap's three files and the secret-reading helper
+   (`/opt/backend/secret.sh`) from it, fetches the RDS CA bundle `deploy.sh`
+   staged in the artifact bucket, and builds the driver-scoped trust store
    ([TLS to the database](database-encryption.md#tls-to-the-database)).
 2. **The database bootstrap**, as the RDS master user
    ([Database bootstrap](#database-bootstrap)): UserData starts
@@ -36,7 +39,7 @@ service `Requires=` the migrate step, which `Requires=` the bootstrap, so every
 start of the service after a deploy runs the bootstrap again (a no-op) and the
 migrations before the JVM.
 
-The bootstrap's files are in `cfn-init` metadata rather than UserData because EC2
+The bootstrap's files are in the instance's metadata rather than UserData because EC2
 caps UserData at 16 KB; for the same reason of size, the template is larger than
 CloudFormation's 51,200-byte inline limit, so `deploy.sh` stages it in S3 and
 creates the stack from its URL (`CFN_TEMPLATE_BUCKET`, or a bucket

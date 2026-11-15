@@ -18,8 +18,8 @@ values with its files (steps 5 and 6) return their verdict alone: neither a
 secret nor the text searched for one leaves the instance.
 
 `./smoke.sh --leaks-only <stack> [region]` runs steps 0 and 6 alone, step 6 over the sources
-that exist before the service does — the rendered UserData, the `cfn-init`
-metadata and logs, the cloud-init logs, the env files and the database
+that exist before the service does — the rendered UserData, the boot-file
+metadata, the cloud-init logs, the env files and the database
 bootstrap's journal — and needs no JAR. `deploy.sh` runs it when you decline the
 JAR prompt, so every deploy scans the boot.
 
@@ -29,8 +29,8 @@ JAR prompt, so every deploy scans the boot.
    ([File ownership on the instance](database-credentials.md#file-ownership-on-the-instance)). The JAR
    is checked when it is there.
 1. **Health:** `/actuator/health` through the ALB answers `200`. **JVM trust:**
-   the service's JVM keeps the JDK's default trust store, and that JDK fetches
-   a public AWS HTTPS endpoint over it
+   the service's JVM keeps the JDK's default trust store, and that JDK
+   completes a TLS handshake with a public AWS HTTPS endpoint over it
    ([TLS to the database](database-encryption.md#tls-to-the-database)).
 2. **TLS:** see [TLS to the database](database-encryption.md#tls-to-the-database).
 3. **SCIM:** as the Bootstrap Admin, it mints a one-day token on a throwaway
@@ -53,9 +53,9 @@ JAR prompt, so every deploy scans the boot.
 6. **Secret leaks:** every database password (the master's included), the
    trust store's password and the Bootstrap Admin's current and previous
    passwords are searched for in the **rendered UserData** (read
-   back from EC2), the instance's **`cfn-init` metadata**, the instance's
+   back from EC2), the instance's **boot-file metadata**, the instance's
    `/var/log/cloud-init-output.log`, `/var/log/cloud-init.log`,
-   `/var/log/cfn-init.log` and `/var/log/cfn-init-cmd.log`, `/opt/backend/.env`,
+   `/opt/backend/.env`,
    `migrate.env` and `db-bootstrap.env`, the bootstrap's, the migrate step's and
    the service's journals, and the service's log file. A match fails the deploy,
    naming the secret and the file, never printing the value.

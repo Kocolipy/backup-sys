@@ -9,7 +9,7 @@
 #
 # Usage: ./check-bootstrap-parity.sh [--extract <dir>]
 #   --extract  also write the instance's db-bootstrap.sql, db-bootstrap.sh and
-#              secret.sh (which db-bootstrap.sh sources), exactly as cfn-init
+#              secret.sh (which db-bootstrap.sh sources), exactly as UserData
 #              will, into <dir> (to run them elsewhere).
 # deploy.sh runs it before every deploy.
 set -euo pipefail
@@ -18,7 +18,7 @@ INFRA_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TEMPLATE="$INFRA_DIR/infrastructure.yaml"
 LOCAL_SQL="$INFRA_DIR/../backend/scripts/local-db-init.sql"
 
-# metadata_file <path>: the content of one cfn-init file of the template, its
+# metadata_file <path>: the content of one metadata file of the template, its
 # block scalar's indentation removed.
 metadata_file() {
   awk -v path="            $1:" '

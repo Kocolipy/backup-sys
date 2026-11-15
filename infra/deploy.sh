@@ -92,8 +92,27 @@ get_inputs() {
     [ -n "$PRIVATE_SUBNET_2_ID" ] || die "Private Subnet 2 ID is required"
 
     echo
+    # The instance runs the organisation's RHEL 9 image in private subnet 1,
+    # with no route to the internet: its packages come from the repositories
+    # the image is configured with (README.md, "Prerequisites").
+    print_info "EC2 Configuration (RHEL 9, private subnet, no internet access)"
+    read -r -p "Enter the organisation's RHEL 9 image ID (e.g., ami-0123456789abcdef0): " IMAGE_ID
+    [[ $IMAGE_ID =~ ^ami-[0-9a-f]+$ ]] || die "the image ID is required, and looks like ami-0123456789abcdef0"
+
     read -r -p "Enter EC2 instance type (default: t3.small): " INSTANCE_TYPE
     INSTANCE_TYPE=${INSTANCE_TYPE:-t3.small}
+
+    read -r -p "Enter the Java 25 JDK package name in the image's repositories (default: java-25-openjdk-devel): " JAVA_PACKAGE
+    JAVA_PACKAGE=${JAVA_PACKAGE:-java-25-openjdk-devel}
+
+    # Microsoft's packages (msodbcsql18, mssql-tools18): empty when the image's
+    # repositories already offer them.
+    read -r -p "Internal mirror URL of Microsoft's RHEL 9 repository (empty if the image's repositories already carry msodbcsql18): " MSSQL_REPO_BASE_URL
+    MSSQL_REPO_GPG_KEY_URL=""
+    if [ -n "$MSSQL_REPO_BASE_URL" ]; then
+        read -r -p "Internal mirror URL of Microsoft's package signing key: " MSSQL_REPO_GPG_KEY_URL
+        [ -n "$MSSQL_REPO_GPG_KEY_URL" ] || die "the signing key's URL is required with the repository's"
+    fi
 
     # Database configuration. No password: the master user's is RDS-managed and
     # the three logins' are generated, all in Secrets Manager.
@@ -196,6 +215,27 @@ stage_template() {
     print_info "Template staged at ${TEMPLATE_URL}"
 }
 
+# The RDS CA bundle for the region, which every database connection validates
+# the server against: AWS's public file, fetched here and staged under
+# <stack>/boot/ in the artifact bucket, because the instance has no route to
+# the internet to fetch it itself. RDS_CA_BUNDLE names a local copy instead.
+stage_boot_files() {
+    local bundle
+    bundle=$(mktemp)
+    if [ -n "${RDS_CA_BUNDLE:-}" ]; then
+        cp "$RDS_CA_BUNDLE" "$bundle"
+    else
+        curl -fsS --proto '=https' -o "$bundle" \
+            "https://truststore.pki.rds.amazonaws.com/${AWS_REGION}/${AWS_REGION}-bundle.pem" ||
+            die "cannot fetch the RDS CA bundle; download it elsewhere and name the file in RDS_CA_BUNDLE"
+    fi
+    grep -q 'BEGIN CERTIFICATE' "$bundle" || die "the RDS CA bundle holds no certificate"
+    aws s3 cp "$bundle" "s3://${ARTIFACT_BUCKET}/${STACK_NAME}/boot/rds-ca-bundle.pem" \
+        --region "${AWS_REGION}" --only-show-errors
+    rm -f "$bundle"
+    print_info "RDS CA bundle staged at s3://${ARTIFACT_BUCKET}/${STACK_NAME}/boot/rds-ca-bundle.pem"
+}
+
 # Create parameters file. It holds no secret.
 create_parameters_file() {
     print_info "Creating parameters file..."
@@ -207,7 +247,11 @@ create_parameters_file() {
         --arg PublicSubnet2Id "$PUBLIC_SUBNET_2_ID" \
         --arg PrivateSubnet1Id "$PRIVATE_SUBNET_1_ID" \
         --arg PrivateSubnet2Id "$PRIVATE_SUBNET_2_ID" \
+        --arg ImageId "$IMAGE_ID" \
         --arg InstanceType "$INSTANCE_TYPE" \
+        --arg JavaPackage "$JAVA_PACKAGE" \
+        --arg MssqlRepoBaseUrl "$MSSQL_REPO_BASE_URL" \
+        --arg MssqlRepoGpgKeyUrl "$MSSQL_REPO_GPG_KEY_URL" \
         --arg ArtifactBucket "$ARTIFACT_BUCKET" \
         --arg DBEngine "$DB_ENGINE" \
         --arg DBName "$DB_NAME" \
@@ -249,7 +293,7 @@ display_outputs() {
 
     load_stack_outputs "${STACK_NAME}" "${AWS_REGION}"
     EC2_ID=$(stack_output EC2InstanceId)
-    EC2_IP=$(stack_output EC2PublicIP)
+    EC2_IP=$(stack_output EC2PrivateIP)
     ALB_DNS=$(stack_output LoadBalancerDNS)
     ALB_URL=$(stack_output LoadBalancerURL)
     DB_ENDPOINT=$(stack_output DBEndpoint)
@@ -391,6 +435,7 @@ main() {
     resolve_artifact_bucket
     create_parameters_file
     stage_template
+    stage_boot_files
     deploy_stack
     display_outputs
     bootstrap_database

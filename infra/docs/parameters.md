@@ -14,6 +14,10 @@ tags: [cloudformation, parameters]
 | PublicSubnet2Id      | Public subnet 2                                 | Yes      | -                       |
 | PrivateSubnet1Id     | Private subnet 1                                | Yes      | -                       |
 | PrivateSubnet2Id     | Private subnet 2                                | Yes      | -                       |
+| ImageId              | The organisation's RHEL 9 image                 | Yes      | -                       |
+| JavaPackage          | Java 25 JDK package in the image's repositories | No       | java-25-openjdk-devel   |
+| MssqlRepoBaseUrl     | Internal mirror of Microsoft's RHEL 9 repo      | No       | (empty: image has it)   |
+| MssqlRepoGpgKeyUrl   | Microsoft's signing key on the mirror           | With it  | (empty)                 |
 | InstanceType         | EC2 type                                        | No       | t3.small                |
 | ArtifactBucket       | S3 bucket the instance fetches the JAR from     | Yes      | - (deploy.sh fills it)  |
 | DBEngine             | SQL Server edition (see "Engine, edition…")     | No       | sqlserver-ex            |

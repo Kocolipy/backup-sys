@@ -50,8 +50,10 @@ deletion yourself once that snapshot is no longer needed.
   no `trustServerCertificate`, so the driver validates RDS's certificate chain
   against the trust store and its name against the endpoint.
 - **The driver-scoped trust store** (ADR 0013, "The RDS CA trust store is
-  driver-scoped"): at boot UserData downloads the region's RDS CA bundle
-  (`https://truststore.pki.rds.amazonaws.com/<region>/<region>-bundle.pem`) and
+  driver-scoped"): at boot UserData fetches the region's RDS CA bundle
+  (AWS's `https://truststore.pki.rds.amazonaws.com/<region>/<region>-bundle.pem`,
+  which `deploy.sh` stages in the artifact bucket because the instance has no
+  route to the internet) and
   imports every certificate in it into `/opt/backend/rds-truststore.p12`, a
   PKCS12 store under the password `DBTrustStoreSecretArn` holds (`keytool` reads
   it from its environment, `-storepass:env`). Only the SQL Server driver opens
@@ -63,8 +65,8 @@ deletion yourself once that snapshot is no longer needed.
   outbound HTTPS call keeps validating against the JDK's own CAs. `smoke.sh`
   proves it directly: the running JVM has no `javax.net.ssl.trustStore` (`jcmd
 VM.system_properties`), and the same JDK, as the service user and with its
-  default trust store, fetches a public AWS HTTPS endpoint (the region's RDS CA
-  bundle).
+  default trust store, completes a TLS handshake with a public AWS HTTPS
+  endpoint (the region's Secrets Manager, through its VPC endpoint).
 - **The bootstrap's `sqlcmd`:** `-N` (encryption mandatory), **never `-C`**, so
   the ODBC driver validates RDS's certificate chain and its name against the
   endpoint. The RDS CA bundle is given to `sqlcmd` alone, as `SSL_CERT_FILE` in

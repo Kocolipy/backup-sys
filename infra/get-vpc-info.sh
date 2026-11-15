@@ -228,9 +228,9 @@ fi
 
 echo
 
-echo "Note: at boot the EC2 instance (public subnet 1) downloads the SQL Server command-line"
-echo "tools from packages.microsoft.com and the RDS CA bundle from truststore.pki.rds.amazonaws.com,"
-echo "so that subnet needs a route to the Internet Gateway."
+echo "Note: the EC2 instance runs in private subnet 1 with no route to the internet. That subnet"
+echo "needs the VPC's endpoints: the interface endpoints ssm, ssmmessages, ec2messages,"
+echo "secretsmanager, logs and cloudformation, and the s3 gateway endpoint (README.md, Prerequisites)."
 echo
 
 if [ "$ALL_GOOD" = true ]; then
