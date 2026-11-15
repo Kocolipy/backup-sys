@@ -47,30 +47,27 @@ Parameters:
     ConstraintDescription: an S3 bucket name
 
   # RDS Configuration
-  # Standard Edition is production's (ADR 0013, "Scope"). Web and Express are
-  # the small, cheap editions for a trial stack: Express caps a database at
-  # 10 GB, and Web is licensed for public web workloads only
-  # (infra/docs/database-engine.md, "Engine, edition and cost").
+  # Express, the default, is the small, cheap edition for a trial stack, and
+  # caps a database at 10 GB. Standard Edition is production's (ADR 0013,
+  # "Scope") (infra/docs/database-engine.md, "Engine, edition and cost").
   DBEngine:
     Description: >-
-      RDS for SQL Server 2022 edition, licence-included: sqlserver-se
-      (Standard, production), sqlserver-web (Web) or sqlserver-ex (Express)
+      RDS for SQL Server 2022 edition, licence-included: sqlserver-ex
+      (Express, a trial stack) or sqlserver-se (Standard, production)
     Type: String
-    Default: sqlserver-se
+    Default: sqlserver-ex
     AllowedValues:
-      - sqlserver-se
-      - sqlserver-web
       - sqlserver-ex
+      - sqlserver-se
 
-  # Each edition runs on its own classes: Express from db.t3.micro, Web from
-  # db.t3.small, and Standard on none of the small ones (db.t3.xlarge or
-  # db.m5.large at least). deploy.sh checks the pair is orderable before
+  # Each edition runs on its own classes: Express from db.t3.micro, and
+  # Standard on none of the small ones (db.t3.xlarge or db.m5.large at least). deploy.sh checks the pair is orderable before
   # creating anything; see infra/docs/database-engine.md, "Engine, edition and
   # cost".
   DBInstanceClass:
     Description: RDS instance class, one the chosen edition (DBEngine) runs on
     Type: String
-    Default: db.t3.xlarge
+    Default: db.t3.micro
     AllowedValues:
       - db.t3.micro
       - db.t3.small

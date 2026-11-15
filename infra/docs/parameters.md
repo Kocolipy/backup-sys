@@ -16,8 +16,8 @@ tags: [cloudformation, parameters]
 | PrivateSubnet2Id     | Private subnet 2                                | Yes      | -                       |
 | InstanceType         | EC2 type                                        | No       | t3.small                |
 | ArtifactBucket       | S3 bucket the instance fetches the JAR from     | Yes      | - (deploy.sh fills it)  |
-| DBEngine             | SQL Server edition (see "Engine, edition…")     | No       | sqlserver-se            |
-| DBInstanceClass      | A class the edition runs on (same section)      | No       | db.t3.xlarge            |
+| DBEngine             | SQL Server edition (see "Engine, edition…")     | No       | sqlserver-ex            |
+| DBInstanceClass      | A class the edition runs on (same section)      | No       | db.t3.micro             |
 | DBAllocatedStorage   | RDS storage, GB (20–100)                        | No       | 20                      |
 | DBName               | Database the bootstrap creates                  | No       | backend                 |
 | DBMasterUsername     | RDS master username (password RDS-managed)      | No       | dbmaster                |

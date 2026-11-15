@@ -34,9 +34,9 @@ what it does, step by step.
 > does not create one, and the application has no rate limiter of its own. See
 > [Edge throttling](docs/edge-throttling.md).
 
-> **Cost:** SQL Server Standard Edition, licence-included — production's
-> edition — is expensive. A trial stack can take Express or Web Edition on a
-> small class instead. Read [Engine, edition and cost](docs/database-engine.md)
+> **Cost:** the default is Express Edition on a small class, for a trial stack.
+> SQL Server Standard Edition, licence-included — production's edition — is
+> expensive. Read [Engine, edition and cost](docs/database-engine.md)
 > before deploying.
 
 ---
@@ -53,8 +53,8 @@ Internet → ALB (HTTP:80) → EC2 (8080) → RDS for SQL Server (1433) + Redis
 - Application Load Balancer (internet-facing)
 - EC2 instance (Amazon Linux 2023 + Java 25, and `sqlcmd` for the database
   bootstrap), managed through Systems Manager
-- RDS for SQL Server 2022, licence-included — Standard Edition in production,
-  Web or Express for a trial stack (`DBEngine`) — (encrypted under a
+- RDS for SQL Server 2022, licence-included — Express Edition by default, for
+  a trial stack; Standard Edition in production (`DBEngine`) — (encrypted under a
   customer-managed KMS key, TLS 1.2+ forced, Enhanced Monitoring and Performance
   Insights, automated backups)
 - Secrets Manager secrets for every database credential, the driver's trust
@@ -111,8 +111,8 @@ incident touches.
 ./deploy.sh
 ```
 
-It prompts for no password, and asks for the SQL Server edition — `standard`
-(the default, production's), `web` or `express` — then for an instance class,
+It prompts for no password, and asks for the SQL Server edition — `express`
+(the default, for a trial stack) or `standard` (production's) — then for an instance class,
 defaulting to the smallest that edition runs on. In order, it:
 
 1. checks that RDS resolves SQL Server `16.00` in the edition you chose and that

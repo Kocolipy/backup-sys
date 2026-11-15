@@ -101,32 +101,26 @@ get_inputs() {
     read -r -p "Enter database name (default: backend): " DB_NAME
     DB_NAME=${DB_NAME:-backend}
 
-    # The edition sets the price and the classes on offer: Standard Edition is
-    # production's (ADR 0013, "Scope") and bills its licence by the hour; Web
-    # and Express are the small editions for a trial stack
+    # The edition sets the price and the classes on offer: Express, the
+    # default, is the small edition for a trial stack; Standard Edition is
+    # production's (ADR 0013, "Scope") and bills its licence by the hour
     # (docs/database-engine.md, "Engine, edition and cost").
     local edition default_class
-    read -r -p "Enter SQL Server edition: standard, web or express (default: standard): " edition
-    case ${edition:-standard} in
-        standard)
-            DB_ENGINE=sqlserver-se
-            DB_EDITION_NAME="Standard Edition"
-            default_class=db.t3.xlarge
-            print_warn "SQL Server Standard Edition (licence-included) bills its licence by the hour: see docs/database-engine.md, \"Engine, edition and cost\""
-            ;;
-        web)
-            DB_ENGINE=sqlserver-web
-            DB_EDITION_NAME="Web Edition"
-            default_class=db.t3.small
-            print_warn "SQL Server Web Edition is licensed for public, internet-accessible web workloads only"
-            ;;
+    read -r -p "Enter SQL Server edition: express or standard (default: express): " edition
+    case ${edition:-express} in
         express)
             DB_ENGINE=sqlserver-ex
             DB_EDITION_NAME="Express Edition"
             default_class=db.t3.micro
             print_warn "SQL Server Express Edition caps a database at 10 GB: a trial stack's edition, not production's"
             ;;
-        *) die "the edition must be standard, web or express" ;;
+        standard)
+            DB_ENGINE=sqlserver-se
+            DB_EDITION_NAME="Standard Edition"
+            default_class=db.t3.xlarge
+            print_warn "SQL Server Standard Edition (licence-included) bills its licence by the hour: see docs/database-engine.md, \"Engine, edition and cost\""
+            ;;
+        *) die "the edition must be express or standard" ;;
     esac
     read -r -p "Enter RDS instance class (default: ${default_class}, the smallest ${DB_EDITION_NAME} runs on): " DB_INSTANCE_CLASS
     DB_INSTANCE_CLASS=${DB_INSTANCE_CLASS:-$default_class}

@@ -29,11 +29,11 @@
   },
   {
     "ParameterKey": "DBEngine",
-    "ParameterValue": "sqlserver-se"
+    "ParameterValue": "sqlserver-ex"
   },
   {
     "ParameterKey": "DBInstanceClass",
-    "ParameterValue": "db.t3.xlarge"
+    "ParameterValue": "db.t3.micro"
   },
   {
     "ParameterKey": "DBAllocatedStorage",
