@@ -211,15 +211,24 @@ change, when the backend side moves. What the SPA has to honour:
 - **Sessions expire after 15 minutes** of inactivity, the single default in
   every environment. The SPA never hardcodes that figure: `GET /api/auth/me`
   and the login response carry `idleTimeoutSeconds`, read off the session
-  itself, and `src/auth/idle-sign-out.tsx` times its own sign-out by it. That
-  sign-out counts only user input (pointer, key, touch, wheel, scroll) as
-  activity, never a request, and shares it across tabs over a
-  `BroadcastChannel`. A minute before the limit an `alertdialog` offers to stay
-  signed in, which is a `GET /api/auth/me` sent through `useSessionRequest` —
-  so a session already ended takes that seam's one `401` rule — and renews the
-  backend's idle clock too; at the limit the SPA calls logout, discards the CSRF token and
-  sends the user to login with the sign-in reason `inactive`. A session the backend ended first
-  still takes the ordinary `401` path above.
+  itself, and `src/auth/idle-sign-out.tsx` times its own sign-out by it. Only
+  user input (pointer, key, touch, wheel, scroll) renews the backend's idle
+  clock: input arriving when the last renewal the tab knows of is older than a
+  minute (a quarter of a limit under four minutes) sends a `GET /api/auth/me`
+  through `useSessionRequest`. No timer, poll or background request sends it,
+  so an unattended page still signs out at the limit. The SPA's clock counts
+  from the last successful renewal it knows of, stamped when its request went
+  out, never from the last input, so its warning and its sign-out never come
+  after the backend's own end of the session. A renewal is shared with the other
+  tabs over a `BroadcastChannel`, carrying its time; input that renewed nothing
+  is not. A minute before the limit an `alertdialog` offers to stay signed in,
+  which is a renewal too; passive input while it is open neither dismisses it
+  nor renews anything, and another tab's renewal dismisses it. A renewal
+  answered `401` takes that seam's one `401` rule; any other failure leaves the
+  clock where it was, and the next input tries again. At the limit the SPA
+  calls logout, discards the CSRF token and sends the user to login with the
+  sign-in reason `inactive`. A session the backend ended first still takes the
+  ordinary `401` path above.
 - **Sessions are also capped at 8 hours from the Login** that signed them in,
   however active.
   Whichever bound is reached first ends the session, and the SPA cannot tell
