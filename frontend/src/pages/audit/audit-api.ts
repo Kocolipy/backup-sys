@@ -179,13 +179,23 @@ export const EMPTY_AUDIT_FILTERS: AuditFilters = {
 };
 
 /**
- * The listing, as a filter set parsed into it. `search` is the query string of
- * every set filter, empty for none, and is built once, when the filters parse,
- * so rendering never touches a filter again; {@link AUDIT_EVENTS} puts it after
- * the listing's path, before the page the paged read asks for.
+ * The listing, as a filter set parsed into it: each filter as it is sent, an
+ * unset one `null` — no operation for every operation. It is built once, when
+ * the filters parse, so rendering never touches a filter again;
+ * {@link AUDIT_EVENTS} sends each set filter as its own query parameter, by
+ * name, before the page the paged read asks for.
  */
 export interface AuditQuery {
-  readonly search: string;
+  readonly operations: readonly AuditOperation[];
+  readonly outcome: AuditOutcome | null;
+  /** A UUID, trimmed. */
+  readonly actorId: string | null;
+  /** A UUID, trimmed. */
+  readonly resourceId: string | null;
+  /** An ISO instant. */
+  readonly from: string | null;
+  /** An ISO instant. */
+  readonly to: string | null;
 }
 
 /**
@@ -228,48 +238,76 @@ const refuse = (field: AuditRefusedField, message: string): ParsedAuditFilters =
  * `datetime-local` still accepts — and a `from` not strictly before `to` are
  * each refused here, so the backend's own `400` is never spent on them and
  * nothing downstream can throw on them. Every set filter goes into the query,
- * each operation as its own `operation` parameter, an id trimmed and a date bound read as Singapore time
- * (`parseTypedTime`) and sent as an ISO instant; an unset one is left out.
+ * an id trimmed and a date bound read as Singapore time (`parseTypedTime`) as
+ * the ISO instant it is sent as; an unset one is `null`.
  */
 export function parseAuditFilters(filters: AuditFilters): ParsedAuditFilters {
-  const params = new URLSearchParams();
-  for (const operation of filters.operations) params.append("operation", operation);
-  if (filters.outcome !== "ANY") params.set("outcome", filters.outcome);
+  const ids: Record<(typeof ID_FIELDS)[number]["key"], string | null> = {
+    actorId: null,
+    resourceId: null,
+  };
   for (const { key, label } of ID_FIELDS) {
     const value = filters[key].trim();
     if (value === "") continue;
     if (!UUID_PATTERN.test(value)) return refuse(key, `${label} must be a valid UUID.`);
-    params.set(key, value);
+    ids[key] = value;
   }
+  const instants: Record<(typeof DATE_FIELDS)[number]["key"], string | null> = {
+    from: null,
+    to: null,
+  };
   // An unset bound leaves the range open on its side, so it never refuses.
   const bounds = { from: -Infinity, to: Infinity };
   for (const { key, label } of DATE_FIELDS) {
     if (filters[key] === "") continue;
     const instant = parseTypedTime(filters[key]);
     if (instant === null) return refuse("occurred", `${label} date must be a valid date.`);
-    params.set(key, instant.toISOString());
+    instants[key] = instant.toISOString();
     bounds[key] = instant.getTime();
   }
   // Asked as "is from strictly before to?" rather than "from >= to": a bound
   // missing from `bounds` then refuses everything instead of silently passing.
   if (!(bounds.from < bounds.to))
     return refuse("occurred", "The from date must be before the to date.");
-  return { ok: true, query: { search: params.toString() } };
+  const outcome = filters.outcome === "ANY" ? null : filters.outcome;
+  return { ok: true, query: { operations: filters.operations, outcome, ...ids, ...instants } };
 }
 
 /**
  * What {@link parseAuditFilters} makes of {@link EMPTY_AUDIT_FILTERS}: every
  * event. The listing's query before any filter is submitted.
  */
-export const UNFILTERED_AUDIT_QUERY: AuditQuery = { search: "" };
+export const UNFILTERED_AUDIT_QUERY: AuditQuery = {
+  operations: [],
+  outcome: null,
+  actorId: null,
+  resourceId: null,
+  from: null,
+  to: null,
+};
+
+/**
+ * The query string `query` asks for: each operation as its own `operation`
+ * parameter, then each other filter set, by its own name; an unset one is
+ * left out.
+ */
+function auditSearch(query: AuditQuery): string {
+  const params = new URLSearchParams();
+  for (const operation of query.operations) params.append("operation", operation);
+  for (const key of ["outcome", "actorId", "resourceId", "from", "to"] as const) {
+    const value = query[key];
+    if (value !== null) params.set(key, value);
+  }
+  return params.toString();
+}
 
 /**
  * One page of the audit trail, `GET /api/admin/audit-events`, newest first,
- * with the query string its query was parsed into — so a page names the
- * query, never a path.
+ * with the parameters its query was parsed into — so a page names the query,
+ * never a path.
  */
 export const AUDIT_EVENTS: ReadDeclaration<Page<AuditEvent>, [query: AuditQuery, at: PageAt]> = {
   decode: jsonDecoder(pageDecoder("AuditEventPage", "events", decodeAuditEvent)),
-  path: (query, at) => pagedPath(AUDIT_EVENTS_PATH, at, query.search),
+  path: (query, at) => pagedPath(AUDIT_EVENTS_PATH, at, auditSearch(query)),
   permission: "audit:read",
 };
