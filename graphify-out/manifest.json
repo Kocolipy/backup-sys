@@ -1032,9 +1032,9 @@
     "semantic_hash": ""
   },
   "backend/src/main/java/com/example/backend/scim/infrastructure/persistence/ScimResourceJpaRepository.java": {
-    "mtime": 1794193904.8090703,
-    "seen": 1794726155.1620018,
-    "ast_hash": "c2450d4e3b486ac9d289faf490b0d39e",
+    "mtime": 1794727933.9936688,
+    "seen": 1794729497.676786,
+    "ast_hash": "02a29039ffa4c1ddc00b77f279963121",
     "semantic_hash": ""
   },
   "backend/src/main/java/com/example/backend/scim/infrastructure/persistence/ScimTombstonePersistenceAdapter.java": {
@@ -1146,9 +1146,9 @@
     "semantic_hash": ""
   },
   "backend/src/test/java/com/example/backend/ContainerTestConfiguration.java": {
-    "mtime": 1794230172.1596732,
-    "seen": 1794726155.1620464,
-    "ast_hash": "943d07af4028f3fcf9e5d64cd2c359a2",
+    "mtime": 1794728127.4931698,
+    "seen": 1794729497.6787212,
+    "ast_hash": "4600af9cad56caf3328353dd29fbd65d",
     "semantic_hash": ""
   },
   "backend/src/test/java/com/example/backend/InMemorySessionRegistryConfiguration.java": {
@@ -1326,9 +1326,9 @@
     "semantic_hash": ""
   },
   "backend/src/test/java/com/example/backend/observability/EcsLogCapture.java": {
-    "mtime": 1794193904.8483648,
-    "seen": 1794726155.16225,
-    "ast_hash": "d3bdf5f8bc01d815b5b85db9df7506cc",
+    "mtime": 1794728315.976087,
+    "seen": 1794729497.6848645,
+    "ast_hash": "07ab933576f40c0ee9cc792959c7d4bd",
     "semantic_hash": ""
   },
   "backend/src/test/java/com/example/backend/observability/EcsLogFormatTests.java": {
@@ -1740,9 +1740,9 @@
     "semantic_hash": ""
   },
   "frontend/package.json": {
-    "mtime": 1794193904.8896937,
-    "seen": 1794726155.162472,
-    "ast_hash": "f1c77f64af4b12ad7a4a2b526c29d4ce",
+    "mtime": 1794728533.3863177,
+    "seen": 1794729497.6961343,
+    "ast_hash": "fc5f1815bab484d33835c269f739a812",
     "semantic_hash": ""
   },
   "frontend/playwright.config.ts": {
@@ -2214,9 +2214,9 @@
     "semantic_hash": ""
   },
   "frontend/docs/TESTING_GUIDE.md": {
-    "mtime": 1794723831.0349681,
-    "seen": 1794726155.162786,
-    "ast_hash": "1c011cb7e873a7a9beb6decb47ad0175",
+    "mtime": 1794728533.7704003,
+    "seen": 1794729497.7065248,
+    "ast_hash": "411666ac23ffd38fa3cee1e53418fce8",
     "semantic_hash": ""
   },
   "frontend/index.html": {
@@ -3864,15 +3864,15 @@
     "semantic_hash": ""
   },
   "backend/src/test/java/com/example/backend/scim/ScimWriteLockOrderIntegrationTests.java": {
-    "mtime": 1794193904.85979,
-    "seen": 1794726155.1623766,
-    "ast_hash": "ae16c5b659a275105281b16cd0fb4571",
+    "mtime": 1794727890.0816288,
+    "seen": 1794729497.6911469,
+    "ast_hash": "3495db12dd3475f39724253408b3387c",
     "semantic_hash": ""
   },
   "backend/src/test/java/com/example/backend/scim/infrastructure/persistence/ScimWriteLockAdapterIntegrationTests.java": {
-    "mtime": 1794193904.8766968,
-    "seen": 1794726155.1624503,
-    "ast_hash": "ec935b48491a4a6a70dac1bcc32a08c3",
+    "mtime": 1794729361.3886802,
+    "seen": 1794729497.6950638,
+    "ast_hash": "986cf6936e577f58e33e7fe37ef33639",
     "semantic_hash": ""
   },
   "backend/src/main/java/com/example/backend/audit/config/AuditAppendPoolConfig.java": {
@@ -4644,9 +4644,9 @@
     "semantic_hash": ""
   },
   "backend/src/main/java/com/example/backend/scim/infrastructure/persistence/ResourceVersionStatements.java": {
-    "mtime": 1794193904.8090703,
-    "seen": 1794726155.161987,
-    "ast_hash": "79ff8389a02f3fe69b0cb6914246a847",
+    "mtime": 1794727933.9936688,
+    "seen": 1794729497.6761136,
+    "ast_hash": "b0b2208bbf29934b7df17cf151d2bf82",
     "semantic_hash": ""
   },
   "backend/src/test/java/com/example/backend/scim/domain/ResourceVersionAdvanceTests.java": {
@@ -4800,8 +4800,8 @@
     "semantic_hash": ""
   },
   "backend/src/test/java/com/example/backend/patient/controller/PatientR5ConformanceTests.java": {
-    "mtime": 1794228159.239262,
-    "seen": 1794726155.1622922,
+    "mtime": 1794728394.1047854,
+    "seen": 1794729497.6869211,
     "ast_hash": "8d66685a867160dbf3d6ddc0d91dafab",
     "semantic_hash": ""
   },
