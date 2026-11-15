@@ -1,7 +1,7 @@
 // Tests for the SPA–API contract check (./check.mjs). Run by `make verify-contract`
 // before the check itself, with Node's own runner: `node --test scripts/spa-contract/`.
 //
-// Every test hands `findMismatches` an SPA and an API document that agree, less
+// Every test hands `holdContract` an SPA and an API document that agree, less
 // the one difference it names, and asserts on the findings the check reports.
 // The SPA's decoders are written here, so a finding is the document disagreeing
 // with a decoder of known behaviour, never with one under test elsewhere.
@@ -9,12 +9,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import {
-  declaredNames,
-  discover,
-  findMismatches,
-  holdContract,
-} from "./check.mjs";
+import { declaredNames, discover, holdContract } from "./check.mjs";
 
 // ---- the SPA's decoders, written here -----------------------------------------------
 //
@@ -415,7 +410,7 @@ const schemas = (doc) => doc.components.schemas;
 
 describe("the SPA's vocabularies", () => {
   it("finds nothing when the SPA and the document agree", async () => {
-    assert.deepEqual(await findMismatches(spa(), document()), []);
+    assert.deepEqual((await holdContract(spa(), document())).findings, []);
   });
 
   // Each row edits one side and names the findings that edit must produce.
@@ -575,7 +570,7 @@ describe("the SPA's vocabularies", () => {
       const [s, doc] = [spa(), document()];
       edit(s, doc);
 
-      assert.deepEqual(await findMismatches(s, doc), [finding].flat());
+      assert.deepEqual((await holdContract(s, doc)).findings, [finding].flat());
     });
   }
 });
@@ -587,7 +582,7 @@ describe("the SPA's request declarations", () => {
       { sessionCookie: ["group:read"] },
     ];
 
-    assert.deepEqual(await findMismatches(spa(), doc), [
+    assert.deepEqual((await holdContract(spa(), doc)).findings, [
       'USERS (src/pages/accounts/accounts-api.ts) requires "user:read" for GET /api/admin/accounts, but openapi.yaml requires sessionCookie: [group:read]',
     ]);
   });
@@ -598,7 +593,7 @@ describe("the SPA's request declarations", () => {
       { sessionCookie: ["group:read"] },
     ];
 
-    assert.deepEqual(await findMismatches(spa(), doc), [
+    assert.deepEqual((await holdContract(spa(), doc)).findings, [
       'SET_GROUP_PERMISSIONS (src/pages/accounts/accounts-api.ts) requires "superuser" for PUT /api/admin/groups/{id}/permissions, but openapi.yaml requires sessionCookie: [group:read]',
     ]);
   });
@@ -609,7 +604,7 @@ describe("the SPA's request declarations", () => {
       { sessionCookie: ["group:read"] },
     ];
 
-    assert.deepEqual(await findMismatches(spa(), doc), [
+    assert.deepEqual((await holdContract(spa(), doc)).findings, [
       'GROUP_MEMBERS (src/pages/accounts/accounts-api.ts) requires "group:read" and "user:read" for GET /api/admin/groups/{id}/members, but openapi.yaml requires sessionCookie: [group:read]',
     ]);
   });
@@ -620,7 +615,7 @@ describe("the SPA's request declarations", () => {
       { sessionCookie: ["user:read", "group:read"] },
     ];
 
-    assert.deepEqual(await findMismatches(spa(), doc), [
+    assert.deepEqual((await holdContract(spa(), doc)).findings, [
       'USERS (src/pages/accounts/accounts-api.ts) requires "user:read" for GET /api/admin/accounts, but openapi.yaml requires sessionCookie: [user:read, group:read]',
     ]);
   });
@@ -631,7 +626,7 @@ describe("the SPA's request declarations", () => {
       { sessionCookie: ["user:read", "group:read"] },
     ];
 
-    assert.deepEqual(await findMismatches(spa(), doc), []);
+    assert.deepEqual((await holdContract(spa(), doc)).findings, []);
   });
 
   it("does not read two Permissions offered as alternatives as both required", async () => {
@@ -641,7 +636,7 @@ describe("the SPA's request declarations", () => {
       { sessionCookie: ["user:read"] },
     ];
 
-    assert.deepEqual(await findMismatches(spa(), doc), [
+    assert.deepEqual((await holdContract(spa(), doc)).findings, [
       'GROUP_MEMBERS (src/pages/accounts/accounts-api.ts) requires "group:read" and "user:read" for GET /api/admin/groups/{id}/members, but openapi.yaml requires sessionCookie: [group:read] or sessionCookie: [user:read]',
     ]);
   });
@@ -652,7 +647,7 @@ describe("the SPA's request declarations", () => {
       allOf: ["group:read", "group:read"],
     };
 
-    assert.deepEqual(await findMismatches(s, document()), [
+    assert.deepEqual((await holdContract(s, document())).findings, [
       'GROUP_MEMBERS (src/pages/accounts/accounts-api.ts) requires "group:read" and "group:read" for GET /api/admin/groups/{id}/members, but openapi.yaml requires sessionCookie: [group:read, user:read]',
     ]);
   });
@@ -663,7 +658,7 @@ describe("the SPA's request declarations", () => {
       allOf: [],
     };
 
-    assert.deepEqual(await findMismatches(s, document()), [
+    assert.deepEqual((await holdContract(s, document())).findings, [
       "src/pages/accounts/accounts-api.ts declares GROUP_MEMBERS, which did not evaluate to a request declaration",
     ]);
   });
@@ -672,7 +667,7 @@ describe("the SPA's request declarations", () => {
     const doc = document();
     delete doc.paths["/api/admin/accounts"].get.security;
 
-    assert.deepEqual(await findMismatches(spa(), doc), [
+    assert.deepEqual((await holdContract(spa(), doc)).findings, [
       'USERS (src/pages/accounts/accounts-api.ts) requires "user:read" for GET /api/admin/accounts, but openapi.yaml requires sessionCookie: []',
     ]);
   });
@@ -683,7 +678,7 @@ describe("the SPA's request declarations", () => {
       { connectorBearer: ["user:read"] },
     ];
 
-    assert.deepEqual(await findMismatches(spa(), doc), [
+    assert.deepEqual((await holdContract(spa(), doc)).findings, [
       'USERS (src/pages/accounts/accounts-api.ts) requires "user:read" for GET /api/admin/accounts, but openapi.yaml requires connectorBearer: [user:read]',
     ]);
   });
@@ -692,7 +687,7 @@ describe("the SPA's request declarations", () => {
     const doc = document();
     delete doc.paths["/api/admin/groups/{id}/permissions"].put;
 
-    assert.deepEqual(await findMismatches(spa(), doc), [
+    assert.deepEqual((await holdContract(spa(), doc)).findings, [
       "SET_GROUP_PERMISSIONS (src/pages/accounts/accounts-api.ts) sends PUT /api/admin/groups/ARG/permissions, which no operation in openapi.yaml serves",
     ]);
   });
@@ -702,7 +697,7 @@ describe("the SPA's request declarations", () => {
     s.modules["src/pages/audit/audit-api.ts"].AUDIT_EVENTS.path = (query) =>
       query.path;
 
-    assert.deepEqual(await findMismatches(s, document()), [
+    assert.deepEqual((await holdContract(s, document())).findings, [
       "AUDIT_EVENTS (src/pages/audit/audit-api.ts) builds no absolute path from placeholder arguments",
     ]);
   });
@@ -711,7 +706,7 @@ describe("the SPA's request declarations", () => {
     const s = spa();
     delete s.modules["src/pages/accounts/accounts-api.ts"].USERS;
 
-    assert.deepEqual(await findMismatches(s, document()), [
+    assert.deepEqual((await holdContract(s, document())).findings, [
       "src/pages/accounts/accounts-api.ts declares USERS, which did not evaluate to a request declaration",
     ]);
   });
@@ -726,7 +721,7 @@ describe("the SPA's request declarations", () => {
     delete s.modules["src/pages/patient-api.ts"].PATIENT;
     s.declared = {};
 
-    assert.deepEqual(await findMismatches(s, document()), [
+    assert.deepEqual((await holdContract(s, document())).findings, [
       "found no request declaration in the SPA; the check would hold nothing",
     ]);
   });
@@ -892,7 +887,7 @@ describe("the SPA's response shapes", () => {
       (_spa, doc) => {
         delete schemas(doc).GroupMember;
       },
-      "GROUP_MEMBERS (src/pages/accounts/accounts-api.ts) cannot be held to GET /api/admin/groups/{id}/members 200 application/json: there is no schema at #/components/schemas/GroupMember",
+      "GROUP_MEMBERS (src/pages/accounts/accounts-api.ts) cannot be held to GET /api/admin/groups/{id}/members 200 application/json: there is no schema (at #/components/schemas/GroupMember)",
     ],
     [
       "a declaration's decode is not a function",
@@ -915,7 +910,7 @@ describe("the SPA's response shapes", () => {
       const [s, doc] = [spa(), document()];
       edit(s, doc);
 
-      assert.deepEqual(await findMismatches(s, doc), [finding]);
+      assert.deepEqual((await holdContract(s, doc)).findings, [finding]);
     });
   }
 
@@ -923,7 +918,7 @@ describe("the SPA's response shapes", () => {
     const doc = document();
     schemas(doc).AccountSummary.properties.email = { type: "string" };
 
-    assert.deepEqual(await findMismatches(spa(), doc), []);
+    assert.deepEqual((await holdContract(spa(), doc)).findings, []);
   });
 
   it("holds nothing of the response of a write that declares no decoder", async () => {
@@ -931,7 +926,7 @@ describe("the SPA's response shapes", () => {
     delete s.modules["src/pages/accounts/accounts-api.ts"].SET_GROUP_PERMISSIONS
       .decode;
 
-    assert.deepEqual(await findMismatches(s, document()), []);
+    assert.deepEqual((await holdContract(s, document())).findings, []);
   });
 
   // Each row gives a Group's property a constraint, and reads the Group with a
@@ -986,7 +981,7 @@ describe("the SPA's response shapes", () => {
         objectOf("GroupSummary", { limited: is(name, accepts) }),
       );
 
-      assert.deepEqual(await findMismatches(s, doc), []);
+      assert.deepEqual((await holdContract(s, doc)).findings, []);
     });
   }
 });
@@ -1066,7 +1061,7 @@ describe("the SPA's query parameters", () => {
       const [s, doc] = [spa(), document()];
       edit(s, doc);
 
-      assert.deepEqual(await findMismatches(s, doc), [finding]);
+      assert.deepEqual((await holdContract(s, doc)).findings, [finding]);
     });
   }
 });
@@ -1168,9 +1163,12 @@ export const TOKENS: PagedDeclaration<
       },
     };
 
-    assert.deepEqual(await findMismatches({ modules, declared }, doc), [
-      'TOKENS (src/pages/tokens/tokens-api.ts) requires "connector:read" for GET /api/admin/connectors/{id}/tokens, but openapi.yaml requires sessionCookie: [superuser]',
-    ]);
+    assert.deepEqual(
+      (await holdContract({ modules, declared }, doc)).findings,
+      [
+        'TOKENS (src/pages/tokens/tokens-api.ts) requires "connector:read" for GET /api/admin/connectors/{id}/tokens, but openapi.yaml requires sessionCookie: [superuser]',
+      ],
+    );
   });
 
   it("names a paged declaration its source exports that does not evaluate to one", async () => {
@@ -1181,7 +1179,7 @@ export const TOKENS: PagedDeclaration<
     };
     s.declared = { ...s.declared, ...declared };
 
-    assert.deepEqual(await findMismatches(s, document()), [
+    assert.deepEqual((await holdContract(s, document())).findings, [
       "src/pages/tokens/tokens-api.ts declares TOKENS, which did not evaluate to a request declaration",
     ]);
   });

@@ -326,12 +326,8 @@ function queryNamesOf(path) {
 }
 
 /** Every `in: query` parameter `doc` documents for the operation, the path item's own included. */
-function documentedQueryParameters(doc, template, method) {
-  const item = doc.paths[template];
-  return [
-    ...(item.parameters ?? []),
-    ...(item[method.toLowerCase()].parameters ?? []),
-  ]
+function documentedQueryParameters(doc, { template, node }) {
+  return [...(doc.paths[template].parameters ?? []), ...(node.parameters ?? [])]
     .map((parameter) => dereferenced(doc, parameter))
     .filter((parameter) => parameter?.in === "query");
 }
@@ -341,9 +337,9 @@ function documentedQueryParameters(doc, template, method) {
  * not document, each one the operation requires that the path never sends,
  * and a name the path builds from its arguments, which the check cannot hold.
  */
-function queryMismatches(doc, { label, method }, path, template, held) {
-  const operation = `${method} ${template}`;
-  const documented = documentedQueryParameters(doc, template, method);
+function queryMismatches(doc, { label }, path, served, held) {
+  const { operation } = served;
+  const documented = documentedQueryParameters(doc, served);
   const documentedNames = documented.map(({ name }) => name);
   const sent = queryNamesOf(path);
   const findings = [];
@@ -434,13 +430,11 @@ class Unsampleable extends Error {}
  */
 function sampleOf(doc, schema, full, at) {
   if (schema === null || typeof schema !== "object") {
-    throw new Unsampleable(`there is no schema at ${at}`);
+    unsampleable("there is no schema", at);
   }
   for (const keyword of Object.keys(schema)) {
     if (!SAMPLED_KEYWORDS.has(keyword) && !ANNOTATIONS.has(keyword)) {
-      throw new Unsampleable(
-        `the sampler does not implement "${keyword}" (at ${at})`,
-      );
+      unimplemented(`"${keyword}"`, at);
     }
   }
   if (typeof schema.$ref === "string") {
@@ -453,8 +447,10 @@ function sampleOf(doc, schema, full, at) {
     return schema.enum.find((value) => value !== null) ?? null;
   }
   const kinds = types.filter((type) => type !== "null");
-  if (kinds.length === 0) return nullable ? null : unsampleable("a schema with no type", at);
-  if (kinds.length > 1) return unsampleable(`a type of several kinds`, at);
+  if (kinds.length === 0) {
+    return nullable ? null : unimplemented("a schema with no type", at);
+  }
+  if (kinds.length > 1) return unimplemented("a type of several kinds", at);
   switch (kinds[0]) {
     case "object":
       return objectSample(doc, schema, full, at);
@@ -467,12 +463,18 @@ function sampleOf(doc, schema, full, at) {
     case "boolean":
       return full;
     default:
-      return unsampleable(`type "${kinds[0]}"`, at);
+      return unimplemented(`type "${kinds[0]}"`, at);
   }
 }
 
-function unsampleable(what, at) {
-  throw new Unsampleable(`the sampler does not implement ${what} (at ${at})`);
+/** Refuses to sample the schema at `at`, saying why. */
+function unsampleable(reason, at) {
+  throw new Unsampleable(`${reason} (at ${at})`);
+}
+
+/** Refuses to sample the schema at `at`, naming `what` it uses that the sampler does not implement. */
+function unimplemented(what, at) {
+  unsampleable(`the sampler does not implement ${what}`, at);
 }
 
 function objectSample(doc, schema, full, at) {
@@ -480,7 +482,7 @@ function objectSample(doc, schema, full, at) {
   const required = schema.required ?? [];
   const missing = required.find((name) => !(name in properties));
   if (missing !== undefined) {
-    throw new Unsampleable(`required "${missing}" has no schema (at ${at})`);
+    unsampleable(`required "${missing}" has no schema`, at);
   }
   const names = full ? Object.keys(properties) : required;
   return Object.fromEntries(
@@ -503,25 +505,28 @@ function arraySample(doc, schema, full, at) {
 
 function stringSample(schema, at) {
   if (schema.format !== undefined && !(schema.format in STRING_FORMATS)) {
-    unsampleable(`format "${schema.format}"`, at);
+    unimplemented(`format "${schema.format}"`, at);
   }
   let value = STRING_FORMATS[schema.format] ?? "sample";
   value = value.padEnd(schema.minLength ?? 0, "x");
   if (schema.maxLength !== undefined) value = value.slice(0, schema.maxLength);
-  if (
-    schema.pattern !== undefined &&
-    !new RegExp(schema.pattern, "u").test(value)
-  ) {
-    throw new Unsampleable(
-      `the sampler's "${value}" does not match the pattern "${schema.pattern}" (at ${at})`,
-    );
+  if (schema.pattern !== undefined) {
+    // The pattern is read from the repo's own openapi.yaml, never from a caller.
+    // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp
+    const pattern = new RegExp(schema.pattern, "u");
+    if (!pattern.test(value)) {
+      unsampleable(
+        `the sampler's "${value}" does not match the pattern "${schema.pattern}"`,
+        at,
+      );
+    }
   }
   return value;
 }
 
 function integerSample(schema, at) {
   if (schema.format !== undefined && !INTEGER_FORMATS.has(schema.format)) {
-    unsampleable(`format "${schema.format}"`, at);
+    unimplemented(`format "${schema.format}"`, at);
   }
   return Math.min(schema.minimum ?? 1, schema.maximum ?? Infinity);
 }
@@ -542,13 +547,8 @@ function successBodies(doc, operation) {
  * operation's success responses document, under that body's own media type:
  * the first sample it refuses, or why there is nothing to run it over.
  */
-async function responseMismatches(
-  doc,
-  { label, method, value },
-  template,
-  held,
-) {
-  const operation = `${method} ${template}`;
+async function responseMismatches(doc, { label, value }, served, held) {
+  const { method, operation } = served;
   if (value.decode === undefined) {
     return method === "GET"
       ? [
@@ -559,7 +559,7 @@ async function responseMismatches(
   if (typeof value.decode !== "function") {
     return [`${label} has a decode that is not a function`];
   }
-  const bodies = successBodies(doc, doc.paths[template][method.toLowerCase()]);
+  const bodies = successBodies(doc, served.node);
   if (bodies.length === 0) {
     return [
       `${label} decodes a body, but ${operation} documents no success body`,
@@ -622,17 +622,24 @@ async function declarationMismatches(spa, doc, held) {
       );
       continue;
     }
-    const operation = doc.paths[template][method.toLowerCase()];
-    const security = operation.security ?? doc.security ?? [];
+    // The operation the declaration is sent to: its path template, method, the
+    // `METHOD /template` its findings name it by, and its node in the document.
+    const served = {
+      template,
+      method,
+      operation: `${method} ${template}`,
+      node: doc.paths[template][method.toLowerCase()],
+    };
+    const security = served.node.security ?? doc.security ?? [];
     if (!sameNames(required, sessionRequirement(security))) {
       const requires = required.map((name) => `"${name}"`).join(" and ");
       findings.push(
-        `${label} requires ${requires} for ${method} ${template}, but openapi.yaml requires ${describeSecurity(security)}`,
+        `${label} requires ${requires} for ${served.operation}, but openapi.yaml requires ${describeSecurity(security)}`,
       );
     }
     findings.push(
-      ...queryMismatches(doc, declaration, path, template, held),
-      ...(await responseMismatches(doc, declaration, template, held)),
+      ...queryMismatches(doc, declaration, path, served, held),
+      ...(await responseMismatches(doc, declaration, served, held)),
     );
   }
   return findings;
@@ -695,9 +702,4 @@ export async function holdContract(spa, doc) {
     ...(await declarationMismatches(spa, doc, held)),
   ];
   return { findings, held };
-}
-
-/** Every way the SPA, as `spa` holds it, disagrees with `doc`: {@link holdContract}'s `findings`. */
-export async function findMismatches(spa, doc) {
-  return (await holdContract(spa, doc)).findings;
 }
