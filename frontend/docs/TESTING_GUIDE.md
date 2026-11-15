@@ -202,6 +202,10 @@ For example:
   `src/index.css`.
 - `e2eSpecRouting.test.ts` — every Playwright spec is matched by exactly one
   project's `testMatch`.
+- `cruiserPaths.test.ts` — every literal path a dependency-cruiser rule names
+  (`src/lib/http.ts`, each alternative of `(http|decode)`) matches a file, so
+  renaming the file fails the suite instead of leaving its rule matching
+  nothing. A path a rule forbids to exist is listed in `MEANT_TO_MATCH_NOTHING`.
 - `skippedTests.test.ts` — no skip or focus marker in any suite
   (`/backend/AGENTS.md`, "Test suite policy"): a skip leaves a test nothing
   runs, a focus drops every other test in its file, and the run still exits

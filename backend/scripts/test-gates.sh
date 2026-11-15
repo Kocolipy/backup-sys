@@ -37,6 +37,7 @@ MVN=${MVN:-./mvnw}
 FAST_GATE=(
   arch/ArchitectureTest
   arch/AuditTrailRulesTests
+  arch/ClockRulesTests
   arch/DeadlockRetryRulesTests
   arch/ErrorNamespaceRulesTests
   arch/ModuleRulesTests
@@ -47,6 +48,7 @@ FAST_GATE=(
   arch/TestSourceArchitectureTest
   arch/TrustServerCertificateTest
   arch/UtilityClassRulesTests
+  arch/WebAdapterRulesTests
   com/example/backend/audit/application/AuditRetentionServiceTests
   com/example/backend/audit/application/AuditTrailServiceTests
   com/example/backend/audit/config/AuditAppendPoolConfigTests

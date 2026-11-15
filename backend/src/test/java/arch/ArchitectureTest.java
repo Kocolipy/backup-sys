@@ -700,7 +700,7 @@ public class ArchitectureTest {
             .should().dependOnClassesThat().resideInAnyPackage(
                     "org.springframework.jdbc..", "java.sql..", "javax.sql..")
             .orShould().dependOnClassesThat().haveFullyQualifiedName(
-                    "com.example.backend.database.TimedJdbc")
+                    com.example.backend.database.TimedJdbc.class.getName())
             .because("Dependencies point inward: SQL is issued by a persistence adapter, behind the"
                     + " port the use case calls");
 
@@ -1648,8 +1648,9 @@ public class ArchitectureTest {
     @com.tngtech.archunit.junit.ArchTest
     static final ArchRule the_audit_trail_boundary_admits_no_free_text =
         classes()
-            .that().haveFullyQualifiedName("com.example.backend.audit.domain.AuditTrail")
-            .or().areAssignableTo("com.example.backend.audit.domain.Audited")
+            .that().haveFullyQualifiedName(
+                    com.example.backend.audit.domain.AuditTrail.class.getName())
+            .or().areAssignableTo(com.example.backend.audit.domain.Audited.class)
             .should(new ArchCondition<JavaClass>("admit no String in a parameter or a field") {
                 private boolean mentionsString(com.tngtech.archunit.core.domain.JavaType type) {
                     return type.getName().matches(".*\\bjava\\.lang\\.(String|CharSequence)\\b.*");

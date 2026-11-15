@@ -545,6 +545,16 @@ sessions or React — `mb-lib-is-a-leaf` holds that.
 `test/arch/rawNetwork.test.ts` (`no_raw_network_outside_transport`) names
 `lib/http.ts` and no other module.
 
+### Why nothing reads on a timer
+
+Every request renews the server session, so a page that read on a schedule
+would hold off the idle timeout for as long as its tab stayed open. A page reads
+on mount and on the user's action — Apply, Reset, paging, Refresh — and never on
+a timer. `test/arch/timers.test.ts` (`no_timer_outside_idle_sign_out`) fails
+any `setTimeout`, `setInterval`, `requestAnimationFrame` or
+`requestIdleCallback` outside `auth/idle-sign-out.tsx`, whose timer times the
+session's own window and sends nothing on a schedule.
+
 ### Why every time goes through `lib/time.ts`
 
 The SPA reads and shows every time in Asia/Singapore, the zone the backend

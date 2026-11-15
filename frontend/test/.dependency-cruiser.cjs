@@ -38,15 +38,6 @@ module.exports = {
     },
 
     {
-      name: "lb-no-css-in-logic",
-      comment:
-        "Helpers must not import stylesheets; style imports belong in component files and in the composition root.",
-      severity: "error",
-      from: { path: "^src/lib/" },
-      to: { path: "\\.(css|scss|sass|less)$" },
-    },
-
-    {
       name: "lb-transport-has-no-react",
       comment:
         "src/lib/http.ts and decode.ts stay dependency-free — no auth types, no React (docs/ARCHITECTURE.md). mb-lib-is-a-leaf holds the first half; this holds the second, so the transport stays callable outside a component tree.",
@@ -58,9 +49,9 @@ module.exports = {
     {
       name: "styles-not-in-logic-files",
       comment:
-        "The session layer and the *-api.ts request modules hold no markup, so they have no reason to import a stylesheet; style imports belong in component files and the composition root.",
+        "The helpers in src/lib/, the session layer in src/auth/ and every .ts file (a request module, a hook, a shared reader: no markup) have no reason to import a stylesheet; style imports belong in component files and the composition root.",
       severity: "error",
-      from: { path: "^src/(auth/|pages/[^/]+/[^/]+-api\\.ts$)" },
+      from: { path: ["^src/(auth|lib)/", "^src/.*\\.ts$"] },
       to: { path: "\\.(css|scss|sass|less)$" },
     },
 
@@ -107,7 +98,7 @@ module.exports = {
     {
       name: "mb-patient-in-context-has-one-reader",
       comment:
-        "patient-in-context.ts is the one reader of the patient in context (docs/ARCHITECTURE.md): it reads PATIENT once per patient change and hands its view to the top bar, the Patient card and the FFI page, which only render it. A second importer of patient-api.ts could send that read again on every page. A type-only import, such as patient-card.tsx's PatientSummary, sends nothing.",
+        "patient-in-context.ts is the one reader of the patient in context (docs/ARCHITECTURE.md): it reads PATIENT once per patient change and hands its view to the top bar, the Patient card and the Medication, FFI, NUMC and ARMC pages, which only render it. A second importer of patient-api.ts could send that read again on every page. A type-only import, such as patient-card.tsx's PatientSummary, sends nothing.",
       severity: "error",
       from: {
         path: "^src/",
