@@ -28,8 +28,11 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 
@@ -37,16 +40,21 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * Two real writers on SQL Server whose lock sets overlap, released together: a User write and a
  * Group write that each advance the other's version. Each locks the rows its write will touch in
  * the one canonical order before changing anything, so neither can hold a row the other already
- * waits for — the pair serializes instead of deadlocking.
+ * waits for — the pair serializes instead of deadlocking. The deadlock retry would complete a
+ * pair that did deadlock, so each race also holds that no write was retried.
  *
  * <p>Repeated, because two writers that happen to serialize once prove nothing. Each round makes
  * its own fixtures, since a deletion consumes them.
  */
 @SpringBootTest
 @Import(ContainerTestConfiguration.class)
+@ExtendWith(OutputCaptureExtension.class)
 class ScimWriteLockOrderIntegrationTests {
 
     private static final int ROUNDS = 10;
+
+    /** What the deadlock retry logs as it retries a write the database chose as a victim. */
+    private static final String DEADLOCK_RETRIED = "Database deadlock: the write is retried once";
 
     private static final ScimVersionPrecondition UNCONDITIONAL =
             ScimVersionPrecondition.ofIfMatch(List.of());
@@ -81,10 +89,11 @@ class ScimWriteLockOrderIntegrationTests {
 
     /**
      * A User rename advances every Group the User is in; a Group rename advances every member.
-     * Racing the two on a shared membership completes both, every round.
+     * Racing the two on a shared membership completes both, every round, neither retried.
      */
     @Test
-    void a_user_rename_racing_a_group_put_on_a_shared_membership_both_complete() throws Exception {
+    void a_user_rename_racing_a_group_put_on_a_shared_membership_both_complete(
+            CapturedOutput output) throws Exception {
         List<String> failures = new ArrayList<>();
         for (int round = 0; round < ROUNDS; round++) {
             String tag = UUID.randomUUID().toString().substring(0, 8);
@@ -102,16 +111,17 @@ class ScimWriteLockOrderIntegrationTests {
                                     "Lock order renamed " + tag, List.of(user, other), null))));
         }
         assertThat(failures).isEmpty();
+        assertThat(output.getAll()).doesNotContain(DEADLOCK_RETRIED);
     }
 
     /**
      * A User DELETE advances every Group it leaves; a Group rename advances every member. Racing
      * the two on a shared membership completes both, every round — the rename either still sees
-     * the User or no longer does, and neither is an error.
+     * the User or no longer does, and neither is an error or retried.
      */
     @Test
-    void a_user_delete_racing_a_group_rename_on_a_shared_membership_both_complete()
-            throws Exception {
+    void a_user_delete_racing_a_group_rename_on_a_shared_membership_both_complete(
+            CapturedOutput output) throws Exception {
         List<String> failures = new ArrayList<>();
         for (int round = 0; round < ROUNDS; round++) {
             String tag = UUID.randomUUID().toString().substring(0, 8);
@@ -126,6 +136,7 @@ class ScimWriteLockOrderIntegrationTests {
                                     "Lock order deleted " + tag)))));
         }
         assertThat(failures).isEmpty();
+        assertThat(output.getAll()).doesNotContain(DEADLOCK_RETRIED);
     }
 
     /** Runs both writes released together; reports each one that failed, naming the round. */

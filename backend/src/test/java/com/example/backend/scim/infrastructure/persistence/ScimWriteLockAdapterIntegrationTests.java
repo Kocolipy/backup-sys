@@ -7,6 +7,7 @@ import com.example.backend.CreatedScimRows;
 import com.example.backend.ContainerTestConfiguration;
 import com.example.backend.DatabaseLogins;
 import com.example.backend.scim.ScimIdentities;
+import com.example.backend.scim.domain.ResourceVersionAdvance;
 import com.example.backend.scim.domain.ScimConnector;
 import com.example.backend.scim.domain.ScimGroup;
 import com.example.backend.scim.domain.ScimGroupMember;
@@ -14,6 +15,7 @@ import com.example.backend.scim.domain.ScimGroupRepository;
 import com.example.backend.scim.domain.ScimUser;
 import com.example.backend.scim.domain.ScimUserRepository;
 import com.example.backend.scim.domain.ScimWriteLocks;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Collection;
@@ -56,6 +58,9 @@ class ScimWriteLockAdapterIntegrationTests {
     /** The adapter behind both lock ports, for the refusal sweep over every lock it takes. */
     @Autowired
     private ScimWriteLockAdapter lockAdapter;
+
+    @Autowired
+    private ScimResourceJpaRepository resources;
 
     @Autowired
     private ScimUserRepository users;
@@ -201,6 +206,51 @@ class ScimWriteLockAdapterIntegrationTests {
             release.countDown();
             writer.get(30, TimeUnit.SECONDS);
         }
+    }
+
+    /**
+     * A version advance updates only the rows it names, each reached by its key, so it waits on no
+     * row another writer holds outside its set: the canonical lock order covers the rows a write
+     * advances, and an advance that read past them would hold one of its own rows while waiting on
+     * a stranger's, the deadlock the order exists to rule out.
+     */
+    @Test
+    void aVersionAdvanceWaitsOnNoRowItDoesNotName() throws Exception {
+        UUID first = user("advance-first");
+        UUID second = user("advance-second");
+        UUID bystander = user("advance-bystander");
+        List<Long> before = versions(first, second, bystander);
+        CountDownLatch holding = new CountDownLatch(1);
+        CountDownLatch released = new CountDownLatch(1);
+        Future<?> other = holders.submit(() -> inTransaction(() -> {
+            writeLocks.lock(List.of(bystander));
+            holding.countDown();
+            await(released);
+        }));
+        try {
+            assertThat(holding.await(30, TimeUnit.SECONDS)).isTrue();
+
+            Future<?> advance = holders.submit(() -> inTransaction(() -> {
+                writeLocks.lock(List.of(first, second));
+                ResourceVersionStatements.advance(
+                        ResourceVersionAdvance.groupDeleted(List.of(first, second), now()),
+                        resources);
+            }));
+
+            assertThat(advance).succeedsWithin(Duration.ofSeconds(10));
+        } finally {
+            released.countDown();
+            other.get(30, TimeUnit.SECONDS);
+        }
+        assertThat(versions(first, second, bystander))
+                .containsExactly(before.get(0) + 1, before.get(1) + 1, before.get(2));
+    }
+
+    private List<Long> versions(UUID... ids) {
+        return List.of(ids).stream()
+                .map(id -> jdbc.queryForObject(
+                        "SELECT version FROM scim_resources WHERE id = ?", Long.class, id))
+                .toList();
     }
 
     /**
