@@ -21,6 +21,7 @@ import java.util.function.Supplier;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -39,9 +40,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * from one table with a row for each history: the {@code patient:read} it requires, no audit row
  * for a read, a log stream that names neither the patient nor a record of the history nor a
  * filter's value, and, for each way the source fails, the {@code 502} and exactly one
- * {@code ERROR} naming nothing of the patient or the answer (/docs/domain/ffi.md,
- * "Logging"). The reason each fault record names is each history's own integration tests'. A new
- * history joins by adding its row.
+ * {@code ERROR}, naming the failure under its category and nothing of the patient or the answer
+ * (/docs/domain/ffi.md, "Logging"). A new history joins by adding its row, and its fault stubs
+ * their rows.
  *
  * <p>The reader is a Medical Officer of this suite's own, whose audit rows no other suite writes.
  */
@@ -107,6 +108,74 @@ class PatientHistoriesIntegrationTests {
 
     static Stream<History> histories() {
         return HISTORIES.stream();
+    }
+
+    /**
+     * Each fault stub the stub files serve, by the failure its record names — a reason of the
+     * history's own where the record broke a rule — and the {@code error.category} it is
+     * reported under. Written out, so a reason is checked against the domain files and not
+     * against the adapter that reports it.
+     */
+    private static final String FAULT_STUBS = """
+            fault-ffi-unreachable,                       unreachable,                           network
+            fault-ffi-slow,                              timed-out,                             network
+            fault-ffi-server-error,                      server-error,                          server
+            fault-ffi-unexpected-status,                 unexpected-status,                     data
+            fault-ffi-not-a-searchset,                   not-a-searchset,                       data
+            fault-ffi-no-total,                          no-total,                              data
+            fault-ffi-no-id,                             no-id,                                 data
+            fault-ffi-invalid-id,                        invalid-id,                            data
+            fault-ffi-no-outcome,                        no-outcome,                            data
+            fault-ffi-unknown-higher-authority,          unknown-higher-authority,              data
+            fault-ffi-expiry-date-not-to-the-day,        expiry-date-not-to-the-day,            data
+            fault-numc-unreachable,                      unreachable,                           network
+            fault-numc-slow,                             timed-out,                             network
+            fault-numc-server-error,                     server-error,                          server
+            fault-numc-unexpected-status,                unexpected-status,                     data
+            fault-numc-not-a-searchset,                  not-a-searchset,                       data
+            fault-numc-no-total,                         no-total,                              data
+            fault-numc-no-id,                            numc-no-id,                            data
+            fault-numc-invalid-id,                       numc-invalid-id,                       data
+            fault-numc-no-outcome,                       no-numc-outcome,                       data
+            fault-numc-unknown-type,                     unknown-numc-type,                     data
+            fault-numc-unknown-outcome,                  unknown-numc-outcome,                  data
+            fault-numc-expiry-date-not-to-the-day,       numc-expiry-date-not-to-the-day,       data
+            fault-armc-unreachable,                      unreachable,                           network
+            fault-armc-slow,                             timed-out,                             network
+            fault-armc-server-error,                     server-error,                          server
+            fault-armc-unexpected-status,                unexpected-status,                     data
+            fault-armc-not-a-searchset,                  not-a-searchset,                       data
+            fault-armc-no-total,                         no-total,                              data
+            fault-armc-no-id,                            armc-no-id,                            data
+            fault-armc-invalid-id,                       armc-invalid-id,                       data
+            fault-armc-no-outcome,                       no-armc-outcome,                       data
+            fault-armc-no-medical-officer-2,             no-armc-medical-officer-2,             data
+            fault-armc-unknown-board-type,               unknown-armc-board-type,               data
+            fault-armc-unknown-outcome,                  unknown-armc-outcome,                  data
+            fault-armc-end-before-start,                 armc-end-before-start,                 data
+            fault-armc-end-date-not-to-the-day,          armc-end-date-not-to-the-day,          data
+            fault-medication-unreachable,                unreachable,                           network
+            fault-medication-slow,                       timed-out,                             network
+            fault-medication-server-error,               server-error,                          server
+            fault-medication-unexpected-status,          unexpected-status,                     data
+            fault-medication-not-a-searchset,            not-a-searchset,                       data
+            fault-medication-no-total,                   no-total,                              data
+            fault-medication-no-id,                      medication-no-id,                      data
+            fault-medication-invalid-id,                 medication-invalid-id,                 data
+            fault-medication-no-dispense-status,         no-dispense-status,                    data
+            fault-medication-no-prescribing-doctor,      no-prescribing-doctor,                 data
+            fault-medication-unknown-dispense-status,    unknown-dispense-status,               data
+            fault-medication-unknown-dispensary,         unknown-dispensary,                    data
+            fault-medication-start-date-not-a-date-time, medication-start-date-not-a-date-time, data
+            fault-medication-end-before-start,           medication-end-before-start,           data
+            """;
+
+    /** What the fault stub {@code id}'s record names: the fault, then its row's reason and category. */
+    private static List<String> reported(String id) {
+        return FAULT_STUBS.lines().map(row -> row.strip().split(",\\s*"))
+                .filter(row -> row[0].equals(id))
+                .map(row -> List.of("http.request.fault", row[1], row[2]))
+                .findFirst().orElseThrow(() -> new AssertionError("No row for " + id));
     }
 
     static Stream<Arguments> failingSources() {
@@ -237,16 +306,24 @@ class PatientHistoriesIntegrationTests {
         assertThat(logs.lines()).doesNotContain(quoted.toArray(String[]::new));
     }
 
+    /** The table of fault stubs holds every fault stub the stub files serve, of every history. */
+    @Test
+    void theFaultTableHoldsEveryFaultStub() {
+        assertThat(FAULT_STUBS.lines().map(row -> row.strip().split(",")[0]))
+                .containsExactlyInAnyOrderElementsOf(failingSources()
+                        .map(arguments -> ((FaultStub) arguments.get()[1]).id()).toList());
+    }
+
     /**
      * A source failure is the application API's {@code 502}, and writes exactly one
-     * {@code ERROR}, the fault's record; nothing in the stream names the patient id asked for, or
-     * anything the source's answer carried — a record's id or values, its error body. The slow
-     * stub waits past the production read timeout; the tests' is shorter
-     * (ContainerTestConfiguration).
+     * {@code ERROR}, the fault's record, naming the failure or the broken rule of the history
+     * under its category; nothing in the stream names the patient id asked for, or anything the
+     * source's answer carried — a record's id or values, its error body. The slow stub waits
+     * past the production read timeout; the tests' is shorter (ContainerTestConfiguration).
      */
     @ParameterizedTest
     @MethodSource("failingSources")
-    void aSourceFailureIsOneFaultRecordNamingNothingOfThePatient(History history,
+    void aSourceFailureIsOneFaultRecordNamingItsReasonAndNothingOfThePatient(History history,
             FaultStub stub) throws Exception {
         HttpClient session = signedIn();
         logs.reset();
@@ -260,8 +337,11 @@ class PatientHistoriesIntegrationTests {
         assertThat(logs.records())
                 .filteredOn(record -> "ERROR".equals(record.at("/log/level").asText()))
                 .singleElement()
-                .satisfies(fault -> assertThat(fault.at("/app/event/action").asText())
-                        .isEqualTo("http.request.fault"));
+                .satisfies(fault -> assertThat(List.of(
+                        fault.at("/app/event/action").asText(),
+                        fault.at("/event/reason").asText(),
+                        fault.at("/error/category").asText()))
+                        .isEqualTo(reported(stub.id())));
         List<String> quoted = new ArrayList<>(history.values().apply(stub));
         quoted.add(stub.id());
         assertThat(logs.lines()).contains("http.request.fault")

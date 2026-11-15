@@ -216,7 +216,7 @@ handler answers `502` with the generic `server-error` `ApiError`
   (`/api/patient-ffi/{patientId}`), never the id; a `403` adds the
   authorization refusal's `WARN` record.
 
-`FfiHistoryIntegrationTests` holds each FFI fault stub's read to exactly one
+`PatientHistoriesIntegrationTests` holds each FFI fault stub's read to exactly one
 `ERROR` naming its failure under its category, and the stream, for those reads
 and for successful ones, filtered and sorted ones among them, to naming neither
 the patient id, a filter's value, nor any FFI's id or dates.

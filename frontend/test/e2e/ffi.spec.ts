@@ -12,8 +12,8 @@ import { sidebar } from "./shell.helpers";
  * matching nothing — and the Status, and Siti Nurhaliza binte Ahmad none
  * (`/docs/domain/ffi.md`, "The patient source's FFI fixtures"). What the page
  * decides without the backend — the labels, the badges, each filter's
- * parameters, an inverted range, no patient in context, a 404 and a failure —
- * is `ffi.test.tsx`'s; that a session
+ * parameters, an inverted range and a failure — is `ffi.test.tsx`'s, and no
+ * patient in context `for-patient-in-context.test.tsx`'s; that a session
  * without `patient:read` is offered no FFI link is `roles-user.spec.ts`'.
  *
  * In the `medical-officer` project, replaying the saved `mo1` session. A new

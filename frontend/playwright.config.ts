@@ -60,7 +60,10 @@ export default defineConfig({
   reporter: "html",
   use: {
     baseURL: "http://localhost:5173",
-    trace: "on-first-retry",
+    // Kept for every failing test, not only a retried one: a local run retries
+    // nothing, and a flake's trace is the evidence its ledger entry needs
+    // (/docs/agents/flaky-tests.md).
+    trace: "retain-on-failure",
     screenshot: "only-on-failure",
   },
 

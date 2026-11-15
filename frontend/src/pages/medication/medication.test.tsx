@@ -122,12 +122,6 @@ afterEach(() => {
 });
 
 describe("Medication", () => {
-  it("is headed Medication", async () => {
-    await renderMedication(page(FOUR_RECORDS, 1, 4));
-
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(/^Medication$/);
-  });
-
   it("shows the patient in context's Medication Records in the source's order, every column", async () => {
     await renderMedication(page(FOUR_RECORDS.slice(0, 2), 1, 2));
 
@@ -316,12 +310,6 @@ describe("Medication", () => {
     });
   });
 
-  it("names the range on a single page too", async () => {
-    await renderMedication(page(FOUR_RECORDS, 1, 4));
-
-    expect(await screen.findByText("Showing 1 to 4 of 4 medication records")).toBeInTheDocument();
-  });
-
   it("says No medication records for a patient with none", async () => {
     await renderMedication(page([], 1, 0));
 
@@ -330,8 +318,11 @@ describe("Medication", () => {
   });
 
   // What the patient in context decides — none, a 404, a failed read — is
-  // `ForPatientInContext`'s (for-patient-in-context.test.tsx); held here are
-  // the history and the loading copy this page hands it.
+  // `ForPatientInContext`'s (for-patient-in-context.test.tsx), and what every
+  // history shares — a history's own 404, the range on a single page, a new
+  // filter or sort read from the first page — `FilteredHistory`'s
+  // (filtered-history.test.tsx); held here are the history, the copy, the
+  // columns and the filters this page hands them.
   it("reads the Medication Records only once the patient in context has been read", async () => {
     const patient = deferred();
     withPatientInContext(TAN_WEI_MING.id);
@@ -371,13 +362,6 @@ describe("Medication", () => {
     expect(medicationReads(requests())).toEqual([]);
   });
 
-  it("says No patient in context for a patient the source holds none under, and reports nothing", async () => {
-    await renderMedication(bare(404));
-
-    expect(await screen.findByText("No patient in context")).toBeInTheDocument();
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-  });
-
   it("says it couldn't load medication records when the source fails, offering Try again", async () => {
     await renderMedication(bare(502));
 
@@ -386,15 +370,6 @@ describe("Medication", () => {
     );
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
     expect(screen.queryByText("No patient in context")).not.toBeInTheDocument();
-  });
-
-  it("reads the same page again on Try again", async () => {
-    const { requests } = await renderMedication(bare(502));
-    await screen.findByRole("alert");
-
-    await userEvent.click(screen.getByRole("button", { name: "Try again" }));
-
-    expect(medicationReads(requests())).toEqual([FIRST_PAGE, FIRST_PAGE]);
   });
 });
 
@@ -651,23 +626,6 @@ describe("Medication, filtered", () => {
     await screen.findByText("Showing 1 to 1 of 1 medication records");
 
     expect(medicationReads(requests()).slice(-1)[0]).toBe(historyPage(1, asked));
-  });
-
-  it("applies on Enter in a date-time, as on Apply", async () => {
-    const user = userEvent.setup();
-    const asked = "endDateTo=2025-12-31T23:59";
-    const { requests } = await renderMedication(page(FOUR_RECORDS, 1, 4), {
-      [historyPage(1, asked)]: page(FOUR_RECORDS, 1, 4),
-    });
-    await screen.findByRole("table", { name: "Medication History" });
-
-    await openFilters(user);
-    setDateTime("End Date", "To", "2025-12-31T23:59");
-    await user.type(dateField("End Date", "To"), "{Enter}");
-
-    await waitFor(() =>
-      expect(medicationReads(requests()).slice(-1)[0]).toBe(historyPage(1, asked)),
-    );
   });
 
   it("combines the filters with AND, and with the current sort", async () => {

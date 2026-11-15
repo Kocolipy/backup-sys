@@ -203,7 +203,7 @@ neither the log nor the exception's message names the patient id or anything of
 the source's body — not a board's id, code, date or Medical Officer, nor an
 error answer's body; and a read adds no record of its own, the request record
 naming the route template (`/api/patient-armc/{patientId}`), never the id.
-`ArmcHistoryIntegrationTests` holds each ARMC fault stub's read to exactly one
+`PatientHistoriesIntegrationTests` holds each ARMC fault stub's read to exactly one
 `ERROR` naming its failure under its category, and the stream, for those reads
 and for successful ones, to naming neither the patient id nor any board's id,
 dates or Medical Officers.

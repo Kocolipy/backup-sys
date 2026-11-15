@@ -97,12 +97,6 @@ afterEach(() => {
 });
 
 describe("NUMC", () => {
-  it("is headed NUMC", async () => {
-    await renderNumc(page(FOUR_RECORDS, 1, 4));
-
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(/^NUMC$/);
-  });
-
   it("shows the patient in context's NUMC Records in the source's order, each code by its label", async () => {
     await renderNumc(page(FOUR_RECORDS, 1, 4));
 
@@ -177,12 +171,6 @@ describe("NUMC", () => {
     });
   });
 
-  it("names the range on a single page too", async () => {
-    await renderNumc(page(FOUR_RECORDS, 1, 4));
-
-    expect(await screen.findByText("Showing 1 to 4 of 4 NUMC records")).toBeInTheDocument();
-  });
-
   it("says No NUMC records for a patient with none", async () => {
     await renderNumc(page([], 1, 0));
 
@@ -191,8 +179,11 @@ describe("NUMC", () => {
   });
 
   // What the patient in context decides — none, a 404, a failed read — is
-  // `ForPatientInContext`'s (for-patient-in-context.test.tsx); held here are
-  // the history and the loading copy this page hands it.
+  // `ForPatientInContext`'s (for-patient-in-context.test.tsx), and what every
+  // history shares — a history's own 404, the range on a single page, a new
+  // filter or sort read from the first page — `FilteredHistory`'s
+  // (filtered-history.test.tsx); held here are the history, the copy, the
+  // columns and the filters this page hands them.
   it("reads the NUMC Records only once the patient in context has been read", async () => {
     const patient = deferred();
     withPatientInContext(TAN_WEI_MING.id);
@@ -229,28 +220,12 @@ describe("NUMC", () => {
     expect(numcReads(requests())).toEqual([]);
   });
 
-  it("says No patient in context for a patient the source holds none under, and reports nothing", async () => {
-    await renderNumc(bare(404));
-
-    expect(await screen.findByText("No patient in context")).toBeInTheDocument();
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-  });
-
   it("says it couldn't load NUMC records when the source fails, offering Try again", async () => {
     await renderNumc(bare(502));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/^Couldn't load NUMC records$/);
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
     expect(screen.queryByText("No patient in context")).not.toBeInTheDocument();
-  });
-
-  it("reads the same page again on Try again", async () => {
-    const { requests } = await renderNumc(bare(502));
-    await screen.findByRole("alert");
-
-    await userEvent.click(screen.getByRole("button", { name: "Try again" }));
-
-    expect(numcReads(requests())).toEqual([FIRST_PAGE, FIRST_PAGE]);
   });
 });
 
@@ -489,21 +464,6 @@ describe("NUMC, filtered", () => {
       count: filterTrigger().getAttribute("aria-label"),
       read: numcReads(requests()).slice(-1)[0],
     }).toEqual({ count: "Filter, 2 set", read: historyPage(1, asked) });
-  });
-
-  it("applies on Enter in a date, as on Apply", async () => {
-    const user = userEvent.setup();
-    const asked = "expiryDateTo=2024-12-31";
-    const { requests } = await renderNumc(page(FOUR_RECORDS, 1, 4), {
-      [historyPage(1, asked)]: page(FOUR_RECORDS, 1, 4),
-    });
-    await screen.findByRole("table", { name: "NUMC History" });
-
-    await openFilters(user);
-    setDate("Expiry Date", "To", "2024-12-31");
-    await user.type(dateField("Expiry Date", "To"), "{Enter}");
-
-    await waitFor(() => expect(numcReads(requests()).slice(-1)[0]).toBe(historyPage(1, asked)));
   });
 
   it("combines the filters with AND, and with the current sort", async () => {

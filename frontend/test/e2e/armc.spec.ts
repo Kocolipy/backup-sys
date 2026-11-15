@@ -1,7 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { expectOnHomeInContext, search, selectResult } from "./patient.helpers";
-import { USER_SESSION } from "./sessions";
 import { sidebar } from "./shell.helpers";
 
 /**
@@ -12,17 +11,16 @@ import { sidebar } from "./shell.helpers";
  * pages, the first still open, filtered by each Outcome, each date range — an
  * End Date range leaving out the open board — two filters combined and one
  * matching nothing, and Siti Nurhaliza binte Ahmad none
- * (`/docs/domain/armc.md`, "The patient source's ARMC fixtures"). A failing
- * source is the mock's own `fault-armc-server-error`, the page's read sent
- * there in place of the patient's, so the backend's real `502` reaches the
- * page. What the page decides without the backend — the labels, the badges, a
- * loading patient, each filter's parameters, an inverted range — is
- * `armc.test.tsx`'s.
+ * (`/docs/domain/armc.md`, "The patient source's ARMC fixtures"). What the
+ * page decides without the backend — the labels, the badges, a loading
+ * patient, each filter's parameters, an inverted range, no patient in context
+ * and a failure — is `armc.test.tsx`'s; the backend's real `502`
+ * reaching a history page is `medication.spec.ts`', that a session without
+ * `patient:read` is offered no ARMC link `roles-user.spec.ts`', and that it is
+ * routed to Home `App.test.tsx`'s.
  *
- * In the `medical-officer` project, replaying the saved `mo1` session; the
- * case without `patient:read` replays the `guest` session in a context of its
- * own. A new page starts with no EHR context: the tab's `sessionStorage` is
- * its own.
+ * In the `medical-officer` project, replaying the saved `mo1` session. A new
+ * page starts with no EHR context: the tab's `sessionStorage` is its own.
  */
 
 /** The ARMC table's body rows. */
@@ -89,54 +87,6 @@ test.describe("ARMC", () => {
 
     await expect(page.getByText("No ARMC records")).toBeVisible();
     await expect(page.getByRole("table", { name: "ARMC History" })).toHaveCount(0);
-  });
-
-  test("says No patient in context with none in context, and reads no ARMC Boards", async ({
-    page,
-  }) => {
-    const reads: string[] = [];
-    page.on("request", (request) => {
-      if (new URL(request.url()).pathname.startsWith("/api/patient-armc/"))
-        reads.push(request.url());
-    });
-
-    await page.goto("/armc");
-
-    await expect(page.getByRole("main").getByText("No patient in context")).toBeVisible();
-    expect(reads).toEqual([]);
-  });
-
-  test("says it couldn't load ARMC records when the source fails, offering Try again", async ({
-    page,
-  }) => {
-    await selectPatient(page, "tan", "Tan Wei Ming", "S1234567A");
-    // Each read of the history goes to the patient id the mock fails for.
-    await page.route("**/api/patient-armc/**", (route) =>
-      route.continue({
-        url: route
-          .request()
-          .url()
-          .replace(/\/api\/patient-armc\/[^?]+/, "/api/patient-armc/fault-armc-server-error"),
-      }),
-    );
-
-    await openArmc(page);
-
-    await expect(page.getByRole("alert")).toHaveText("Couldn't load ARMC records");
-    await expect(page.getByRole("button", { name: "Try again" })).toBeVisible();
-    await expect(page.getByRole("table", { name: "ARMC History" })).toHaveCount(0);
-  });
-
-  test.describe("without patient:read", () => {
-    test.use({ storageState: USER_SESSION });
-
-    test("is offered no ARMC link, and is routed from ARMC to Home", async ({ page }) => {
-      await page.goto("/armc");
-
-      await expect(page).toHaveURL("/");
-      await expect(page.getByRole("heading", { name: "Profile" })).toBeVisible();
-      await expect(sidebar(page).getByRole("link", { exact: true, name: "ARMC" })).toHaveCount(0);
-    });
   });
 
   test.describe("sorted", () => {

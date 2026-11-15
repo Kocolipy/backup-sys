@@ -108,12 +108,6 @@ afterEach(() => {
 });
 
 describe("FFI", () => {
-  it("is headed FFI History", async () => {
-    await renderFfi(page(FOUR_FFIS, 1, 4));
-
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(/^FFI History$/);
-  });
-
   it("shows a Submitting MC of Khatib Camp MC by its label", async () => {
     await renderFfi(page([ffi("ffi-khatib", { submittingMc: "khatib-camp" })], 1, 1));
     await screen.findByRole("table", { name: "FFI History" });
@@ -266,8 +260,11 @@ describe("FFI", () => {
   });
 
   // What the patient in context decides — none, a 404, a failed read — is
-  // `ForPatientInContext`'s (for-patient-in-context.test.tsx); held here are
-  // the history and the loading copy this page hands it.
+  // `ForPatientInContext`'s (for-patient-in-context.test.tsx), and what every
+  // history shares — a history's own 404, the range on a single page, a new
+  // filter or sort read from the first page — `FilteredHistory`'s
+  // (filtered-history.test.tsx); held here are the history, the copy, the
+  // columns and the filters this page hands them.
   it("reads the FFIs only once the patient in context has been read", async () => {
     const patient = deferred();
     withPatientInContext(TAN_WEI_MING.id);
@@ -295,13 +292,6 @@ describe("FFI", () => {
       /^Loading FFIs…$/,
     );
     await patient.settle(json(TAN_WEI_MING));
-  });
-
-  it("says No patient in context for a patient the source holds none under, and reports nothing", async () => {
-    await renderFfi(bare(404));
-
-    expect(await screen.findByText("No patient in context")).toBeInTheDocument();
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("says it couldn't load FFIs when the source fails, offering Try again", async () => {
@@ -619,21 +609,6 @@ describe("FFI, filtered", () => {
     await screen.findByText("Showing 1 to 4 of 4 FFIs");
 
     expect(ffiReads(requests()).slice(-1)[0]).toBe(historyPage(1, "status=active"));
-  });
-
-  it("applies on Enter in a date, as on Apply", async () => {
-    const user = userEvent.setup();
-    const asked = "issueDateFrom=2024-01-01";
-    const { requests } = await renderFfi(page(FOUR_FFIS, 1, 4), {
-      [historyPage(1, asked)]: page(FOUR_FFIS, 1, 4),
-    });
-    await screen.findByRole("table", { name: "FFI History" });
-
-    await openFilters(user);
-    setDate("Issue Date", "From", "2024-01-01");
-    await user.type(dateField("Issue Date", "From"), "{Enter}");
-
-    await waitFor(() => expect(ffiReads(requests()).slice(-1)[0]).toBe(historyPage(1, asked)));
   });
 
   it("combines the filters with AND, and with the current sort", async () => {

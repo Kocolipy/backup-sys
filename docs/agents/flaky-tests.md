@@ -40,6 +40,10 @@ Add one entry per test under **Ledger**, ordered by path:
 - **Suspected cause**: what the failure points to, or `unknown`.
 ```
 
+A failing Playwright test keeps its trace and screenshot under
+`frontend/test-results/` until the next run: read them before that run, and
+put what the page showed in **Suspected cause**.
+
 A test already in the ledger gains an **Evidence** line per observation, plus
 its **Failure** line when that differs; one test keeps one entry.
 

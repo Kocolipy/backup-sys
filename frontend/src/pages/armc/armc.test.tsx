@@ -94,12 +94,6 @@ afterEach(() => {
 });
 
 describe("ARMC", () => {
-  it("is headed ARMC", async () => {
-    await renderArmc(page(TWO_BOARDS, 1, 2));
-
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(/^ARMC$/);
-  });
-
   it("shows the patient in context's ARMC Boards in the source's order, each code by its label", async () => {
     await renderArmc(page(TWO_BOARDS, 1, 2));
 
@@ -200,12 +194,6 @@ describe("ARMC", () => {
     });
   });
 
-  it("names the range on a single page too", async () => {
-    await renderArmc(page(TWO_BOARDS, 1, 2));
-
-    expect(await screen.findByText("Showing 1 to 2 of 2 ARMC records")).toBeInTheDocument();
-  });
-
   it("says No ARMC records for a patient with none", async () => {
     await renderArmc(page([], 1, 0));
 
@@ -214,8 +202,11 @@ describe("ARMC", () => {
   });
 
   // What the patient in context decides — none, a 404, a failed read — is
-  // `ForPatientInContext`'s (for-patient-in-context.test.tsx); held here are
-  // the history and the loading copy this page hands it.
+  // `ForPatientInContext`'s (for-patient-in-context.test.tsx), and what every
+  // history shares — a history's own 404, the range on a single page, a new
+  // filter or sort read from the first page — `FilteredHistory`'s
+  // (filtered-history.test.tsx); held here are the history, the copy, the
+  // columns and the filters this page hands them.
   it("reads the ARMC Boards only once the patient in context has been read", async () => {
     const patient = deferred();
     withPatientInContext(TAN_WEI_MING.id);
@@ -252,28 +243,12 @@ describe("ARMC", () => {
     expect(armcReads(requests())).toEqual([]);
   });
 
-  it("says No patient in context for a patient the source holds none under, and reports nothing", async () => {
-    await renderArmc(bare(404));
-
-    expect(await screen.findByText("No patient in context")).toBeInTheDocument();
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-  });
-
   it("says it couldn't load ARMC records when the source fails, offering Try again", async () => {
     await renderArmc(bare(502));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/^Couldn't load ARMC records$/);
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
     expect(screen.queryByText("No patient in context")).not.toBeInTheDocument();
-  });
-
-  it("reads the same page again on Try again", async () => {
-    const { requests } = await renderArmc(bare(502));
-    await screen.findByRole("alert");
-
-    await userEvent.click(screen.getByRole("button", { name: "Try again" }));
-
-    expect(armcReads(requests())).toEqual([FIRST_PAGE, FIRST_PAGE]);
   });
 });
 
@@ -524,21 +499,6 @@ describe("ARMC, filtered", () => {
       count: filterTrigger().getAttribute("aria-label"),
       read: armcReads(requests()).slice(-1)[0],
     }).toEqual({ count: "Filter, 2 set", read: historyPage(1, asked) });
-  });
-
-  it("applies on Enter in a date, as on Apply", async () => {
-    const user = userEvent.setup();
-    const asked = "endDateFrom=2023-01-01";
-    const { requests } = await renderArmc(page(TWO_BOARDS, 1, 2), {
-      [historyPage(1, asked)]: page(TWO_BOARDS, 1, 2),
-    });
-    await screen.findByRole("table", { name: "ARMC History" });
-
-    await openFilters(user);
-    setDate("End Date", "From", "2023-01-01");
-    await user.type(dateField("End Date", "From"), "{Enter}");
-
-    await waitFor(() => expect(armcReads(requests()).slice(-1)[0]).toBe(historyPage(1, asked)));
   });
 
   it("combines the filters with AND, and with the current sort", async () => {

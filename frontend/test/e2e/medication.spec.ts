@@ -1,7 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { expectOnHomeInContext, search, selectResult } from "./patient.helpers";
-import { USER_SESSION } from "./sessions";
 import { sidebar } from "./shell.helpers";
 
 /**
@@ -14,14 +13,16 @@ import { sidebar } from "./shell.helpers";
  * Medication fixtures"), each sort of his and each filter of hers a canned
  * stub of its own ("Sort and filter stubs"). A failing source is the mock's own
  * `fault-medication-server-error`, the page's read sent there in place of the
- * patient's, so the backend's real `502` reaches the page. What the page
- * decides without the backend — the labels, the badges, a loading patient —
- * is `medication.test.tsx`'s.
+ * patient's, so the backend's real `502` reaches the page: the one history
+ * whose failure is read here, the others' pages reading theirs as this one
+ * does (`filtered-history.tsx`). What the page decides without the backend —
+ * the labels, the badges, a loading patient, no patient in context — is
+ * `medication.test.tsx`'s; that a session without `patient:read` is offered no
+ * Medication link is `roles-user.spec.ts`', and that it is routed to Home
+ * `App.test.tsx`'s.
  *
- * In the `medical-officer` project, replaying the saved `mo1` session; the
- * case without `patient:read` replays the `guest` session in a context of its
- * own. A new page starts with no EHR context: the tab's `sessionStorage` is
- * its own.
+ * In the `medical-officer` project, replaying the saved `mo1` session. A new
+ * page starts with no EHR context: the tab's `sessionStorage` is its own.
  */
 
 /** The Medication table's body rows. */
@@ -108,21 +109,6 @@ test.describe("Medication", () => {
     await expect(page.getByRole("table", { name: "Medication History" })).toHaveCount(0);
   });
 
-  test("says No patient in context with none in context, and reads no Medication Records", async ({
-    page,
-  }) => {
-    const reads: string[] = [];
-    page.on("request", (request) => {
-      if (new URL(request.url()).pathname.startsWith("/api/patient-medication/"))
-        reads.push(request.url());
-    });
-
-    await page.goto("/medication");
-
-    await expect(page.getByRole("main").getByText("No patient in context")).toBeVisible();
-    expect(reads).toEqual([]);
-  });
-
   test("says it couldn't load medication records when the source fails, offering Try again", async ({
     page,
   }) => {
@@ -145,22 +131,6 @@ test.describe("Medication", () => {
     await expect(page.getByRole("alert")).toHaveText("Couldn't load medication records");
     await expect(page.getByRole("button", { name: "Try again" })).toBeVisible();
     await expect(page.getByRole("table", { name: "Medication History" })).toHaveCount(0);
-  });
-
-  test.describe("without patient:read", () => {
-    test.use({ storageState: USER_SESSION });
-
-    test("is offered no Medication link, and is routed from Medication to Home", async ({
-      page,
-    }) => {
-      await page.goto("/medication");
-
-      await expect(page).toHaveURL("/");
-      await expect(page.getByRole("heading", { name: "Profile" })).toBeVisible();
-      await expect(
-        sidebar(page).getByRole("link", { exact: true, name: "Medication" }),
-      ).toHaveCount(0);
-    });
   });
 
   test.describe("sorted", () => {

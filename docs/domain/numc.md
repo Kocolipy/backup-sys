@@ -177,7 +177,7 @@ neither the log nor the exception's message names the patient id or anything of
 the source's body — not a record's id, code or date, nor an error answer's body;
 and a read adds no record of its own, the request record naming the route
 template (`/api/patient-numc/{patientId}`), never the id.
-`NumcHistoryIntegrationTests` holds each NUMC fault stub's read to exactly one
+`PatientHistoriesIntegrationTests` holds each NUMC fault stub's read to exactly one
 `ERROR` naming its failure under its category, and the stream, for those reads
 and for successful ones, to naming neither the patient id nor any record's id or
 dates.

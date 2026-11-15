@@ -5,9 +5,11 @@ import { describe, expect, it, vi } from "vitest";
 import { HistoryFilterPopover } from "./history-filter-popover";
 
 // The panel over a history declaring one column of each precision. Each
-// history's own panel — its filters, their order and its count — is its
-// page's (ffi.test.tsx, numc.test.tsx, armc.test.tsx); how a range is checked
-// is `checkDateRanges`' (lib/date-range.test.ts).
+// history's own panel — its filters, their order, its count and what its
+// Reset applies — is its page's (ffi.test.tsx, numc.test.tsx, armc.test.tsx,
+// medication.test.tsx); how a range is checked is `checkDateRanges`'
+// (lib/date-range.test.ts), and that the panel forgets an edit never applied
+// `FilterPopover`'s (filter-popover.test.tsx).
 const COLUMNS = [
   { column: "shipped", label: "Shipped", precision: "date" },
   { column: "takenAt", label: "Taken At", precision: "date-time" },
@@ -17,12 +19,12 @@ type Filters = Record<"shippedFrom" | "shippedTo" | "takenAtFrom" | "takenAtTo",
 
 const OPEN: Filters = { shippedFrom: "", shippedTo: "", takenAtFrom: "", takenAtTo: "" };
 
-/** The panel over {@link COLUMNS}, open, every Apply it makes recorded. */
-async function openPanel() {
+/** The panel over {@link COLUMNS}, open on the filters `applied`, every Apply it makes recorded. */
+async function openPanel(applied: Filters = OPEN) {
   const onApply = vi.fn<(filters: Filters) => void>();
   render(
     <HistoryFilterPopover
-      applied={OPEN}
+      applied={applied}
       columns={COLUMNS}
       count={() => 0}
       label="Widget filters"
@@ -70,6 +72,39 @@ describe("HistoryFilterPopover", () => {
     ]);
   });
 
+  it("opens on the filters applied", async () => {
+    const { panel } = await openPanel({ ...OPEN, shippedFrom: "2024-01-01" });
+
+    expect((["From", "To"] as const).map((end) => field(panel, "Shipped", end).value)).toEqual([
+      "2024-01-01",
+      "",
+    ]);
+  });
+
+  it("applies on Enter in a date, as on Apply, and closes", async () => {
+    const { onApply, panel, user } = await openPanel();
+
+    fireEvent.change(field(panel, "Shipped", "To"), { target: { value: "2024-12-31" } });
+    await user.type(field(panel, "Shipped", "To"), "{Enter}");
+
+    expect({
+      applied: onApply.mock.calls,
+      open: screen.queryByRole("form", { name: "Widget filters" }),
+    }).toEqual({ applied: [[{ ...OPEN, shippedTo: "2024-12-31" }]], open: null });
+  });
+
+  it("applies no filter on Reset, whatever the panel holds, and closes", async () => {
+    const { onApply, panel, user } = await openPanel({ ...OPEN, shippedFrom: "2024-01-01" });
+    fireEvent.change(field(panel, "Shipped", "To"), { target: { value: "2024-12-31" } });
+
+    await user.click(within(panel).getByRole("button", { name: "Reset" }));
+
+    expect({
+      applied: onApply.mock.calls,
+      open: screen.queryByRole("form", { name: "Widget filters" }),
+    }).toEqual({ applied: [[OPEN]], open: null });
+  });
+
   it("refuses a date-time from-end after its to-end beneath its range, and applies nothing", async () => {
     const { onApply, panel, user } = await openPanel();
 
@@ -83,6 +118,7 @@ describe("HistoryFilterPopover", () => {
     expect({
       applied: onApply.mock.calls,
       describedBy: field(panel, "Taken At", "To").getAttribute("aria-describedby"),
-    }).toEqual({ applied: [], describedBy: refusal.id });
+      open: screen.queryByRole("form", { name: "Widget filters" }) === panel,
+    }).toEqual({ applied: [], describedBy: refusal.id, open: true });
   });
 });
