@@ -1,6 +1,6 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { clearEhrContext } from "@/auth/ehr-context";
 import { bare, deferred, holding, json, type Answers } from "@/auth/session-adapter.testHelpers";
@@ -18,11 +18,18 @@ const CLINICIAN = holding(["patient:read"]);
 const FIRST_PAGE = "GET /api/patient-ffi/eq081-VQEgP8drUUqCWzHfw3?startIndex=1&count=5";
 const SECOND_PAGE = "GET /api/patient-ffi/eq081-VQEgP8drUUqCWzHfw3?startIndex=6&count=5";
 
-/** One FFI as the backend sends it, its fields given by `fields` over a Dental FFI's. */
-const ffi = (id: string, fields: Record<string, string> = {}) => ({
+/**
+ * One FFI as the backend sends it, its fields given by `fields` over a Dental
+ * FFI's, none invalid unless `fields` names some.
+ */
+const ffi = (
+  id: string | null,
+  fields: Record<string, string | null | readonly string[]> = {},
+) => ({
   expiryDate: "2024-11-21",
   higherAuthority: "carmo",
   id,
+  invalid: [],
   issueDate: "2023-11-22",
   outcome: "fit",
   status: "active",
@@ -230,6 +237,137 @@ describe("FFI", () => {
     expect(rows()).toEqual([
       ["Dental FFI", "FIT", "22 Nov 2023", "05 Feb 2001", "CARMO", "Hendon Camp MC", "Active"],
     ]);
+  });
+
+  // The patient source is the truth (ADR 0020): its data is shown as received.
+  it('shows a missing field as "—", the rest of the row as any other', async () => {
+    await renderFfi(
+      page(
+        [
+          ffi("ffi-1", { outcome: null, submittingMc: null }),
+          ffi("ffi-2", { expiryDate: null, higherAuthority: null, status: null, type: null }),
+        ],
+        1,
+        2,
+      ),
+    );
+    await screen.findByRole("table", { name: "FFI History" });
+
+    expect(rows()).toEqual([
+      ["Dental FFI", "—", "22 Nov 2023", "21 Nov 2024", "CARMO", "—", "Active"],
+      ["—", "FIT", "22 Nov 2023", "—", "—", "Hendon Camp MC", "—"],
+    ]);
+  });
+
+  it('shows a field in the wrong format as "Error", the rest of the row as any other', async () => {
+    await renderFfi(
+      page(
+        [
+          ffi("ffi-1", { invalid: ["issueDate", "status"], issueDate: null, status: null }),
+          ffi("ffi-2", {
+            expiryDate: null,
+            higherAuthority: null,
+            invalid: ["type", "outcome", "expiryDate", "higherAuthority", "submittingMc"],
+            outcome: null,
+            submittingMc: null,
+            type: null,
+          }),
+        ],
+        1,
+        2,
+      ),
+    );
+    await screen.findByRole("table", { name: "FFI History" });
+
+    expect(rows()).toEqual([
+      ["Dental FFI", "FIT", "Error", "21 Nov 2024", "CARMO", "Hendon Camp MC", "Error"],
+      ["Error", "Error", "22 Nov 2023", "Error", "Error", "Error", "Active"],
+    ]);
+  });
+
+  it("shows a code outside each closed set as it came, the Outcome and the Status on neutral badges", async () => {
+    await renderFfi(
+      page(
+        [
+          ffi("ffi-1", {
+            higherAuthority: "sar-21",
+            outcome: "waiver-granted",
+            status: "expired",
+            submittingMc: "tengah-air-base",
+            type: "swimming",
+          }),
+        ],
+        1,
+        1,
+      ),
+    );
+    await screen.findByRole("table", { name: "FFI History" });
+
+    expect({ outcomes: badges(1), rows: rows(), statuses: badges(6) }).toEqual({
+      outcomes: ["waiver-granted outline"],
+      rows: [
+        [
+          "swimming",
+          "waiver-granted",
+          "22 Nov 2023",
+          "21 Nov 2024",
+          "sar-21",
+          "tengah-air-base",
+          "expired",
+        ],
+      ],
+      statuses: ["expired outline"],
+    });
+  });
+
+  // A code spelling an Object member is no member of a closed set.
+  it("shows a code that names an Object member as it came", async () => {
+    await renderFfi(
+      page(
+        [
+          ffi("ffi-1", {
+            higherAuthority: "hasOwnProperty",
+            outcome: "toString",
+            status: "valueOf",
+            submittingMc: "__proto__",
+            type: "constructor",
+          }),
+        ],
+        1,
+        1,
+      ),
+    );
+    await screen.findByRole("table", { name: "FFI History" });
+
+    expect({ outcomes: badges(1), rows: rows(), statuses: badges(6) }).toEqual({
+      outcomes: ["toString outline"],
+      rows: [
+        [
+          "constructor",
+          "toString",
+          "22 Nov 2023",
+          "21 Nov 2024",
+          "hasOwnProperty",
+          "__proto__",
+          "valueOf",
+        ],
+      ],
+      statuses: ["valueOf outline"],
+    });
+  });
+
+  it("keys a row with no id by its place, as React needs each row keyed", async () => {
+    const warned = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    await renderFfi(
+      page([ffi(null), ffi(null, { invalid: ["id"] }), ffi("ffi-3", { outcome: "unfit" })], 1, 3),
+    );
+    await screen.findByRole("table", { name: "FFI History" });
+
+    expect({
+      keyWarnings: warned.mock.calls.filter((call) => String(call[0]).includes("key")),
+      rows: rows().length,
+    }).toEqual({ keyWarnings: [], rows: 3 });
+    warned.mockRestore();
   });
 
   it("reads five a page, and pages to the second through the numbered pager", async () => {

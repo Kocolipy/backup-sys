@@ -118,9 +118,13 @@ change, when the backend side moves. What the SPA has to honour:
   in to `absentOnNotFound`: the `404` of a patient the source holds none under
   is the FFI page's "No patient in context" and reports nothing; the `502` of
   the source failing is "Couldn't load FFIs" with Try again. The `{patientId}`
-  is the EHR context's patient, sent through `encodeURIComponent`. Each FFI is
-  decoded strictly: an unknown code or a field the decoder does not know is a
-  failure, never passed through.
+  is the EHR context's patient, sent through `encodeURIComponent`. An FFI is
+  shown as received (ADR 0020): its shape is decoded strictly — every field
+  there, `invalid` an array of strings, and a field it does not know refused —
+  but each field's value through the lenient field decoder
+  (`readObject(…).sourceFields()`): a `null` field is missing, "—", one its row
+  names in `invalid` is "Error", and a code outside any of its five closed sets
+  is shown as it came, so no field fails the read.
 - **A patient's NUMC History answers plain JSON too, on the same terms.**
   `GET /api/patient-numc/{patientId}` answers `application/json`, every
   refusal or fault an `ApiError`. Its declaration (`NUMC_HISTORY`,

@@ -21,7 +21,10 @@ It is read on the same terms as an FFI History (ADR 0019, D6): what the
 failures, its logging, caching and auditing holds here too, and this file says
 only where an ARMC History differs — the endpoint, the six elements, the one
 optional element, the two closed sets and how it is sorted and filtered — and
-what is its own. The wire
+what is its own. One rule of the FFI History's does not hold: an FFI is shown
+as received (ADR 0020), and an ARMC Board is read strictly, a field missing or
+malformed or a code outside its set a failure of the source
+([Failures](#failures)). The wire
 contract is `backend/docs/openapi.yaml`. The SPA never reaches the source:
 SPA → `GET /api/patient-armc/{patientId}` → backend →
 `GET {base}/Patient/{id}/armc`.
@@ -58,11 +61,11 @@ which the page keys its row by and never shows.
 
 ### The closed sets
 
-The ARMC Board Type and the ARMC Outcome are closed sets, carried and matched
-as an FFI's are ([ffi](ffi.md), "The closed sets"): each value travels as its
-code, from the source and to the SPA, matched exactly, and the SPA alone names
-it with its label. A code the service does not know is a failure of the source,
-never a row with a blank cell. Each set is one Java enum (`ArmcBoardType`,
+The ARMC Board Type and the ARMC Outcome are closed sets, carried as an FFI's
+are ([ffi](ffi.md), "The closed sets"): each value travels as its code, from
+the source and to the SPA, matched exactly, and the SPA alone names it with its
+label. Unlike an FFI's, shown as received, a code the service does not know is
+a failure of the source, never a row with a blank cell. Each set is one Java enum (`ArmcBoardType`,
 `ArmcOutcome`, codes through `SourceCode`), one enum in
 `backend/docs/openapi.yaml` and one SPA set (`src/pages/armc/armc-api.ts`), held
 set-equal by `VocabularyContractTests` and by `make verify-contract`

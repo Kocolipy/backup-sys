@@ -375,12 +375,15 @@ class ApiContractFixtureTests {
     // ---- /api/patient-ffi/{patientId} ---------------------------------------------------
 
     private static void patientFfi(List<Fixture> all) {
-        add(all, "patient FFI History: a page of FFIs, sorted and filtered, a patient with none,"
-                + " an unknown patient, a malformed id, a filter or sort it cannot take, a failing"
-                + " source, and the refusals", t -> {
+        add(all, "patient FFI History: a page of FFIs, sorted and filtered, one with fields"
+                + " missing, invalid and outside their closed sets, a patient with none, an unknown"
+                + " patient, a malformed id, a filter or sort it cannot take, a failing source, and"
+                + " the refusals", t -> {
             // patient:read is a Group's to confer, as for a Patient search. The histories are the
             // patient source's mock's (PatientSourceStubs): Tan Wei Ming has four FFIs, Tan Hui
-            // Min seven, Siti Nurhaliza binte Ahmad none.
+            // Min seven, Tan Boon Huat four shown as received (ADR 0020) — fields missing and
+            // invalid, codes outside their closed sets, ids outside FHIR's grammar and none — and
+            // Siti Nurhaliza binte Ahmad none.
             Cookie user = t.medicalOfficer(t.logIn(ADMIN, ADMIN_PASSWORD));
             Cookie inNoGroup = t.settle(t.provision(true));
             Cookie confined = t.logIn(t.provision(true), CONNECTOR_PASSWORD);
@@ -390,6 +393,7 @@ class ApiContractFixtureTests {
                     200);
             t.expect(t.get("/api/patient-ffi/dev-patient-05?count=5&type=ippt&type=dental")
                     .cookie(user), 200);
+            t.expect(t.get("/api/patient-ffi/dev-patient-10?count=5").cookie(user), 200);
             t.expect(t.get("/api/patient-ffi/erXuFYUfucBZaryVksYEcMg3?count=5").cookie(user),
                     200);
             t.expect(t.get("/api/patient-ffi/not-a-uuid").cookie(user), 404);

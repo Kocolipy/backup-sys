@@ -432,7 +432,7 @@ present, shown as its value; missing — no key, `null`, or a blank string —
 shown as "—"; or invalid — the wrong JSON type, or a string that is no date or
 date-time of its kind — shown as "Error". A code outside its closed set is
 shown as the raw code. Only a failure of the call or of the page's structure
-fails the read. The NUMC History is read so.
+fails the read. The FFI History and the NUMC History are read so.
 _Avoid_: validated, sanitised, lenient (the reading is lenient; what the
 clinician sees is the data as received)
 **Demographic page**:
@@ -488,15 +488,17 @@ their enlistment, ORD (Operationally Ready Date), MR and ROD (Run Out Date)
 dates.
 _Avoid_: military service (the name of its wire extension, not of the term),
 service history, NS record
+
 ### FFIs
 
-Rules: [ffi](docs/domain/ffi.md). Decided in ADR 0019.
+Rules: [ffi](docs/domain/ffi.md). Decided in ADR 0019 and ADR 0020.
 
 **FFI (Fit for Instruction)**:
 One record of whether a patient was found fit for an instruction — an
 exercise, a test, a release — as the Patient source holds it: its FFI Type,
 Outcome, Issue Date, Expiry Date, Higher Authority, Submitting MC and Status,
-every one required. Read from the Patient source on every read, never held,
+each shown as received — missing or invalid included, and a code outside its
+closed set shown raw. Read from the Patient source on every read, never held,
 and not audited.
 _Avoid_: fitness record, medical clearance, certificate
 
@@ -521,7 +523,8 @@ _Avoid_: granularity, date type
 
 **FFI Type**:
 What an FFI is for, one of a closed set: Overseas Exercises, CAT A - OCS/SCS,
-IPPT FFI, Dental FFI, ORD / Release from Service, Vocational FFI.
+IPPT FFI, Dental FFI, ORD / Release from Service, Vocational FFI. A code
+outside it is shown as it came, as one outside each of an FFI's closed sets is.
 
 **Outcome**:
 What an FFI found, one of FIT, REQUEST WAIVER and UNFIT.

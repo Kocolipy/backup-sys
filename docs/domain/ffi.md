@@ -1,7 +1,7 @@
 ---
 type: Domain Rules
 title: FFIs
-description: A patient's FFI History — the in-house patient source's own FFIs, read through it at GET {base}/Patient/{id}/ffi as a FHIR-shaped but non-conformant searchset, the elements read and the five closed sets carried as codes, the sort by Issue Date or Expiry Date and the filters on every column with the source parameter each is sent as and the refusals, the source's order and paging, the failures and their log reasons, the logging rules, no caching, no auditing, the FFI page with its sort headings, Filter panel and empty states, and the mock's FFI fixtures, sort and filter stubs and fault stubs.
+description: A patient's FFI History — the in-house patient source's own FFIs, read through it at GET {base}/Patient/{id}/ffi as a FHIR-shaped but non-conformant searchset and shown as received, the elements read and the five closed sets carried as codes, a field missing, in the wrong format or outside its set, the sort by Issue Date or Expiry Date and the filters on every column with the source parameter each is sent as and the refusals, the source's order and paging, the failures, the logging rules and the invalid-fields WARN and counter, no caching, no auditing, the FFI page with its sort headings, Filter panel and empty states, and the mock's FFI fixtures, sort and filter stubs and fault stubs.
 tags: [patient, ffi]
 ---
 
@@ -17,14 +17,16 @@ to a session holding `patient:read` ([authorization](authorization.md)), as
 plain JSON a page at a time. The source filters, sorts, pages and counts it,
 as it does a Patient search; the service does none of it itself. Nothing
 stores it. Why it is the source's, read through, and
-why the read is not audited, is ADR 0019; the wire contract is
+why the read is not audited, is ADR 0019; it is **shown as received** (ADR
+0020): no FFI fails the read for what its fields hold. The wire contract is
 `backend/docs/openapi.yaml`. The SPA never reaches the source:
 SPA → `GET /api/patient-ffi/{patientId}` → backend →
 `GET {base}/Patient/{id}/ffi`.
 
 ## The elements
 
-Every FFI has every element; none is optional.
+An FFI has seven elements, each read as the patient source sent it
+([Shown as received](#shown-as-received)).
 
 | Element          | On the wire (both sides)   | Shown as                                                                                                                                                                                                |
 | ---------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -36,26 +38,50 @@ Every FFI has every element; none is optional.
 | Submitting MC    | `submittingMc`, a code     | a Medical Centre: `nee-soon-camp` Nee Soon Camp MC · `kranji-camp` Kranji Camp MC · `hendon-camp` Hendon Camp MC · `mandai-hill-camp` Mandai Hill Camp MC · `khatib-camp` Khatib Camp MC                |
 | Status           | `status`, a code           | `active` Active (green) · `inactive` Inactive (muted)                                                                                                                                                   |
 
-Each FFI also carries its own `id` at the source, in FHIR's id grammar, which
-the page keys its row by and never shows.
+Each FFI also carries its own `id` at the source, never checked, which the
+page keys its row by and never shows; a row with none is keyed by its place.
 
 ### The closed sets
 
 The FFI Type, Outcome, Higher Authority, Submitting MC and Status are closed
 sets. Each value travels as its **code** — from the source, and to the SPA —
-and the SPA alone names it with its **label**. A code is matched exactly: a
-label, another case or another spelling is outside the set. Each set is one
-Java enum (`FfiType`, `FfiOutcome`, `FfiHigherAuthority`, `FfiStatus`, codes
-through `SourceCode`), one enum in `backend/docs/openapi.yaml` and one SPA set
-(`src/pages/ffi/ffi-api.ts`), held set-equal by `VocabularyContractTests` and
-by `make verify-contract` (`/scripts/spa-contract/README.md`).
+and the SPA alone names a known code with its **label**. **A code outside its
+set is shown as the raw code** — a label, another case or another spelling
+among them — the Outcome's and the Status's on a neutral badge (ADR 0020, D2):
+never a failure of the source, and never a blank cell. The sets check what the
+service is asked: a filter's code is matched exactly, and the Filter panel
+offers only the known codes ([Sort and filters](#sort-and-filters)). Each set
+is one Java enum (`FfiType`, `FfiOutcome`, `FfiHigherAuthority`, `FfiStatus`,
+codes through `SourceCode`), one enum in `backend/docs/openapi.yaml` and one
+SPA set (`src/pages/ffi/ffi-api.ts`), held set-equal by
+`VocabularyContractTests` and by `make verify-contract`
+(`/scripts/spa-contract/README.md`).
 
 **The Submitting MC draws on Medical Centre**, the closed set a Medication
 Record's Dispensary draws on too ([medication](medication.md)): the field is
 the FFI's own, `submittingMc` on both wires, and the set is shared — one Java
 enum (`MedicalCentre`), one enum in `backend/docs/openapi.yaml`
 (`MedicalCentre`) and one SPA set (`src/pages/medical-centre-api.ts`), held
-set-equal as the others are.
+set-equal as the others are. Only the FFI's field is shown as received: a
+centre outside the set is an FFI's raw code, and still a failure of the source
+in a Medication Record's Dispensary.
+
+### Shown as received
+
+The patient source is the truth (ADR 0020): nothing refuses an FFI, or the
+response, for what a field holds. Each field — the seven elements and the `id`
+— is one of three things, read by the adapter from the raw JSON it arrived as
+(`ReceivedFields`, so a number is never coerced into a string):
+
+| The source sent                                                                                               | The field is | Our API                              | The page shows |
+| ------------------------------------------------------------------------------------------------------------- | ------------ | ------------------------------------ | -------------- |
+| No key, `null`, `""`, or only whitespace                                                                      | missing      | `null`                               | "—"            |
+| A number, a boolean, an object or an array; a date that is no calendar date `YYYY-MM-DD`                      | invalid      | `null`, named in the row's `invalid` | "Error"        |
+| Any other string, as it came: a code outside its set, an id outside FHIR's grammar, any date the calendar has | present      | the value                            | the value      |
+
+**No semantic or range check is made**: a date in the future, or an Expiry Date
+before its Issue Date, is shown as received. The domain's `Ffi` holds each
+field as a `SourceField` and refuses none.
 
 ### Status is the source's
 
@@ -88,10 +114,11 @@ Bundle`, `type: searchset`, its `total` and each `entry[].resource` — whose
   `totalResults` is the source's `total`. The source is asked even for
   `count=0` or a page past the end, as a Patient search's is (ADR 0018, D3).
   The SPA asks for 5. The searchset's paging — the page's parameters, the
-  `total`, the `entry`, and an entry's `id` rules — is read by the one piece
-  a Patient search reads its page with (`SourceSearchset`).
-- **Only a `404` is no patient**, and is our API's `404` too. Every other answer
-  is a failure of the source, our `502` (["Failures"](#failures)).
+  `total` and the `entry` — is read by the one piece a Patient search reads its
+  page with (`SourceSearchset`).
+- **Only a `404` is no patient**, and is our API's `404` too. Every other
+  status, and a `200` that is no searchset of FFIs, is a failure of the source,
+  our `502` (["Failures"](#failures)); what an FFI's fields hold never is.
 - **No caching.** No FFI is kept in Redis or in memory: every read, of the same
   page too, is a call to the source.
 
@@ -152,16 +179,20 @@ for a Patient search ([patient](patient.md), "Patient search"; ADR 0018, D7).
 - **Checked as the request is read in.** A column or direction spelled any
   other way, a code outside its closed set — a label, another case, a Java
   constant's name — a date that is no calendar date, and a from-date after its
-  to-date are each `400`, before the source is called.
+  to-date are each `400`, before the source is called. An FFI may carry a code
+  no filter can name ([Shown as received](#shown-as-received)).
 
 ## Our API
 
 `GET /api/patient-ffi/{patientId}?startIndex=…&count=…`, with any filters and
 sort, outside the `/api/patient` FHIR namespace, as Patient search is: plain
 JSON, `{totalResults, startIndex, ffis: [{id, type, outcome, issueDate,
-expiryDate, higherAuthority, submittingMc, status}]}`, each code as the source
-sent it and both dates `YYYY-MM-DD`. `totalResults` counts the FFIs the
-filters select. Errors are the application API's `ApiError`:
+expiryDate, higherAuthority, submittingMc, status, invalid}]}`, each code as
+the source sent it, known to its set or not, and both dates `YYYY-MM-DD`. Every
+field is always there: one missing or in the wrong format is `null`, and
+`invalid` names, in the row's order, those whose format was wrong — a `null`
+it does not name is missing. `totalResults` counts the FFIs the filters select.
+Errors are the application API's `ApiError`:
 
 | Case                                                                                                                                                       | Status |
 | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
@@ -178,22 +209,21 @@ handler's `@PreAuthorize` and the chain's backstop, audited as an
 ## Failures
 
 Each of these is a failure of the source, our `502`, and its one fault record's
-`event.reason`:
+`event.reason`: a failure of the call or of the searchset, the one every paged
+read of the source shares. **No FFI is a failure**, whatever its fields hold
+([Shown as received](#shown-as-received)), so no reason names an FFI's field.
 
-| Failure                                                     | `event.reason`                                                                                                     | `error.category` |
-| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ---------------- |
-| No connection, or one refused, reset or dropped             | `unreachable`                                                                                                      | `network`        |
-| No connection within 2 seconds, or no whole answer within 5 | `timed-out`                                                                                                        | `network`        |
-| A `5xx`                                                     | `server-error`                                                                                                     | `server`         |
-| Any other status but a `200` or a `404`                     | `unexpected-status`                                                                                                | `data`           |
-| A body that arrived whole and is not JSON or not the shape  | `unreadable`                                                                                                       | `data`           |
-| A `200` that is no searchset `Bundle`                       | `not-a-searchset`                                                                                                  | `data`           |
-| A searchset with no `total`, or a negative one              | `no-total`                                                                                                         | `data`           |
-| An entry with no resource, or one that is no `FFI`          | `another-resource`                                                                                                 | `data`           |
-| An entry with no `id`, or one outside FHIR's id grammar     | `no-id`, `invalid-id`                                                                                              | `data`           |
-| An entry missing a field — every field is required          | `no-type`, `no-outcome`, `no-issue-date`, `no-expiry-date`, `no-higher-authority`, `no-submitting-mc`, `no-status` | `data`           |
-| A code outside its closed set                               | `unknown-type`, `unknown-outcome`, `unknown-higher-authority`, `unknown-submitting-mc`, `unknown-status`           | `data`           |
-| A date not to the day                                       | `issue-date-not-to-the-day`, `expiry-date-not-to-the-day`                                                          | `data`           |
+| Failure                                                     | `event.reason`      | `error.category` |
+| ----------------------------------------------------------- | ------------------- | ---------------- |
+| No connection, or one refused, reset or dropped             | `unreachable`       | `network`        |
+| No connection within 2 seconds, or no whole answer within 5 | `timed-out`         | `network`        |
+| A `5xx`                                                     | `server-error`      | `server`         |
+| Any other status but a `200` or a `404`                     | `unexpected-status` | `data`           |
+| A body that arrived whole and is not JSON or not the shape  | `unreadable`        | `data`           |
+| A `200` that is no searchset `Bundle`                       | `not-a-searchset`   | `data`           |
+| A searchset with no `total`, or a negative one              | `no-total`          | `data`           |
+| An entry with no resource, or one that is no `FFI`          | `another-resource`  | `data`           |
+| An entry whose resource is no object                        | `unreadable`        | `data`           |
 
 The adapter raises each as a `PatientSourceException`, which the app-wide
 handler answers `502` with the generic `server-error` `ApiError`
@@ -202,22 +232,31 @@ handler answers `502` with the generic `server-error` `ApiError`
 ## Logging
 
 - **Each failure of the source is exactly one `ERROR`**, the `502`'s
-  `http.request.fault` record, whose `event.reason` names the failure or the
-  rule broken (the table above) and whose error message is the fault's fixed
-  sentence.
+  `http.request.fault` record, whose `event.reason` names the failure (the
+  table above) and whose error message is the fault's fixed sentence.
 - **Neither the log nor the exception's message names the patient id,
   a filter's value or anything of the source's body**: not an FFI's id, code
   or date, nor an error answer's body, which is never read. Each filter's
   value, each code too, is a URI variable of the outbound call, so the call is
   observed under its template alone. The exception's cause is redacted to its
   type, as a read by id's is ([patient](patient.md), "Logging").
-- **A read adds no record of its own.** A success, a `400` and a `404` each
-  have the request record alone, which names the route template
+- **A read adds no record of its own** but the one below. A success, a `400`
+  and a `404` each have the request record, which names the route template
   (`/api/patient-ffi/{patientId}`), never the id; a `403` adds the
   authorization refusal's `WARN` record.
+- **A response holding fields in the wrong format is one `WARN`** beside the
+  request record, `patient_source.invalid_fields`
+  (`observability.InvalidSourceFields`, ADR 0020): its
+  `app.patient_source.read` is `ffi`, and its
+  `app.patient_source.invalid_fields` lists each such field by its path in the
+  source's answer, the entry counted from zero — `entry[3].issueDate` — never
+  its value, an FFI's id or the patient. The `patient_source.invalid_fields`
+  counter counts each such field, tagged `read=ffi` and `field`. A response
+  with none, a field missing included, writes and counts nothing.
 
 `PatientHistoriesIntegrationTests` holds each FFI fault stub's read to exactly one
-`ERROR` naming its failure under its category, and the stream, for those reads
+`ERROR` naming its failure under its category, Tan Boon Huat's read to exactly
+one `WARN` naming its invalid fields' paths, and the stream, for those reads
 and for successful ones, filtered and sorted ones among them, to naming neither
 the patient id, a filter's value, nor any FFI's id or dates.
 
@@ -243,7 +282,10 @@ offered no link and is routed to its landing page. Headed "FFI History".
   a page, with no row action.
 - **The table**: FFI Type, Outcome, Issue Date, Expiry Date, Higher Authority,
   Submitting MC, Status — each code by its label, the Outcome and the Status as
-  badges ([the elements](#the-elements)), both dates `dd MMM yyyy`.
+  badges ([the elements](#the-elements)), both dates `dd MMM yyyy`; a code
+  outside its set as it came, the Outcome's and the Status's on a neutral
+  badge; a missing field "—" and one in the wrong format "Error", the rest of
+  the row as any other ([Shown as received](#shown-as-received)).
 - **The shared paged listing**: the numbered pager and "Showing x to y of N
   FFIs", named on a single page too, the page shown held while the next loads.
 - **Sort.** Only the Issue Date and Expiry Date headings sort, one at a time,
@@ -302,6 +344,22 @@ fixtures, and the backend's tests read the same stub files
   closed set — every Outcome, Higher Authority, Medical Centre and Status among
   them, her seventh submitted by Khatib Camp MC — and Active FFIs past their
   Expiry Date.
+- **Tan Boon Huat** (`dev-patient-10`) has four FFIs, on one page, shown as
+  received (`ffi-tan-boon-huat`): an IPPT FFI with no outcome and a `null`
+  Submitting MC; a Dental FFI whose Issue Date is a number, whose Expiry Date
+  is a month, not a day, and whose Status is a boolean; one whose id is outside
+  FHIR's grammar and whose codes are outside all five sets — `swimming`, a
+  NUMC Outcome's `waiver-granted`, `hq-medc`, `tengah-air-base` and `expired`;
+  and a Vocational FFI with no id, an empty outcome and Submitting MC, a blank
+  Issue Date, a `null` Expiry Date and no Higher Authority:
+
+  | FFI Type       | Outcome        | Issue Date  | Expiry Date | Higher Authority | Submitting MC   | Status   |
+  | -------------- | -------------- | ----------- | ----------- | ---------------- | --------------- | -------- |
+  | IPPT FFI       | —              | 16 Mar 2022 | 15 Mar 2023 | CAMO             | —               | Active   |
+  | Dental FFI     | FIT            | Error       | Error       | CNMO             | Kranji Camp MC  | Error    |
+  | swimming       | waiver-granted | 16 Mar 2020 | 15 Mar 2021 | hq-medc          | tengah-air-base | expired  |
+  | Vocational FFI | —              | —           | —           | —                | —               | Inactive |
+
 - **Every other fixture** has none — Siti Nurhaliza binte Ahmad
   (`erXuFYUfucBZaryVksYEcMg3`), found by the NRIC search `S9212345A`, is the
   one the tests read — answered by `ffi-fallback`, which also answers any page,
@@ -313,7 +371,7 @@ Each canned page is matched on the whole query the backend sends — `_count=5`,
 `_offset`, `_total=accurate`, the `_sort`, and each filter pinned to its exact
 values or, where the read uses none, to absent — so a filtered or sorted read
 never falls to an unfiltered page. Each fixture is selectable on Patient Search
-(the name search `tan` finds both Tans).
+(the name search `tan` finds the three Tans, Tan Boon Huat on its second page).
 
 **Sort and filter stubs.** Beside the pages in the source's order:
 
@@ -337,13 +395,14 @@ never falls to an unfiltered page. Each fixture is selectable on Patient Search
 filters select from the history in the source's order, in the order its sort
 names, ties by id.
 
-**Fault stubs.** Beside them, each failure above has a stub of its own under a
-well-formed patient id no fixture uses, `fault-ffi-<failure>`, marked with
-`metadata.fault`: `unreachable` (the connection reset), `slow` (the answer after
-7 seconds), `server-error` (`503`), `unexpected-status` (`400`),
-`not-a-searchset`, `no-total`, `no-id`, `invalid-id`, `no-outcome` (an FFI
-missing a field), `unknown-higher-authority` (a code outside its set) and
-`expiry-date-not-to-the-day`. A fault stub is no fixture. `PatientSourceFixturesTests`
-holds the fixtures to these rules, `PatientStoreContract` holds what each
-history reads, written out, and `PatientSourceFfiAdapterTests` each fault
-stub's failure.
+**Fault stubs.** Beside them, each failure above that the mock can serve has a
+stub of its own under a well-formed patient id no fixture uses,
+`fault-ffi-<failure>`, marked with `metadata.fault`: `unreachable` (the
+connection reset), `slow` (the answer after 7 seconds), `server-error`
+(`503`), `unexpected-status` (`400`), `not-a-searchset` and `no-total` — the
+failures every history shares. An FFI's data is no fault: what its fields may
+hold is Tan Boon Huat's page. A fault stub is no fixture.
+`PatientSourceFixturesTests` holds the fixtures to these rules, Tan Boon Huat's
+written out, `PatientStoreContract` holds what each history reads, written out,
+`PatientSourceHistoriesAdapterTests` each fault stub's failure, and
+`PatientSourceFfiAdapterTests` how each field is read.

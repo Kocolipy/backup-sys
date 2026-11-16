@@ -24,13 +24,12 @@ import java.util.stream.Stream;
  *       ({@code unexpected-status}), a body that is not JSON or not a Patient
  *       ({@code unreadable}), a Patient breaking one of the domain's rules, a search's answer
  *       or a history that is no searchset, has no total, or holds an entry of another
- *       resource, or one with no id, or an FFI, an ARMC Board or a Medication Record missing a
- *       field, holding a code outside its closed set, a date not to the day or a date-time with
- *       no offset, or an ARMC Board or a Medication Record ending before it starts — an ARMC
- *       Board's under a reason naming ARMC and a Medication Record's under one naming
- *       Medication or an element of its own, so a record says which history broke. A NUMC
- *       Record breaks no rule: its NUMC History is shown as received (ADR 0020), so only its
- *       call or its searchset fails.
+ *       resource, or one with no id, or an ARMC Board or a Medication Record missing a field,
+ *       holding a code outside its closed set, a date not to the day or a date-time with no
+ *       offset, or ending before it starts — an ARMC Board's under a reason naming ARMC and a
+ *       Medication Record's under one naming Medication or an element of its own, so a record
+ *       says which history broke. An FFI and a NUMC Record break no rule: their histories are
+ *       shown as received (ADR 0020), so only their call or their searchset fails.
  * </ul>
  *
  * <p>Its message is fixed text, naming at most a status or an element, and its cause, when it has
@@ -83,52 +82,6 @@ public final class PatientSourceException extends UpstreamFaultException {
         /** A search's Patient whose Last visit is no date to the day. */
         LAST_VISIT_NOT_TO_THE_DAY("last-visit-not-to-the-day",
                 "The patient source's Patient's last visit is not to the day", ErrorCategory.DATA),
-        /** An FFI History's entry with no {@code id}. */
-        FFI_NO_ID("no-id", "The patient source's FFI has no id", ErrorCategory.DATA),
-        /** An FFI History's entry whose {@code id} is outside FHIR's id grammar. */
-        FFI_INVALID_ID("invalid-id", "The patient source's FFI's id is not a FHIR id",
-                ErrorCategory.DATA),
-        /** An FFI with no {@code type}. */
-        NO_FFI_TYPE("no-type", "The patient source's FFI has no type", ErrorCategory.DATA),
-        /** An FFI whose {@code type} is no FFI Type's code. */
-        UNKNOWN_FFI_TYPE("unknown-type", "The patient source's FFI's type is not an FFI Type",
-                ErrorCategory.DATA),
-        /** An FFI with no {@code outcome}. */
-        NO_OUTCOME("no-outcome", "The patient source's FFI has no outcome", ErrorCategory.DATA),
-        /** An FFI whose {@code outcome} is no Outcome's code. */
-        UNKNOWN_OUTCOME("unknown-outcome",
-                "The patient source's FFI's outcome is not an Outcome", ErrorCategory.DATA),
-        /** An FFI with no {@code issueDate}. */
-        NO_ISSUE_DATE("no-issue-date", "The patient source's FFI has no issue date",
-                ErrorCategory.DATA),
-        /** An FFI whose Issue Date is no date to the day. */
-        ISSUE_DATE_NOT_TO_THE_DAY("issue-date-not-to-the-day",
-                "The patient source's FFI's issue date is not to the day", ErrorCategory.DATA),
-        /** An FFI with no {@code expiryDate}. */
-        NO_EXPIRY_DATE("no-expiry-date", "The patient source's FFI has no expiry date",
-                ErrorCategory.DATA),
-        /** An FFI whose Expiry Date is no date to the day. */
-        EXPIRY_DATE_NOT_TO_THE_DAY("expiry-date-not-to-the-day",
-                "The patient source's FFI's expiry date is not to the day", ErrorCategory.DATA),
-        /** An FFI with no {@code higherAuthority}. */
-        NO_HIGHER_AUTHORITY("no-higher-authority",
-                "The patient source's FFI has no higher authority", ErrorCategory.DATA),
-        /** An FFI whose {@code higherAuthority} is no Higher Authority's code. */
-        UNKNOWN_HIGHER_AUTHORITY("unknown-higher-authority",
-                "The patient source's FFI's higher authority is not a Higher Authority",
-                ErrorCategory.DATA),
-        /** An FFI with no {@code submittingMc}. */
-        NO_SUBMITTING_MC("no-submitting-mc", "The patient source's FFI has no submitting MC",
-                ErrorCategory.DATA),
-        /** An FFI whose {@code submittingMc} is no Medical Centre's code. */
-        UNKNOWN_SUBMITTING_MC("unknown-submitting-mc",
-                "The patient source's FFI's submitting MC is not a Medical Centre",
-                ErrorCategory.DATA),
-        /** An FFI with no {@code status}. */
-        NO_STATUS("no-status", "The patient source's FFI has no status", ErrorCategory.DATA),
-        /** An FFI whose {@code status} is no Status's code. */
-        UNKNOWN_STATUS("unknown-status", "The patient source's FFI's status is not a Status",
-                ErrorCategory.DATA),
         /** An ARMC History's entry with no {@code id}. */
         ARMC_NO_ID("armc-no-id", "The patient source's ARMC Board has no id",
                 ErrorCategory.DATA),

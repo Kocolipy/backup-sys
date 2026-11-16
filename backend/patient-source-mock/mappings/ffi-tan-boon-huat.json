@@ -1,0 +1,123 @@
+{
+  "name": "FFI History: Tan Boon Huat's four FFIs, shown as received: fields missing, malformed and outside their closed sets",
+  "request": {
+    "method": "GET",
+    "urlPath": "/Patient/dev-patient-10/ffi",
+    "queryParameters": {
+      "_count": {
+        "equalTo": "5"
+      },
+      "_offset": {
+        "equalTo": "0"
+      },
+      "_total": {
+        "equalTo": "accurate"
+      },
+      "_sort": {
+        "absent": true
+      },
+      "type": {
+        "absent": true
+      },
+      "outcome": {
+        "absent": true
+      },
+      "issue-date": {
+        "absent": true
+      },
+      "expiry-date": {
+        "absent": true
+      },
+      "higher-authority": {
+        "absent": true
+      },
+      "submitting-mc": {
+        "absent": true
+      },
+      "status": {
+        "absent": true
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/fhir+json"
+    },
+    "jsonBody": {
+      "resourceType": "Bundle",
+      "id": "ffi-history",
+      "type": "searchset",
+      "total": 4,
+      "link": [
+        {
+          "relation": "self",
+          "url": "http://127.0.0.1:8104/Patient/dev-patient-10/ffi?_offset=0&_count=5"
+        }
+      ],
+      "entry": [
+        {
+          "resource": {
+            "resourceType": "FFI",
+            "id": "ffi-tan-boon-huat-1",
+            "type": "ippt",
+            "issueDate": "2022-03-16",
+            "expiryDate": "2023-03-15",
+            "higherAuthority": "camo",
+            "submittingMc": null,
+            "status": "active"
+          },
+          "search": {
+            "mode": "match"
+          }
+        },
+        {
+          "resource": {
+            "resourceType": "FFI",
+            "id": "ffi-tan-boon-huat-2",
+            "type": "dental",
+            "outcome": "fit",
+            "issueDate": 20210316,
+            "expiryDate": "2022-03",
+            "higherAuthority": "cnmo",
+            "submittingMc": "kranji-camp",
+            "status": true
+          },
+          "search": {
+            "mode": "match"
+          }
+        },
+        {
+          "resource": {
+            "resourceType": "FFI",
+            "id": "ffi tan boon huat 3",
+            "type": "swimming",
+            "outcome": "waiver-granted",
+            "issueDate": "2020-03-16",
+            "expiryDate": "2021-03-15",
+            "higherAuthority": "hq-medc",
+            "submittingMc": "tengah-air-base",
+            "status": "expired"
+          },
+          "search": {
+            "mode": "match"
+          }
+        },
+        {
+          "resource": {
+            "resourceType": "FFI",
+            "type": "vocational",
+            "outcome": "",
+            "issueDate": "  ",
+            "expiryDate": null,
+            "submittingMc": "",
+            "status": "inactive"
+          },
+          "search": {
+            "mode": "match"
+          }
+        }
+      ]
+    }
+  }
+}

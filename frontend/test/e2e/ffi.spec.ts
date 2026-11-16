@@ -9,10 +9,11 @@ import { sidebar } from "./shell.helpers";
  * Patient Search, then FFI opened from the sidebar. Tan Wei Ming has exactly
  * four FFIs, sorted by each date both ways, Tan Hui Min seven over two pages,
  * filtered by a multi-select, a date range — one spanning two pages, one
- * matching nothing — and the Status, and Siti Nurhaliza binte Ahmad none
- * (`/docs/domain/ffi.md`, "The patient source's FFI fixtures"). What the page
- * decides without the backend — the labels, the badges, each filter's
- * parameters, an inverted range and a failure — is `ffi.test.tsx`'s, and no
+ * matching nothing — and the Status, Tan Boon Huat four shown as received, and
+ * Siti Nurhaliza binte Ahmad none (`/docs/domain/ffi.md`, "The patient
+ * source's FFI fixtures"). What the page decides without the backend — the
+ * labels, the badges, "—", "Error" and a raw code, each filter's parameters,
+ * an inverted range and a failure — is `ffi.test.tsx`'s, and no
  * patient in context `for-patient-in-context.test.tsx`'s; that a session
  * without `patient:read` is offered no FFI link is `roles-user.spec.ts`'.
  *
@@ -72,6 +73,31 @@ test.describe("FFI", () => {
       "Vocational FFIREQUEST WAIVER17 Apr 202316 Apr 2024CNMOKranji Camp MCInactive",
       "IPPT FFIUNFIT05 Dec 202204 Dec 2023CAMOKhatib Camp MCInactive",
     ]);
+  });
+
+  // The patient source is the truth (ADR 0020): Tan Boon Huat's FFIs hold an
+  // outcome left out and a Submitting MC null, a date of the wrong JSON type,
+  // one not to the day and a Status of the wrong JSON type, codes outside all
+  // five closed sets, and an FFI with no id whose fields are empty, blank,
+  // null or left out.
+  test('shows Tan Boon Huat\'s FFIs as received: "—", "Error" and raw codes in one table', async ({
+    page,
+  }) => {
+    await page.goto("/search");
+    await search(page, "tan");
+    await page.getByRole("button", { name: "Page 2" }).click();
+    await selectResult(page, "Tan Boon Huat");
+    await expectOnDemographicInContext(page, "Tan Boon Huat", "S5512345A");
+
+    await openFfi(page);
+
+    await expect(ffiRows(page)).toHaveText([
+      "IPPT FFI—16 Mar 202215 Mar 2023CAMO—Active",
+      "Dental FFIFITErrorErrorCNMOKranji Camp MCError",
+      "swimmingwaiver-granted16 Mar 202015 Mar 2021hq-medctengah-air-baseexpired",
+      "Vocational FFI—————Inactive",
+    ]);
+    await expect(page.getByText("Showing 1 to 4 of 4 FFIs")).toBeVisible();
   });
 
   test("says No FFIs for a patient with none", async ({ page }) => {

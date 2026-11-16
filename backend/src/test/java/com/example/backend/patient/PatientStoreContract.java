@@ -302,8 +302,48 @@ public abstract class PatientStoreContract {
     private static Ffi ffi(String id, FfiType type, FfiOutcome outcome, String issueDate,
             String expiryDate, FfiHigherAuthority higherAuthority, MedicalCentre submittingMc,
             FfiStatus status) {
-        return new Ffi(id, type, outcome, LocalDate.parse(issueDate), LocalDate.parse(expiryDate),
-                higherAuthority, submittingMc, status);
+        return new Ffi(SourceField.present(id), SourceField.present(type.code()),
+                SourceField.present(outcome.code()),
+                SourceField.present(LocalDate.parse(issueDate)),
+                SourceField.present(LocalDate.parse(expiryDate)),
+                SourceField.present(higherAuthority.code()),
+                SourceField.present(submittingMc.code()), SourceField.present(status.code()));
+    }
+
+    /**
+     * Tan Boon Huat's four FFIs, read as received (ADR 0020): an outcome left out and a Submitting
+     * MC {@code null}; a date of the wrong JSON type, one not to the day and a Status of the wrong
+     * JSON type; codes outside all five closed sets kept as they came, an id outside FHIR's grammar
+     * kept; and an FFI with no id whose outcome and Submitting MC are empty, its Issue Date blank,
+     * its Expiry Date {@code null} and its Higher Authority left out.
+     */
+    @Test
+    void tan_boon_huats_ffi_history_is_read_as_received() {
+        assertThat(patients().findFfiHistory(new PatientId("dev-patient-10"), FfiFilter.NONE,
+                HistorySort.SOURCE_ORDER, FIRST_FIVE)).contains(new FfiHistory(4, List.of(
+                        new Ffi(SourceField.present("ffi-tan-boon-huat-1"),
+                                SourceField.present("ippt"), SourceField.missing(),
+                                SourceField.present(LocalDate.of(2022, 3, 16)),
+                                SourceField.present(LocalDate.of(2023, 3, 15)),
+                                SourceField.present("camo"), SourceField.missing(),
+                                SourceField.present("active")),
+                        new Ffi(SourceField.present("ffi-tan-boon-huat-2"),
+                                SourceField.present("dental"), SourceField.present("fit"),
+                                SourceField.invalid(), SourceField.invalid(),
+                                SourceField.present("cnmo"), SourceField.present("kranji-camp"),
+                                SourceField.invalid()),
+                        new Ffi(SourceField.present("ffi tan boon huat 3"),
+                                SourceField.present("swimming"),
+                                SourceField.present("waiver-granted"),
+                                SourceField.present(LocalDate.of(2020, 3, 16)),
+                                SourceField.present(LocalDate.of(2021, 3, 15)),
+                                SourceField.present("hq-medc"),
+                                SourceField.present("tengah-air-base"),
+                                SourceField.present("expired")),
+                        new Ffi(SourceField.missing(), SourceField.present("vocational"),
+                                SourceField.missing(), SourceField.missing(),
+                                SourceField.missing(), SourceField.missing(),
+                                SourceField.missing(), SourceField.present("inactive")))));
     }
 
     /** Tan Wei Ming's four FFIs, in the source's own order. */

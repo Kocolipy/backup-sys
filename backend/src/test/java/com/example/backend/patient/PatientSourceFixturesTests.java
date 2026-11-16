@@ -358,11 +358,12 @@ class PatientSourceFixturesTests {
     }
 
     /**
-     * Two fixtures have FFIs, each page its own stub — Tan Wei Ming's one page of four and Tan
-     * Hui Min's two of seven — and a fallback answers every fixture's other read with none.
+     * Three fixtures have FFIs, each page its own stub — Tan Wei Ming's one page of four, Tan Hui
+     * Min's two of seven and Tan Boon Huat's one of four, shown as received — and a fallback
+     * answers every fixture's other read with none.
      */
     @Test
-    void twoFixturesHaveAnFfiHistoryAndTheFallbackServesEveryFixture() {
+    void threeFixturesHaveAnFfiHistoryAndTheFallbackServesEveryFixture() {
         List<String> exact = PatientSourceStubs.ffiHistories().stream()
                 .filter(stub -> inTheSourcesOrder(stub, FFI_FILTER_PARAMETERS))
                 .map(stub -> stub.path() + " " + stub.query().at("/_offset/equalTo").asString()
@@ -376,10 +377,11 @@ class PatientSourceFixturesTests {
         assertThat(exact).containsExactlyInAnyOrder(
                 "/Patient/eq081-VQEgP8drUUqCWzHfw3/ffi 0 of 4",
                 "/Patient/dev-patient-05/ffi 0 of 7",
-                "/Patient/dev-patient-05/ffi 5 of 7");
+                "/Patient/dev-patient-05/ffi 5 of 7",
+                "/Patient/dev-patient-10/ffi 0 of 4");
         assertThat(fixtureIds()).allSatisfy(id ->
                 assertThat("/Patient/" + id + "/ffi").matches(fallback));
-        assertThat("/Patient/fault-ffi-no-id/ffi").doesNotMatch(fallback);
+        assertThat("/Patient/fault-ffi-no-total/ffi").doesNotMatch(fallback);
     }
 
     /** Each page holds no more than five FFIs, and a history's pages hold its total. */
@@ -388,7 +390,62 @@ class PatientSourceFixturesTests {
         assertThat(PatientSourceStubs.ffiHistories())
                 .allSatisfy(stub -> assertThat(resourcesOf(stub)).hasSizeLessThanOrEqualTo(5));
         assertThat(List.of(ffisOf("eq081-VQEgP8drUUqCWzHfw3").size(),
-                ffisOf("dev-patient-05").size())).containsExactly(4, 7);
+                ffisOf("dev-patient-05").size(), ffisOf("dev-patient-10").size()))
+                .containsExactly(4, 7, 4);
+    }
+
+    /** The patient whose FFI History is shown as received: the one whose FFIs are malformed. */
+    private static final String FFI_AS_RECEIVED = "/Patient/dev-patient-10/ffi";
+
+    /** Every FFI History stub but Tan Boon Huat's, whose every FFI is well-formed. */
+    private static Stream<PatientSourceStubs.HistoryStub> wellFormedFfiHistories() {
+        return PatientSourceStubs.ffiHistories().stream()
+                .filter(stub -> !stub.path().equals(FFI_AS_RECEIVED));
+    }
+
+    /**
+     * Every FFI any stub answers is an {@code FFI} of its seven fields and its id alone, and every
+     * one but Tan Boon Huat's has every one of them.
+     */
+    @Test
+    void everyFfiHoldsItsSevenFieldsAndItsIdAlone() {
+        Set<String> fields = Set.of("resourceType", "id", "type", "outcome", "issueDate",
+                "expiryDate", "higherAuthority", "submittingMc", "status");
+        assertThat(PatientSourceStubs.ffiHistories().stream()
+                .flatMap(stub -> resourcesOf(stub).stream()))
+                .isNotEmpty()
+                .allSatisfy(ffi -> assertThat(ffi.get("resourceType").asString())
+                        .isEqualTo("FFI"))
+                .allSatisfy(ffi -> assertThat(fields).containsAll(ffi.propertyNames()));
+        assertThat(wellFormedFfiHistories().flatMap(stub -> resourcesOf(stub).stream()))
+                .allSatisfy(ffi -> assertThat(ffi.propertyNames())
+                        .containsExactlyInAnyOrderElementsOf(fields));
+    }
+
+    /**
+     * Tan Boon Huat's four FFIs are the patient source's data as received (ADR 0020): a field left
+     * out, {@code null}, empty and blank, a date of the wrong JSON type and one not to the day, a
+     * Status of the wrong JSON type, a code outside each of the five closed sets — another set's
+     * among them — and an id outside FHIR's grammar and none at all, written out FFI by FFI.
+     */
+    @Test
+    void tanBoonHuatsFfiHistoryHoldsMissingMalformedAndUnknownFields() {
+        assertThat(ffisOf("dev-patient-10")).extracting(JsonNode::toString).containsExactly(
+                "{\"resourceType\":\"FFI\",\"id\":\"ffi-tan-boon-huat-1\",\"type\":\"ippt\","
+                        + "\"issueDate\":\"2022-03-16\",\"expiryDate\":\"2023-03-15\","
+                        + "\"higherAuthority\":\"camo\",\"submittingMc\":null,"
+                        + "\"status\":\"active\"}",
+                "{\"resourceType\":\"FFI\",\"id\":\"ffi-tan-boon-huat-2\",\"type\":\"dental\","
+                        + "\"outcome\":\"fit\",\"issueDate\":20210316,\"expiryDate\":\"2022-03\","
+                        + "\"higherAuthority\":\"cnmo\",\"submittingMc\":\"kranji-camp\","
+                        + "\"status\":true}",
+                "{\"resourceType\":\"FFI\",\"id\":\"ffi tan boon huat 3\",\"type\":\"swimming\","
+                        + "\"outcome\":\"waiver-granted\",\"issueDate\":\"2020-03-16\","
+                        + "\"expiryDate\":\"2021-03-15\",\"higherAuthority\":\"hq-medc\","
+                        + "\"submittingMc\":\"tengah-air-base\",\"status\":\"expired\"}",
+                "{\"resourceType\":\"FFI\",\"type\":\"vocational\",\"outcome\":\"\","
+                        + "\"issueDate\":\"  \",\"expiryDate\":null,\"submittingMc\":\"\","
+                        + "\"status\":\"inactive\"}");
     }
 
     /** Every code of every closed set an FFI has, as the five sets spell them on the wire. */
@@ -428,10 +485,10 @@ class PatientSourceFixturesTests {
                 .anyMatch(expiry -> expiry.compareTo("2026-01-01") < 0);
     }
 
-    /** Every FFI's id is in FHIR's id grammar and no other FFI's. */
+    /** Every FFI's id but Tan Boon Huat's is in FHIR's id grammar and no other FFI's. */
     @Test
     void everyFfiIdIsAFhirIdOfItsOwn() {
-        List<String> ids = PatientSourceStubs.ffiHistories().stream()
+        List<String> ids = wellFormedFfiHistories()
                 .filter(stub -> inTheSourcesOrder(stub, FFI_FILTER_PARAMETERS))
                 .flatMap(stub -> resourcesOf(stub).stream())
                 .map(ffi -> ffi.get("id").asString())
@@ -451,7 +508,7 @@ class PatientSourceFixturesTests {
     @Test
     void everyCannedFfiReadPinsItsSortAndEveryFilterItUsesOrNot() {
         assertThat(PatientSourceStubs.ffiHistories()).filteredOn(PatientSourceFixturesTests::canned)
-                .hasSize(17)
+                .hasSize(18)
                 .allSatisfy(stub -> assertThat(Stream.concat(Stream.of("_sort"),
                         FFI_FILTER_PARAMETERS.stream()))
                         .as("each matcher, absent or pinned")
@@ -591,7 +648,8 @@ class PatientSourceFixturesTests {
 
     /**
      * The FFI fault stubs, each by the failure it serves under a well-formed patient id no fixture
-     * uses, so it never shadows a fixture's history and the read reaches the source.
+     * uses, so it never shadows a fixture's history and the read reaches the source: a failure of
+     * the call or of the searchset alone, since no FFI fails a read (ADR 0020).
      */
     @Test
     void theFfiFaultStubsServeEachFailureUnderAPatientIdOfItsOwn() {
@@ -602,9 +660,7 @@ class PatientSourceFixturesTests {
                         .isNotIn(fixtureIds()))
                 .extracting(PatientSourceStubs.FaultStub::fault)
                 .containsExactlyInAnyOrder("unreachable", "slow", "server-error",
-                        "unexpected-status", "not-a-searchset", "no-total", "no-id",
-                        "invalid-id", "no-outcome", "unknown-higher-authority",
-                        "expiry-date-not-to-the-day");
+                        "unexpected-status", "not-a-searchset", "no-total");
     }
 
     // ---- the NUMC Histories -----------------------------------------------------------------
@@ -763,6 +819,7 @@ class PatientSourceFixturesTests {
                 .toList();
         List<String> ffiIds = PatientSourceStubs.ffiHistories().stream()
                 .flatMap(stub -> resourcesOf(stub).stream())
+                .filter(ffi -> ffi.has("id"))
                 .map(ffi -> ffi.get("id").asString())
                 .toList();
 

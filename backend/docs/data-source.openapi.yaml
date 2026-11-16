@@ -268,6 +268,13 @@ paths:
         four. Tan Wei Ming's four with `_sort=issue-date,_id` are his
         Vocational, Overseas Exercises, Dental and IPPT FFIs, in that order.
 
+        **Shown as received** (ADR 0020): the backend refuses no FFI for what
+        its fields hold. A field left out, `null`, empty or blank is shown
+        missing; one of another JSON type, or a date that is no calendar date,
+        is shown "Error"; a code outside its set, or an id outside FHIR's id
+        grammar, is shown as it came. Tan Boon Huat (`dev-patient-10`) has four
+        such FFIs. Only the page itself can fail the read.
+
         **FHIR-shaped paging only, not FHIR-conformant**: the answer borrows a
         searchset `Bundle`'s shape and FHIR's search-parameter syntax, and its
         entries are a custom `FFI` object no FHIR version defines (ADR 0019).
@@ -277,19 +284,14 @@ paths:
         **Fault ids (mock only).** Beside the fixtures' histories, the mock
         serves one failure of this read per patient id, none a fixture's:
 
-        | Id                                     | Answers                                                    |
-        | -------------------------------------- | ---------------------------------------------------------- |
-        | `fault-ffi-unreachable`                | the connection reset, no answer                            |
-        | `fault-ffi-slow`                       | `200` page after 7 seconds, past the read timeout          |
-        | `fault-ffi-server-error`               | `503`                                                      |
-        | `fault-ffi-unexpected-status`          | `400`                                                      |
-        | `fault-ffi-not-a-searchset`            | `200` Bundle of `type: collection`                         |
-        | `fault-ffi-no-total`                   | `200` searchset with no `total`                            |
-        | `fault-ffi-no-id`                      | `200` page whose FFI has no `id`                           |
-        | `fault-ffi-invalid-id`                 | `200` page whose FFI's `id` is outside FHIR's id grammar   |
-        | `fault-ffi-no-outcome`                 | `200` page whose FFI has no `outcome`                      |
-        | `fault-ffi-unknown-higher-authority`   | `200` page whose FFI's `higherAuthority` is no code of its set |
-        | `fault-ffi-expiry-date-not-to-the-day` | `200` page whose FFI's `expiryDate` is a month             |
+        | Id                            | Answers                                           |
+        | ----------------------------- | ------------------------------------------------- |
+        | `fault-ffi-unreachable`       | the connection reset, no answer                   |
+        | `fault-ffi-slow`              | `200` page after 7 seconds, past the read timeout |
+        | `fault-ffi-server-error`      | `503`                                             |
+        | `fault-ffi-unexpected-status` | `400`                                             |
+        | `fault-ffi-not-a-searchset`   | `200` Bundle of `type: collection`                |
+        | `fault-ffi-no-total`          | `200` searchset with no `total`                   |
       parameters:
         - name: id
           in: path
@@ -1392,74 +1394,52 @@ components:
     Ffi:
       description: |
         One FFI (Fit for Instruction), a custom object no FHIR version defines,
-        of flat fields. Every field is required, and each rule below is one the
-        backend holds: an FFI breaking any is the source failing, the backend's
-        `502`. A field it does not read is ignored.
+        of flat fields, shown as received (ADR 0020). Only its `resourceType` is
+        required: an entry of another resource is the source failing, the
+        backend's `502`. Each other field is expected in the form its
+        description names, but none is required and no value of one fails the
+        read: a field left out, `null`, empty or blank is shown missing, and
+        one of another JSON type, or a date that is no calendar date, is shown
+        "Error". A field it does not read is ignored.
       type: object
-      required:
-        [
-          resourceType,
-          id,
-          type,
-          outcome,
-          issueDate,
-          expiryDate,
-          higherAuthority,
-          submittingMc,
-          status,
-        ]
+      required: [resourceType]
       properties:
         resourceType:
           const: FFI
         id:
-          description: The FFI's own id, in FHIR's id grammar.
-          type: string
-          pattern: '^[A-Za-z0-9\-.]{1,64}$'
+          description: |
+            The FFI's own id, a string; never checked, so one outside FHIR's id
+            grammar is kept.
         type:
-          description: The FFI Type, by its code.
-          type: string
-          enum:
-            [
-              overseas-exercises,
-              cat-a-ocs-scs,
-              ippt,
-              dental,
-              ord-release-from-service,
-              vocational,
-            ]
+          description: |
+            The FFI Type, by its code — a string, one of `overseas-exercises`,
+            `cat-a-ocs-scs`, `ippt`, `dental`, `ord-release-from-service` and
+            `vocational`; another is shown as it came.
         outcome:
-          description: The Outcome, by its code.
-          type: string
-          enum: [fit, request-waiver, unfit]
+          description: |
+            The Outcome, by its code — a string, one of `fit`, `request-waiver`
+            and `unfit`; another, a NUMC Outcome's `waiver-granted` among them,
+            is shown as it came.
         issueDate:
-          description: To the day.
-          type: string
-          format: date
+          description: A calendar date, `YYYY-MM-DD`, to the day.
         expiryDate:
-          description: To the day. The backend derives nothing from it.
-          type: string
-          format: date
+          description: |
+            A calendar date, `YYYY-MM-DD`, to the day. The backend derives
+            nothing from it, and checks it against nothing.
         higherAuthority:
-          description: The Higher Authority, by its code.
-          type: string
-          enum: [camo, carmo, cnmo, comd-mmi, dis]
+          description: |
+            The Higher Authority, by its code — a string, one of `camo`,
+            `carmo`, `cnmo`, `comd-mmi` and `dis`; another is shown as it came.
         submittingMc:
-          description: The Submitting MC, by its code — a Medical Centre's.
-          type: string
-          enum:
-            [
-              nee-soon-camp,
-              kranji-camp,
-              hendon-camp,
-              mandai-hill-camp,
-              khatib-camp,
-            ]
+          description: |
+            The Submitting MC, by its code — a string, a Medical Centre's, one
+            of `nee-soon-camp`, `kranji-camp`, `hendon-camp`,
+            `mandai-hill-camp` and `khatib-camp`; another is shown as it came.
         status:
           description: |
-            The source's own Status, never derived from the Expiry Date: an FFI
-            past its Expiry Date may still be `active`.
-          type: string
-          enum: [active, inactive]
+            The source's own Status, by its code — a string, `active` or
+            `inactive`, never derived from the Expiry Date: an FFI past its
+            Expiry Date may still be `active`. Another is shown as it came.
 
     NumcSearchset:
       description: |
