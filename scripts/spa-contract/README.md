@@ -52,8 +52,8 @@ set-equal to the one before it. The document's enums are named under
   (`equal`) or only to hold every documented value (`covers`, for a set the SPA
   also decodes another response with: `PERMISSIONS` against the delegatable
   enum). A new closed set joins both lists.
-- **A set shown as received** (ADR 0020) stays `equal`. A NUMC Record's code
-  may be any string — the document's row field is `anyOf` the set's enum, any
+- **A set shown as received** (ADR 0020) stays `equal`. An FFI's or a NUMC
+  Record's code may be any string — the document's row field is `anyOf` the set's enum, any
   string and `null` — but the set is what a filter's codes are checked
   against and what the Filter panel offers, so the SPA's copy and the enum hold
   the same known codes, and the check compares the enum, not the row field.

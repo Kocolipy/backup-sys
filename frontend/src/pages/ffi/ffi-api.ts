@@ -14,9 +14,11 @@
 
 import type { ReadDeclaration } from "@/auth/declarations";
 import { codeParameters } from "@/lib/code-parameters";
-import { calendarDate, jsonDecoder, readObject } from "@/lib/decode";
+import { jsonDecoder, readObject } from "@/lib/decode";
 import { pageDecoder, pagedPath, type Page, type PageAt } from "@/lib/paging";
 import { sortParameters, type ColumnSort } from "@/lib/sorting";
+import type { SourceField } from "@/lib/source-field";
+import { isCalendarDate } from "@/lib/time";
 import {
   countHistoryDates,
   type DateColumnOf,
@@ -28,11 +30,14 @@ import {
 import { MEDICAL_CENTRES, type MedicalCentre } from "@/pages/medical-centre-api";
 
 // The four closed sets an FFI has of its own, each as the API carries it, by
-// its codes, in the order the Filter panel lists them. Each is exported for the
-// SPA–API contract check (`/scripts/spa-contract/`), which holds it to its enum
-// in `/backend/docs/openapi.yaml` from outside this app's import graph; the
+// its codes, in the order the Filter panel lists them and its labels and
+// badges name them. Each is exported for the SPA–API contract check
+// (`/scripts/spa-contract/`), which holds it to its enum in
+// `/backend/docs/openapi.yaml` from outside this app's import graph; the
 // Filter panel lists the three but the Status from them, beside the Medical
-// Centres, and nothing in `src/` imports the Status's.
+// Centres, and nothing in `src/` imports the Status's. An FFI may carry a code
+// outside any of the five sets, shown as it came (ADR 0020); only the Filter
+// panel is limited to these.
 
 /** An FFI's FFI Type. */
 export const FFI_TYPES = [
@@ -95,21 +100,24 @@ export const FFI_STATUS_LABELS: Readonly<Record<FfiStatus, string>> = {
 };
 
 /**
- * One FFI (Fit for Instruction) of a patient's FFI History, as the backend
- * answers it: its id, which the page keeps but never shows, each closed set's
- * code, and its Issue Date and Expiry Date, each `YYYY-MM-DD`.
+ * One FFI (Fit for Instruction) of a patient's FFI History, shown as the
+ * patient source sent it (ADR 0020): each field present, missing or in the
+ * wrong format — its id, which the page keys its row by but never shows, each
+ * closed set's code, known to the set or not, and its Issue Date and Expiry
+ * Date, each `YYYY-MM-DD`.
  */
 export interface Ffi {
-  id: string;
-  type: FfiType;
-  outcome: FfiOutcome;
-  issueDate: string;
-  expiryDate: string;
-  higherAuthority: FfiHigherAuthority;
-  submittingMc: MedicalCentre;
-  status: FfiStatus;
+  id: SourceField<string>;
+  type: SourceField<string>;
+  outcome: SourceField<string>;
+  issueDate: SourceField<string>;
+  expiryDate: SourceField<string>;
+  higherAuthority: SourceField<string>;
+  submittingMc: SourceField<string>;
+  status: SourceField<string>;
 }
 
+/** Every field the backend sends of an FFI: its own, and which were invalid. */
 const FFI_FIELDS = [
   "id",
   "type",
@@ -119,27 +127,30 @@ const FFI_FIELDS = [
   "higherAuthority",
   "submittingMc",
   "status",
-] as const satisfies readonly (keyof Ffi)[];
+  "invalid",
+] as const satisfies readonly (keyof Ffi | "invalid")[];
 
 /** The page size the FFI page asks for, and its pager moves by. */
 export const FFI_HISTORY_PAGE_SIZE = 5;
 
 /**
- * An FFI, read strictly: every field is required, each code must be one of
- * its set's, each date a calendar date, and a field the FFI does not have is
- * refused rather than dropped.
+ * An FFI, its shape read strictly — every field there, and a field the FFI
+ * does not have refused rather than dropped — and each field's value
+ * leniently, by the lenient field decoder: a code is any string, a date a
+ * calendar date or invalid, and nothing a field holds refuses the FFI.
  */
 export const decodeFfi = (value: unknown): Ffi => {
   const ffi = readObject(value, "Ffi");
+  const fields = ffi.sourceFields();
   const decoded: Ffi = {
-    id: ffi.string("id"),
-    type: ffi.oneOf("type", FFI_TYPES),
-    outcome: ffi.oneOf("outcome", FFI_OUTCOMES),
-    issueDate: calendarDate(ffi.string("issueDate"), "Ffi.issueDate"),
-    expiryDate: calendarDate(ffi.string("expiryDate"), "Ffi.expiryDate"),
-    higherAuthority: ffi.oneOf("higherAuthority", FFI_HIGHER_AUTHORITIES),
-    submittingMc: ffi.oneOf("submittingMc", MEDICAL_CENTRES),
-    status: ffi.oneOf("status", FFI_STATUSES),
+    id: fields.read("id"),
+    type: fields.read("type"),
+    outcome: fields.read("outcome"),
+    issueDate: fields.read("issueDate", isCalendarDate),
+    expiryDate: fields.read("expiryDate", isCalendarDate),
+    higherAuthority: fields.read("higherAuthority"),
+    submittingMc: fields.read("submittingMc"),
+    status: fields.read("status"),
   };
   ffi.onlyFields(FFI_FIELDS);
   return decoded;

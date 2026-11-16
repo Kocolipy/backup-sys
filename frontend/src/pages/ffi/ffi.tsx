@@ -1,4 +1,3 @@
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Table,
@@ -8,11 +7,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { orElse, shown } from "@/lib/source-field";
 import { formatCalendarDateTwoDigitDay } from "@/lib/time";
 import { FilteredHistory } from "@/pages/filtered-history";
 import { ForPatientInContext } from "@/pages/for-patient-in-context";
 import { MEDICAL_CENTRE_LABELS } from "@/pages/medical-centre-api";
 import { type ColumnSorting, PlainHeading, SortHeading } from "@/pages/sort-heading";
+import { badged, type BadgeVariant, labelled } from "@/pages/source-code";
 
 import { FfiFilterPopover } from "./ffi-filter-popover";
 import {
@@ -30,15 +31,18 @@ import {
   type FfiStatus,
 } from "./ffi-api";
 
-/** Each Outcome's badge: FIT green, REQUEST WAIVER amber, UNFIT red. */
-const OUTCOME_BADGES: Readonly<Record<FfiOutcome, "success" | "warning" | "danger">> = {
+/**
+ * Each Outcome's badge: FIT green, REQUEST WAIVER amber, UNFIT red. A code
+ * outside the set is on a neutral one.
+ */
+const OUTCOME_BADGES: Readonly<Record<FfiOutcome, BadgeVariant>> = {
   fit: "success",
   "request-waiver": "warning",
   unfit: "danger",
 };
 
-/** Each Status's badge: Active green, Inactive muted. */
-const STATUS_BADGES: Readonly<Record<FfiStatus, "success" | "muted">> = {
+/** Each Status's badge: Active green, Inactive muted. A code outside the set is on a neutral one. */
+const STATUS_BADGES: Readonly<Record<FfiStatus, BadgeVariant>> = {
   active: "success",
   inactive: "muted",
 };
@@ -47,13 +51,16 @@ const STATUS_BADGES: Readonly<Record<FfiStatus, "success" | "muted">> = {
 type HistorySorting = ColumnSorting<FfiSortColumn>;
 
 /**
- * The page's FFIs, one row each, in the order read: each closed set's code
- * by its label, the Outcome and the Status as badges, and both dates as
- * `dd MMM yyyy`. Issue Date and Expiry Date sort, one at a time, held still
- * while a read is `pending`; every other column does not. Read-only, with no
- * row action; each row is keyed by the FFI's id, which is never shown. The
- * Status is the source's, shown as sent: nothing here works out whether an FFI
- * has expired.
+ * The page's FFIs, one row each, in the order read, shown as the patient
+ * source sent them (ADR 0020): each closed set's code by its label, the
+ * Outcome and the Status as badges, and both dates as `dd MMM yyyy`; a code
+ * outside its closed set as it came, the Outcome's and the Status's on a
+ * neutral badge; a missing field as "—" and one in the wrong format as
+ * "Error" (`shown`). Issue Date and Expiry Date sort, one at a time, held
+ * still while a read is `pending`; every other column does not. Read-only,
+ * with no row action; each row is keyed by the FFI's id, which is never shown,
+ * or its place without one. The Status is the source's, shown as sent:
+ * nothing here works out whether an FFI has expired.
  */
 function FfiTable({
   ffis,
@@ -79,23 +86,21 @@ function FfiTable({
         </TableRow>
       </TableHeader>
       <TableBody>
-        {ffis.map((ffi) => (
-          <TableRow key={ffi.id}>
-            <TableCell>{FFI_TYPE_LABELS[ffi.type]}</TableCell>
-            <TableCell>
-              <Badge variant={OUTCOME_BADGES[ffi.outcome]}>{FFI_OUTCOME_LABELS[ffi.outcome]}</Badge>
+        {ffis.map((ffi, place) => (
+          <TableRow key={orElse(ffi.id, place)}>
+            <TableCell>{shown(ffi.type, labelled(FFI_TYPE_LABELS))}</TableCell>
+            <TableCell>{shown(ffi.outcome, badged(FFI_OUTCOME_LABELS, OUTCOME_BADGES))}</TableCell>
+            <TableCell className="tabular-nums">
+              {shown(ffi.issueDate, formatCalendarDateTwoDigitDay)}
             </TableCell>
             <TableCell className="tabular-nums">
-              {formatCalendarDateTwoDigitDay(ffi.issueDate)}
+              {shown(ffi.expiryDate, formatCalendarDateTwoDigitDay)}
             </TableCell>
-            <TableCell className="tabular-nums">
-              {formatCalendarDateTwoDigitDay(ffi.expiryDate)}
-            </TableCell>
-            <TableCell>{FFI_HIGHER_AUTHORITY_LABELS[ffi.higherAuthority]}</TableCell>
-            <TableCell>{MEDICAL_CENTRE_LABELS[ffi.submittingMc]}</TableCell>
             <TableCell>
-              <Badge variant={STATUS_BADGES[ffi.status]}>{FFI_STATUS_LABELS[ffi.status]}</Badge>
+              {shown(ffi.higherAuthority, labelled(FFI_HIGHER_AUTHORITY_LABELS))}
             </TableCell>
+            <TableCell>{shown(ffi.submittingMc, labelled(MEDICAL_CENTRE_LABELS))}</TableCell>
+            <TableCell>{shown(ffi.status, badged(FFI_STATUS_LABELS, STATUS_BADGES))}</TableCell>
           </TableRow>
         ))}
       </TableBody>

@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import { checkDateRanges } from "@/lib/date-range";
 import { DecodeError } from "@/lib/decode";
-import { describeDecoder, STRING } from "@/lib/decode.testHelpers";
 
 import {
   countFfiFilters,
@@ -13,7 +12,7 @@ import {
   type FfiFilters,
 } from "./ffi-api";
 
-/** One FFI exactly as the backend serialises it. */
+/** One FFI exactly as the backend serialises it, every field present. */
 const IPPT = {
   id: "ffi-tan-wei-ming-2",
   type: "ippt",
@@ -23,7 +22,32 @@ const IPPT = {
   higherAuthority: "cnmo",
   submittingMc: "kranji-camp",
   status: "active",
+  invalid: [],
 };
+
+/** {@link IPPT} as the page reads it. */
+const IPPT_READ = {
+  id: { state: "present", value: "ffi-tan-wei-ming-2" },
+  type: { state: "present", value: "ippt" },
+  outcome: { state: "present", value: "request-waiver" },
+  issueDate: { state: "present", value: "2024-01-10" },
+  expiryDate: { state: "present", value: "2025-01-09" },
+  higherAuthority: { state: "present", value: "cnmo" },
+  submittingMc: { state: "present", value: "kranji-camp" },
+  status: { state: "present", value: "active" },
+};
+
+/** Every field of an FFI's row the patient source sent. */
+const SOURCE_FIELDS = [
+  "id",
+  "type",
+  "outcome",
+  "issueDate",
+  "expiryDate",
+  "higherAuthority",
+  "submittingMc",
+  "status",
+] as const;
 
 /** `decode(body)`'s refusal, read through the declaration as a `Response`. */
 async function refused(body: unknown) {
@@ -33,33 +57,93 @@ async function refused(body: unknown) {
   );
 }
 
-// Every field is required, and each is read as a string first. A code is
-// matched exactly, so a label, another case or another spelling is outside its
-// set; which strings are calendar dates is `isCalendarDate`'s (lib/time.test.ts).
-describeDecoder(
-  "Ffi",
-  decodeFfi,
-  IPPT,
-  {
-    id: STRING,
-    type: [
-      "IPPT FFI",
-      "overseas-exercises | cat-a-ocs-scs | ippt | dental | ord-release-from-service | vocational",
-      "a string",
-    ],
-    outcome: ["FIT", "fit | request-waiver | unfit", "a string"],
-    issueDate: ["10 Jan 2024", "a date", "a string"],
-    expiryDate: ["2025-02-30", "a date", "a string"],
-    higherAuthority: ["comd_mmi", "camo | carmo | cnmo | comd-mmi | dis", "a string"],
-    submittingMc: [
-      "Nee Soon Camp MC",
-      "nee-soon-camp | kranji-camp | hendon-camp | mandai-hill-camp | khatib-camp",
-      "a string",
-    ],
-    status: ["expired", "active | inactive", "a string"],
-  },
-  { strict: true },
-);
+// An FFI is shown as received (ADR 0020): each field is read by the lenient
+// field decoder (`readObject(…).sourceFields()`, lib/decode.test.ts), so its
+// value never refuses the FFI — only its shape does.
+describe("decodeFfi", () => {
+  it("reads every field present as it came", () => {
+    expect(decodeFfi(IPPT)).toStrictEqual(IPPT_READ);
+  });
+
+  it("reads a null field as missing, and one the row names invalid as invalid", () => {
+    expect(
+      decodeFfi({ ...IPPT, id: null, outcome: null, status: null, invalid: ["status"] }),
+    ).toStrictEqual({
+      ...IPPT_READ,
+      id: { state: "missing" },
+      outcome: { state: "missing" },
+      status: { state: "invalid" },
+    });
+  });
+
+  it.each(SOURCE_FIELDS)("reads %s invalid when the row names it", (field) => {
+    expect(decodeFfi({ ...IPPT, [field]: null, invalid: [field] })).toStrictEqual({
+      ...IPPT_READ,
+      [field]: { state: "invalid" },
+    });
+  });
+
+  // Which strings are calendar dates is `isCalendarDate`'s (lib/time.test.ts).
+  it.each(["issueDate", "expiryDate"] as const)(
+    "reads %s invalid when it is no calendar date",
+    (field) => {
+      expect(decodeFfi({ ...IPPT, [field]: "2025-02-30" })[field]).toStrictEqual({
+        state: "invalid",
+      });
+    },
+  );
+
+  // A code is matched by the page, not the decoder: a label, another case or
+  // a code of no set is kept as the source sent it, in each of the five sets.
+  it.each([
+    ["type", "IPPT FFI"],
+    ["type", "swimming"],
+    ["outcome", "FIT"],
+    ["outcome", "waiver-granted"],
+    ["higherAuthority", "comd_mmi"],
+    ["submittingMc", "Nee Soon Camp MC"],
+    ["submittingMc", "tengah-air-base"],
+    ["status", "expired"],
+  ])("reads %s outside its closed set as present, as it came: %s", (field, code) => {
+    expect(decodeFfi({ ...IPPT, [field]: code })).toStrictEqual({
+      ...IPPT_READ,
+      [field]: { state: "present", value: code },
+    });
+  });
+
+  it("reads an id outside FHIR's id grammar as present: ids are not checked", () => {
+    expect(decodeFfi({ ...IPPT, id: "ffi tan/1" }).id).toStrictEqual({
+      state: "present",
+      value: "ffi tan/1",
+    });
+  });
+
+  it.each(SOURCE_FIELDS)("refuses an FFI without %s, which the backend always sends", (field) => {
+    expect(() =>
+      decodeFfi(Object.fromEntries(Object.entries(IPPT).filter(([key]) => key !== field))),
+    ).toThrow(new DecodeError(`Ffi.${field} is not a string or null`));
+  });
+
+  it("refuses an FFI without invalid", () => {
+    expect(() =>
+      decodeFfi(Object.fromEntries(Object.entries(IPPT).filter(([key]) => key !== "invalid"))),
+    ).toThrow(new DecodeError("Ffi.invalid is not an array"));
+  });
+
+  it("refuses a field the FFI does not have", () => {
+    expect(() => decodeFfi({ ...IPPT, dispensary: "kranji-camp" })).toThrow(
+      new DecodeError("Ffi.dispensary is not expected"),
+    );
+  });
+
+  it.each([
+    ["an array", [IPPT]],
+    ["null", null],
+    ["a string", "ffi"],
+  ])("refuses %s as an FFI", (_, value) => {
+    expect(() => decodeFfi(value)).toThrow(new DecodeError("Ffi is not an object"));
+  });
+});
 
 // How a date range is checked is `checkDateRanges`' (lib/date-range.test.ts):
 // here, that the FFI History's two ranges are the ones checked, by name.
@@ -190,13 +274,13 @@ describe("FFI_HISTORY", () => {
       FFI_HISTORY.decode(
         new Response(JSON.stringify({ ffis: [IPPT], startIndex: 1, totalResults: 4 })),
       ),
-    ).resolves.toStrictEqual({ rows: [IPPT], startIndex: 1, totalResults: 4 });
+    ).resolves.toStrictEqual({ rows: [IPPT_READ], startIndex: 1, totalResults: 4 });
   });
 
-  it("refuses a page holding an FFI it cannot read", async () => {
+  it("refuses a page holding an FFI whose shape it cannot read", async () => {
     expect(
-      await refused({ ffis: [{ ...IPPT, status: "lapsed" }], startIndex: 1, totalResults: 1 }),
-    ).toStrictEqual(new DecodeError("Ffi.status is not active | inactive"));
+      await refused({ ffis: [{ ...IPPT, invalid: "status" }], startIndex: 1, totalResults: 1 }),
+    ).toStrictEqual(new DecodeError("Ffi.invalid is not an array"));
   });
 
   it("refuses a page holding a field it does not know", async () => {

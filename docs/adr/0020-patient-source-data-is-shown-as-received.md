@@ -1,8 +1,8 @@
 ---
 type: Decision Record
 title: "ADR 0020: Patient-source data is shown as received"
-description: The patient source is the truth, so no record or response is refused for what a field holds — a missing field is shown as "—", one in the wrong format as "Error", a code outside its closed set as the raw code — while transport and structural failures still fail the read; the shared pieces each read adopts it through, enacted for the NUMC History, and the parts of ADR 0014, 0018 and 0019 it supersedes.
-tags: [patient, numc, integration, observability, spa]
+description: The patient source is the truth, so no record or response is refused for what a field holds — a missing field is shown as "—", one in the wrong format as "Error", a code outside its closed set as the raw code — while transport and structural failures still fail the read; the shared pieces each read adopts it through, enacted for the FFI and NUMC Histories, and the parts of ADR 0014, 0018 and 0019 it supersedes.
+tags: [patient, ffi, numc, integration, observability, spa]
 ---
 
 # 20. Patient-source data is shown as received
@@ -11,10 +11,11 @@ Date: 2026-11-16
 
 ## Status
 
-Accepted. Enacted for the NUMC History (`/docs/domain/numc.md`). The other
-patient-source reads — the FFI, ARMC and Medication Histories, a Patient by id
-and a Patient search — keep the strict reading their ADRs describe until each
-adopts the shared pieces below; the rule is decided for all of them.
+Accepted. Enacted for the FFI History (`/docs/domain/ffi.md`) and the NUMC
+History (`/docs/domain/numc.md`). The other patient-source reads — the ARMC and
+Medication Histories, a Patient by id and a Patient search — keep the strict
+reading their ADRs describe until each adopts the shared pieces below; the rule
+is decided for all of them.
 
 ## Context
 
@@ -95,12 +96,15 @@ and ADR 0019, D4 have it: a malformed field sorts wherever the source puts it.
   (`shown`) turns present, missing and invalid into the value, "—" and
   "Error", and label and badge lookups fall back to the raw code (`byCode`).
 
-**D6. What this supersedes.** For the NUMC History:
+**D6. What this supersedes.** For the FFI History and the NUMC History:
 
 - ADR 0019, D2: "every one required", and a code outside a closed set being a
-  failure of the source.
-- ADR 0019, D4: each rule a NUMC Record breaks being logged under a reason
-  naming NUMC — no NUMC Record breaks one.
+  failure of the source — any of an FFI's five, its Submitting MC's Medical
+  Centre included, which a Medication Record's Dispensary still reads strictly.
+- ADR 0019, D4: each rule an FFI or a NUMC Record breaks being logged under a
+  reason of its own — `no-id`, `invalid-id`, each `no-<field>`, each
+  `unknown-<set>` and each `<date>-not-to-the-day` for an FFI, each naming NUMC
+  for a NUMC Record — no FFI or NUMC Record breaks one.
 - ADR 0019, Consequences: a new code being "a `502`, not a row shown with a
   blank cell", and the source having to "send every required element".
 

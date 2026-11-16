@@ -21,7 +21,10 @@ It is read on the same terms as an FFI History (ADR 0019, D7): what the
 its failures, its logging, caching and auditing holds here too, and this file
 says only where a Medication History differs — the endpoint, the twelve
 elements, the date-times, the closed sets, and its sort and filters — and what
-is its own. The wire
+is its own. One rule of the FFI History's does not hold: an FFI is shown as
+received (ADR 0020), and a Medication Record is read strictly, a field missing
+or malformed or a code outside its set a failure of the source
+([Failures](#failures)). The wire
 contract is `backend/docs/openapi.yaml`. The SPA never reaches the source:
 SPA → `GET /api/patient-medication/{patientId}` → backend →
 `GET {base}/Patient/{id}/medication`.
@@ -71,11 +74,12 @@ grammar, which the page keys its row by and never shows.
 
 ### The closed sets
 
-The Dispense Status and the Dispensary are closed sets, carried and matched as
-an FFI's are ([ffi](ffi.md), "The closed sets"): each value travels as its
-code, from the source and to the SPA, matched exactly, and the SPA alone names
-it with its label. A code the service does not know is a failure of the source,
-never a row with a blank cell.
+The Dispense Status and the Dispensary are closed sets, carried as an FFI's are
+([ffi](ffi.md), "The closed sets"): each value travels as its code, from the
+source and to the SPA, matched exactly, and the SPA alone names it with its
+label. Unlike an FFI's, shown as received, a code the service does not know is
+a failure of the source, never a row with a blank cell — a Medical Centre an
+FFI's Submitting MC would show raw among them.
 
 - **Dispense Status** is one Java enum (`DispenseStatus`, codes through
   `SourceCode`), one enum in `backend/docs/openapi.yaml` (`DispenseStatus`) and

@@ -78,9 +78,9 @@ import org.springframework.web.client.RestClient;
  * built from Spring Boot's {@link RestClient.Builder}, so each call is observed as every client's
  * is ({@code http.client.requests}, under the URI template, never the id), on the JDK client with
  * redirects off and the timeouts below: a fixed connect timeout, and a read timeout a deployment
- * may set ({@code APP_PATIENT_SOURCE_READ_TIMEOUT}). Nothing here logs: a NUMC History, shown as
- * received (ADR 0020), hands the paths of the fields its answer held in the wrong format to
- * {@link InvalidSourceFields}, which reports them.
+ * may set ({@code APP_PATIENT_SOURCE_READ_TIMEOUT}). Nothing here logs: an FFI History and a NUMC
+ * History, shown as received (ADR 0020), hand the paths of the fields their answer held in the
+ * wrong format to {@link InvalidSourceFields}, which reports them.
  */
 @Component
 class PatientSourceAdapter implements PatientStore {
@@ -256,9 +256,10 @@ class PatientSourceAdapter implements PatientStore {
      * descending, ties broken by id. With no column to sort by, no {@code _sort} is sent, and the
      * order is the source's own. A {@code 404} is no patient under the id; the one other good
      * answer is a {@code 200} searchset of FFIs, and anything else is a fault, as is a searchset
-     * with no total or an entry that is no FFI the service can hold. The id and the filters'
-     * values are URI variables, so the call is observed under the template alone: which filters
-     * were asked for and the sort, and none of their values.
+     * with no total or an entry that is no FFI. What an FFI's fields hold never is: each is read
+     * as received (ADR 0020), and the answer's invalid fields are reported. The id and the
+     * filters' values are URI variables, so the call is observed under the template alone: which
+     * filters were asked for and the sort, and none of their values.
      */
     @Override
     public Optional<FfiHistory> findFfiHistory(PatientId id, FfiFilter filter, HistorySort sort,
@@ -275,7 +276,8 @@ class PatientSourceAdapter implements PatientStore {
             query.parameter("status", "status", filter.status().code());
         }
         query.sorted(sort, Ties.BY_ID);
-        return history(query, FFIS, SourceFfi::toFfi, FfiHistory::new);
+        return history(query, FFIS, SourceFfi::toFfi,
+                reportingInvalidFields(SourceRead.FFI, FfiHistory::new));
     }
 
     /**

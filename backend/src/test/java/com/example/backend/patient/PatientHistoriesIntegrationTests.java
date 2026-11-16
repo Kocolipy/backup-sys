@@ -123,11 +123,6 @@ class PatientHistoriesIntegrationTests {
             fault-ffi-unexpected-status,                 unexpected-status,                     data
             fault-ffi-not-a-searchset,                   not-a-searchset,                       data
             fault-ffi-no-total,                          no-total,                              data
-            fault-ffi-no-id,                             no-id,                                 data
-            fault-ffi-invalid-id,                        invalid-id,                            data
-            fault-ffi-no-outcome,                        no-outcome,                            data
-            fault-ffi-unknown-higher-authority,          unknown-higher-authority,              data
-            fault-ffi-expiry-date-not-to-the-day,        expiry-date-not-to-the-day,            data
             fault-numc-unreachable,                      unreachable,                           network
             fault-numc-slow,                             timed-out,                             network
             fault-numc-server-error,                     server-error,                          server
@@ -330,6 +325,40 @@ class PatientHistoriesIntegrationTests {
                                 "[\"entry[1].issueDate\",\"entry[1].expiryDate\"]"));
         assertThat(logs.lines()).doesNotContain("dev-patient-10", "numc-tan-boon-huat",
                 "numc tan boon huat", "20210316", "2022-03", "parachuting", "request-waiver");
+    }
+
+    /**
+     * An FFI History holding fields in the wrong format is answered, as received (ADR 0020), and
+     * writes exactly one {@code WARN} beside the request's record, naming each such field by its
+     * path in the source's answer, and no {@code ERROR}; nothing in the stream names the patient
+     * or anything the FFIs hold.
+     */
+    @Test
+    void anFfiHistoryWithInvalidFieldsIsAnsweredAndWarnsOnceNamingTheirPaths() throws Exception {
+        HttpClient session = signedIn();
+        logs.reset();
+
+        HttpResponse<String> response = send(session, HttpRequest.newBuilder(URI.create(
+                "http://localhost:" + port + "/api/patient-ffi/dev-patient-10?count=5")));
+        logs.awaitRequestRecords(1);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(logs.records())
+                .filteredOn(record -> List.of("WARN", "ERROR")
+                        .contains(record.at("/log/level").asText()))
+                .filteredOn(record -> !"http.request".equals(record.at("/app/event/action")
+                        .asText()))
+                .singleElement()
+                .satisfies(warning -> assertThat(List.of(warning.at("/log/level").asText(),
+                        warning.at("/app/event/action").asText(),
+                        warning.at("/app/patient_source/read").asText(),
+                        warning.at("/app/patient_source/invalid_fields").toString()))
+                        .containsExactly("WARN", "patient_source.invalid_fields", "ffi",
+                                "[\"entry[1].issueDate\",\"entry[1].expiryDate\","
+                                        + "\"entry[1].status\"]"));
+        assertThat(logs.lines()).doesNotContain("dev-patient-10", "ffi-tan-boon-huat",
+                "ffi tan boon huat", "20210316", "2022-03", "swimming", "waiver-granted",
+                "hq-medc", "tengah-air-base");
     }
 
     /** The table of fault stubs holds every fault stub the stub files serve, of every history. */

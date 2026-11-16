@@ -7,10 +7,15 @@ import static com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import com.example.backend.audit.CapturedLog;
+import com.example.backend.observability.LogEvent;
 import com.example.backend.observability.LogEvent.ErrorCategory;
 import com.example.backend.paging.domain.PageRequest;
 import com.example.backend.patient.PatientSourceStubs;
 import com.example.backend.patient.domain.DateRange;
+import com.example.backend.patient.domain.Ffi;
 import com.example.backend.patient.domain.FfiFilter;
 import com.example.backend.patient.domain.FfiHistory;
 import com.example.backend.patient.domain.FfiHigherAuthority;
@@ -21,28 +26,36 @@ import com.example.backend.patient.domain.FfiType;
 import com.example.backend.patient.domain.MedicalCentre;
 import com.example.backend.patient.domain.PatientId;
 import com.example.backend.patient.domain.SortOrder;
+import com.example.backend.patient.domain.SourceField;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import com.github.tomakehurst.wiremock.verification.LoggedRequest;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
-import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.web.client.RestClient;
 
 /**
- * A patient's FFI History as the HTTP adapter reads it (ADR 0019), against the patient source's
- * mock in process: the one call it sends — the page, counted by the source, in the source's own
- * order — and what a failure of that call is. What the mock's FFI Histories hold is
- * {@code PatientStoreContract}'s. What every history shares — the page's call, the statuses that
- * are no page, the timeout, the fault stubs they have in common — is
+ * A patient's FFI History as the HTTP adapter reads it (ADR 0019; ADR 0020), against the patient
+ * source's mock in process: the one call it sends — the page, counted by the source, with each
+ * filter and the sort as the source's own search parameters — and each FFI read as received, each
+ * field present, missing or invalid and none refused, a response holding invalid fields reported
+ * once in the log and counted by field. What the mock's FFI Histories hold is
+ * {@code PatientStoreContract}'s, and how one field is classified {@code ReceivedFieldsTests}'.
+ * What every history shares — the page's call, the statuses that are no page, the timeout, the
+ * fault stubs they have in common, an entry that is another resource — is
  * {@code PatientSourceHistoriesAdapterTests}'.
  */
 class PatientSourceFfiAdapterTests {
@@ -57,19 +70,29 @@ class PatientSourceFfiAdapterTests {
 
     private static final String PROBE_PATH = "/Patient/" + PROBE_PATIENT + "/ffi";
 
-    /** One FFI as the source answers it, every field there and well-formed. */
+    /** One FFI as the source answers it, every field there and well-formed, as JSON. */
     private static final Map<String, String> WELL_FORMED = Map.of(
-            "resourceType", "FFI",
-            "id", "probe-ffi-Z8k2",
-            "type", "ippt",
-            "outcome", "request-waiver",
-            "issueDate", "2017-02-13",
-            "expiryDate", "2018-02-12",
-            "higherAuthority", "cnmo",
-            "submittingMc", "hendon-camp",
-            "status", "active");
+            "resourceType", "\"FFI\"",
+            "id", "\"probe-ffi-Z8k2\"",
+            "type", "\"ippt\"",
+            "outcome", "\"request-waiver\"",
+            "issueDate", "\"2017-02-13\"",
+            "expiryDate", "\"2018-02-12\"",
+            "higherAuthority", "\"cnmo\"",
+            "submittingMc", "\"hendon-camp\"",
+            "status", "\"active\"");
 
-    /** {@link #WELL_FORMED} with {@code field} set to {@code value}, or left out for {@code null}. */
+    /** {@link #WELL_FORMED} as the domain reads it. */
+    private static final Ffi READ = new Ffi(SourceField.present("probe-ffi-Z8k2"),
+            SourceField.present("ippt"), SourceField.present("request-waiver"),
+            SourceField.present(LocalDate.of(2017, 2, 13)),
+            SourceField.present(LocalDate.of(2018, 2, 12)), SourceField.present("cnmo"),
+            SourceField.present("hendon-camp"), SourceField.present("active"));
+
+    /**
+     * {@link #WELL_FORMED} with {@code field} set to the JSON {@code value}, or left out for
+     * {@code null}.
+     */
     private static String ffi(String field, String value) {
         Map<String, String> fields = new TreeMap<>(WELL_FORMED);
         if (value == null) {
@@ -79,7 +102,7 @@ class PatientSourceFfiAdapterTests {
         }
         StringBuilder json = new StringBuilder("{");
         fields.forEach((name, member) -> json.append(json.length() > 1 ? ", " : "")
-                .append('"').append(name).append("\": \"").append(member).append('"'));
+                .append('"').append(name).append("\": ").append(member));
         return json.append('}').toString();
     }
 
@@ -92,7 +115,11 @@ class PatientSourceFfiAdapterTests {
     }
 
     private static PatientSourceAdapter adapter() {
-        return PatientSourceAdapters.at(SOURCE.baseUrl());
+        return adapter(new SimpleMeterRegistry());
+    }
+
+    private static PatientSourceAdapter adapter(MeterRegistry meters) {
+        return new PatientSourceAdapter(RestClient.builder(), SOURCE.baseUrl(), meters);
     }
 
     private static void answering(String body) {
@@ -103,19 +130,22 @@ class PatientSourceFfiAdapterTests {
     private record Fault(String message, String reason, ErrorCategory category) {
     }
 
-    private static Fault faultReading(PatientSourceAdapter adapter, String patient) {
+    private static Fault faultReading(PatientSourceAdapter adapter) {
         PatientSourceException fault = (PatientSourceException) catchThrowable(() ->
-                adapter.findFfiHistory(new PatientId(patient), FfiFilter.NONE,
-                HistorySort.SOURCE_ORDER, SECOND_PAGE_OF_FIVE));
+                unfiltered(adapter));
         return new Fault(fault.getMessage(), fault.reason(), fault.category());
     }
 
-    private static Fault faultReading(PatientSourceAdapter adapter) {
-        return faultReading(adapter, PROBE_PATIENT);
+    /** The second page of five of the probe patient's FFI History, unfiltered, in the source's order. */
+    private static Optional<FfiHistory> unfiltered(PatientSourceAdapter adapter) {
+        return adapter.findFfiHistory(new PatientId(PROBE_PATIENT), FfiFilter.NONE,
+                HistorySort.SOURCE_ORDER, SECOND_PAGE_OF_FIVE);
     }
 
-    private static Fault data(String message, String reason) {
-        return new Fault(message, reason, ErrorCategory.DATA);
+    /** The probe patient's one FFI, the source answering a page of {@code ffi} alone. */
+    private static Ffi readingOne(String ffi) {
+        answering(page(ffi));
+        return unfiltered(adapter()).orElseThrow().ffis().getFirst();
     }
 
     // ---- the call ------------------------------------------------------------------------
@@ -244,97 +274,215 @@ class PatientSourceFfiAdapterTests {
                 Map.entry("_total", List.of("accurate"))));
     }
 
+    // ---- each FFI as received -------------------------------------------------------------
+
+    @Test
+    void aWellFormedFfiIsReadWithEveryFieldPresent() {
+        assertThat(readingOne(ffi("id", "\"probe-ffi-Z8k2\""))).isEqualTo(READ);
+    }
+
+    /**
+     * A field the source left out, sent {@code null}, or sent empty or blank is missing, and the
+     * rest of the FFI is read as it came.
+     */
+    @ParameterizedTest
+    @CsvSource(nullValues = "-", delimiter = '|', textBlock = """
+        id              | -
+        type            | null
+        outcome         | '""'
+        issueDate       | '"  "'
+        expiryDate      | -
+        higherAuthority | null
+        submittingMc    | '" "'
+        status          | -
+        """)
+    void aFieldLeftOutOrBlankIsMissing(String field, String value) {
+        assertThat(readingOne(ffi(field, value))).isEqualTo(with(field, SourceField.missing()));
+    }
+
+    /**
+     * A field of the wrong JSON type — a number is not coerced into a string — or a date that is
+     * no calendar date is invalid, and the rest of the FFI is read as it came.
+     */
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', textBlock = """
+        id              | 7
+        type            | {"code": "ippt"}
+        outcome         | ["request-waiver"]
+        issueDate       | 20170213
+        issueDate       | "2017-02"
+        expiryDate      | "2018-02-30"
+        expiryDate      | "2018-02-12T00:00:00"
+        higherAuthority | false
+        submittingMc    | 3
+        status          | true
+        """)
+    void aFieldOfTheWrongFormatIsInvalid(String field, String value) {
+        assertThat(readingOne(ffi(field, value))).isEqualTo(with(field, SourceField.invalid()));
+    }
+
+    /**
+     * A code outside its closed set is kept as the source sent it, in each of the five sets: one
+     * in another case, a label in place of the code, or a code of no set at all.
+     */
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', textBlock = """
+        type            | IPPT FFI
+        type            | swimming
+        outcome         | FIT
+        outcome         | waiver-granted
+        higherAuthority | comd_mmi
+        submittingMc    | nee-soon-camp-mc
+        submittingMc    | Kranji Camp MC
+        status          | expired
+        status          | Active
+        """)
+    void aCodeOutsideItsClosedSetIsKeptAsItCame(String field, String code) {
+        assertThat(readingOne(ffi(field, "\"" + code + "\"")))
+                .isEqualTo(with(field, SourceField.present(code)));
+    }
+
+    /** An FFI's id is not checked: one outside FHIR's id grammar is kept as it came. */
+    @ParameterizedTest
+    @ValueSource(strings = {"ffi tan/1", "ffi_1",
+        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"})
+    void anIdIsKeptAsItCame(String id) {
+        assertThat(readingOne(ffi("id", "\"" + id + "\"")).id())
+                .isEqualTo(SourceField.present(id));
+    }
+
+    /** Nothing of a date's meaning is checked: an Expiry Date before the Issue Date is kept. */
+    @Test
+    void anFfiExpiringBeforeItIsIssuedIsKept() {
+        assertThat(readingOne(ffi("expiryDate", "\"2016-01-01\"")).expiryDate())
+                .isEqualTo(SourceField.present(LocalDate.of(2016, 1, 1)));
+    }
+
+    /** {@link #READ} with its {@code field} read as {@code read}. */
+    @SuppressWarnings("unchecked")
+    private static Ffi with(String field, SourceField<?> read) {
+        return new Ffi(
+                field.equals("id") ? (SourceField<String>) read : READ.id(),
+                field.equals("type") ? (SourceField<String>) read : READ.type(),
+                field.equals("outcome") ? (SourceField<String>) read : READ.outcome(),
+                field.equals("issueDate") ? (SourceField<LocalDate>) read : READ.issueDate(),
+                field.equals("expiryDate") ? (SourceField<LocalDate>) read : READ.expiryDate(),
+                field.equals("higherAuthority") ? (SourceField<String>) read
+                        : READ.higherAuthority(),
+                field.equals("submittingMc") ? (SourceField<String>) read : READ.submittingMc(),
+                field.equals("status") ? (SourceField<String>) read : READ.status());
+    }
+
+    // ---- invalid fields, reported -------------------------------------------------------
+
+    /**
+     * Three FFIs, the second well-formed: the first's Submitting MC invalid, and the third's Issue
+     * Date and Status.
+     */
+    private static final String TWO_FFIS_WITH_INVALID_FIELDS = page(
+            ffi("submittingMc", "7"),
+            ffi("id", "\"probe-ffi-Z8k3\""),
+            ffi("issueDate", "\"2017-13-01\"").replace("\"active\"", "true"));
+
+    /** The WARN records reporting a response's invalid fields. */
+    private static List<ILoggingEvent> invalidFieldRecords(CapturedLog captured) {
+        return captured.withAction(Level.WARN, LogEvent.LOCAL_ACTION,
+                "patient_source.invalid_fields");
+    }
+
+    /**
+     * A response holding invalid fields is one WARN, naming the read and each invalid field by its
+     * path in the response — never its value, nor the patient.
+     */
+    @Test
+    void aResponseHoldingInvalidFieldsIsOneWarnNamingTheirPaths() {
+        answering(TWO_FFIS_WITH_INVALID_FIELDS);
+
+        try (CapturedLog captured = CapturedLog.attach()) {
+            unfiltered(adapter());
+
+            assertThat(invalidFieldRecords(captured)).singleElement()
+                    .satisfies(warning -> assertThat(CapturedLog.fields(warning))
+                            .containsEntry("app.patient_source.read", "ffi")
+                            .containsEntry("app.patient_source.invalid_fields", List.of(
+                                    "entry[0].submittingMc", "entry[2].issueDate",
+                                    "entry[2].status")));
+        }
+    }
+
+    @Test
+    void theWarnQuotesNoValueOfTheResponseNorThePatient() {
+        answering(TWO_FFIS_WITH_INVALID_FIELDS);
+
+        try (CapturedLog captured = CapturedLog.attach()) {
+            unfiltered(adapter());
+
+            ILoggingEvent warning = invalidFieldRecords(captured).getFirst();
+            assertThat(warning.getFormattedMessage() + " " + CapturedLog.fields(warning))
+                    .doesNotContain(PROBE_PATIENT, "probe-ffi", "2017", "2018", "ippt",
+                            "request-waiver", "cnmo", "hendon-camp");
+        }
+    }
+
+    /** A response whose fields are each present or missing reports nothing. */
+    @Test
+    void aResponseWithNoInvalidFieldIsNotReported() {
+        answering(page(ffi("outcome", null), ffi("status", "\"\"")));
+        MeterRegistry meters = new SimpleMeterRegistry();
+
+        try (CapturedLog captured = CapturedLog.attach()) {
+            unfiltered(adapter(meters));
+
+            assertThat(List.of(invalidFieldRecords(captured),
+                    meters.find("patient_source.invalid_fields").counters()))
+                    .containsExactly(List.of(), List.of());
+        }
+    }
+
+    /** Each invalid field counts once, tagged by the read and the field. */
+    @Test
+    void eachInvalidFieldCountsOnceByTheReadAndTheField() {
+        answering(TWO_FFIS_WITH_INVALID_FIELDS);
+        MeterRegistry meters = new SimpleMeterRegistry();
+        PatientSourceAdapter adapter = adapter(meters);
+
+        unfiltered(adapter);
+        unfiltered(adapter);
+
+        Map<String, Double> counted = new TreeMap<>();
+        for (Counter counter : meters.find("patient_source.invalid_fields").counters()) {
+            counted.put(counter.getId().getTag("read") + " " + counter.getId().getTag("field"),
+                    counter.count());
+        }
+        assertThat(counted).isEqualTo(Map.of(
+                "ffi submittingMc", 2.0,
+                "ffi issueDate", 2.0,
+                "ffi status", 2.0));
+    }
+
     // ---- a failure of the source ---------------------------------------------------------
 
     /**
-     * Each fault stub of an FFI History that is its own, by the failure it serves: the stubs every history serves
-     * are {@code PatientSourceHistoriesAdapterTests}'.
+     * A resource that is no object is no FFI the read can hold: the response is unreadable,
+     * whatever its other entries hold.
      */
-    static Stream<Arguments> faultStubs() {
-        return Stream.of(
-                Arguments.of("fault-ffi-no-id",
-                        data("The patient source's FFI has no id", "no-id")),
-                Arguments.of("fault-ffi-invalid-id",
-                        data("The patient source's FFI's id is not a FHIR id", "invalid-id")),
-                Arguments.of("fault-ffi-no-outcome",
-                        data("The patient source's FFI has no outcome", "no-outcome")),
-                Arguments.of("fault-ffi-unknown-higher-authority", data(
-                        "The patient source's FFI's higher authority is not a Higher Authority",
-                        "unknown-higher-authority")),
-                Arguments.of("fault-ffi-expiry-date-not-to-the-day", data(
-                        "The patient source's FFI's expiry date is not to the day",
-                        "expiry-date-not-to-the-day")));
-    }
-
     @ParameterizedTest
-    @MethodSource("faultStubs")
-    void eachFaultStubIsTheFaultItServes(String patient, Fault expected) {
-        assertThat(faultReading(adapter(), patient)).isEqualTo(expected);
+    @ValueSource(strings = {"\"FFI\"", "7", "[]"})
+    void aResourceThatIsNoObjectIsAFault(String resource) {
+        answering("""
+                {"resourceType": "Bundle", "type": "searchset", "total": 2,
+                 "entry": [{"resource": %s}, {"resource": %s}]}"""
+                .formatted(ffi("id", "\"probe-ffi-Z8k2\""), resource));
+
+        assertThat(faultReading(adapter())).isEqualTo(new Fault(
+                "The patient source could not be read", "unreadable", ErrorCategory.DATA));
     }
 
-    /** The cases above, the shared stubs and the slow one are every FFI fault stub the files hold. */
+    /** The stubs every history serves and the slow one are every FFI fault stub the files hold. */
     @Test
-    void everyFfiFaultStubIsReadAbove() {
-        Stream<String> covered = Stream.concat(
-                PatientSourceHistoriesAdapterTests.sharedFaultStubs("ffi").stream(),
-                faultStubs().map(arguments -> (String) arguments.get()[0]));
-
+    void everyFfiFaultStubIsOneEveryHistoryServes() {
         assertThat(PatientSourceStubs.ffiFaults()).extracting(PatientSourceStubs.FaultStub::id)
-                .containsExactlyInAnyOrderElementsOf(covered.toList());
+                .containsExactlyInAnyOrderElementsOf(
+                        PatientSourceHistoriesAdapterTests.sharedFaultStubs("ffi"));
     }
-
-    /** Every field is required: an FFI missing any one is a fault naming the field. */
-    @ParameterizedTest
-    @CsvSource(delimiter = '|', textBlock = """
-        id              | no-id               | The patient source's FFI has no id
-        type            | no-type             | The patient source's FFI has no type
-        outcome         | no-outcome          | The patient source's FFI has no outcome
-        issueDate       | no-issue-date       | The patient source's FFI has no issue date
-        expiryDate      | no-expiry-date      | The patient source's FFI has no expiry date
-        higherAuthority | no-higher-authority | The patient source's FFI has no higher authority
-        submittingMc    | no-submitting-mc    | The patient source's FFI has no submitting MC
-        status          | no-status           | The patient source's FFI has no status
-        """)
-    void anFfiMissingAFieldIsAFault(String field, String reason, String message) {
-        answering(page(ffi(field, null)));
-
-        assertThat(faultReading(adapter())).isEqualTo(data(message, reason));
-    }
-
-    /**
-     * A code outside its closed set is a fault naming the set: a code is matched exactly, so
-     * one in another case, or a label in place of the code, is outside it too.
-     */
-    @ParameterizedTest
-    @CsvSource(delimiter = '|', textBlock = """
-        type            | IPPT FFI              | unknown-type             | The patient source's FFI's type is not an FFI Type
-        type            | swimming              | unknown-type             | The patient source's FFI's type is not an FFI Type
-        outcome         | FIT                   | unknown-outcome          | The patient source's FFI's outcome is not an Outcome
-        outcome         | expired               | unknown-outcome          | The patient source's FFI's outcome is not an Outcome
-        higherAuthority | comd_mmi              | unknown-higher-authority | The patient source's FFI's higher authority is not a Higher Authority
-        submittingMc    | nee-soon-camp-mc      | unknown-submitting-mc    | The patient source's FFI's submitting MC is not a Medical Centre
-        status          | expired               | unknown-status           | The patient source's FFI's status is not a Status
-        status          | Active                | unknown-status           | The patient source's FFI's status is not a Status
-        """)
-    void aCodeOutsideItsClosedSetIsAFault(String field, String code, String reason,
-            String message) {
-        answering(page(ffi(field, code)));
-
-        assertThat(faultReading(adapter())).isEqualTo(data(message, reason));
-    }
-
-    /** Each date must be a calendar date to the day: a month, a time or no day the calendar has is a fault. */
-    @ParameterizedTest
-    @CsvSource(delimiter = '|', textBlock = """
-        issueDate  | 2017-02             | issue-date-not-to-the-day  | The patient source's FFI's issue date is not to the day
-        issueDate  | 2017-02-13T00:00:00 | issue-date-not-to-the-day  | The patient source's FFI's issue date is not to the day
-        expiryDate | 2018                | expiry-date-not-to-the-day | The patient source's FFI's expiry date is not to the day
-        expiryDate | 2018-02-30          | expiry-date-not-to-the-day | The patient source's FFI's expiry date is not to the day
-        """)
-    void aDateNotToTheDayIsAFault(String field, String date, String reason, String message) {
-        answering(page(ffi(field, date)));
-
-        assertThat(faultReading(adapter())).isEqualTo(data(message, reason));
-    }
-
 }

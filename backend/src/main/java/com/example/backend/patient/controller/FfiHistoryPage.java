@@ -2,6 +2,7 @@ package com.example.backend.patient.controller;
 
 import com.example.backend.patient.domain.Ffi;
 import com.example.backend.patient.domain.FfiHistory;
+import java.time.LocalDate;
 import java.util.List;
 
 /**
@@ -22,22 +23,30 @@ public record FfiHistoryPage(int totalResults, int startIndex, List<Row> ffis) {
     }
 
     /**
-     * One FFI: its id, each closed set's member as its code, and its dates as
-     * {@code YYYY-MM-DD}. The SPA names each code with its label.
+     * One FFI as received (ADR 0020): each field the source sent, each closed set's code as it
+     * came — known to its set or not — and its dates as {@code YYYY-MM-DD}. A field the source left
+     * out, sent blank or sent in the wrong format is {@code null}, and {@code invalid} names those
+     * whose format was wrong: a {@code null} field it does not name is missing. The SPA names each
+     * known code with its label.
+     *
+     * @param invalid the fields whose format was wrong, in the row's order; none when each field
+     *                is present or missing
      */
     public record Row(String id, String type, String outcome, String issueDate,
-            String expiryDate, String higherAuthority, String submittingMc, String status) {
+            String expiryDate, String higherAuthority, String submittingMc, String status,
+            List<String> invalid) {
 
         static Row of(Ffi ffi) {
             return new Row(
-                    ffi.id(),
-                    ffi.type().code(),
-                    ffi.outcome().code(),
-                    ffi.issueDate().toString(),
-                    ffi.expiryDate().toString(),
-                    ffi.higherAuthority().code(),
-                    ffi.submittingMc().code(),
-                    ffi.status().code());
+                    ffi.id().value(),
+                    ffi.type().value(),
+                    ffi.outcome().value(),
+                    ffi.issueDate().map(LocalDate::toString).value(),
+                    ffi.expiryDate().map(LocalDate::toString).value(),
+                    ffi.higherAuthority().value(),
+                    ffi.submittingMc().value(),
+                    ffi.status().value(),
+                    ffi.invalid());
         }
 
         /** An FFI is Restricted data: printed, it names the FFI by id alone. */

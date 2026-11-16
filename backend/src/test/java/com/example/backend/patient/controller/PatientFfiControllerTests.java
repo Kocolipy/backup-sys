@@ -96,19 +96,53 @@ class PatientFfiControllerTests {
                     {"id": "ffi-tan-wei-ming-1", "type": "overseas-exercises", "outcome": "fit",
                      "issueDate": "2023-10-14", "expiryDate": "2024-10-13",
                      "higherAuthority": "camo", "submittingMc": "nee-soon-camp",
-                     "status": "inactive"},
+                     "status": "inactive", "invalid": []},
                     {"id": "ffi-tan-wei-ming-2", "type": "ippt", "outcome": "request-waiver",
                      "issueDate": "2024-01-10", "expiryDate": "2025-01-09",
                      "higherAuthority": "cnmo", "submittingMc": "kranji-camp",
-                     "status": "active"},
+                     "status": "active", "invalid": []},
                     {"id": "ffi-tan-wei-ming-3", "type": "dental", "outcome": "fit",
                      "issueDate": "2023-11-22", "expiryDate": "2024-11-21",
                      "higherAuthority": "carmo", "submittingMc": "hendon-camp",
-                     "status": "active"},
+                     "status": "active", "invalid": []},
                     {"id": "ffi-tan-wei-ming-4", "type": "vocational", "outcome": "unfit",
                      "issueDate": "2023-08-05", "expiryDate": "2024-08-04",
                      "higherAuthority": "camo", "submittingMc": "mandai-hill-camp",
-                     "status": "inactive"}
+                     "status": "inactive", "invalid": []}
+                  ]
+                }"""));
+    }
+
+    /**
+     * Tan Boon Huat's four FFIs, as received (ADR 0020): a field missing or invalid is
+     * {@code null}, each invalid one named in its row's {@code invalid}, and a code outside its
+     * closed set or an id outside FHIR's grammar as the source sent it.
+     */
+    @Test
+    void anFfisMissingAndInvalidFieldsAreNullTheInvalidOnesNamed() throws Exception {
+        MockHttpServletResponse response = reading(ffis("dev-patient-10"));
+
+        assertThat(body(response)).isEqualTo(json.readTree("""
+                {
+                  "totalResults": 4,
+                  "startIndex": 1,
+                  "ffis": [
+                    {"id": "ffi-tan-boon-huat-1", "type": "ippt", "outcome": null,
+                     "issueDate": "2022-03-16", "expiryDate": "2023-03-15",
+                     "higherAuthority": "camo", "submittingMc": null, "status": "active",
+                     "invalid": []},
+                    {"id": "ffi-tan-boon-huat-2", "type": "dental", "outcome": "fit",
+                     "issueDate": null, "expiryDate": null,
+                     "higherAuthority": "cnmo", "submittingMc": "kranji-camp", "status": null,
+                     "invalid": ["issueDate", "expiryDate", "status"]},
+                    {"id": "ffi tan boon huat 3", "type": "swimming", "outcome": "waiver-granted",
+                     "issueDate": "2020-03-16", "expiryDate": "2021-03-15",
+                     "higherAuthority": "hq-medc", "submittingMc": "tengah-air-base",
+                     "status": "expired", "invalid": []},
+                    {"id": null, "type": "vocational", "outcome": null,
+                     "issueDate": null, "expiryDate": null,
+                     "higherAuthority": null, "submittingMc": null, "status": "inactive",
+                     "invalid": []}
                   ]
                 }"""));
     }
@@ -276,7 +310,8 @@ class PatientFfiControllerTests {
     @Test
     void aRowPrintsItsFfisIdAlone() {
         assertThat(new FfiHistoryPage.Row("ffi-tan-wei-ming-1", "overseas-exercises", "fit",
-                "2023-10-14", "2024-10-13", "camo", "nee-soon-camp", "inactive"))
+                "2023-10-14", "2024-10-13", "camo", "nee-soon-camp", "inactive",
+                List.of("outcome")))
                 .hasToString("Row[id=ffi-tan-wei-ming-1]");
     }
 }

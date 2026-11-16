@@ -7,6 +7,9 @@ package com.example.backend.observability;
  */
 public enum SourceRead {
 
+    /** A patient's FFI History. */
+    FFI("ffi"),
+
     /** A patient's NUMC History. */
     NUMC("numc");
 

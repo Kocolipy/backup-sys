@@ -67,17 +67,18 @@ nothing in the service or the SPA works out "expired".
 **D2. The source's page is a FHIR-shaped but non-conformant Bundle.** The
 contract is ours to define. The source answers a FHIR-R4-shaped `searchset`
 `Bundle` — `total`, `entry[].resource` — whose resources are a custom
-`"resourceType": "FFI"` object of flat fields, every one required, but in a
-history shown as received, the NUMC History, whose fields are each present,
-missing or in the wrong format and none refused (ADR 0020). It borrows
+`"resourceType": "FFI"` object of flat fields. In a history shown as
+received — the FFI History and the NUMC History — each field is present,
+missing or in the wrong format and none refused (ADR 0020); in one read
+strictly, every one is required. It borrows
 FHIR's paging (`_offset`, `_count`, `_total=accurate`) so that one piece reads
 every page the source answers, a Patient search's and each history's
 (`SourceSearchset`: the page's parameters, the `total`, the `entry`, an entry's
 `id` rules), and it is documented as **not FHIR-conformant**: no FHIR validator
 is run over it and no FHIR client should read it as FHIR. The closed sets
 travel as codes, each a Java enum, an enum of `openapi.yaml` and an SPA set
-held set-equal; the SPA names each code with its label. A NUMC Record's code
-outside its set is shown as the raw code (ADR 0020, D2). Paging is ADR 0017's
+held set-equal; the SPA names each code with its label. An FFI's or a NUMC
+Record's code outside its set is shown as the raw code (ADR 0020, D2). Paging is ADR 0017's
 `startIndex` and `count`, read by `PageParameter` and `PageRequest`, with ADR
 0018's D3 departure: the page is the source's to read, `count=0` and a page
 past the end included, and `totalResults` is the source's `total`. Our answer
@@ -113,16 +114,17 @@ holds its filters, and its domain file's "Sort and filters" lists them.
 **Each rule a record breaks is logged under a reason naming its history**
 (`armc-no-id`, `armc-end-before-start`, `unknown-dispensary`, …), so a fault
 record says which history broke; a failure of the call or of the searchset
-itself is the one every paged read shares. A NUMC Record breaks no rule: its
-history fails only by its call or its searchset (ADR 0020, D3).
+itself is the one every paged read shares. An FFI and a NUMC Record break no
+rule: their histories fail only by their call or their searchset (ADR 0020,
+D3). Each is shown as received — a field present, missing or in the wrong
+format, "—" and "Error" in its cell, and none refused, its id never checked,
+a code outside its closed set shown raw, and a response holding fields in the
+wrong format one `WARN` naming their paths.
 
 **D5. NUMC Records are read on the FFI History's terms** (`findNumcHistory`,
-`GET {base}/Patient/{id}/numc`, `"resourceType": "NUMC"`). What differs:
+`GET {base}/Patient/{id}/numc`, `"resourceType": "NUMC"`), shown as received
+as an FFI is. What differs:
 
-- **It is shown as received** (ADR 0020): each element present, missing or in
-  the wrong format — "—" and "Error" in its cell — and none refused, its id
-  never checked, a code outside its closed set shown raw, and a response
-  holding fields in the wrong format one `WARN` naming their paths.
 - **Its sets are its own.** The NUMC Outcome is not the FFI Outcome: the two
   share codes by chance, not by meaning, so an FFI's `request-waiver` is no
   NUMC Outcome as a filter's code — a `400` — and is shown raw as a record's.
@@ -135,7 +137,7 @@ history fails only by its call or its searchset (ADR 0020, D3).
   out of our answer then, never sent as `null`. When it is there it is on or
   after the Start Date, a rule of the domain's `ArmcBoard`: a board ending
   before it starts is a failure of the source, never a row shown. Every other
-  date of every history stays required.
+  date of a history read strictly stays required.
 - **The source breaks the sort's ties.** The sort is sent as the column alone,
   with no `_id` after it as an FFI History's and a NUMC History's have: the
   source breaks ties, and places a board with no End Date in an End Date sort,
@@ -176,13 +178,14 @@ history fails only by its call or its searchset (ADR 0020, D3).
   break a sort's ties the same way on every page and send every required
   element of a history read strictly, each date-time with its offset; a source
   that cannot is no history source until its adapter changes. A history shown
-  as received, the NUMC History, needs only the searchset (ADR 0020).
+  as received, the FFI History or the NUMC History, needs only the searchset
+  (ADR 0020).
 - **A new code in a closed set of a history read strictly is a contract
-  change.** The source sending an FFI, ARMC or Medication code the service does
-  not know is a `502`, until the enum, the document and the SPA set gain it
-  together. A NUMC code outside its set is no `502` and no blank cell: it is
-  shown as the raw code (ADR 0020, D2), and only its filter needs the set to
-  gain it.
+  change.** The source sending an ARMC or Medication code the service does not
+  know is a `502`, until the enum, the document and the SPA set gain it
+  together. An FFI or NUMC code outside its set is no `502` and no blank cell:
+  it is shown as the raw code (ADR 0020, D2), and only its filter needs the set
+  to gain it.
 - **No trail records who read whose histories.** A deployment whose policy
   requires every read of patient data to be recorded must revisit D3 together
   with the unaudited read by id (`/docs/domain/patient.md`).
@@ -214,7 +217,7 @@ history fails only by its call or its searchset (ADR 0020, D3).
 - **Give the Dispensary a set of its own**, a Dispensary set beside the
   FFI's Submitting MC set. Rejected: both name the same camp medical centres,
   so two sets would have to gain each new centre together, and a centre known
-  to one would be a failure of the source in the other.
+  to one would be unknown to the other.
 - **Read a Medication Record's dates as calendar dates**, as an ARMC Board's
   are. Rejected: two prescriptions on one day differ by the minute, and the
   source gives the instant with its offset; a calendar date would drop the
