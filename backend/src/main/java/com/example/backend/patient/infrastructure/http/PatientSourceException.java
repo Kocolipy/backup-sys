@@ -24,12 +24,11 @@ import java.util.stream.Stream;
  *       ({@code unexpected-status}), a body that is not JSON or not a Patient
  *       ({@code unreadable}), a Patient breaking one of the domain's rules, a search's answer
  *       or a history that is no searchset, has no total, or holds an entry of another
- *       resource, or one with no id, or an ARMC Board or a Medication Record missing a field,
- *       holding a code outside its closed set, a date not to the day or a date-time with no
- *       offset, or ending before it starts — an ARMC Board's under a reason naming ARMC and a
- *       Medication Record's under one naming Medication or an element of its own, so a record
- *       says which history broke. An FFI and a NUMC Record break no rule: their histories are
- *       shown as received (ADR 0020), so only their call or their searchset fails.
+ *       resource, or one with no id, or a Medication Record missing a field, holding a code
+ *       outside its closed set or a date-time with no offset, or ending before it starts, under
+ *       a reason naming Medication or an element of its own, so a record says which history
+ *       broke. An FFI, a NUMC Record and an ARMC Board break no rule: their histories are shown
+ *       as received (ADR 0020), so only their call or their searchset fails.
  * </ul>
  *
  * <p>Its message is fixed text, naming at most a status or an element, and its cause, when it has
@@ -82,46 +81,6 @@ public final class PatientSourceException extends UpstreamFaultException {
         /** A search's Patient whose Last visit is no date to the day. */
         LAST_VISIT_NOT_TO_THE_DAY("last-visit-not-to-the-day",
                 "The patient source's Patient's last visit is not to the day", ErrorCategory.DATA),
-        /** An ARMC History's entry with no {@code id}. */
-        ARMC_NO_ID("armc-no-id", "The patient source's ARMC Board has no id",
-                ErrorCategory.DATA),
-        /** An ARMC History's entry whose {@code id} is outside FHIR's id grammar. */
-        ARMC_INVALID_ID("armc-invalid-id",
-                "The patient source's ARMC Board's id is not a FHIR id", ErrorCategory.DATA),
-        /** An ARMC Board with no {@code boardType}. */
-        NO_ARMC_BOARD_TYPE("no-armc-board-type",
-                "The patient source's ARMC Board has no board type", ErrorCategory.DATA),
-        /** An ARMC Board whose {@code boardType} is no ARMC Board Type's code. */
-        UNKNOWN_ARMC_BOARD_TYPE("unknown-armc-board-type",
-                "The patient source's ARMC Board's board type is not an ARMC Board Type",
-                ErrorCategory.DATA),
-        /** An ARMC Board with no {@code outcome}. */
-        NO_ARMC_OUTCOME("no-armc-outcome", "The patient source's ARMC Board has no outcome",
-                ErrorCategory.DATA),
-        /** An ARMC Board whose {@code outcome} is no ARMC Outcome's code. */
-        UNKNOWN_ARMC_OUTCOME("unknown-armc-outcome",
-                "The patient source's ARMC Board's outcome is not an ARMC Outcome",
-                ErrorCategory.DATA),
-        /** An ARMC Board with no {@code startDate}. */
-        NO_ARMC_START_DATE("no-armc-start-date",
-                "The patient source's ARMC Board has no start date", ErrorCategory.DATA),
-        /** An ARMC Board whose Start Date is no date to the day. */
-        ARMC_START_DATE_NOT_TO_THE_DAY("armc-start-date-not-to-the-day",
-                "The patient source's ARMC Board's start date is not to the day",
-                ErrorCategory.DATA),
-        /** An ARMC Board whose End Date, when it has one, is no date to the day. */
-        ARMC_END_DATE_NOT_TO_THE_DAY("armc-end-date-not-to-the-day",
-                "The patient source's ARMC Board's end date is not to the day",
-                ErrorCategory.DATA),
-        /** An ARMC Board whose End Date is before its Start Date. */
-        ARMC_END_BEFORE_START("armc-end-before-start",
-                "The patient source's ARMC Board ends before it starts", ErrorCategory.DATA),
-        /** An ARMC Board with no {@code medicalOfficer1}, or a blank one. */
-        NO_ARMC_MEDICAL_OFFICER_1("no-armc-medical-officer-1",
-                "The patient source's ARMC Board has no Medical Officer #1", ErrorCategory.DATA),
-        /** An ARMC Board with no {@code medicalOfficer2}, or a blank one. */
-        NO_ARMC_MEDICAL_OFFICER_2("no-armc-medical-officer-2",
-                "The patient source's ARMC Board has no Medical Officer #2", ErrorCategory.DATA),
         /** A Medication History's entry with no {@code id}. */
         MEDICATION_NO_ID("medication-no-id", "The patient source's Medication Record has no id",
                 ErrorCategory.DATA),

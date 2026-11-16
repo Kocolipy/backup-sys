@@ -152,7 +152,11 @@ guarded by, `patient:read`, is read-only with no row action, and:
   (`src/lib/decode.ts`), an optional element through `optionalString` — absent
   when the source lacks it, shown as `—` — and each closed set as a `Record`
   of labels keyed by its codes, so a code added fails typecheck until it has a
-  label;
+  label. FFI, NUMC and ARMC, shown as received (ADR 0020), decode their rows'
+  shape strictly and each field's value through `readObject(…).sourceFields()`,
+  each cell through `shown` and each code's label or badge through `byCode`
+  (`src/lib/source-field.ts`): "—" for a missing field, "Error" for one in the
+  wrong format, the raw code for one outside its set;
 - sorts by its two date columns through `SortHeading`, every other column a
   `PlainHeading`, and with no column sorted sends no `sortBy`, so the source's
   own order applies;

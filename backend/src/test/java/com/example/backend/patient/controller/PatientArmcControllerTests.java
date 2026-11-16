@@ -34,8 +34,8 @@ import tools.jackson.databind.json.JsonMapper;
  * {@code GET /api/patient-armc/{patientId}} as the web adapter answers it, through the HTTP
  * adapter over the patient source's mock — the stub files the local mock serves
  * ({@link PatientSourceStubs}) — with the app-wide exception handler its failures go to: one page
- * of the patient's ARMC History as plain JSON, its codes as the source sent them and no
- * {@code endDate} for a board still open, with each filter and the sort the read takes passed to
+ * of the patient's ARMC History as plain JSON, as received (ADR 0020) — its codes as the source
+ * sent them, a field missing or invalid {@code null} and each invalid one named — with each filter and the sort the read takes passed to
  * the source, or the application API's {@code ApiError}. The filter
  * chain is not in this MockMvc: the Permission and its backstop are
  * {@code AuthorizationContractTests}', the paging coercion {@code PagingContractTests}', and what
@@ -98,25 +98,59 @@ class PatientArmcControllerTests {
                     {"id": "armc-tan-wei-ming-1", "boardType": "aces", "outcome": "fit",
                      "startDate": "2024-01-01", "endDate": "2024-02-10",
                      "medicalOfficer1": "Medical Officer 1",
-                     "medicalOfficer2": "Medical Officer 2"},
+                     "medicalOfficer2": "Medical Officer 2", "invalid": []},
                     {"id": "armc-tan-wei-ming-2", "boardType": "aces", "outcome": "unfit",
                      "startDate": "2020-11-21", "endDate": "2021-04-02",
                      "medicalOfficer1": "Medical Officer 3",
-                     "medicalOfficer2": "Medical Officer 4"}
+                     "medicalOfficer2": "Medical Officer 4", "invalid": []}
                   ]
                 }"""));
     }
 
-    /** A board still open is answered with no {@code endDate} at all, not a {@code null} one. */
+    /** A board still open is answered with its {@code endDate} {@code null}: missing, not invalid. */
     @Test
-    void aBoardStillOpenIsAnsweredWithNoEndDate() throws Exception {
+    void aBoardStillOpenIsAnsweredWithANullEndDate() throws Exception {
         JsonNode open = body(reading(boards("dev-patient-05"))).at("/records/0");
 
         assertThat(open).isEqualTo(json.readTree("""
                 {"id": "armc-tan-hui-min-1", "boardType": "aces", "outcome": "fit",
-                 "startDate": "2025-06-02",
+                 "startDate": "2025-06-02", "endDate": null,
                  "medicalOfficer1": "Dr Lim Wei Jie",
-                 "medicalOfficer2": "Dr Nur Aisyah binte Rahman"}"""));
+                 "medicalOfficer2": "Dr Nur Aisyah binte Rahman", "invalid": []}"""));
+    }
+
+    /**
+     * Tan Boon Huat's four ARMC Boards, as received (ADR 0020): a field missing, blank or invalid
+     * is {@code null}, each invalid one named in its row's {@code invalid}; a code outside its
+     * closed set, an id outside FHIR's grammar and an End Date before the Start Date as the
+     * source sent them.
+     */
+    @Test
+    void aBoardsMissingAndInvalidFieldsAreNullTheInvalidOnesNamed() throws Exception {
+        MockHttpServletResponse response = reading(boards("dev-patient-10"));
+
+        assertThat(body(response)).isEqualTo(json.readTree("""
+                {
+                  "totalResults": 4,
+                  "startIndex": 1,
+                  "records": [
+                    {"id": "armc-tan-boon-huat-1", "boardType": "aces", "outcome": null,
+                     "startDate": "2022-03-16", "endDate": "2022-03-01",
+                     "medicalOfficer1": "Dr Lim Wei Jie", "medicalOfficer2": null,
+                     "invalid": []},
+                    {"id": "armc-tan-boon-huat-2", "boardType": "aces", "outcome": "fit",
+                     "startDate": null, "endDate": null,
+                     "medicalOfficer1": "Dr Rajesh Kumar", "medicalOfficer2": "Dr Chen Mei Ling",
+                     "invalid": ["startDate", "endDate"]},
+                    {"id": "armc tan boon huat 3", "boardType": "aircrew",
+                     "outcome": "waiver-granted", "startDate": "2020-03-16",
+                     "endDate": "2020-05-11", "medicalOfficer1": "Dr Chen Mei Ling",
+                     "medicalOfficer2": "Dr Lim Wei Jie", "invalid": []},
+                    {"id": null, "boardType": "aces", "outcome": null, "startDate": null,
+                     "endDate": null, "medicalOfficer1": null, "medicalOfficer2": null,
+                     "invalid": []}
+                  ]
+                }"""));
     }
 
     /** The one ARMC History read the source was sent, every value of each query parameter. */
@@ -282,7 +316,7 @@ class PatientArmcControllerTests {
     @Test
     void aRowPrintsItsBoardsIdAlone() {
         assertThat(new ArmcHistoryPage.Row("armc-tan-wei-ming-1", "aces", "fit", "2024-01-01",
-                "2024-02-10", "Medical Officer 1", "Medical Officer 2"))
+                "2024-02-10", "Medical Officer 1", "Medical Officer 2", List.of("outcome")))
                 .hasToString("Row[id=armc-tan-wei-ming-1]");
     }
 }

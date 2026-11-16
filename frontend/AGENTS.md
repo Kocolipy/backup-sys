@@ -39,8 +39,8 @@ reasoning behind each rule.
   the lenient field decoder, `readObject(…).sourceFields()`, into a
   `SourceField` (`src/lib/source-field.ts`), shown only through `shown` — its
   value, "—" when missing, "Error" when invalid — and a code's label or badge
-  found only through `byCode`, which falls back to the raw code. The FFI and
-  NUMC Histories are read so (ADR 0020).
+  found only through `byCode`, which falls back to the raw code. The FFI,
+  NUMC and ARMC Histories are read so (ADR 0020).
 - **The auth state changes, and the CSRF token is forgotten, only through
   `src/auth/session-transitions.ts`**, which owns the session generation: a `401`
   ends only the session its request was sent under.

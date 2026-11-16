@@ -1,9 +1,8 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { clearEhrContext } from "@/auth/ehr-context";
-import { without } from "@/lib/decode.testHelpers";
 import { bare, deferred, holding, json, type Answers } from "@/auth/session-adapter.testHelpers";
 import { TAN_WEI_MING, TAN_WEI_MING_READ, withPatientInContext } from "@/pages/patient.testHelpers";
 import { renderSignedIn } from "@/shell/signed-in-shell.testHelpers";
@@ -19,21 +18,24 @@ const CLINICIAN = holding(["patient:read"]);
 const FIRST_PAGE = "GET /api/patient-armc/eq081-VQEgP8drUUqCWzHfw3?startIndex=1&count=5";
 const SECOND_PAGE = "GET /api/patient-armc/eq081-VQEgP8drUUqCWzHfw3?startIndex=6&count=5";
 
-/** One ARMC Board as the backend sends it, its elements given by `fields` over an ACES FIT one's. */
-const board = (id: string, fields: Record<string, string> = {}) => ({
+/**
+ * One ARMC Board as the backend sends it, its elements given by `fields` over
+ * an ACES FIT one's, none invalid unless `fields` names some.
+ */
+const board = (
+  id: string | null,
+  fields: Record<string, string | null | readonly string[]> = {},
+) => ({
   boardType: "aces",
   endDate: "2024-02-10",
   id,
+  invalid: [],
   medicalOfficer1: "Medical Officer 1",
   medicalOfficer2: "Medical Officer 2",
   outcome: "fit",
   startDate: "2024-01-01",
   ...fields,
 });
-
-/** `board(id, fields)` still open: the backend leaves its End Date out. */
-const openBoard = (id: string, fields: Record<string, string> = {}) =>
-  without(board(id, fields), "endDate");
 
 /** Tan Wei Ming's two ARMC Boards, as the patient source's mock serves them. */
 const TWO_BOARDS = [
@@ -133,7 +135,7 @@ describe("ARMC", () => {
   });
 
   it("shows a board still open with — for its End Date", async () => {
-    await renderArmc(page([openBoard("armc-open", { startDate: "2025-06-02" })], 1, 1));
+    await renderArmc(page([board("armc-open", { endDate: null, startDate: "2025-06-02" })], 1, 1));
 
     expect(await screen.findByRole("table", { name: "ARMC History" })).toBeInTheDocument();
     expect(rows()).toEqual([
@@ -157,6 +159,113 @@ describe("ARMC", () => {
     await screen.findByRole("table", { name: "ARMC History" });
 
     expect(rows()[0]!.slice(4)).toEqual(["Dr Nur Aisyah binte Rahman", "<b>Lim</b>"]);
+  });
+
+  // The patient source is the truth (ADR 0020): its data is shown as received.
+  it('shows a missing element as "—", the rest of the row as any other', async () => {
+    await renderArmc(
+      page(
+        [
+          board("armc-1", { medicalOfficer2: null, outcome: null }),
+          board("armc-2", { boardType: null, medicalOfficer1: null, startDate: null }),
+        ],
+        1,
+        2,
+      ),
+    );
+    await screen.findByRole("table", { name: "ARMC History" });
+
+    expect(rows()).toEqual([
+      ["ACES", "—", "01 Jan 2024", "10 Feb 2024", "Medical Officer 1", "—"],
+      ["—", "FIT", "—", "10 Feb 2024", "—", "Medical Officer 2"],
+    ]);
+  });
+
+  it('shows an element in the wrong format as "Error", the rest of the row as any other', async () => {
+    await renderArmc(
+      page(
+        [
+          board("armc-1", { endDate: null, invalid: ["endDate"] }),
+          board("armc-2", {
+            boardType: null,
+            invalid: ["boardType", "outcome", "startDate", "medicalOfficer1", "medicalOfficer2"],
+            medicalOfficer1: null,
+            medicalOfficer2: null,
+            outcome: null,
+            startDate: null,
+          }),
+        ],
+        1,
+        2,
+      ),
+    );
+    await screen.findByRole("table", { name: "ARMC History" });
+
+    expect(rows()).toEqual([
+      ["ACES", "FIT", "01 Jan 2024", "Error", "Medical Officer 1", "Medical Officer 2"],
+      ["Error", "Error", "Error", "10 Feb 2024", "Error", "Error"],
+    ]);
+  });
+
+  it("shows a board ending before it starts with both dates as received", async () => {
+    await renderArmc(
+      page([board("armc-1", { endDate: "2022-03-01", startDate: "2022-03-16" })], 1, 1),
+    );
+    await screen.findByRole("table", { name: "ARMC History" });
+
+    expect(rows()[0]!.slice(2, 4)).toEqual(["16 Mar 2022", "01 Mar 2022"]);
+  });
+
+  it("shows a code outside its closed set as it came, the Outcome on a neutral badge", async () => {
+    await renderArmc(
+      page([board("armc-1", { boardType: "aircrew", outcome: "waiver-granted" })], 1, 1),
+    );
+    await screen.findByRole("table", { name: "ARMC History" });
+
+    expect({ badges: outcomeBadges(), rows: rows() }).toEqual({
+      badges: ["waiver-granted outline"],
+      rows: [
+        [
+          "aircrew",
+          "waiver-granted",
+          "01 Jan 2024",
+          "10 Feb 2024",
+          "Medical Officer 1",
+          "Medical Officer 2",
+        ],
+      ],
+    });
+  });
+
+  // A code spelling an Object member is no member of a closed set.
+  it("shows a code that names an Object member as it came", async () => {
+    await renderArmc(
+      page([board("armc-1", { boardType: "constructor", outcome: "toString" })], 1, 1),
+    );
+    await screen.findByRole("table", { name: "ARMC History" });
+
+    expect({ badges: outcomeBadges(), types: rows().map((row) => row[0]) }).toEqual({
+      badges: ["toString outline"],
+      types: ["constructor"],
+    });
+  });
+
+  it("keys a row with no id by its place, as React needs each row keyed", async () => {
+    const warned = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    await renderArmc(
+      page(
+        [board(null), board(null, { invalid: ["id"] }), board("armc-3", { outcome: "unfit" })],
+        1,
+        3,
+      ),
+    );
+    await screen.findByRole("table", { name: "ARMC History" });
+
+    expect({
+      keyWarnings: warned.mock.calls.filter((call) => String(call[0]).includes("key")),
+      rows: rows().length,
+    }).toEqual({ keyWarnings: [], rows: 3 });
+    warned.mockRestore();
   });
 
   it("says it is loading ARMC records while the first read is in flight", async () => {

@@ -228,7 +228,7 @@ page, which quoted the path.
   rule a page of a Patient search or of a history broke, each history's under
   a reason naming it (`/docs/domain/patient.md`, "Logging", and "Failures" in
   each history's file in `/docs/domain/`); a history shown as received, the
-  FFI or the NUMC History, breaks only the searchset's rules (ADR 0020) — and its `error.category` is the
+  FFI, the NUMC or the ARMC History, breaks only the searchset's rules (ADR 0020) — and its `error.category` is the
   fault's own, as ADR 0014's table has it for an outbound call: `network` and
   `server` with no follow-up, `cert/auth` and `data` with one.
 - A `4xx` that Spring MVC maps (validation, an unreadable body, an unbindable
@@ -243,13 +243,13 @@ page, which quoted the path.
 
 ### The patient source's invalid fields
 
-A read that shows the patient source's data as received — the FFI History or
-the NUMC History —
-answers a field in the wrong format as `null`, shown as "Error" (ADR 0020), and
-writes one `WARN` `patient_source.invalid_fields` (`successAtWarn`,
-`event.category` `network`, `event.type` `info`) for the whole response that
-held any, beside the request's own record. It carries
-`app.patient_source.read`, the read (`ffi` or `numc`), and
+A read that shows the patient source's data as received — the FFI History, the
+NUMC History and the ARMC History — answers a field in the wrong format as
+`null`, shown as "Error" (ADR 0020), and writes one `WARN`
+`patient_source.invalid_fields` (`successAtWarn`, `event.category` `network`,
+`event.type` `info`) for the whole response that held any, beside the request's
+own record. It carries `app.patient_source.read`, the read (`ffi`, `numc` or
+`armc`), and
 `app.patient_source.invalid_fields`, the path of each such field in the
 source's answer, in its order (`entry[1].issueDate`) — never a value, a
 record's id or the patient. A response with none writes nothing. The
