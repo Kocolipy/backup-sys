@@ -32,8 +32,8 @@ test("IBM Plex Sans 500 loads from the app's own origin with an empty console", 
   page,
 }) => {
   const errors = recordConsoleErrors(page);
-  await page.goto("/");
-  // Home's Sign out button is `font-medium` text, so the page asks for the face.
+  await page.goto("/demographic");
+  // The sidebar's link to the page shown is `font-medium` text, so the page asks for the face.
   await expectNoPatientInContext(page);
   const origin = new URL(page.url()).origin;
 

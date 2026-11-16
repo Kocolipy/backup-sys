@@ -7,7 +7,7 @@ import { clearEhrContext } from "@/auth/ehr-context";
 import { bare, deferred, holding, json, type WireAnswer } from "@/auth/session-adapter.testHelpers";
 import type { Clock } from "@/lib/time";
 
-import { PatientCard } from "./patient-card";
+import { PatientCard } from "@/pages/patient-card";
 import {
   withPatientInContext,
   page,

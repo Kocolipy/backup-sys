@@ -91,28 +91,42 @@ and decoders — and imports no hook (`lb-api-modules-are-data`).
   the filter reads from the first page. A failure is reported on the page's
   line, with a Retry that reads the same page again. Each row keeps the
   Patient's id, which it never shows.
-- `home/home.tsx`, `patient-card.tsx` — Home and its Patient card, rendered
-  from `usePatientInContext()`: "No patient in context" for none or a `404`,
-  "Loading the patient…", an empty card for a failure (its copy is on the
-  error line), or the banner. Every field renders as a plain text node; the
-  age is computed from the card's injectable `Clock`.
+- `home/home.tsx` — Home: the Patient card alone. The landing page of a
+  session without `patient:read`, linked from no sidebar.
+- `patient-card.tsx` — the Patient card, a part Home and the Demographic page
+  share, rendered from `usePatientInContext()`: "No patient in context" for
+  none or a `404`, "Loading the patient…", an empty card for a failure (its
+  copy is on the error line), or the banner. Every field renders as a plain
+  text node; the age is computed from the card's injectable `Clock`.
+- `demographic/demographic.tsx` — the Demographic page, guarded by
+  `patient:read`, which Patient Search opens on selecting a result: the
+  Patient card, then the Demographic details.
+- `demographic/demographic-details.tsx` — the Demographic details of the
+  patient in context, rendered from `usePatientInContext()` (importing
+  `patient-api.ts` for its types alone), and nothing while no patient is
+  loaded: the Military Overview (at least three service record slots, a
+  filled one open and an empty one folded at first, then the service dates
+  as `dd MMM yyyy`), Contact Details and Next of Kin / Emergency. A value the
+  patient has none of shows "—"; every value renders as a plain text node.
 - `patient-in-context.ts`, `patient-api.ts` — the **one reader of the patient
   in context**. `PatientInContextScope`, which the signed-in layout renders
   once inside its page status, reads `GET /api/patient/{id}` through `PATIENT`
   (opting in to `absent`, a `403` reported as failure) for the EHR context's
   patient, decoding the R5 `Patient` (typed by `@types/fhir`'s `fhir5`) down
-  to the fields shown and the id the history pages read by; with none in
+  to the fields shown, the Demographic details and the id the history pages
+  read by; with none in
   context it reads nothing.
   - A new id is a new path, so a new first read, and a late answer for the id
     before never lands. A failure is reported to the page's error line once,
     by this read.
   - `usePatientInContext()` hands its view — `none`, or the gated read's — to
-    the top bar, the Patient card and the history pages, which only render it,
+    the top bar, the Patient card, the Demographic details and the history
+    pages, which only render it,
     so each patient change sends one request on every page.
   - The read is a sibling of the layout's children, never their parent, so a
     patient coming into context or leaving it never remounts the page.
   - It lives in `src/pages/` itself because that is the lowest layer the
-    shell, the Patient card and the history pages may all import:
+    shell, Home, the Demographic page and the history pages may all import:
     `mb-pages-do-not-import-the-shell` rules out `src/shell/`, and
     `mb-pages-do-not-import-another-page` a page folder.
 - `for-patient-in-context.tsx` — the part of a history page the patient in

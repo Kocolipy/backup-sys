@@ -19,6 +19,9 @@ export const HOME_PATH = "/";
 /** Patient Search: the landing page of a session holding `patient:read`. */
 export const PATIENT_SEARCH_PAGE_PATH = "/search";
 
+/** The Demographic page, which selecting a Patient on Patient Search opens. */
+export const DEMOGRAPHIC_PAGE_PATH = "/demographic";
+
 /**
  * The landing page: where the SPA sends an authenticated session with no
  * return destination recorded — after login, off the login route, from a path

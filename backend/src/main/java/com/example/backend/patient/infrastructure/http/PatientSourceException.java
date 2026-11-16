@@ -218,6 +218,10 @@ public final class PatientSourceException extends UpstreamFaultException {
         /** A Medication Record with no {@code prescribingDoctor}, or a blank one. */
         NO_PRESCRIBING_DOCTOR("no-prescribing-doctor",
                 "The patient source's Medication Record has no prescribing doctor",
+                ErrorCategory.DATA),
+        /** A Patient read by id whose military service has a date that is no date to the day. */
+        SERVICE_DATE_NOT_TO_THE_DAY("service-date-not-to-the-day",
+                "The patient source's Patient's military service date is not to the day",
                 ErrorCategory.DATA);
 
         /** The call's own failure this is, or {@code null} for a broken domain rule. */

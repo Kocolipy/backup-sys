@@ -4767,6 +4767,9 @@ components:
         A base FHIR R5 `Patient`, with exactly the elements the service holds.
         `name[0].text` is authoritative; `family` and `given` are left out when
         the name is not split. Age is never sent: it is derived from `birthDate`.
+        The Demographic details — `extension` (the military service), `telecom`,
+        `address` and `contact` — are each left out when the patient has none
+        (`/docs/domain/patient.md`, "Demographic details").
       required: [resourceType, id, identifier, name, gender, birthDate]
       additionalProperties: false
       properties:
@@ -4777,6 +4780,140 @@ components:
           type: string
           description: The patient's EHR's FHIR id.
           pattern: "^[A-Za-z0-9\\-.]{1,64}$"
+        extension:
+          type: array
+          minItems: 1
+          maxItems: 1
+          description: |
+            Exactly one when present: the military service, under a placeholder
+            URL until the in-house source names its own. Its sub-extensions are
+            each `serviceRecord`, in order, then whichever of the dates the
+            patient has.
+          items:
+            type: object
+            required: [url, extension]
+            additionalProperties: false
+            properties:
+              url:
+                type: string
+                enum: ["http://example.org/fhir/StructureDefinition/military-service"]
+              extension:
+                type: array
+                minItems: 1
+                items:
+                  anyOf:
+                    - type: object
+                      description: |
+                        One service record: whichever of `serviceType`, `rank`,
+                        `unit`, `service` and `vocation` it has, in that order.
+                      required: [url, extension]
+                      additionalProperties: false
+                      properties:
+                        url:
+                          type: string
+                          enum: [serviceRecord]
+                        extension:
+                          type: array
+                          minItems: 1
+                          items:
+                            type: object
+                            required: [url, valueString]
+                            additionalProperties: false
+                            properties:
+                              url:
+                                type: string
+                                enum: [serviceType, rank, unit, service, vocation]
+                              valueString:
+                                type: string
+                                minLength: 1
+                    - type: object
+                      description: One of the service's dates, to the day.
+                      required: [url, valueDate]
+                      additionalProperties: false
+                      properties:
+                        url:
+                          type: string
+                          enum: [enlistmentDate, ordDate, mrDate, rodDate]
+                        valueDate:
+                          type: string
+                          format: date
+                          pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        telecom:
+          type: array
+          minItems: 1
+          maxItems: 2
+          description: The phone, then the email, whichever the patient has.
+          items:
+            $ref: "#/components/schemas/FhirContactPoint"
+        address:
+          type: array
+          minItems: 1
+          maxItems: 1
+          description: Exactly one when present, the residential address as its text.
+          items:
+            type: object
+            required: [use, text]
+            additionalProperties: false
+            properties:
+              use:
+                type: string
+                enum: [home]
+              text:
+                type: string
+                minLength: 1
+        contact:
+          type: array
+          minItems: 1
+          maxItems: 1
+          description: |
+            Exactly one when present, the next of kin: their relationship coded
+            v2-0131 `N`, then their relationship as text when known; their name
+            as text; their phone when known.
+          items:
+            type: object
+            required: [relationship, name]
+            additionalProperties: false
+            properties:
+              relationship:
+                type: array
+                minItems: 1
+                maxItems: 2
+                items:
+                  type: object
+                  additionalProperties: false
+                  properties:
+                    coding:
+                      type: array
+                      minItems: 1
+                      maxItems: 1
+                      items:
+                        type: object
+                        required: [system, code]
+                        additionalProperties: false
+                        properties:
+                          system:
+                            type: string
+                            enum: ["http://terminology.hl7.org/CodeSystem/v2-0131"]
+                          code:
+                            type: string
+                            enum: [N]
+                    text:
+                      type: string
+                      minLength: 1
+              name:
+                type: object
+                required: [text]
+                additionalProperties: false
+                properties:
+                  text:
+                    type: string
+                    minLength: 1
+              telecom:
+                type: array
+                minItems: 1
+                maxItems: 1
+                items:
+                  $ref: "#/components/schemas/FhirContactPoint"
         identifier:
           type: array
           minItems: 1
@@ -4823,6 +4960,18 @@ components:
           type: string
           format: date
           pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    FhirContactPoint:
+      type: object
+      description: A FHIR R5 `ContactPoint`, a phone or an email.
+      required: [system, value]
+      additionalProperties: false
+      properties:
+        system:
+          type: string
+          enum: [phone, email]
+        value:
+          type: string
+          minLength: 1
     FhirOperationOutcome:
       type: object
       description: A FHIR R5 `OperationOutcome` with one issue.

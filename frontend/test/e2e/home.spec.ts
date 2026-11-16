@@ -13,7 +13,7 @@ test.describe("Home", () => {
 
     await expect(sidebar(page).getByRole("link")).toHaveText([
       "Search",
-      "Profile",
+      "Demographic",
       "Medication",
       "FFI",
       "NUMC",

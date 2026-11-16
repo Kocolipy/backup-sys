@@ -60,12 +60,15 @@ export const selectResult = (page: Page, name: string) =>
 export const topBarPatient = (page: Page) =>
   page.getByRole("region", { name: "Patient in context" });
 
-/** Home, showing the Patient `name` with NRIC `nric` on its Patient card and the top bar. */
-export async function expectOnHomeInContext(page: Page, name: string, nric: string) {
-  // Home's Patient card holding a patient: a banner named Patient, headed by their name.
+/**
+ * The Demographic page, showing the Patient `name` with NRIC `nric` on its
+ * Patient card and the top bar.
+ */
+export async function expectOnDemographicInContext(page: Page, name: string, nric: string) {
+  // The Patient card holding a patient: a banner named Patient, headed by their name.
   const patientCard = page.getByRole("region", { exact: true, name: "Patient" });
-  await expect(page).toHaveURL("/");
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Profile");
+  await expect(page).toHaveURL("/demographic");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Demographic");
   await expect(patientCard.getByRole("heading")).toHaveText(name);
   await expect(patientCard.getByText(nric, { exact: true })).toBeVisible();
   await expect(topBarPatient(page)).toHaveText(`${name}${nric}`);

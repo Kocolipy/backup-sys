@@ -504,7 +504,7 @@ async function resultRow(name: string) {
 }
 
 describe("Search, selecting a result", () => {
-  it("puts the Patient of a clicked row into the EHR context and goes to Home, whose Patient card and top bar name them", async () => {
+  it("puts the Patient of a clicked row into the EHR context and opens the Demographic page, whose Patient card and top bar name them", async () => {
     await renderSearch(SELECTABLE);
     await search("tan");
 
@@ -519,7 +519,7 @@ describe("Search, selecting a result", () => {
     }).toEqual({
       card: "Tan Hui Min",
       context: { patient: "dev-patient-05" },
-      title: "Profile",
+      title: "Demographic",
       topBar: "Tan Hui MinS8512345A",
     });
   });
@@ -539,7 +539,7 @@ describe("Search, selecting a result", () => {
       expect({
         context: ehrContext(),
         title: screen.getByRole("heading", { level: 1 }).textContent,
-      }).toEqual({ context: { patient: "dev-patient-05" }, title: "Profile" });
+      }).toEqual({ context: { patient: "dev-patient-05" }, title: "Demographic" });
     },
   );
 

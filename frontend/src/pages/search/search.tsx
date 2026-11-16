@@ -2,6 +2,7 @@ import { useId, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { setEhrContext } from "@/auth/ehr-context";
+import { DEMOGRAPHIC_PAGE_PATH } from "@/auth/session-route";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -47,7 +48,7 @@ const GENDER_BADGE_TINTS: Readonly<Record<PatientGender, string | undefined>> = 
  * shown.
  *
  * Selecting a row puts its Patient into the tab's EHR context, replacing any
- * patient there with no confirmation, and goes to Home. A click anywhere on the
+ * patient there with no confirmation, and opens the Demographic page. A click anywhere on the
  * row selects it; the Patient Name is a button, so the keyboard and assistive
  * technology select it too, its click reaching the row's. The same Patient
  * selected again leaves the context as it was, so the signed-in layout reads
@@ -57,7 +58,7 @@ function ResultsTable({ patients }: { patients: readonly PatientMatch[] }) {
   const navigate = useNavigate();
   const select = (patient: PatientMatch) => {
     setEhrContext({ patient: patient.id });
-    void navigate("/");
+    void navigate(DEMOGRAPHIC_PAGE_PATH);
   };
   return (
     <Table>

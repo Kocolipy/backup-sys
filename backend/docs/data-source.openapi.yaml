@@ -33,8 +33,9 @@ tags:
       `PatientSourceAdapter`. A mock of it matches, filters, orders, pages and
       counts over its own Patients.
 
-      - **Six reads.** `GET /Patient/{id}` for one Patient (Home's Patient
-        card), `GET /Patient?…` for a Patient search (the Search page),
+      - **Six reads.** `GET /Patient/{id}` for one Patient (the Patient card
+        and the Demographic page's Demographic details), `GET /Patient?…` for a
+        Patient search (the Search page),
         `GET /Patient/{id}/ffi?…` for a patient's FFI History (the FFI page,
         ADR 0019), `GET /Patient/{id}/numc?…` for a patient's NUMC History
         (the NUMC page, ADR 0019, D5), `GET /Patient/{id}/armc?…` for a
@@ -102,6 +103,16 @@ paths:
             The Patient under exactly this `id`. A Patient under another id is a
             failure. The `last-visit` extension may be present; a read by id
             ignores it.
+
+            A read by id also copies the Patient's **Demographic details**, each
+            only when the Patient has it: the first `telecom` of `system: phone`
+            and the first of `system: email` that have a `value`; the `text` of
+            the first `address` of `use: home` that has one; the first `contact`
+            whose relationship is coded v2-0131 `N` and whose `name` has a
+            `text`; and the military-history extension. An element without what
+            its copy needs is skipped, never the source failing, except a
+            military-history date not to the day, which is. Tan Wei Ming's
+            fixture holds all of them; no other fixture holds any.
           content:
             application/fhir+json:
               schema:
@@ -979,10 +990,12 @@ components:
     Patient:
       description: |
         An R4 `Patient`. The backend reads only `resourceType`, `id`,
-        `extension`, `identifier`, `name`, `gender` and `birthDate`, and ignores
-        every other element; a realistic resource carries more (`meta`,
-        `active`, `telecom`, `address`, an MRN identifier, `usual` and `maiden`
-        names), and the fixtures do, so the backend's selection is exercised.
+        `extension`, `identifier`, `name`, `gender` and `birthDate`, and on a
+        read by id `telecom`, `address` and `contact` too, ignoring every other
+        element; a realistic resource carries more (`meta`, `active`, an MRN
+        identifier, `usual` and `maiden` names, an address's `line`s, a
+        contact point's `use`), and the fixtures do, so the backend's selection
+        is exercised. A search reads none of the Demographic details.
 
         Each rule below is one the backend holds: a Patient breaking any is the
         source failing, the backend's `502`. A part the Patient does not hold is
@@ -997,9 +1010,15 @@ components:
           type: string
           pattern: '^[A-Za-z0-9\-.]{1,64}$'
         extension:
+          description: |
+            The Last visit and, read by id alone, the Military history; an
+            extension under any other `url` is ignored.
           type: array
           items:
-            $ref: "#/components/schemas/LastVisitExtension"
+            anyOf:
+              - $ref: "#/components/schemas/LastVisitExtension"
+              - $ref: "#/components/schemas/MilitaryHistoryExtension"
+              - $ref: "#/components/schemas/OtherExtension"
         identifier:
           description: |
             Must include one identifier under the NRIC NamingSystem with a
@@ -1024,6 +1043,105 @@ components:
           description: To the day.
           type: string
           format: date
+        telecom:
+          description: |
+            Read by id alone: the first phone and the first email that have a
+            `value` are the Patient's; any other is ignored.
+          type: array
+          items:
+            $ref: "#/components/schemas/ContactPoint"
+        address:
+          description: |
+            Read by id alone: the first address of `use: home` with a non-blank
+            `text` is the residential address, shown as that text and never
+            rebuilt from its `line`s. An address with no text is skipped.
+          type: array
+          items:
+            $ref: "#/components/schemas/Address"
+        contact:
+          description: |
+            Read by id alone: the first contact with a relationship coded
+            v2-0131 `N` and a `name.text` is the Next of kin. Any other contact,
+            or one with no name text, is skipped.
+          type: array
+          items:
+            $ref: "#/components/schemas/Contact"
+
+    ContactPoint:
+      type: object
+      properties:
+        system:
+          description: Only `phone` and `email` are read.
+          type: string
+        value:
+          type: string
+        use:
+          description: Ignored.
+          type: string
+        rank:
+          description: Ignored; the order the source lists them in decides.
+          type: integer
+
+    Address:
+      type: object
+      properties:
+        use:
+          description: Only `home` is read.
+          type: string
+        text:
+          description: The address as written, what the backend shows.
+          type: string
+        type:
+          type: string
+        line:
+          description: Never read.
+          type: array
+          items:
+            type: string
+        postalCode:
+          type: string
+        country:
+          type: string
+
+    Contact:
+      type: object
+      properties:
+        relationship:
+          description: |
+            A Next of kin carries a concept coded v2-0131 `N`; their
+            relationship as shown (`Mother`) is the `text` of the first concept
+            that has one.
+          type: array
+          items:
+            type: object
+            properties:
+              coding:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    system:
+                      description: The Next of kin role's is `http://terminology.hl7.org/CodeSystem/v2-0131`.
+                      type: string
+                    code:
+                      description: "`N`, next of kin; any other code is not."
+                      type: string
+                    display:
+                      description: Ignored.
+                      type: string
+              text:
+                type: string
+        name:
+          type: object
+          properties:
+            text:
+              description: Required for the contact to be the Next of kin.
+              type: string
+        telecom:
+          description: The first `phone` with a `value` is the Next of kin's contact number.
+          type: array
+          items:
+            $ref: "#/components/schemas/ContactPoint"
 
     Identifier:
       type: object
@@ -1073,6 +1191,94 @@ components:
           type: string
           format: date
 
+    MilitaryHistoryExtension:
+      description: |
+        A Patient's Military history, which base FHIR has no element for, read
+        by id alone. At most one; absent for a Patient with none. The URL is a
+        placeholder until the in-house source names its own (ADR 0014). Its
+        sub-extensions are `serviceRecord`, one per record in the order the
+        backend shows them, and the dates; a sub-extension under any other
+        `url` is ignored.
+      type: object
+      required: [url, extension]
+      properties:
+        url:
+          const: http://example.org/fhir/StructureDefinition/military-service
+        extension:
+          type: array
+          items:
+            anyOf:
+              - type: object
+                description: |
+                  One service record: whichever of `serviceType`, `rank`,
+                  `unit`, `service` and `vocation` it has, each a
+                  `valueString`. Any other field is ignored.
+                required: [url]
+                properties:
+                  url:
+                    const: serviceRecord
+                  extension:
+                    type: array
+                    items:
+                      type: object
+                      required: [url, valueString]
+                      properties:
+                        url:
+                          type: string
+                        valueString:
+                          type: string
+              - type: object
+                description: One of the service's dates, each at most once.
+                required: [url, valueDate]
+                properties:
+                  url:
+                    enum: [enlistmentDate, ordDate, mrDate, rodDate]
+                  valueDate:
+                    description: To the day; any other precision is the source failing.
+                    type: string
+                    format: date
+              - type: object
+                description: A sub-extension under any other `url`, ignored.
+                required: [url]
+                properties:
+                  url:
+                    type: string
+                    not:
+                      enum: [serviceRecord, enlistmentDate, ordDate, mrDate, rodDate]
+      example:
+        url: http://example.org/fhir/StructureDefinition/military-service
+        extension:
+          - url: serviceRecord
+            extension:
+              - url: serviceType
+                valueString: NSman
+              - url: rank
+                valueString: CPT
+              - url: unit
+                valueString: 3 SIR
+              - url: service
+                valueString: Army
+              - url: vocation
+                valueString: Infantry Officer
+          - url: enlistmentDate
+            valueDate: "2018-01-15"
+          - url: ordDate
+            valueDate: "2020-01-14"
+          - url: rodDate
+            valueDate: "2037-09-08"
+
+    OtherExtension:
+      description: An extension under any other `url`, which the backend ignores.
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+          not:
+            enum:
+              - https://fhir.synapxe.sg/StructureDefinition/last-visit
+              - http://example.org/fhir/StructureDefinition/military-service
+
     SearchsetBundle:
       description: |
         The backend reads `resourceType`, `type`, `total` and each entry's
@@ -1102,7 +1308,9 @@ components:
               resource:
                 description: |
                   The Patient as `GET /Patient/{id}` serves it, with its
-                  `last-visit` extension when it has a Last visit.
+                  `last-visit` extension when it has a Last visit. A search
+                  reads none of its Demographic details, so a mock may send
+                  them or leave them out.
                 $ref: "#/components/schemas/Patient"
       example:
         resourceType: Bundle

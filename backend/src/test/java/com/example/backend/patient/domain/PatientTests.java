@@ -95,6 +95,66 @@ class PatientTests {
         assertThat(tan.toString()).isEqualTo("Patient[id=eq081-VQEgP8drUUqCWzHfw3]");
     }
 
+    @Test
+    void aPatientNeedsItsDemographicDetails() {
+        assertThatThrownBy(() -> new Patient(ID, "S1234567A", NAME, AdministrativeGender.MALE, BORN,
+                null)).isInstanceOf(NullPointerException.class).hasMessage("demographics");
+    }
+
+    @Test
+    void aPatientOfItsFiveElementsHasNoDemographicDetails() {
+        assertThat(new Patient(ID, "S1234567A", NAME, AdministrativeGender.MALE, BORN).demographics())
+                .isEqualTo(Demographics.NONE);
+    }
+
+    @Test
+    void aPatientWithDemographicDetailsKeepsItsFiveElements() {
+        Patient tan = new Patient(ID, "S1234567A", NAME, AdministrativeGender.MALE, BORN);
+        Demographics details = new Demographics("+65 9123 4567", null, null, null, null);
+
+        assertThat(tan.withDemographics(details)).isEqualTo(
+                new Patient(ID, "S1234567A", NAME, AdministrativeGender.MALE, BORN, details));
+    }
+
+    @Test
+    void aNextOfKinNeedsAName() {
+        assertThatThrownBy(() -> new NextOfKin(null, "Mother", null))
+                .isInstanceOf(NullPointerException.class).hasMessage("name");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", " "})
+    void aNextOfKinsNameCannotBeBlank(String blank) {
+        assertThatThrownBy(() -> new NextOfKin(blank, "Mother", null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("A next of kin's name is required");
+    }
+
+    @Test
+    void aMilitaryHistoryWithNoRecordListHasAnEmptyOne() {
+        assertThat(new MilitaryHistory(null, null, null, null, null).serviceRecords()).isEmpty();
+    }
+
+    /**
+     * The Demographic details are Restricted, as the rest of the Patient is: none of them prints
+     * any of its values, and a Patient holding them still prints as its id alone.
+     */
+    @Test
+    void noDemographicDetailPrintsItsValues() {
+        MilitaryHistory.ServiceRecord record =
+                new MilitaryHistory.ServiceRecord("NSman", "CPT", "3 SIR", "Army", "Infantry Officer");
+        MilitaryHistory service = new MilitaryHistory(List.of(record), BORN, BORN, BORN, BORN);
+        NextOfKin kin = new NextOfKin("Mdm Lee Siew Kuen", "Mother", "+65 8234 5678");
+        Demographics details = new Demographics("+65 9123 4567", "tan.hw@email.com",
+                "Blk 123 Bishan Street 12", kin, service);
+        Patient tan = new Patient(ID, "S1234567A", NAME, AdministrativeGender.MALE, BORN, details);
+
+        assertThat(List.of(record, service, kin, details, tan)).extracting(Object::toString)
+                .containsExactly("ServiceRecord[redacted]", "MilitaryHistory[redacted]",
+                        "NextOfKin[redacted]", "Demographics[redacted]",
+                        "Patient[id=eq081-VQEgP8drUUqCWzHfw3]");
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"male", "female", "other", "unknown"})
     void eachFhirGenderCodeNamesItsGender(String code) {

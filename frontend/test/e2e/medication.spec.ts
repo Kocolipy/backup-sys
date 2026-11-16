@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { expectOnHomeInContext, search, selectResult } from "./patient.helpers";
+import { expectOnDemographicInContext, search, selectResult } from "./patient.helpers";
 import { sidebar } from "./shell.helpers";
 
 /**
@@ -37,7 +37,7 @@ async function selectPatient(page: Page, query: string, name: string, nric: stri
   await page.goto("/search");
   await search(page, query);
   await selectResult(page, name);
-  await expectOnHomeInContext(page, name, nric);
+  await expectOnDemographicInContext(page, name, nric);
 }
 
 /** Opens Medication from the sidebar, headed Medication. */

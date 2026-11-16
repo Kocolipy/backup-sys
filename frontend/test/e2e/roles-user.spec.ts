@@ -28,12 +28,10 @@ test.describe("baseline User pages", () => {
     expect(patientRequests()).toEqual([]);
   });
 
-  test("is offered no Search, Medication, FFI, NUMC or ARMC link, only Profile", async ({
-    page,
-  }) => {
+  test("is offered no sidebar link, Search, Demographic and Home among them", async ({ page }) => {
     await page.goto("/");
 
-    await expect(sidebar(page).getByRole("link")).toHaveText(["Profile"]);
+    await expect(sidebar(page).getByRole("link")).toHaveCount(0);
   });
 
   test("is routed from Patient Search to Home", async ({ page }) => {

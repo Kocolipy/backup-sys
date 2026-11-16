@@ -102,6 +102,73 @@
               {
                 "url": "https://fhir.synapxe.sg/StructureDefinition/last-visit",
                 "valueDate": "2026-10-15"
+              },
+              {
+                "url": "http://example.org/fhir/StructureDefinition/military-service",
+                "extension": [
+                  {
+                    "url": "serviceRecord",
+                    "extension": [
+                      {
+                        "url": "serviceType",
+                        "valueString": "NSman"
+                      },
+                      {
+                        "url": "rank",
+                        "valueString": "CPT"
+                      },
+                      {
+                        "url": "unit",
+                        "valueString": "3 SIR"
+                      },
+                      {
+                        "url": "service",
+                        "valueString": "Army"
+                      },
+                      {
+                        "url": "vocation",
+                        "valueString": "Infantry Officer"
+                      }
+                    ]
+                  },
+                  {
+                    "url": "serviceRecord",
+                    "extension": [
+                      {
+                        "url": "serviceType",
+                        "valueString": "DXO"
+                      },
+                      {
+                        "url": "rank",
+                        "valueString": "ME2"
+                      },
+                      {
+                        "url": "unit",
+                        "valueString": "RSS Supreme"
+                      },
+                      {
+                        "url": "service",
+                        "valueString": "Navy"
+                      },
+                      {
+                        "url": "vocation",
+                        "valueString": "Naval Safety Officer"
+                      }
+                    ]
+                  },
+                  {
+                    "url": "enlistmentDate",
+                    "valueDate": "2018-01-15"
+                  },
+                  {
+                    "url": "ordDate",
+                    "valueDate": "2020-01-14"
+                  },
+                  {
+                    "url": "rodDate",
+                    "valueDate": "2037-09-08"
+                  }
+                ]
               }
             ],
             "identifier": [
@@ -132,13 +199,60 @@
                 ]
               }
             ],
-            "gender": "male",
-            "birthDate": "1985-03-12",
             "telecom": [
               {
                 "system": "phone",
-                "value": "+65 6000 0001",
-                "use": "mobile"
+                "value": "+65 9123 4567",
+                "use": "mobile",
+                "rank": 1
+              },
+              {
+                "system": "email",
+                "value": "tan.hw@email.com",
+                "use": "home"
+              }
+            ],
+            "gender": "male",
+            "birthDate": "1985-03-12",
+            "address": [
+              {
+                "use": "home",
+                "type": "physical",
+                "text": "Blk 123 Bishan Street 12 #10-456, Singapore 570123",
+                "line": [
+                  "Blk 123 Bishan Street 12",
+                  "#10-456"
+                ],
+                "country": "SG",
+                "postalCode": "570123"
+              }
+            ],
+            "contact": [
+              {
+                "relationship": [
+                  {
+                    "coding": [
+                      {
+                        "system": "http://terminology.hl7.org/CodeSystem/v2-0131",
+                        "code": "N",
+                        "display": "Next-of-Kin"
+                      }
+                    ]
+                  },
+                  {
+                    "text": "Mother"
+                  }
+                ],
+                "name": {
+                  "text": "Mdm Lee Siew Kuen"
+                },
+                "telecom": [
+                  {
+                    "system": "phone",
+                    "value": "+65 8234 5678",
+                    "use": "mobile"
+                  }
+                ]
               }
             ]
           },

@@ -24,7 +24,8 @@ the source's own search passed through (ADR 0018, ["Patient search"](#patient-se
 ## The resource
 
 Base R5 `Patient`, with no `meta` and so no `meta.profile`, and no element beyond
-these:
+these and the [Demographic details](#demographic-details), each left out when
+the patient has none:
 
 ```json
 {
@@ -72,6 +73,25 @@ these:
 
 The path follows the repo's convention: an unversioned `/api` base, held in code.
 
+### Demographic details
+
+A read by id also serves what the Demographic page shows of the patient, each
+element only when the patient has it, never empty. A search serves none of it.
+
+- **`extension`** — the **military service**, under
+  `http://example.org/fhir/StructureDefinition/military-service`, a placeholder
+  URL until the in-house source names its own: a `serviceRecord`
+  sub-extension per service record, in the source's order, each holding
+  whichever of `serviceType`, `rank`, `unit`, `service` and `vocation`
+  (`valueString`) it has, then whichever of `enlistmentDate`, `ordDate`,
+  `mrDate` and `rodDate` (`valueDate`, to the day) the patient has.
+- **`telecom`** — the phone (`system: phone`), then the email
+  (`system: email`).
+- **`address`** — the residential address, `use: home`, as its `text` alone.
+- **`contact`** — the **next of kin**: a relationship coded v2-0131 `N`
+  (`http://terminology.hl7.org/CodeSystem/v2-0131`), then their relationship as
+  text (`Mother`) when known; their name as `text`; their phone when known.
+
 ## The in-house patient source
 
 The backend reads every Patient from the in-house patient source through the
@@ -84,9 +104,18 @@ default (`backend/docs/configuration/patient-source.md`).
 - **The elements copied.** From the R4 `Patient`, the adapter copies exactly the
   `identifier` under the NRIC NamingSystem, the `name` whose `use` is `official`,
   `gender` and `birthDate`, and ignores every other element — another
-  identifier, a `usual` or `maiden` name, `meta`, `telecom`, `address` and the
-  rest are never read. R4 and R5 agree on all four, so the copy is straight and
-  the R5 response has exactly the shape above.
+  identifier, a `usual` or `maiden` name, `meta` and the rest are never read.
+  R4 and R5 agree on all four, so the copy is straight and the R5 response has
+  exactly the shape above.
+- **The Demographic details copied**, by a read by id alone: the first
+  `telecom` with `system: phone` and a `value`, and the first with
+  `system: email`; the `text` of the first `address` with `use: home` and a
+  text, never rebuilt from its lines; the first `contact` with a relationship
+  coded v2-0131 `N` and a `name.text`, its relationship the first relationship
+  `text`, its phone its first phone; and the military service extension, a
+  sub-extension it does not name left unread. An element without what its copy
+  needs is not copied — but a military service date not to the day is a
+  failure of the source, as a birth date is.
 - **Only a `404` is no patient**, and stays the `404` below. Every other answer
   is a failure of the source, the `502` below: the source unreachable, no
   answer within 2 seconds to connect and 5 to answer — the whole answer, its
@@ -95,7 +124,7 @@ default (`backend/docs/configuration/patient-source.md`).
   Patient breaking a rule above: another patient's `id`, no `identifier` under
   the NRIC NamingSystem, no `name` with `use: official` or one with no `text`,
   no gender or a code outside the four, a `birthDate` missing or not to the
-  day. An official name with no `text` is a failure even with a `family` and
+  day, a military service date not to the day. An official name with no `text` is a failure even with a `family` and
   `given`: the text is never rebuilt from them.
 - **No caching.** No Patient is kept in Redis or in memory: every read, of the
   same patient too, is a call to the source.
@@ -203,8 +232,8 @@ NRIC", searched only on submit (Enter or the Search button).
 
 ## Data classification
 
-Patient data is **Restricted, Sensitive Normal**: the NRIC, the name and the date
-of birth, and the resource or its JSON as a whole. It is shown to a signed-in
+Patient data is **Restricted, Sensitive Normal**: the NRIC, the name, the date
+of birth and the Demographic details, and the resource or its JSON as a whole. It is shown to a signed-in
 user holding `patient:read`, through a Group that carries it or as the Superuser,
 and goes nowhere else — not into a log, an error body
 or an audit row.
@@ -286,8 +315,11 @@ adapter every namespace shares. A new FHIR resource served beneath
 
 ## Logging
 
-- **A patient is identified in a log only by its id.** The NRIC, the name and
-  the `birthDate` are never logged, and neither is the resource or its JSON.
+- **A patient is identified in a log only by its id.** The NRIC, the name, the
+  `birthDate` and the Demographic details are never logged, and neither is the
+  resource or its JSON. Each domain record holding a Demographic detail
+  (`Demographics`, `NextOfKin`, `MilitaryHistory` and its `ServiceRecord`)
+  prints as its type alone.
 - **`Patient.toString()` prints the id alone.** A Java record's generated
   `toString` prints every field, so a Patient printed into a message or an
   exception would carry all three.
@@ -305,7 +337,8 @@ adapter every namespace shares. A new FHIR resource served beneath
   `unreadable` (a body that arrived whole and is not JSON or not a Patient) —
   or the rule the Patient broke — `another-resource`,
   `no-nric`, `no-official-name`, `no-name-text`, `no-gender`,
-  `no-birth-date`, `birth-date-not-to-the-day` — or, for a search, what its
+  `no-birth-date`, `birth-date-not-to-the-day`, `service-date-not-to-the-day`
+  — or, for a search, what its
   answer lacked — `not-a-searchset`, `no-total`, `no-id`, `invalid-id`,
   `last-visit-not-to-the-day` — and whose error message is the fault's fixed
   sentence. It never names the patient id, the NRIC, the name, the birth date,
@@ -365,7 +398,13 @@ a test states the day it runs on and the age never depends on the viewer's zone.
 
 ## The patient in context
 
-Home's **Patient card** shows the patient in context, and only that patient: the
+The **Demographic page** (`/demographic`, guarded by `patient:read`, which
+selecting a Patient on the Search page opens) shows the patient in context's
+**Patient card**, then their Demographic details: the Military Overview,
+Contact Details and Next of Kin / Emergency, a detail they have none of shown
+as "—", and nothing beyond the card while no patient is loaded. Home shows the
+Patient card alone, and the navigation sidebar links it for no session. The
+Patient card shows the patient in context, and only that patient: the
 patient of the tab's **EHR context**, which selecting a Patient on the Search
 page sets. A patient leaves context only when another Patient is selected or
 the session ends. With none in context it
@@ -439,8 +478,17 @@ reaches a deployed environment. The backend holds no fixture of its own.
   extension (["Last visit"](#last-visit)) but Tan Boon Huat, who has none.
 - **More than the five elements.** Each stub is an R4 Patient as a real source
   would answer it — an MRN identifier ahead of the NRIC, `usual` and `maiden`
-  names beside the official one, `meta`, `active`, `telecom`, `address` — so
-  the tests read the selection, not merely the copy.
+  names beside the official one, `meta`, `active`, `telecom`, `address`,
+  `contact`, `extension` — so the tests read the selection, not merely the
+  copy.
+- **Tan Wei Ming carries every Demographic detail.** His stub holds a mobile
+  phone and an email (`telecom`), a `home` address with its `text`, a next of
+  kin (a `contact` whose relationship is coded v2-0131 `N`, with the text
+  `Mother`, a name and a phone), and his military service: two service records
+  and his `enlistmentDate`, `ordDate` and `rodDate`, with no `mrDate`. Every
+  other fixture carries none, but Siti Nurhaliza's `home` address has no
+  `text`, so none is copied. His copies in the search stubs are the fixture
+  itself, though a search serves none of it.
 - **Dummy NRICs.** Every fixture's NRIC has the NRIC shape — a prefix letter,
   seven digits and a check letter — but carries a **deliberately wrong check
   letter**, so it cannot be a real person's: Tan Wei Ming's `S1234567A`

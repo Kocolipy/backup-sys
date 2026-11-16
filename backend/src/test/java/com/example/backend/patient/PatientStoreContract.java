@@ -29,6 +29,9 @@ import com.example.backend.patient.domain.NumcHistory;
 import com.example.backend.patient.domain.NumcOutcome;
 import com.example.backend.patient.domain.NumcRecord;
 import com.example.backend.patient.domain.NumcType;
+import com.example.backend.patient.domain.Demographics;
+import com.example.backend.patient.domain.MilitaryHistory;
+import com.example.backend.patient.domain.NextOfKin;
 import com.example.backend.patient.domain.Patient;
 import com.example.backend.patient.domain.PatientId;
 import com.example.backend.patient.domain.PatientMatch;
@@ -67,6 +70,26 @@ import org.junit.jupiter.params.provider.MethodSource;
  */
 public abstract class PatientStoreContract {
 
+    /**
+     * Tan Wei Ming's Demographic details, as his stub holds them: written out, as the fixtures
+     * are, so a stub that drifted fails here.
+     */
+    public static final Demographics TAN_WEI_MINGS_DEMOGRAPHICS = new Demographics(
+            "+65 9123 4567",
+            "tan.hw@email.com",
+            "Blk 123 Bishan Street 12 #10-456, Singapore 570123",
+            new NextOfKin("Mdm Lee Siew Kuen", "Mother", "+65 8234 5678"),
+            new MilitaryHistory(
+                    List.of(
+                            new MilitaryHistory.ServiceRecord("NSman", "CPT", "3 SIR", "Army",
+                                    "Infantry Officer"),
+                            new MilitaryHistory.ServiceRecord("DXO", "ME2", "RSS Supreme", "Navy",
+                                    "Naval Safety Officer")),
+                    LocalDate.of(2018, 1, 15),
+                    LocalDate.of(2020, 1, 14),
+                    null,
+                    LocalDate.of(2037, 9, 8)));
+
     /** The patient port under test, reading the development fixtures. */
     protected abstract PatientStore patients();
 
@@ -78,7 +101,8 @@ public abstract class PatientStoreContract {
                         "S1234567A",
                         new PatientName("Tan Wei Ming", "Tan", List.of("Wei", "Ming")),
                         AdministrativeGender.MALE,
-                        LocalDate.of(1985, 3, 12)));
+                        LocalDate.of(1985, 3, 12),
+                        TAN_WEI_MINGS_DEMOGRAPHICS));
     }
 
     @Test

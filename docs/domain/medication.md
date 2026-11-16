@@ -239,7 +239,7 @@ audited as `ACCESS_DENIED`, as every authorization refusal is.
 ## The Medication page
 
 `/medication`, titled **Medication**, linked **Medication** in the sidebar
-directly above FFI — Search, Profile, Medication, FFI, NUMC, … — with the
+directly above FFI — Search, Demographic, Medication, FFI, NUMC, … — with the
 `Pill` icon, for a session holding `patient:read`, and guarded by it as FFI is:
 a session without it is offered no link and is routed to its landing page.
 

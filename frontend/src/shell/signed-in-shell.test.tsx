@@ -128,10 +128,11 @@ describe("SignedInShell", () => {
 
 describe("SignedInShell's navigation sidebar", () => {
   // Each page the sidebar links, with the Permissions its route guard opens it
-  // for (none: every signed-in session), as the registry declares them today.
+  // for, as the registry declares them today: every one is guarded, Home being
+  // linked from no sidebar.
   it.each([
     ["Search", "/search", ["patient:read"]],
-    ["Profile", "/", []],
+    ["Demographic", "/demographic", ["patient:read"]],
     ["Medication", "/medication", ["patient:read"]],
     ["FFI", "/ffi", ["patient:read"]],
     ["NUMC", "/numc", ["patient:read"]],
@@ -148,34 +149,32 @@ describe("SignedInShell's navigation sidebar", () => {
         unmount();
         return href;
       };
-      const forEverySession = qualifying.length === 0 ? path : null;
-
       // A Monitoring account's Permission opens none of the guarded pages.
-      expect(await linkFor([])).toBe(forEverySession);
-      expect(await linkFor(["ops:read"])).toBe(forEverySession);
+      expect(await linkFor([])).toBeNull();
+      expect(await linkFor(["ops:read"])).toBeNull();
       for (const permission of qualifying) expect(await linkFor([permission])).toBe(path);
       expect(await linkFor([...qualifying])).toBe(path);
     },
   );
 
-  it("links Profile alone for a session holding baseline access alone", async () => {
+  it("links no page, Home among them, for a session holding baseline access alone", async () => {
     await renderSignedIn("/", holding([]));
 
     expect(
       within(screen.getAllByRole("list")[0])
-        .getAllByRole("link")
+        .queryAllByRole("link")
         .map((link) => link.textContent),
-    ).toEqual(["Profile"]);
+    ).toEqual([]);
   });
 
-  it("links Search first, then Profile, Medication, FFI, NUMC and ARMC, for a session holding patient:read alone", async () => {
+  it("links Search first, then Demographic, Medication, FFI, NUMC and ARMC, for a session holding patient:read alone", async () => {
     await renderSignedIn("/search", holding(["patient:read"]));
 
     expect(
       within(screen.getAllByRole("list")[0])
         .getAllByRole("link")
         .map((link) => link.textContent),
-    ).toEqual(["Search", "Profile", "Medication", "FFI", "NUMC", "ARMC"]);
+    ).toEqual(["Search", "Demographic", "Medication", "FFI", "NUMC", "ARMC"]);
   });
 
   it("links Search first, ahead of every page a Superuser may open", async () => {
@@ -185,12 +184,21 @@ describe("SignedInShell's navigation sidebar", () => {
       within(screen.getAllByRole("list")[0])
         .getAllByRole("link")
         .map((link) => link.textContent),
-    ).toEqual(["Search", "Profile", "Medication", "FFI", "NUMC", "ARMC", "Accounts", "Audit logs"]);
+    ).toEqual([
+      "Search",
+      "Demographic",
+      "Medication",
+      "FFI",
+      "NUMC",
+      "ARMC",
+      "Accounts",
+      "Audit logs",
+    ]);
   });
 
   it.each([
     ["/search", "Search"],
-    ["/", "Profile"],
+    ["/demographic", "Demographic"],
     ["/medication", "Medication"],
     ["/ffi", "FFI"],
     ["/numc", "NUMC"],
@@ -201,7 +209,7 @@ describe("SignedInShell's navigation sidebar", () => {
 
     const links = [
       "Search",
-      "Profile",
+      "Demographic",
       "Medication",
       "FFI",
       "NUMC",
@@ -304,11 +312,11 @@ describe("SignedInShell's sidebar collapse", () => {
 
       await user.click(screen.getByRole("button", { name: "Open navigation" }));
       const sheet = await screen.findByRole("dialog");
-      await user.click(within(sheet).getByRole("link", { name: "Profile" }));
+      await user.click(within(sheet).getByRole("link", { name: "Demographic" }));
 
       expect([
         screen.queryByRole("dialog"),
-        await screen.findByRole("heading", { level: 1, name: "Profile" }),
+        await screen.findByRole("heading", { level: 1, name: "Demographic" }),
       ]).toEqual([null, expect.anything()]);
     } finally {
       window.innerWidth = width;
@@ -321,7 +329,7 @@ describe("SignedInShell's sidebar collapse", () => {
     await userEvent.setup().click(screen.getByRole("button", { name: "Collapse sidebar" }));
 
     expect([
-      screen.getByRole("link", { name: "Profile" }) !== null,
+      screen.getByRole("link", { name: "Demographic" }) !== null,
       screen.getByRole("button", { name: "Sign out" }) !== null,
     ]).toEqual([true, true]);
   });
@@ -394,7 +402,7 @@ describe("SignedInShell's error line", () => {
     await renderSignedIn("/accounts", holding(["user:read"]), { [USERS]: bare(503) });
     await screen.findByRole("alert");
 
-    await userEvent.setup().click(screen.getByRole("link", { name: "Profile" }));
+    await userEvent.setup().click(screen.getByRole("link", { name: "Open settings" }));
 
     expect(lines()).toEqual([]);
   });
@@ -427,7 +435,7 @@ describe("SignedInShell's error line", () => {
     });
     const user = userEvent.setup();
     await user.click(await screen.findByRole("button", { name: "Unlock grace" }));
-    await user.click(screen.getByRole("link", { name: "Profile" }));
+    await user.click(screen.getByRole("link", { name: "Open settings" }));
 
     await unlock.settle(bare(500));
 

@@ -1,8 +1,8 @@
 /**
  * The **patient in context**, read once: the one reader of the tab's EHR
- * context's patient (`@/auth/ehr-context`), whose view the top bar, Home's
- * Patient card and the Medication, FFI, NUMC and ARMC pages all render from — so it sits in `src/pages/`,
- * shared by the pages it serves.
+ * context's patient (`@/auth/ehr-context`), whose view the top bar, the Patient
+ * card, the Demographic details and the Medication, FFI, NUMC and ARMC pages
+ * all render from — so it sits in `src/pages/`, shared by the pages it serves.
  *
  * The gated read keeps no shared cache, so two readers of one patient would
  * send two `GET /api/patient/{id}` — each a call to the uncached patient

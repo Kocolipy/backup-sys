@@ -7,13 +7,19 @@ import {
   ScrollText,
   Search as SearchIcon,
   Settings,
+  UserRound,
   Users,
   Waves,
 } from "lucide-react";
 import type { ReactNode } from "react";
 
 import type { Permission } from "@/auth/api";
-import { HOME_PATH, PATIENT_SEARCH_PAGE_PATH, SETTINGS_PATH } from "@/auth/session-route";
+import {
+  DEMOGRAPHIC_PAGE_PATH,
+  HOME_PATH,
+  PATIENT_SEARCH_PAGE_PATH,
+  SETTINGS_PATH,
+} from "@/auth/session-route";
 import { Accounts } from "@/pages/accounts/accounts";
 import { ADMINISTRATION_PERMISSIONS } from "@/pages/accounts/accounts-api";
 import { ArmcBoards } from "@/pages/armc/armc";
@@ -21,6 +27,7 @@ import { ARMC_HISTORY } from "@/pages/armc/armc-api";
 import { Audit } from "@/pages/audit/audit";
 import { AUDIT_EVENTS } from "@/pages/audit/audit-api";
 import { ChangePassword } from "@/pages/change-password/change-password";
+import { Demographic } from "@/pages/demographic/demographic";
 import { Ffis } from "@/pages/ffi/ffi";
 import { FFI_HISTORY } from "@/pages/ffi/ffi-api";
 import { Home } from "@/pages/home/home";
@@ -85,15 +92,33 @@ const PAGES_BEYOND_HOME: readonly SignedInPage[] = [
 /**
  * Home: the landing page of a session without `patient:read`, and what the
  * shell falls back to for a path it does not know. Unguarded, so every
- * signed-in session may open it. Its title is hidden: the patient banner
- * heads the page.
+ * signed-in session may open it, and linked from no sidebar: a session with
+ * `patient:read` reaches its patient on the Demographic page. Its title is
+ * hidden: the patient banner heads the page.
  */
 export const HOME_PAGE: SignedInPage = {
   element: <Home />,
-  homeLink: "Profile",
   icon: IdCard,
   path: HOME_PATH,
   title: "Profile",
+  titleHidden: true,
+};
+
+/**
+ * The Demographic page: the patient in context's Patient card and their
+ * Demographic details, which selecting a Patient on Patient Search opens.
+ * Guarded by `patient:read`, the Permission the patient in context is read
+ * with, named here rather than through `PATIENT`: only the one reader of the
+ * patient in context imports `patient-api.ts` (`mb-patient-in-context-has-one-reader`).
+ * Its title is hidden: the patient banner heads the page.
+ */
+const DEMOGRAPHIC_PAGE: SignedInPage = {
+  element: <Demographic />,
+  homeLink: "Demographic",
+  icon: UserRound,
+  path: DEMOGRAPHIC_PAGE_PATH,
+  permissions: ["patient:read"],
+  title: "Demographic",
   titleHidden: true,
 };
 
@@ -128,7 +153,7 @@ const SEARCH_PAGE: SignedInPage = {
 
 /**
  * Medication: the Medication History of the patient in context, linked after
- * Profile and above FFI for a session holding `patient:read`, the Permission
+ * Demographic and above FFI for a session holding `patient:read`, the Permission
  * its read requires, and guarded by it as Patient Search is, so a session
  * without it is routed to its landing page and offered no link. Its title
  * heads the page.
@@ -196,6 +221,7 @@ const ARMC_PAGE: SignedInPage = {
  */
 export const SIGNED_IN_PAGES: readonly SignedInPage[] = [
   SEARCH_PAGE,
+  DEMOGRAPHIC_PAGE,
   HOME_PAGE,
   MEDICATION_PAGE,
   FFI_PAGE,

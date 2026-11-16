@@ -103,12 +103,14 @@ class PatientControllerTests {
     }
 
     /**
-     * Exactly the five elements, though the source's R4 Patient carries more — a {@code meta}, an
-     * MRN identifier ahead of the NRIC, a {@code usual} name ahead of the official one,
-     * {@code active} and a {@code telecom}.
+     * Exactly the five elements and the Demographic details, though the source's R4 Patient
+     * carries more — a {@code meta}, an MRN identifier ahead of the NRIC, a {@code usual} name
+     * ahead of the official one, {@code active}, the Last visit, and each contact point, address
+     * and contact's elements beyond those copied.
      */
     @Test
-    void aPatientIsServedAsAnR5PatientResourceOfItsFiveElements() throws Exception {
+    void aPatientIsServedAsAnR5PatientResourceOfItsFiveElementsAndItsDemographicDetails()
+            throws Exception {
         MockHttpServletResponse response = read(TAN_ID);
 
         assertThat(response.getStatus()).isEqualTo(200);
@@ -117,6 +119,26 @@ class PatientControllerTests {
                 {
                   "resourceType": "Patient",
                   "id": "eq081-VQEgP8drUUqCWzHfw3",
+                  "extension": [{
+                    "url": "http://example.org/fhir/StructureDefinition/military-service",
+                    "extension": [
+                      {"url": "serviceRecord", "extension": [
+                        {"url": "serviceType", "valueString": "NSman"},
+                        {"url": "rank", "valueString": "CPT"},
+                        {"url": "unit", "valueString": "3 SIR"},
+                        {"url": "service", "valueString": "Army"},
+                        {"url": "vocation", "valueString": "Infantry Officer"}]},
+                      {"url": "serviceRecord", "extension": [
+                        {"url": "serviceType", "valueString": "DXO"},
+                        {"url": "rank", "valueString": "ME2"},
+                        {"url": "unit", "valueString": "RSS Supreme"},
+                        {"url": "service", "valueString": "Navy"},
+                        {"url": "vocation", "valueString": "Naval Safety Officer"}]},
+                      {"url": "enlistmentDate", "valueDate": "2018-01-15"},
+                      {"url": "ordDate", "valueDate": "2020-01-14"},
+                      {"url": "rodDate", "valueDate": "2037-09-08"}
+                    ]
+                  }],
                   "identifier": [
                     {"system": "https://fhir.synapxe.sg/NamingSystem/nric", "value": "S1234567A"}
                   ],
@@ -124,9 +146,32 @@ class PatientControllerTests {
                     {"use": "official", "text": "Tan Wei Ming", "family": "Tan",
                      "given": ["Wei", "Ming"]}
                   ],
+                  "telecom": [
+                    {"system": "phone", "value": "+65 9123 4567"},
+                    {"system": "email", "value": "tan.hw@email.com"}
+                  ],
                   "gender": "male",
-                  "birthDate": "1985-03-12"
+                  "birthDate": "1985-03-12",
+                  "address": [
+                    {"use": "home", "text": "Blk 123 Bishan Street 12 #10-456, Singapore 570123"}
+                  ],
+                  "contact": [{
+                    "relationship": [
+                      {"coding": [{"system": "http://terminology.hl7.org/CodeSystem/v2-0131",
+                                   "code": "N"}]},
+                      {"text": "Mother"}
+                    ],
+                    "name": {"text": "Mdm Lee Siew Kuen"},
+                    "telecom": [{"system": "phone", "value": "+65 8234 5678"}]
+                  }]
                 }"""));
+    }
+
+    /** A Patient with no Demographic details is served as its five elements alone. */
+    @Test
+    void aPatientWithNoDemographicDetailsIsServedAsItsFiveElementsAlone() throws Exception {
+        assertThat(body(read("e0w0LEDCYtfckT6N.CkJKCw3")).propertyNames()).containsExactly(
+                "resourceType", "id", "identifier", "name", "gender", "birthDate");
     }
 
     /** The Malay fixture's name is not split at all. */

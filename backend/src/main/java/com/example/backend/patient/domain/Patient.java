@@ -21,9 +21,12 @@ import java.util.Objects;
  * @param name      the official name
  * @param gender    the administrative gender
  * @param birthDate the date of birth
+ * @param demographics the Demographic details, which a read by id copies and a search does not;
+ *                  {@link Demographics#NONE} when there are none
  */
 public record Patient(
-        PatientId id, String nric, PatientName name, AdministrativeGender gender, LocalDate birthDate) {
+        PatientId id, String nric, PatientName name, AdministrativeGender gender, LocalDate birthDate,
+        Demographics demographics) {
 
     /** Synapxe's NRIC NamingSystem: the {@code system} a Patient's NRIC identifier is under. */
     public static final String NRIC_SYSTEM = "https://fhir.synapxe.sg/NamingSystem/nric";
@@ -34,6 +37,18 @@ public record Patient(
         Objects.requireNonNull(name, "name");
         Objects.requireNonNull(gender, "gender");
         Objects.requireNonNull(birthDate, "birthDate");
+        Objects.requireNonNull(demographics, "demographics");
+    }
+
+    /** A Patient of the five elements alone, with no Demographic details. */
+    public Patient(
+            PatientId id, String nric, PatientName name, AdministrativeGender gender, LocalDate birthDate) {
+        this(id, nric, name, gender, birthDate, Demographics.NONE);
+    }
+
+    /** This Patient with {@code details} as its Demographic details. */
+    public Patient withDemographics(Demographics details) {
+        return new Patient(id, nric, name, gender, birthDate, details);
     }
 
     @Override
