@@ -53,6 +53,13 @@ in the same change, so the ledger lists live flakes only.
 
 ## Ledger
 
+### `backend/src/test/java/com/example/backend/contract/PagingContractTests.java` — `every_paged_operation_coerces_its_paging(Operation, String, long, boolean)[1]`
+
+- **Command**: `make verify` (repo root).
+- **Failure**: `PagingContractTests.every_paged_operation_coerces_its_paging:140 [GET /api/patient-search ] expected: 200 but was: 502`
+- **Evidence**: `2026-11-16`, `4d74dc59` with no change; failing `make verify`, then passing `./scripts/verify.sh` (`backend/`), no edit between.
+- **Suspected cause**: the in-process mock answered too slowly. The `502`'s fault record has `event.reason` `timed-out` (`PatientSourceAdapter.search`), and another Maven test run was using the same machine at the time.
+
 ### `frontend/test/e2e/patient-search.spec.ts` — `Patient Search › pages a name search to its second page, in the patient source's order`
 
 - **Command**: `make integration-test`
