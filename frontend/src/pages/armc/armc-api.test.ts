@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import { checkDateRanges } from "@/lib/date-range";
 import { DecodeError } from "@/lib/decode";
-import { describeDecoder, STRING, without } from "@/lib/decode.testHelpers";
 
 import {
   ARMC_DATE_COLUMNS,
@@ -13,7 +12,7 @@ import {
   NO_ARMC_FILTERS,
 } from "./armc-api";
 
-/** One ARMC Board exactly as the backend serialises it, its End Date present. */
+/** One ARMC Board exactly as the backend serialises it, every field present. */
 const ACES_FIT = {
   id: "armc-tan-wei-ming-1",
   boardType: "aces",
@@ -22,7 +21,30 @@ const ACES_FIT = {
   endDate: "2024-02-10",
   medicalOfficer1: "Medical Officer 1",
   medicalOfficer2: "Medical Officer 2",
+  invalid: [],
 };
+
+/** {@link ACES_FIT} as the page reads it. */
+const ACES_FIT_READ = {
+  id: { state: "present", value: "armc-tan-wei-ming-1" },
+  boardType: { state: "present", value: "aces" },
+  outcome: { state: "present", value: "fit" },
+  startDate: { state: "present", value: "2024-01-01" },
+  endDate: { state: "present", value: "2024-02-10" },
+  medicalOfficer1: { state: "present", value: "Medical Officer 1" },
+  medicalOfficer2: { state: "present", value: "Medical Officer 2" },
+};
+
+/** Every element of an ARMC Board, as the backend names it. */
+const ELEMENTS = [
+  "id",
+  "boardType",
+  "outcome",
+  "startDate",
+  "endDate",
+  "medicalOfficer1",
+  "medicalOfficer2",
+] as const;
 
 /** `decode(body)`'s refusal, read through the declaration as a `Response`. */
 async function refused(body: unknown) {
@@ -32,26 +54,110 @@ async function refused(body: unknown) {
   );
 }
 
-// Every element is required but the End Date, which the backend leaves out
-// for a board still open, and each is read as a string first. A code is
-// matched exactly, so a label, another case or another set's code is outside
-// its set; which strings are calendar dates is `isCalendarDate`'s
-// (lib/time.test.ts).
-describeDecoder(
-  "ArmcBoard",
-  decodeArmcBoard,
-  ACES_FIT,
-  {
-    id: STRING,
-    boardType: ["ACES", "aces", "a string"],
-    outcome: ["waiver-granted", "fit | unfit", "a string"],
-    startDate: ["01 Jan 2024", "a date", "a string"],
-    endDate: ["2024-02-30", "a date", "a string"],
-    medicalOfficer1: STRING,
-    medicalOfficer2: STRING,
-  },
-  { optional: ["endDate"], strict: true },
-);
+// An ARMC Board is shown as received (ADR 0020): each field is read by the
+// lenient field decoder (`readObject(…).sourceFields()`, lib/decode.test.ts),
+// so its value never refuses the board — only its shape does.
+describe("decodeArmcBoard", () => {
+  it("reads every field present as it came", () => {
+    expect(decodeArmcBoard(ACES_FIT)).toStrictEqual(ACES_FIT_READ);
+  });
+
+  // A board still open has no End Date: the backend sends it null.
+  it("reads a null field as missing, and one the row names invalid as invalid", () => {
+    expect(
+      decodeArmcBoard({
+        ...ACES_FIT,
+        id: null,
+        endDate: null,
+        medicalOfficer2: null,
+        startDate: null,
+        invalid: ["startDate"],
+      }),
+    ).toStrictEqual({
+      ...ACES_FIT_READ,
+      id: { state: "missing" },
+      endDate: { state: "missing" },
+      medicalOfficer2: { state: "missing" },
+      startDate: { state: "invalid" },
+    });
+  });
+
+  it.each(ELEMENTS)("reads %s invalid when the row names it", (field) => {
+    expect(decodeArmcBoard({ ...ACES_FIT, [field]: null, invalid: [field] })).toStrictEqual({
+      ...ACES_FIT_READ,
+      [field]: { state: "invalid" },
+    });
+  });
+
+  // Which strings are calendar dates is `isCalendarDate`'s (lib/time.test.ts).
+  it.each(["startDate", "endDate"] as const)(
+    "reads %s invalid when it is no calendar date",
+    (field) => {
+      expect(decodeArmcBoard({ ...ACES_FIT, [field]: "2024-02-30" })[field]).toStrictEqual({
+        state: "invalid",
+      });
+    },
+  );
+
+  // A code is matched by the page, not the decoder: another case or another
+  // set's code is kept as the source sent it.
+  it.each([
+    ["boardType", "ACES"],
+    ["boardType", "aircrew"],
+    ["outcome", "FIT"],
+    ["outcome", "waiver-granted"],
+  ])("reads %s outside its closed set as present, as it came: %s", (field, code) => {
+    expect(decodeArmcBoard({ ...ACES_FIT, [field]: code })).toStrictEqual({
+      ...ACES_FIT_READ,
+      [field]: { state: "present", value: code },
+    });
+  });
+
+  it("reads an id outside FHIR's id grammar as present: ids are not checked", () => {
+    expect(decodeArmcBoard({ ...ACES_FIT, id: "armc tan/1" }).id).toStrictEqual({
+      state: "present",
+      value: "armc tan/1",
+    });
+  });
+
+  // No date's meaning is checked: an End Date before the Start Date is a date.
+  it("reads an End Date before the Start Date as present", () => {
+    expect(decodeArmcBoard({ ...ACES_FIT, endDate: "2023-12-31" }).endDate).toStrictEqual({
+      state: "present",
+      value: "2023-12-31",
+    });
+  });
+
+  it.each(ELEMENTS)("refuses a board without %s, which the backend always sends", (field) => {
+    expect(() =>
+      decodeArmcBoard(
+        Object.fromEntries(Object.entries(ACES_FIT).filter(([key]) => key !== field)),
+      ),
+    ).toThrow(new DecodeError(`ArmcBoard.${field} is not a string or null`));
+  });
+
+  it("refuses a board without invalid", () => {
+    expect(() =>
+      decodeArmcBoard(
+        Object.fromEntries(Object.entries(ACES_FIT).filter(([key]) => key !== "invalid")),
+      ),
+    ).toThrow(new DecodeError("ArmcBoard.invalid is not an array"));
+  });
+
+  it("refuses a field the board does not have", () => {
+    expect(() => decodeArmcBoard({ ...ACES_FIT, status: "active" })).toThrow(
+      new DecodeError("ArmcBoard.status is not expected"),
+    );
+  });
+
+  it.each([
+    ["an array", [ACES_FIT]],
+    ["null", null],
+    ["a string", "board"],
+  ])("refuses %s as a board", (_, value) => {
+    expect(() => decodeArmcBoard(value)).toThrow(new DecodeError("ArmcBoard is not an object"));
+  });
+});
 
 // How a date range is checked is `checkDateRanges`' (lib/date-range.test.ts):
 // here, that the ARMC History's two ranges are the ones checked, by name.
@@ -176,31 +282,22 @@ describe("ARMC_HISTORY", () => {
     ]);
   });
 
-  it("decodes a page of ARMC Boards, one still open with no End Date", async () => {
-    const open = without({ ...ACES_FIT, id: "armc-open" }, "endDate");
-
+  it("decodes a page of ARMC Boards", async () => {
     await expect(
       ARMC_HISTORY.decode(
-        new Response(JSON.stringify({ records: [ACES_FIT, open], startIndex: 1, totalResults: 2 })),
+        new Response(JSON.stringify({ records: [ACES_FIT], startIndex: 1, totalResults: 2 })),
       ),
-    ).resolves.toStrictEqual({ rows: [ACES_FIT, open], startIndex: 1, totalResults: 2 });
+    ).resolves.toStrictEqual({ rows: [ACES_FIT_READ], startIndex: 1, totalResults: 2 });
   });
 
-  // An absent End Date is a board still open; a null one is no date at all.
-  it("refuses an ARMC Board whose End Date is null", async () => {
-    expect(
-      await refused({ records: [{ ...ACES_FIT, endDate: null }], startIndex: 1, totalResults: 1 }),
-    ).toStrictEqual(new DecodeError("ArmcBoard.endDate is not a string"));
-  });
-
-  it("refuses a page holding an ARMC Board it cannot read", async () => {
+  it("refuses a page holding an ARMC Board whose shape it cannot read", async () => {
     expect(
       await refused({
-        records: [{ ...ACES_FIT, outcome: "waiver-granted" }],
+        records: [{ ...ACES_FIT, invalid: "outcome" }],
         startIndex: 1,
         totalResults: 1,
       }),
-    ).toStrictEqual(new DecodeError("ArmcBoard.outcome is not fit | unfit"));
+    ).toStrictEqual(new DecodeError("ArmcBoard.invalid is not an array"));
   });
 
   it("refuses a page holding a field it does not know", async () => {

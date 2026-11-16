@@ -1,8 +1,8 @@
 ---
 type: Decision Record
 title: "ADR 0020: Patient-source data is shown as received"
-description: The patient source is the truth, so no record or response is refused for what a field holds — a missing field is shown as "—", one in the wrong format as "Error", a code outside its closed set as the raw code — while transport and structural failures still fail the read; the shared pieces each read adopts it through, enacted for the FFI and NUMC Histories, and the parts of ADR 0014, 0018 and 0019 it supersedes.
-tags: [patient, ffi, numc, integration, observability, spa]
+description: The patient source is the truth, so no record or response is refused for what a field holds — a missing field is shown as "—", one in the wrong format as "Error", a code outside its closed set as the raw code — while transport and structural failures still fail the read; the shared pieces each read adopts it through, enacted for the FFI, NUMC and ARMC Histories, and the parts of ADR 0014, 0018 and 0019 it supersedes.
+tags: [patient, ffi, numc, armc, integration, observability, spa]
 ---
 
 # 20. Patient-source data is shown as received
@@ -11,8 +11,9 @@ Date: 2026-11-16
 
 ## Status
 
-Accepted. Enacted for the FFI History (`/docs/domain/ffi.md`) and the NUMC
-History (`/docs/domain/numc.md`). The other patient-source reads — the ARMC and
+Accepted. Enacted for the FFI History (`/docs/domain/ffi.md`), the NUMC
+History (`/docs/domain/numc.md`) and the ARMC History (`/docs/domain/armc.md`).
+The other patient-source reads — the
 Medication Histories, a Patient by id and a Patient search — keep the strict
 reading their ADRs describe until each adopts the shared pieces below; the rule
 is decided for all of them.
@@ -108,6 +109,15 @@ and ADR 0019, D4 have it: a malformed field sorts wherever the source puts it.
 - ADR 0019, Consequences: a new code being "a `502`, not a row shown with a
   blank cell", and the source having to "send every required element".
 
+For the ARMC History:
+
+- ADR 0019, D6: an ARMC Board ending before it starts, a missing required
+  element, a blank Medical Officer or an unknown code being a failure of the
+  source, and a still-open board's End Date being left out of our answer
+  rather than sent `null`.
+- ADR 0019, D4: each rule an ARMC Board breaks being logged under a reason
+  naming ARMC — no ARMC Board breaks one.
+
 For each other read, as it adopts the rule:
 
 - ADR 0014, "Only a `404` is no patient": a Patient with no NRIC, no official
@@ -115,9 +125,9 @@ For each other read, as it adopts the rule:
   missing or not to the day being a failure of the source. Another patient's
   id stays one: it is not the expected resource.
 - ADR 0018, D1: a search's entry with no `id` being a failure of the source.
-- ADR 0019, D6 and D7: an ARMC Board or a Medication Record ending before it
-  starts, a date-time with no offset, a missing required element or an unknown
-  code being a failure of the source.
+- ADR 0019, D7: a Medication Record ending before it starts, a date-time with
+  no offset, a missing required element or an unknown code being a failure of
+  the source.
 
 ## Consequences
 

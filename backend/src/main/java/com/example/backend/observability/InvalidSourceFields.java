@@ -28,7 +28,7 @@ public final class InvalidSourceFields {
 
     /**
      * Which read of the source the record is about, as the counter's {@code read} tag spells it
-     * ({@link SourceRead#tag()}): {@code ffi} or {@code numc}. The schema has no field for it, so it is namespaced under {@code app.}.
+     * ({@link SourceRead#tag()}): {@code ffi}, {@code numc} or {@code armc}. The schema has no field for it, so it is namespaced under {@code app.}.
      */
     public static final String READ = "app.patient_source.read";
 

@@ -587,9 +587,14 @@ public abstract class PatientStoreContract {
 
     private static ArmcBoard armc(String id, ArmcOutcome outcome, String startDate,
             String endDate, String medicalOfficer1, String medicalOfficer2) {
-        return new ArmcBoard(id, ArmcBoardType.ACES, outcome, LocalDate.parse(startDate),
-                endDate == null ? null : LocalDate.parse(endDate), medicalOfficer1,
-                medicalOfficer2);
+        return new ArmcBoard(SourceField.present(id),
+                SourceField.present(ArmcBoardType.ACES.code()),
+                SourceField.present(outcome.code()),
+                SourceField.present(LocalDate.parse(startDate)),
+                endDate == null
+                        ? SourceField.missing()
+                        : SourceField.present(LocalDate.parse(endDate)),
+                SourceField.present(medicalOfficer1), SourceField.present(medicalOfficer2));
     }
 
     /** The page {@code page} of {@code patient}'s ARMC History, unfiltered, in the source's order. */
@@ -636,10 +641,45 @@ public abstract class PatientStoreContract {
                                 "2020-08-24", "Dr Chen Mei Ling", "Dr Lim Wei Jie"))));
     }
 
+    /**
+     * Tan Boon Huat's four ARMC Boards, read as received (ADR 0020): an outcome left out, an End
+     * Date before its Start Date kept and a blank Medical Officer missing; a date of the wrong
+     * JSON type and one not to the day; codes outside both closed sets and an id outside FHIR's
+     * grammar kept as they came; and a board with no id whose fields are empty, blank,
+     * {@code null} or left out.
+     */
+    @Test
+    void tan_boon_huats_armc_history_is_read_as_received() {
+        assertThat(armcHistory(new PatientId("dev-patient-10"), FIRST_FIVE))
+                .contains(new ArmcHistory(4, List.of(
+                        new ArmcBoard(SourceField.present("armc-tan-boon-huat-1"),
+                                SourceField.present("aces"), SourceField.missing(),
+                                SourceField.present(LocalDate.of(2022, 3, 16)),
+                                SourceField.present(LocalDate.of(2022, 3, 1)),
+                                SourceField.present("Dr Lim Wei Jie"), SourceField.missing()),
+                        new ArmcBoard(SourceField.present("armc-tan-boon-huat-2"),
+                                SourceField.present("aces"), SourceField.present("fit"),
+                                SourceField.invalid(), SourceField.invalid(),
+                                SourceField.present("Dr Rajesh Kumar"),
+                                SourceField.present("Dr Chen Mei Ling")),
+                        new ArmcBoard(SourceField.present("armc tan boon huat 3"),
+                                SourceField.present("aircrew"),
+                                SourceField.present("waiver-granted"),
+                                SourceField.present(LocalDate.of(2020, 3, 16)),
+                                SourceField.present(LocalDate.of(2020, 5, 11)),
+                                SourceField.present("Dr Chen Mei Ling"),
+                                SourceField.present("Dr Lim Wei Jie")),
+                        new ArmcBoard(SourceField.missing(), SourceField.present("aces"),
+                                SourceField.missing(), SourceField.missing(),
+                                SourceField.missing(), SourceField.missing(),
+                                SourceField.missing()))));
+    }
+
     /** The ids of an ARMC History's page, in its order, beside its total. */
     private static List<Object> boardIdsAndTotal(Optional<ArmcHistory> history) {
         ArmcHistory read = history.orElseThrow();
-        return List.of(read.totalResults(), read.boards().stream().map(ArmcBoard::id).toList());
+        return List.of(read.totalResults(),
+                read.boards().stream().map(board -> board.id().value()).toList());
     }
 
     /** Each canned sort of Tan Wei Ming's ARMC History: the sort, then the ids in its order. */

@@ -61,8 +61,7 @@ grammar, which the page keys its row by and never shows.
   accounts, and nothing looks it up. A missing or blank one is a failure of
   the source, as a missing or blank Medication is.
 - **An optional element the source lacks** is left out by the source, and by
-  our API, as an ARMC Board's End Date is ([armc](armc.md), "The elements"):
-  never sent as `null`, and shown as `—`.
+  our API: never sent as `null`, and shown as `—`.
 - **The Start Date and End Date are date-times**, to the minute. The source
   gives each as ISO-8601 with an offset (`Z` among them), and our API passes
   each on with the offset the source gave. The page shows each in Singapore

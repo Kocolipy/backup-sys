@@ -940,20 +940,33 @@ class PatientSourceFixturesTests {
                 .toList();
     }
 
-    /** Every ARMC Board of every fixture's ARMC History, each once, as its pages hold it. */
-    private static List<JsonNode> everyArmcBoard() {
+    /** The patient whose ARMC History is shown as received: the one whose boards are malformed. */
+    private static final String ARMC_AS_RECEIVED = "/Patient/dev-patient-10/armc";
+
+    /** Every ARMC History stub but Tan Boon Huat's, whose every board is well-formed. */
+    private static Stream<PatientSourceStubs.HistoryStub> wellFormedArmcHistories() {
         return PatientSourceStubs.armcHistories().stream()
+                .filter(stub -> !stub.path().equals(ARMC_AS_RECEIVED));
+    }
+
+    /**
+     * Every well-formed ARMC Board of every fixture's ARMC History — every one but Tan Boon
+     * Huat's — each once, as its pages hold it.
+     */
+    private static List<JsonNode> everyArmcBoard() {
+        return wellFormedArmcHistories()
                 .filter(stub -> inTheSourcesOrder(stub, ARMC_FILTER_PARAMETERS))
                 .flatMap(stub -> resourcesOf(stub).stream())
                 .toList();
     }
 
     /**
-     * Two fixtures have ARMC Boards, each page its own stub — Tan Wei Ming's one page of two and
-     * Tan Hui Min's two of seven — and a fallback answers every fixture's other read with none.
+     * Three fixtures have ARMC Boards, each page its own stub — Tan Wei Ming's one page of two,
+     * Tan Hui Min's two of seven and Tan Boon Huat's one of four, shown as received — and a
+     * fallback answers every fixture's other read with none.
      */
     @Test
-    void twoFixturesHaveAnArmcHistoryAndTheFallbackServesEveryFixture() {
+    void threeFixturesHaveAnArmcHistoryAndTheFallbackServesEveryFixture() {
         List<String> exact = PatientSourceStubs.armcHistories().stream()
                 .filter(stub -> inTheSourcesOrder(stub, ARMC_FILTER_PARAMETERS))
                 .map(stub -> stub.path() + " " + stub.query().at("/_offset/equalTo").asString()
@@ -967,10 +980,11 @@ class PatientSourceFixturesTests {
         assertThat(exact).containsExactlyInAnyOrder(
                 "/Patient/eq081-VQEgP8drUUqCWzHfw3/armc 0 of 2",
                 "/Patient/dev-patient-05/armc 0 of 7",
-                "/Patient/dev-patient-05/armc 5 of 7");
+                "/Patient/dev-patient-05/armc 5 of 7",
+                "/Patient/dev-patient-10/armc 0 of 4");
         assertThat(fixtureIds()).allSatisfy(id ->
                 assertThat("/Patient/" + id + "/armc").matches(fallback));
-        assertThat("/Patient/fault-armc-no-id/armc").doesNotMatch(fallback);
+        assertThat("/Patient/fault-armc-no-total/armc").doesNotMatch(fallback);
     }
 
     /**
@@ -982,7 +996,7 @@ class PatientSourceFixturesTests {
     @Test
     void everyCannedArmcReadPinsItsPageItsSortAndEveryFilterItUsesOrNot() {
         assertThat(PatientSourceStubs.armcHistories()).filteredOn(PatientSourceFixturesTests::canned)
-                .hasSize(13)
+                .hasSize(14)
                 .allSatisfy(stub -> assertThat(List.of(
                         stub.query().at("/_count/equalTo").asString(),
                         stub.query().at("/_offset/equalTo").isString(),
@@ -1000,7 +1014,8 @@ class PatientSourceFixturesTests {
         assertThat(PatientSourceStubs.armcHistories())
                 .allSatisfy(stub -> assertThat(resourcesOf(stub)).hasSizeLessThanOrEqualTo(5));
         assertThat(List.of(boardsOf("eq081-VQEgP8drUUqCWzHfw3").size(),
-                boardsOf("dev-patient-05").size())).containsExactly(2, 7);
+                boardsOf("dev-patient-05").size(), boardsOf("dev-patient-10").size()))
+                .containsExactly(2, 7, 4);
     }
 
     /** Every code of both closed sets an ARMC Board has, as the two sets spell them on the wire. */
@@ -1024,8 +1039,8 @@ class PatientSourceFixturesTests {
     }
 
     /**
-     * Every ARMC Board is an {@code ARMC} of exactly its six elements and its id, but a board
-     * still open, which has no End Date: at least one fixture's board is open.
+     * Every well-formed ARMC Board is an {@code ARMC} of exactly its six elements and its id, but
+     * a board still open, which has no End Date: at least one fixture's board is open.
      */
     @Test
     void everyArmcBoardHoldsItsElementsAndItsIdAloneAndOneIsStillOpen() {
@@ -1036,13 +1051,50 @@ class PatientSourceFixturesTests {
                 .containsExactly("armc-tan-hui-min-1");
     }
 
-    /** Every ARMC Board any stub answers, sorted or filtered too, holds its elements alone. */
+    /**
+     * Every ARMC Board any stub answers, sorted or filtered too, is an {@code ARMC} of its
+     * elements and its id alone, and every one but Tan Boon Huat's holds them as a well-formed
+     * board does.
+     */
     @Test
     void everyArmcBoardAnyStubAnswersHoldsItsElementsAlone() {
+        Set<String> elements = Set.of("resourceType", "id", "boardType", "outcome", "startDate",
+                "endDate", "medicalOfficer1", "medicalOfficer2");
         assertThat(PatientSourceStubs.armcHistories().stream()
                 .flatMap(stub -> resourcesOf(stub).stream()))
                 .isNotEmpty()
+                .allSatisfy(board -> assertThat(board.get("resourceType").asString())
+                        .isEqualTo("ARMC"))
+                .allSatisfy(board -> assertThat(elements).containsAll(board.propertyNames()));
+        assertThat(wellFormedArmcHistories().flatMap(stub -> resourcesOf(stub).stream()))
                 .allSatisfy(PatientSourceFixturesTests::holdsItsElementsAlone);
+    }
+
+    /**
+     * Tan Boon Huat's four ARMC Boards are the patient source's data as received (ADR 0020): an
+     * element left out, {@code null}, empty and blank — a Medical Officer among them — an End
+     * Date before its Start Date, a date of the wrong JSON type and one not to the day, a code
+     * outside each closed set — another set's among them — and an id outside FHIR's grammar and
+     * none at all, written out board by board.
+     */
+    @Test
+    void tanBoonHuatsArmcHistoryHoldsMissingMalformedAndUnknownElements() {
+        assertThat(boardsOf("dev-patient-10")).extracting(JsonNode::toString).containsExactly(
+                "{\"resourceType\":\"ARMC\",\"id\":\"armc-tan-boon-huat-1\","
+                        + "\"boardType\":\"aces\",\"startDate\":\"2022-03-16\","
+                        + "\"endDate\":\"2022-03-01\",\"medicalOfficer1\":\"Dr Lim Wei Jie\","
+                        + "\"medicalOfficer2\":\"   \"}",
+                "{\"resourceType\":\"ARMC\",\"id\":\"armc-tan-boon-huat-2\","
+                        + "\"boardType\":\"aces\",\"outcome\":\"fit\",\"startDate\":20210316,"
+                        + "\"endDate\":\"2021-04\",\"medicalOfficer1\":\"Dr Rajesh Kumar\","
+                        + "\"medicalOfficer2\":\"Dr Chen Mei Ling\"}",
+                "{\"resourceType\":\"ARMC\",\"id\":\"armc tan boon huat 3\","
+                        + "\"boardType\":\"aircrew\",\"outcome\":\"waiver-granted\","
+                        + "\"startDate\":\"2020-03-16\",\"endDate\":\"2020-05-11\","
+                        + "\"medicalOfficer1\":\"Dr Chen Mei Ling\","
+                        + "\"medicalOfficer2\":\"Dr Lim Wei Jie\"}",
+                "{\"resourceType\":\"ARMC\",\"boardType\":\"aces\",\"outcome\":\"\","
+                        + "\"startDate\":\"  \",\"endDate\":null,\"medicalOfficer1\":\"\"}");
     }
 
     /** Whether {@code board} is an {@code ARMC} of exactly its elements and its id, the End Date optional. */
@@ -1056,7 +1108,7 @@ class PatientSourceFixturesTests {
                 .isIn(List.of("ARMC", closed), List.of("ARMC", open));
     }
 
-    /** Every fixture's board ends on or after the day it starts, when it has ended. */
+    /** Every well-formed fixture's board ends on or after the day it starts, when it has ended. */
     @Test
     void everyArmcBoardEndsOnOrAfterItStarts() {
         assertThat(everyArmcBoard()).filteredOn(board -> board.has("endDate"))
@@ -1064,7 +1116,10 @@ class PatientSourceFixturesTests {
                         .isAfterOrEqualTo(LocalDate.parse(board.get("startDate").asString())));
     }
 
-    /** Every ARMC Board's id is in FHIR's id grammar and no other record's, an FFI's or NUMC's. */
+    /**
+     * Every ARMC Board's id but Tan Boon Huat's is in FHIR's id grammar and no other record's, an
+     * FFI's or NUMC's.
+     */
     @Test
     void everyArmcBoardIdIsAFhirIdOfItsOwn() {
         List<String> ids = everyArmcBoard().stream()
@@ -1175,7 +1230,9 @@ class PatientSourceFixturesTests {
 
     /**
      * The ARMC fault stubs, each by the failure it serves under a well-formed patient id no
-     * fixture uses, so it never shadows a fixture's history and the read reaches the source.
+     * fixture uses, so it never shadows a fixture's history and the read reaches the source: a
+     * failure of the call or of the searchset alone, since no ARMC Board fails a read
+     * (ADR 0020).
      */
     @Test
     void theArmcFaultStubsServeEachFailureUnderAPatientIdOfItsOwn() {
@@ -1186,10 +1243,7 @@ class PatientSourceFixturesTests {
                         .isNotIn(fixtureIds()))
                 .extracting(PatientSourceStubs.FaultStub::fault)
                 .containsExactlyInAnyOrder("unreachable", "slow", "server-error",
-                        "unexpected-status", "not-a-searchset", "no-total", "no-id",
-                        "invalid-id", "no-outcome", "no-medical-officer-2",
-                        "unknown-board-type", "unknown-outcome", "end-before-start",
-                        "end-date-not-to-the-day");
+                        "unexpected-status", "not-a-searchset", "no-total");
     }
 
     // ---- the Medication Histories -----------------------------------------------------------

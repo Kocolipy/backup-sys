@@ -144,10 +144,13 @@ change, when the backend side moves. What the SPA has to honour:
   `src/pages/armc/armc-api.ts`) opts in to `absentOnNotFound`, so the `404` is
   the ARMC page's "No patient in context" and the `502` "Couldn't load ARMC
   records" with Try again; the `{patientId}` is sent through
-  `encodeURIComponent`, and each ARMC Board is decoded strictly. A board still
-  open has no `endDate` at all — the backend leaves it out rather than sending
-  `null` — and the decoder reads its absence as the board still open, and a
-  `null` one as a failure.
+  `encodeURIComponent`. An ARMC Board is shown as received (ADR 0020): its
+  shape is decoded strictly — every field there, `invalid` an array of
+  strings, and a field it does not know refused — but each element's value
+  through the lenient field decoder (`readObject(…).sourceFields()`): a `null`
+  element is missing, "—" — the `endDate` of a board still open among them —
+  one its row names in `invalid` is "Error", and a code outside its closed set
+  is shown as it came, so no element fails the read.
 - **A patient's Medication History answers plain JSON too, on the same
   terms.** `GET /api/patient-medication/{patientId}` answers
   `application/json`, every refusal or fault an `ApiError`. Its declaration

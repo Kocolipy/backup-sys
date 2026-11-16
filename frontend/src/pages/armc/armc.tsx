@@ -1,4 +1,3 @@
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Table,
@@ -8,10 +7,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { orElse, shown } from "@/lib/source-field";
 import { formatCalendarDateTwoDigitDay } from "@/lib/time";
 import { FilteredHistory } from "@/pages/filtered-history";
 import { ForPatientInContext } from "@/pages/for-patient-in-context";
 import { type ColumnSorting, PlainHeading, SortHeading } from "@/pages/sort-heading";
+import { badged, type BadgeVariant, labelled } from "@/pages/source-code";
 
 import { ArmcFilterPopover } from "./armc-filter-popover";
 import {
@@ -26,20 +27,23 @@ import {
   NO_ARMC_FILTERS,
 } from "./armc-api";
 
-/** Each ARMC Outcome's badge: FIT green, UNFIT red. */
-const OUTCOME_BADGES: Readonly<Record<ArmcOutcome, "success" | "danger">> = {
+/** Each ARMC Outcome's badge: FIT green, UNFIT red. A code outside the set is on a neutral one. */
+const OUTCOME_BADGES: Readonly<Record<ArmcOutcome, BadgeVariant>> = {
   fit: "success",
   unfit: "danger",
 };
 
 /**
- * The page's ARMC Boards, one row each, in the order read: the ARMC Board
- * Type by its label, in bold, the ARMC Outcome as a badge, both dates as
- * `dd MMM yyyy` — `—` for the End Date of a board still open — and both
- * Medical Officers' names as the source gives them. Start Date and End Date
- * sort, one at a time, held still while a read is `pending`; no other column
- * does. Read-only, with no row action; each row is keyed by the board's id,
- * which is never shown.
+ * The page's ARMC Boards, one row each, in the order read, shown as the
+ * patient source sent them (ADR 0020): the ARMC Board Type by its label, in
+ * bold, the ARMC Outcome as a badge, both dates as `dd MMM yyyy` and both
+ * Medical Officers' names as the source gives them; a code outside its closed
+ * set as it came, the Outcome's on a neutral badge; a missing element as "—" —
+ * the End Date of a board still open among them — and one in the wrong format
+ * as "Error" (`shown`). Nothing checks a board's dates against each other.
+ * Start Date and End Date sort, one at a time, held still while a read is
+ * `pending`; no other column does. Read-only, with no row action; each row is
+ * keyed by the board's id, which is never shown, or its place without one.
  */
 function ArmcTable({
   boards,
@@ -64,24 +68,22 @@ function ArmcTable({
         </TableRow>
       </TableHeader>
       <TableBody>
-        {boards.map((board) => (
-          <TableRow key={board.id}>
+        {boards.map((board, place) => (
+          <TableRow key={orElse(board.id, place)}>
             <TableCell className="font-semibold">
-              {ARMC_BOARD_TYPE_LABELS[board.boardType]}
+              {shown(board.boardType, labelled(ARMC_BOARD_TYPE_LABELS))}
             </TableCell>
             <TableCell>
-              <Badge variant={OUTCOME_BADGES[board.outcome]}>
-                {ARMC_OUTCOME_LABELS[board.outcome]}
-              </Badge>
+              {shown(board.outcome, badged(ARMC_OUTCOME_LABELS, OUTCOME_BADGES))}
             </TableCell>
             <TableCell className="tabular-nums">
-              {formatCalendarDateTwoDigitDay(board.startDate)}
+              {shown(board.startDate, formatCalendarDateTwoDigitDay)}
             </TableCell>
             <TableCell className="tabular-nums">
-              {board.endDate === undefined ? "—" : formatCalendarDateTwoDigitDay(board.endDate)}
+              {shown(board.endDate, formatCalendarDateTwoDigitDay)}
             </TableCell>
-            <TableCell>{board.medicalOfficer1}</TableCell>
-            <TableCell>{board.medicalOfficer2}</TableCell>
+            <TableCell>{shown(board.medicalOfficer1, (name) => name)}</TableCell>
+            <TableCell>{shown(board.medicalOfficer2, (name) => name)}</TableCell>
           </TableRow>
         ))}
       </TableBody>
