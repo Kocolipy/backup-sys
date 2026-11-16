@@ -1,6 +1,3 @@
-import type { ComponentProps } from "react";
-
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Table,
@@ -10,11 +7,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { byCode, orElse, shown } from "@/lib/source-field";
+import { orElse, shown } from "@/lib/source-field";
 import { formatCalendarDateTwoDigitDay } from "@/lib/time";
 import { FilteredHistory } from "@/pages/filtered-history";
 import { ForPatientInContext } from "@/pages/for-patient-in-context";
 import { type ColumnSorting, PlainHeading, SortHeading } from "@/pages/sort-heading";
+import { badged, type BadgeVariant, labelled } from "@/pages/source-code";
 
 import { NumcFilterPopover } from "./numc-filter-popover";
 import {
@@ -28,9 +26,6 @@ import {
   type NumcRecord,
   type NumcSortColumn,
 } from "./numc-api";
-
-/** A badge's look, as the Badge takes it. */
-type BadgeVariant = NonNullable<ComponentProps<typeof Badge>["variant"]>;
 
 /**
  * Each NUMC Outcome's badge: FIT green, UNFIT red, WAIVER GRANTED blue and
@@ -77,15 +72,9 @@ function NumcTable({
       <TableBody>
         {records.map((record, place) => (
           <TableRow key={orElse(record.id, place)}>
+            <TableCell>{shown(record.type, labelled(NUMC_TYPE_LABELS))}</TableCell>
             <TableCell>
-              {shown(record.type, (code) => byCode(NUMC_TYPE_LABELS, code, code))}
-            </TableCell>
-            <TableCell>
-              {shown(record.outcome, (code) => (
-                <Badge variant={byCode(OUTCOME_BADGES, code, "outline")}>
-                  {byCode(NUMC_OUTCOME_LABELS, code, code)}
-                </Badge>
-              ))}
+              {shown(record.outcome, badged(NUMC_OUTCOME_LABELS, OUTCOME_BADGES))}
             </TableCell>
             <TableCell className="tabular-nums">
               {shown(record.issueDate, formatCalendarDateTwoDigitDay)}
