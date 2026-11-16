@@ -8,17 +8,26 @@ import static com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import com.example.backend.audit.CapturedLog;
+import com.example.backend.observability.LogEvent;
 import com.example.backend.observability.LogEvent.ErrorCategory;
 import com.example.backend.paging.domain.PageRequest;
 import com.example.backend.patient.PatientSourceStubs;
 import com.example.backend.patient.domain.AdministrativeGender;
 import com.example.backend.patient.domain.PatientFilter;
 import com.example.backend.patient.domain.PatientQuery;
+import com.example.backend.patient.domain.SourceField;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import com.github.tomakehurst.wiremock.verification.LoggedRequest;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.time.Duration;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -26,6 +35,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.springframework.web.client.RestClient;
 
 /**
  * A Patient search as the HTTP adapter makes it (ADR 0018), against the patient source's mock in
@@ -67,6 +77,10 @@ class PatientSourceSearchAdapterTests {
 
     private static PatientSourceAdapter adapter() {
         return PatientSourceAdapters.at(SOURCE.baseUrl());
+    }
+
+    private static PatientSourceAdapter adapter(MeterRegistry meters) {
+        return new PatientSourceAdapter(RestClient.builder(), SOURCE.baseUrl(), meters);
     }
 
     private static void answering(String body) {
@@ -197,34 +211,145 @@ class PatientSourceSearchAdapterTests {
         SOURCE.verify(2, getRequestedFor(urlPathEqualTo(PROBE_SEARCH)));
     }
 
-    /** A Patient with a Last visit is read with it, and one with none with none. */
+    /** The Last visit of the one match {@code adapter} reads from the probe search. */
+    private static SourceField<LocalDate> lastVisitSearching(PatientSourceAdapter adapter) {
+        return adapter.search(
+                new PatientQuery.ByName(PROBE_NAME), PatientFilter.NONE, SECOND_PAGE_OF_FIVE)
+                .patients().getFirst().lastVisit();
+    }
+
+    /** A Patient with a Last visit is read with it. */
     @Test
     void aMatchIsReadWithItsLastVisit() {
         answering(WELL_FORMED);
 
-        assertThat(adapter().search(
-                new PatientQuery.ByName(PROBE_NAME), PatientFilter.NONE, SECOND_PAGE_OF_FIVE)
-                .patients().getFirst().lastVisit()).hasToString("2026-01-02");
+        assertThat(lastVisitSearching(adapter()))
+                .isEqualTo(SourceField.present(LocalDate.of(2026, 1, 2)));
     }
 
-    /** Only the Last visit extension is read: another ahead of it, or alone, is not. */
+    /** Only the Last visit extension is read: another ahead of it is passed over, and alone is none. */
     @Test
     void anotherExtensionIsNoLastVisit() {
         String another = """
                 {"url": "https://fhir.synapxe.sg/StructureDefinition/other", "valueDate": "1999-09-09"},""";
         answering(WELL_FORMED.replace("\"extension\": [", "\"extension\": [" + another));
         PatientSourceAdapter adapter = adapter();
-        String firstLastVisit = String.valueOf(adapter.search(
-                new PatientQuery.ByName(PROBE_NAME), PatientFilter.NONE, SECOND_PAGE_OF_FIVE)
-                .patients().getFirst().lastVisit());
+        SourceField<LocalDate> behindAnother = lastVisitSearching(adapter);
         answering(WELL_FORMED.replace(
                 "https://fhir.synapxe.sg/StructureDefinition/last-visit",
                 "https://fhir.synapxe.sg/StructureDefinition/other"));
 
-        assertThat(List.of(firstLastVisit, String.valueOf(adapter.search(
-                new PatientQuery.ByName(PROBE_NAME), PatientFilter.NONE, SECOND_PAGE_OF_FIVE)
-                .patients().getFirst().lastVisit())))
-                .containsExactly("2026-01-02", "null");
+        assertThat(List.of(behindAnother, lastVisitSearching(adapter))).containsExactly(
+                SourceField.present(LocalDate.of(2026, 1, 2)), SourceField.missing());
+    }
+
+    /**
+     * A Last visit is shown as received (ADR 0020): one in the wrong format — no date to the day,
+     * a day the calendar lacks, the wrong JSON type — is invalid, and one sent {@code null} or
+     * blank is missing, and neither fails the search.
+     */
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', textBlock = """
+        "2026-01" | INVALID
+        "2026-02-30" | INVALID
+        "02 Jan 2026" | INVALID
+        20260102 | INVALID
+        null | MISSING
+        " " | MISSING
+        """)
+    void aLastVisitIsReadAsReceived(String valueDate, SourceField.Received received) {
+        answering(WELL_FORMED.replace("\"2026-01-02\"", valueDate));
+
+        assertThat(lastVisitSearching(adapter()).received()).isEqualTo(received);
+    }
+
+    // ---- an invalid Last visit, reported -------------------------------------------------
+
+    /** One match of {@link #WELL_FORMED}'s searchset, as its entry. */
+    private static final String WELL_FORMED_ENTRY = WELL_FORMED.substring(
+            WELL_FORMED.indexOf("{\"resource\""), WELL_FORMED.lastIndexOf(']'));
+
+    /** Two matches, the second's Last visit, behind another extension, not to the day. */
+    private static final String SECOND_MATCH_WITH_AN_INVALID_LAST_VISIT = """
+            {"resourceType": "Bundle", "type": "searchset", "total": 2,
+             "entry": [%s, %s]}""".formatted(WELL_FORMED_ENTRY, WELL_FORMED_ENTRY
+            .replace("probe-Q7xKd2.v9", "probe-Q7xKd3.v9")
+            .replace("\"extension\": [", "\"extension\": [{\"url\": \"urn:other\"},")
+            .replace("\"2026-01-02\"", "\"2026-01\""));
+
+    /** The WARN records reporting a response's invalid fields. */
+    private static List<ILoggingEvent> invalidFieldRecords(CapturedLog captured) {
+        return captured.withAction(Level.WARN, LogEvent.LOCAL_ACTION,
+                "patient_source.invalid_fields");
+    }
+
+    private static void searchingProbe(PatientSourceAdapter adapter) {
+        adapter.search(new PatientQuery.ByName(PROBE_NAME), PatientFilter.NONE, SECOND_PAGE_OF_FIVE);
+    }
+
+    /**
+     * A search whose matches hold an invalid Last visit is one WARN, naming the read and each by
+     * its path in the answer — never its value, nor the Patient.
+     */
+    @Test
+    void anInvalidLastVisitIsOneWarnNamingItsPath() {
+        answering(SECOND_MATCH_WITH_AN_INVALID_LAST_VISIT);
+
+        try (CapturedLog captured = CapturedLog.attach()) {
+            searchingProbe(adapter());
+
+            assertThat(invalidFieldRecords(captured)).singleElement()
+                    .satisfies(warning -> assertThat(CapturedLog.fields(warning))
+                            .containsEntry("app.patient_source.read", "search")
+                            .containsEntry("app.patient_source.invalid_fields",
+                                    List.of("entry[1].extension[1].valueDate")));
+        }
+    }
+
+    @Test
+    void theWarnQuotesNoValueOfTheAnswerNorThePatient() {
+        answering(SECOND_MATCH_WITH_AN_INVALID_LAST_VISIT);
+
+        try (CapturedLog captured = CapturedLog.attach()) {
+            searchingProbe(adapter());
+
+            ILoggingEvent warning = invalidFieldRecords(captured).getFirst();
+            assertThat(warning.getFormattedMessage() + " " + CapturedLog.fields(warning))
+                    .doesNotContain("2026", "probe-Q7xKd", PROBE_NAME, "T7391046Q", "1963");
+        }
+    }
+
+    /** A search whose every Last visit is present or missing reports nothing. */
+    @Test
+    void aSearchWithNoInvalidLastVisitIsNotReported() {
+        answering(WELL_FORMED.replace("\"2026-01-02\"", "null"));
+        MeterRegistry meters = new SimpleMeterRegistry();
+
+        try (CapturedLog captured = CapturedLog.attach()) {
+            searchingProbe(adapter(meters));
+
+            assertThat(List.of(invalidFieldRecords(captured),
+                    meters.find("patient_source.invalid_fields").counters()))
+                    .containsExactly(List.of(), List.of());
+        }
+    }
+
+    /** Each invalid Last visit counts once, tagged by the read and the row's field. */
+    @Test
+    void eachInvalidLastVisitCountsOnceByTheReadAndTheField() {
+        answering(SECOND_MATCH_WITH_AN_INVALID_LAST_VISIT);
+        MeterRegistry meters = new SimpleMeterRegistry();
+        PatientSourceAdapter adapter = adapter(meters);
+
+        searchingProbe(adapter);
+        searchingProbe(adapter);
+
+        Map<String, Double> counted = new TreeMap<>();
+        for (Counter counter : meters.find("patient_source.invalid_fields").counters()) {
+            counted.put(counter.getId().getTag("read") + " " + counter.getId().getTag("field"),
+                    counter.count());
+        }
+        assertThat(counted).isEqualTo(Map.of("search lastVisit", 2.0));
     }
 
     // ---- a failure of the source ---------------------------------------------------------
@@ -260,7 +385,8 @@ class PatientSourceSearchAdapterTests {
     /**
      * A {@code 200} the service cannot take as a page of matches, each naming what it lacks: no
      * searchset, no total — so no telling how many pages there are — or a match with no id, an id
-     * outside FHIR's grammar, no Patient at all, or a Last visit not to the day.
+     * outside FHIR's grammar, or no Patient at all. A Last visit not to the day is none of these:
+     * it is shown as received.
      */
     @ParameterizedTest
     @CsvSource(delimiter = '|', textBlock = """
@@ -282,7 +408,6 @@ class PatientSourceSearchAdapterTests {
     @CsvSource(delimiter = '|', textBlock = """
         '' | 2026-01-02 | no-id | The patient source's Patient has no id
         "id": "probe Q7xKd2", | 2026-01-02 | invalid-id | The patient source's Patient's id is not a FHIR id
-        "id": "probe-Q7xKd2.v9", | 2026-01 | last-visit-not-to-the-day | The patient source's Patient's last visit is not to the day
         """)
     void aMatchTheServiceCannotHoldIsAFault(String id, String lastVisit, String reason,
             String message) {
@@ -292,13 +417,30 @@ class PatientSourceSearchAdapterTests {
                 .isEqualTo(new Fault(message, reason, ErrorCategory.DATA));
     }
 
-    /** A match is held to every rule a Patient read by id is: one with no NRIC is a fault. */
-    @Test
-    void aMatchBreakingAPatientsRuleIsAFault() {
-        answering(WELL_FORMED.replace("https://fhir.synapxe.sg/NamingSystem/nric", "urn:other"));
+    /**
+     * A search's match is read strictly (ADR 0018), not shown as received as a Patient read by id
+     * is: each of its five elements is required, so a match with no NRIC (none under the NRIC
+     * system, or one of the wrong JSON type), no official name or one with no text, no gender or
+     * a code outside the four, or a birth date missing or not to the day is a fault naming the
+     * rule.
+     */
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', textBlock = """
+        https://fhir.synapxe.sg/NamingSystem/nric | urn:other | no-nric | The patient source's Patient has no NRIC
+        "value": "T7391046Q" | "value": 7391046 | no-nric | The patient source's Patient has no NRIC
+        "use": "official" | "use": "usual" | no-official-name | The patient source's Patient has no official name
+        "text": "Quah Seow Peng" | "text": " " | no-name-text | The patient source's Patient's official name has no text
+        "gender": "female", | '' | no-gender | The patient source's Patient has no gender
+        "gender": "female" | "gender": "F" | no-gender | The patient source's Patient has no gender
+        , "birthDate": "1963-07-29" | '' | no-birth-date | The patient source's Patient has no birth date
+        "birthDate": "1963-07-29" | "birthDate": "1963-07" | birth-date-not-to-the-day | The patient source's Patient's birth date is not to the day
+        """)
+    void aMatchBreakingAPatientsRuleIsAFault(String element, String replaced, String reason,
+            String message) {
+        answering(WELL_FORMED.replace(element, replaced));
 
-        assertThat(faultSearching(adapter())).isEqualTo(new Fault(
-                "The patient source's Patient has no NRIC", "no-nric", ErrorCategory.DATA));
+        assertThat(faultSearching(adapter()))
+                .isEqualTo(new Fault(message, reason, ErrorCategory.DATA));
     }
 
     /**

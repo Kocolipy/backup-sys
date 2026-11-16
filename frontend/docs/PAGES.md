@@ -90,14 +90,20 @@ and decoders — and imports no hook (`lb-api-modules-are-data`).
   patient source's own order — every heading is a `PlainHeading`. A change of
   the filter reads from the first page. A failure is reported on the page's
   line, with a Retry that reads the same page again. Each row keeps the
-  Patient's id, which it never shows.
+  Patient's id, which it never shows. The Last Visit cell is shown as
+  received through `shown` (ADR 0020): its date, "—" when missing, "Error"
+  when invalid.
 - `home/home.tsx` — Home: the Patient card alone. The landing page of a
   session without `patient:read`, linked from no sidebar.
 - `patient-card.tsx` — the Patient card, a part Home and the Demographic page
   share, rendered from `usePatientInContext()`: "No patient in context" for
   none or a `404`, "Loading the patient…", an empty card for a failure (its
   copy is on the error line), or the banner. Every field renders as a plain
-  text node; the age is computed from the card's injectable `Clock`.
+  text node, shown as received through `shown` — its value, "—" when missing,
+  "Error" when invalid, a gender outside the four codes by `labelled` as its
+  code; the age is computed from the card's injectable `Clock`, and follows the
+  date of birth, "—" or "Error" as it is. The top bar names the patient by
+  name and NRIC on the same rule.
 - `demographic/demographic.tsx` — the Demographic page, guarded by
   `patient:read`, which Patient Search opens on selecting a result: the
   Patient card, then the Demographic details.
@@ -113,9 +119,10 @@ and decoders — and imports no hook (`lb-api-modules-are-data`).
   once inside its page status, reads `GET /api/patient/{id}` through `PATIENT`
   (opting in to `absent`, a `403` reported as failure) for the EHR context's
   patient, decoding the R5 `Patient` (typed by `@types/fhir`'s `fhir5`) down
-  to the fields shown, the Demographic details and the id the history pages
-  read by; with none in
-  context it reads nothing.
+  to the fields shown, each a `SourceField` (ADR 0020), and the Demographic
+  details; the patient it hands on carries the id it was asked for — the EHR
+  context's — which the history pages read by, never one the Patient carries.
+  With none in context it reads nothing.
   - A new id is a new path, so a new first read, and a late answer for the id
     before never lands. A failure is reported to the page's error line once,
     by this read.

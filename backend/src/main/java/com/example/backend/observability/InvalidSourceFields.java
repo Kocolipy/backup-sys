@@ -28,13 +28,13 @@ public final class InvalidSourceFields {
 
     /**
      * Which read of the source the record is about, as the counter's {@code read} tag spells it
-     * ({@link SourceRead#tag()}): {@code ffi}, {@code numc} or {@code armc}. The schema has no field for it, so it is namespaced under {@code app.}.
+     * ({@link SourceRead#tag()}): {@code ffi}, {@code numc}, {@code armc}, {@code patient} or {@code search}. The schema has no field for it, so it is namespaced under {@code app.}.
      */
     public static final String READ = "app.patient_source.read";
 
     /**
      * The path of each field of the answer whose format was wrong, in the answer's order —
-     * {@code entry[3].issueDate} — never its value. Namespaced as {@link #READ} is.
+     * {@code entry[3].issueDate}, or a Patient's {@code name[1].text} — never its value. Namespaced as {@link #READ} is.
      */
     public static final String INVALID_FIELDS = "app.patient_source.invalid_fields";
 

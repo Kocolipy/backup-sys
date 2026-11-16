@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { DecodeError } from "@/lib/decode";
-import { describeDecoder, STRING } from "@/lib/decode.testHelpers";
+import { without } from "@/lib/decode.testHelpers";
 
 import {
   countPatientFilters,
@@ -20,27 +20,87 @@ const TAN_HUI_MIN = {
   gender: "female",
   birthDate: "1985-02-14",
   lastVisit: "2026-11-02",
+  invalid: [],
 };
 
-// Every field, missing and wrong-typed. `lastVisit` is nullable: `null` is a
-// value the backend sends for a Patient with no Last visit, never an omission.
-describeDecoder("PatientMatch", decodePatientMatch, TAN_HUI_MIN, {
-  id: STRING,
-  name: STRING,
-  nric: STRING,
-  gender: ["f", "male | female | other | unknown", "a string"],
-  birthDate: ["14 Feb 1985", "a date", "a string"],
-  lastVisit: ["2026-11", "a date", "a string"],
-});
+/** {@link TAN_HUI_MIN} as the page reads it. */
+const TAN_HUI_MIN_READ = {
+  id: "dev-patient-05",
+  name: "Tan Hui Min",
+  nric: "S8512345A",
+  gender: "female",
+  birthDate: "1985-02-14",
+  lastVisit: { state: "present", value: "2026-11-02" },
+};
 
-describe("PatientMatch's dates", () => {
-  it("reads a Patient with no Last visit as null", () => {
-    expect(decodePatientMatch({ ...TAN_HUI_MIN, lastVisit: null }).lastVisit).toBeNull();
+// A match's five elements are read strictly (ADR 0018), each refused when
+// missing or of the wrong type; its Last visit is shown as received (ADR 0020),
+// by the lenient field decoder, so its value never refuses the match.
+describe("decodePatientMatch", () => {
+  it("reads a match, its Last visit as received", () => {
+    expect(decodePatientMatch(TAN_HUI_MIN)).toStrictEqual(TAN_HUI_MIN_READ);
   });
 
-  it("refuses a date the calendar does not have", () => {
+  it("drops a field the match does not have", () => {
+    expect(decodePatientMatch({ ...TAN_HUI_MIN, extra: "ignored" })).toStrictEqual(
+      TAN_HUI_MIN_READ,
+    );
+  });
+
+  it.each(["id", "name", "nric", "gender", "birthDate"])("refuses a match missing %s", (field) => {
+    expect(() => decodePatientMatch(without(TAN_HUI_MIN, field))).toThrow(
+      new DecodeError(`PatientMatch.${field} is not a string`),
+    );
+  });
+
+  it.each([
+    ["id", 7, "a string"],
+    ["name", 7, "a string"],
+    ["nric", 7, "a string"],
+    ["gender", "f", "male | female | other | unknown"],
+    ["birthDate", "14 Feb 1985", "a date"],
+  ])("refuses a match whose %s is of the wrong type", (field, wrong, expected) => {
+    expect(() => decodePatientMatch({ ...TAN_HUI_MIN, [field]: wrong })).toThrow(
+      new DecodeError(`PatientMatch.${field} is not ${expected}`),
+    );
+  });
+
+  it("refuses a date of birth the calendar does not have", () => {
     expect(() => decodePatientMatch({ ...TAN_HUI_MIN, birthDate: "1985-02-30" })).toThrow(
       new DecodeError("PatientMatch.birthDate is not a date"),
+    );
+  });
+
+  it("reads a Patient with no Last visit as missing", () => {
+    expect(decodePatientMatch({ ...TAN_HUI_MIN, lastVisit: null }).lastVisit).toStrictEqual({
+      state: "missing",
+    });
+  });
+
+  it("reads a Last visit the row names invalid as invalid", () => {
+    expect(
+      decodePatientMatch({ ...TAN_HUI_MIN, lastVisit: null, invalid: ["lastVisit"] }).lastVisit,
+    ).toStrictEqual({ state: "invalid" });
+  });
+
+  it.each(["2026-11", "2026-02-30", 20261102])(
+    "reads a Last visit that is no calendar date, %s, as invalid rather than refuse the match",
+    (lastVisit) => {
+      expect(decodePatientMatch({ ...TAN_HUI_MIN, lastVisit }).lastVisit).toStrictEqual({
+        state: "invalid",
+      });
+    },
+  );
+
+  it("refuses a match without lastVisit, which the backend always sends", () => {
+    expect(() => decodePatientMatch(without(TAN_HUI_MIN, "lastVisit"))).toThrow(
+      new DecodeError("PatientMatch.lastVisit is not a string or null"),
+    );
+  });
+
+  it("refuses a match without invalid", () => {
+    expect(() => decodePatientMatch(without(TAN_HUI_MIN, "invalid"))).toThrow(
+      new DecodeError("PatientMatch.invalid is not an array"),
     );
   });
 });
@@ -105,7 +165,7 @@ describe("PATIENT_SEARCH", () => {
       PATIENT_SEARCH.decode(
         Response.json({ patients: [TAN_HUI_MIN], startIndex: 1, totalResults: 7 }),
       ),
-    ).resolves.toStrictEqual({ rows: [TAN_HUI_MIN], startIndex: 1, totalResults: 7 });
+    ).resolves.toStrictEqual({ rows: [TAN_HUI_MIN_READ], startIndex: 1, totalResults: 7 });
   });
 
   it("refuses an answer that is a bare list of Patients rather than a page", async () => {

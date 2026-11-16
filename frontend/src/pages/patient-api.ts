@@ -12,8 +12,16 @@
  */
 
 import type { ReadDeclaration } from "@/auth/declarations";
-import { calendarDate, decodeArray, DecodeError, jsonDecoder, readObject } from "@/lib/decode";
-import { PATIENT_GENDERS, type PatientGender } from "@/lib/patient-gender";
+import {
+  calendarDate,
+  decodeArray,
+  DecodeError,
+  jsonDecoder,
+  readObject,
+  receivedValue,
+} from "@/lib/decode";
+import type { SourceField } from "@/lib/source-field";
+import { isCalendarDate } from "@/lib/time";
 
 /** Synapxe's NRIC NamingSystem, the `system` of the identifier that holds a patient's NRIC. */
 const NRIC_SYSTEM = "https://fhir.synapxe.sg/NamingSystem/nric";
@@ -22,31 +30,38 @@ const NRIC_SYSTEM = "https://fhir.synapxe.sg/NamingSystem/nric";
 export const MILITARY_HISTORY_EXTENSION =
   "http://example.org/fhir/StructureDefinition/military-service";
 
+/**
+ * The extension naming one element of the Patient the patient source sent in
+ * the wrong format, by its path in the resource (`name[0].text`): the
+ * backend's own (`/docs/domain/patient.md`, "The resource").
+ */
+export const INVALID_FIELD_EXTENSION = "http://example.org/fhir/StructureDefinition/invalid-field";
+
 /** HL7 v2 table 0131, whose code `N` marks a contact as the patient's Next of kin. */
 const CONTACT_ROLE_SYSTEM = "http://terminology.hl7.org/CodeSystem/v2-0131";
 
 /**
  * The part of an R5 `Patient` the pages show, read off the wire (its suite reads
- * `fhir5.Patient` fixtures through the decoder): the official
- * name's `text`, which is authoritative (its `family` and `given` parts are
- * optional and never read), the NRIC, the gender code and the birth date;
- * the id the patient's Medication, FFI, NUMC and ARMC Histories are read by;
- * and, where the patient has them, the Demographic details: the phone and
- * email, the `home` address's text, the Next of kin (the first contact coded
- * v2-0131 `N`) and the Military history. No age: age is derived where it is
- * shown, never sent.
+ * `fhir5.Patient` fixtures through the decoder): the official name's `text`,
+ * which is authoritative (its `family` and `given` parts are optional and never
+ * read), the NRIC, the gender code and the birth date, each shown as received
+ * (ADR 0020) — present, missing or in the wrong format, a gender outside the
+ * four codes present as the code it came as — and, where the patient has them,
+ * the Demographic details: the phone and email, the `home` address's text, the
+ * Next of kin (the first contact coded v2-0131 `N`) and the Military history.
+ * No age: age is derived where it is shown, never sent. No id: the patient's
+ * other reads go by the id the patient was asked for (`patient-in-context.ts`),
+ * never one the Patient carries.
  */
 export interface PatientSummary {
-  birthDate: string;
+  birthDate: SourceField<string>;
   email?: string;
-  gender: PatientGender;
-  /** Its FHIR id, which the patient's other reads (its Medication, FFI, NUMC and ARMC Histories) name it by. */
-  id: string;
+  gender: SourceField<string>;
   militaryHistory?: MilitaryHistory;
-  name: string;
+  name: SourceField<string>;
   nextOfKin?: NextOfKin;
   phone?: string;
-  nric: string;
+  nric: SourceField<string>;
   residentialAddress?: string;
 }
 
@@ -162,15 +177,22 @@ const decodeServiceRecord = (extension: unknown): ServiceRecord => {
   return record;
 };
 
+/** A patient's extensions, each beside its url. */
+const extensionsOf = (body: unknown) =>
+  optionalArray(body, "extension", "Patient").map((extension) => ({
+    extension,
+    url: readObject(extension, "Extension").string("url"),
+  }));
+
+type Extensions = ReturnType<typeof extensionsOf>;
+
 /**
  * The Military history extension, if the patient has one: its service records
  * in order, and its dates, each to the day. A sub-extension it does not know is
  * left unread.
  */
-const militaryHistoryOf = (extensions: unknown[]): MilitaryHistory | undefined => {
-  const extension = extensions.find(
-    (candidate) => readObject(candidate, "Extension").string("url") === MILITARY_HISTORY_EXTENSION,
-  );
+const militaryHistoryOf = (extensions: Extensions): MilitaryHistory | undefined => {
+  const extension = extensions.find(({ url }) => url === MILITARY_HISTORY_EXTENSION)?.extension;
   if (extension === undefined) return undefined;
   const history: MilitaryHistory = { serviceRecords: [] };
   for (const { sub, url } of subExtensionsOf(extension, "military-service")) {
@@ -188,19 +210,48 @@ const militaryHistoryOf = (extensions: unknown[]): MilitaryHistory | undefined =
   return history;
 };
 
-/** The value of the identifier under the NRIC system, among a patient's identifiers. */
-const nricOf = (identifiers: unknown[]): string => {
-  const nric = identifiers
-    .map((identifier) => readObject(identifier, "Identifier"))
-    .find((identifier) => identifier.string("system") === NRIC_SYSTEM);
-  if (nric === undefined) throw new DecodeError("Patient.identifier has no NRIC");
-  return nric.string("value");
+/**
+ * The paths of the elements an invalid-field extension names, among a
+ * patient's extensions.
+ */
+const invalidElementsOf = (extensions: Extensions): string[] =>
+  extensions
+    .filter(({ url }) => url === INVALID_FIELD_EXTENSION)
+    .map(({ extension }) => readObject(extension, "invalid-field").string("valueString"));
+
+/**
+ * The path an invalid-field extension names the NRIC by: the value of the
+ * identifier `at` that place among the patient's identifiers — the first, as
+ * the backend serves the NRIC alone.
+ */
+const nricElement = (at: number) => `identifier[${String(at)}].value`;
+
+/**
+ * The path an invalid-field extension names the official name's text by: the
+ * first name's, as the backend serves the official name alone.
+ */
+const NAME_TEXT_ELEMENT = "name[0].text";
+
+/**
+ * The value of the identifier under the NRIC system, among a patient's
+ * identifiers, as received, `invalid` naming it by its path: missing when none
+ * is under the system.
+ */
+const nricOf = (identifiers: unknown[], invalid: readonly string[]): SourceField<string> => {
+  const at = identifiers.findIndex(
+    (identifier) => readObject(identifier, "Identifier").string("system") === NRIC_SYSTEM,
+  );
+  if (at < 0) return { state: "missing" };
+  return receivedValue(
+    fieldOf(identifiers[at], "value", "Identifier"),
+    invalid.includes(nricElement(at)),
+  );
 };
 
-/** The first name's `text`. */
-const nameTextOf = (names: unknown[]): string => {
-  if (names.length === 0) throw new DecodeError("Patient.name has no entry");
-  return readObject(names[0], "HumanName").string("text");
+/** The first name's `text`, as received: missing when there is no name. */
+const nameTextOf = (names: unknown[], invalid: readonly string[]): SourceField<string> => {
+  if (names.length === 0) return { state: "missing" };
+  return receivedValue(fieldOf(names[0], "text", "HumanName"), invalid.includes(NAME_TEXT_ELEMENT));
 };
 
 const decodePatient = jsonDecoder((body: unknown): PatientSummary => {
@@ -208,21 +259,23 @@ const decodePatient = jsonDecoder((body: unknown): PatientSummary => {
   if (patient.string("resourceType") !== "Patient") {
     throw new DecodeError("Patient.resourceType is not Patient");
   }
-  // A FHIR `date` to the day, the precision the backend serves a birth date at.
-  const birthDate = calendarDate(patient.string("birthDate"), "Patient.birthDate");
+  /** The element `key` as it came, `undefined` when the backend left it out. */
+  const element = (key: string): unknown => fieldOf(body, key, "Patient");
+  const extensions = extensionsOf(body);
+  const invalid = invalidElementsOf(extensions);
   const telecom = optionalArray(body, "telecom", "Patient");
   const email = contactPointOf(telecom, "email");
   const phone = contactPointOf(telecom, "phone");
   const residentialAddress = residentialAddressOf(optionalArray(body, "address", "Patient"));
   const nextOfKin = nextOfKinOf(optionalArray(body, "contact", "Patient"));
-  const militaryHistory = militaryHistoryOf(optionalArray(body, "extension", "Patient"));
+  const militaryHistory = militaryHistoryOf(extensions);
   // A detail the patient has none of is left off, as the wire leaves it out.
   return {
-    birthDate,
-    gender: patient.oneOf("gender", PATIENT_GENDERS),
-    id: patient.string("id"),
-    name: nameTextOf(patient.array("name", (name) => name)),
-    nric: nricOf(patient.array("identifier", (identifier) => identifier)),
+    // A FHIR `date` to the day, the precision the backend serves a birth date at.
+    birthDate: receivedValue(element("birthDate"), invalid.includes("birthDate"), isCalendarDate),
+    gender: receivedValue(element("gender"), invalid.includes("gender")),
+    name: nameTextOf(optionalArray(body, "name", "Patient"), invalid),
+    nric: nricOf(optionalArray(body, "identifier", "Patient"), invalid),
     ...(email === undefined ? {} : { email }),
     ...(militaryHistory === undefined ? {} : { militaryHistory }),
     ...(nextOfKin === undefined ? {} : { nextOfKin }),

@@ -83,6 +83,28 @@ export interface SourceFieldReader {
   read(key: string, accept?: (text: string) => boolean): SourceField<string>;
 }
 
+/**
+ * One patient-source value as the lenient field decoder reads it
+ * (`/docs/adr/0020-patient-source-data-is-shown-as-received.md`): invalid when
+ * `named` — the backend named it as received in the wrong format; missing when
+ * it is `null` or left out, as a FHIR resource leaves out an element it has
+ * none of; present when it is a string `accept` takes (any string, by default);
+ * and invalid for anything else. {@link SourceFieldReader} reads a row's fields
+ * by it, and a FHIR resource shown as received its elements, each named by its
+ * path.
+ */
+export function receivedValue(
+  field: unknown,
+  named: boolean,
+  accept: (text: string) => boolean = () => true,
+): SourceField<string> {
+  if (named) return { state: "invalid" };
+  if (field === null || field === undefined) return { state: "missing" };
+  return typeof field === "string" && accept(field)
+    ? { state: "present", value: field }
+    : { state: "invalid" };
+}
+
 /** An array, each element decoded by `decode`; `what` names it in the error. */
 export function decodeArray<T>(value: unknown, decode: (item: unknown) => T, what: string): T[] {
   if (!Array.isArray(value)) throw new DecodeError(`${what} is not an array`);
@@ -155,14 +177,9 @@ export function readObject(value: unknown, what: string): ObjectReader {
         : fail("invalid", "an array");
       if (!named.every((field) => typeof field === "string")) fail("invalid", "strings");
       return {
-        read: (key, accept = () => true) => {
+        read: (key, accept) => {
           if (!(key in value)) fail(key, "a string or null");
-          const field = value[key];
-          if (named.includes(key)) return { state: "invalid" };
-          if (field === null) return { state: "missing" };
-          return typeof field === "string" && accept(field)
-            ? { state: "present", value: field }
-            : { state: "invalid" };
+          return receivedValue(value[key], named.includes(key), accept);
         },
       };
     },

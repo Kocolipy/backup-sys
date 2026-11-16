@@ -1,11 +1,11 @@
 {
-  "name": "Fault: an official name with no text",
+  "name": "Received: a Patient with no gender",
   "metadata": {
-    "fault": "no-name-text"
+    "received": "no-gender"
   },
   "request": {
     "method": "GET",
-    "urlPath": "/Patient/fault-no-name-text"
+    "urlPath": "/Patient/received-no-gender"
   },
   "response": {
     "status": 200,
@@ -14,7 +14,7 @@
     },
     "jsonBody": {
       "resourceType": "Patient",
-      "id": "fault-no-name-text",
+      "id": "received-no-gender",
       "meta": {
         "versionId": "1",
         "lastUpdated": "2026-01-01T00:00:00Z"
@@ -23,27 +23,22 @@
         {
           "use": "usual",
           "system": "urn:oid:1.2.840.114350.1.13.0.1.7.5.737384.14",
-          "value": "900105"
+          "value": "900106"
         },
         {
           "use": "official",
           "system": "https://fhir.synapxe.sg/NamingSystem/nric",
-          "value": "S8800005A"
+          "value": "S8800006A"
         }
       ],
       "active": true,
       "name": [
         {
           "use": "official",
-          "family": "Ong",
-          "given": [
-            "Mei",
-            "Ling"
-          ]
+          "text": "Nur Aisyah binte Hassan"
         }
       ],
-      "gender": "female",
-      "birthDate": "1990-10-07"
+      "birthDate": "1999-01-30"
     }
   }
 }

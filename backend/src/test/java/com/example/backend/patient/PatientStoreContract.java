@@ -127,6 +127,43 @@ public abstract class PatientStoreContract {
                         LocalDate.of(2003, 11, 5)));
     }
 
+    /**
+     * Each received stub's Patient, read as received (ADR 0020): the element it lacks missing,
+     * or each of the four invalid, and the rest as the stub holds them.
+     */
+    static Stream<Arguments> receivedStubs() {
+        SourceField<String> missing = SourceField.missing();
+        return Stream.of(
+                Arguments.of("received-no-nric", missing,
+                        new PatientName("Goh Siew Lan", "Goh", List.of("Siew", "Lan")),
+                        SourceField.present("female"),
+                        SourceField.present(LocalDate.of(1975, 12, 1))),
+                Arguments.of("received-no-official-name", SourceField.present("S8800004A"), null,
+                        SourceField.present("male"),
+                        SourceField.present(LocalDate.of(1988, 5, 22))),
+                Arguments.of("received-no-name-text", SourceField.present("S8800005A"),
+                        new PatientName(missing, "Ong", List.of("Mei", "Ling")),
+                        SourceField.present("female"),
+                        SourceField.present(LocalDate.of(1990, 10, 7))),
+                Arguments.of("received-no-gender", SourceField.present("S8800006A"),
+                        new PatientName("Nur Aisyah binte Hassan", null, List.of()), missing,
+                        SourceField.present(LocalDate.of(1999, 1, 30))),
+                Arguments.of("received-no-birth-date", SourceField.present("S8800003A"),
+                        new PatientName("Daniel Pereira", "Pereira", List.of("Daniel")),
+                        SourceField.present("male"), SourceField.missing()),
+                Arguments.of("received-wrong-format", SourceField.invalid(),
+                        new PatientName(SourceField.invalid(), "Wong", List.of("Mei Fong")),
+                        SourceField.invalid(), SourceField.invalid()));
+    }
+
+    @ParameterizedTest
+    @MethodSource("receivedStubs")
+    void each_received_stub_is_read_as_received(String id, SourceField<String> nric,
+            PatientName name, SourceField<String> gender, SourceField<LocalDate> birthDate) {
+        assertThat(patients().findById(new PatientId(id))).contains(new Patient(
+                new PatientId(id), nric, name, gender, birthDate, Demographics.NONE));
+    }
+
     @Test
     void the_eurasian_fixture_is_read_with_given_names_first_and_a_multi_word_family_name() {
         assertThat(patients().findById(new PatientId("egqBHVfQlt4Bw3XGXoxVxHg3"))).contains(
@@ -197,7 +234,7 @@ public abstract class PatientStoreContract {
     /** Each match on a page, as its id and its Last visit, {@code null} for none. */
     private static List<String> idsAndLastVisits(PatientMatches matches) {
         return matches.patients().stream()
-                .map(match -> match.patient().id() + " " + match.lastVisit())
+                .map(match -> match.patient().id() + " " + match.lastVisit().orElse(null))
                 .toList();
     }
 
@@ -236,7 +273,7 @@ public abstract class PatientStoreContract {
                 new PatientQuery.ByName("tan"), PatientFilter.NONE, FIRST_FIVE);
 
         assertThat(matches.patients().get(3)).isEqualTo(new PatientMatch(
-                searchFixtures().get(2), LocalDate.of(2026, 9, 30)));
+                searchFixtures().get(2), SourceField.present(LocalDate.of(2026, 9, 30))));
     }
 
     @Test
@@ -250,7 +287,19 @@ public abstract class PatientStoreContract {
                                 new PatientName("Siti Nurhaliza binte Ahmad", null, List.of()),
                                 AdministrativeGender.FEMALE,
                                 LocalDate.of(1992, 8, 21)),
-                        LocalDate.of(2026, 7, 11)))));
+                        SourceField.present(LocalDate.of(2026, 7, 11))))));
+    }
+
+    /**
+     * Rajesh Kumar's Last visit is to the month alone: his match is read with it invalid, shown
+     * as received (ADR 0020), and the search is answered.
+     */
+    @Test
+    void a_match_whose_last_visit_is_not_to_the_day_is_read_with_it_invalid() {
+        assertThat(patients().search(
+                new PatientQuery.ByNric("S9912345B"), PatientFilter.NONE, FIRST_FIVE))
+                .isEqualTo(new PatientMatches(1, List.of(new PatientMatch(
+                        searchFixtures().get(7), SourceField.invalid()))));
     }
 
     private static PatientFilter gender(AdministrativeGender gender) {

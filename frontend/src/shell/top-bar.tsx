@@ -7,12 +7,15 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { shown } from "@/lib/source-field";
 import { usePatientInContext } from "@/pages/patient-in-context";
 import { SETTINGS_PAGE } from "@/shell/signed-in-pages";
 
 /**
- * The patient in context, as the top bar names them: their name and NRIC,
- * rendered from the layout's one read of them (`usePatientInContext`). It
+ * The patient in context, as the top bar names them: their name and NRIC, each
+ * shown as received (ADR 0020) — its value, "—" when missing, "Error" when its
+ * format was wrong — rendered from the layout's one read of them
+ * (`usePatientInContext`). It
  * shows nothing with no patient in context, until the read has answered, and
  * for a session without `patient:read`, a patient that is not there or a read
  * that failed — whose line on the page's error line is the read's, not this.
@@ -28,10 +31,10 @@ function PatientInContext() {
       {/* A full line height, not leading-none: truncate clips to the line box,
           which would cut the glyphs' ascenders and descenders. */}
       <span className="min-w-0 truncate text-2xl leading-8 font-bold tracking-tight">
-        {view.data.name}
+        {shown(view.data.name, String)}
       </span>
       <span className="shrink-0 text-sm font-semibold tracking-widest text-muted-foreground uppercase">
-        {view.data.nric}
+        {shown(view.data.nric, String)}
       </span>
     </section>
   );

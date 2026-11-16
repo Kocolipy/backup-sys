@@ -57,8 +57,13 @@ subset of it.
 `compose.yaml`'s `patient-source` service is WireMock (`wiremock/wiremock`,
 pinned by tag and digest, the same release as the backend's test dependency)
 serving `patient-source-mock/mappings` on **`127.0.0.1:8104`**: FHIR R4
-`Patient/{id}` for the development fixtures, a `404` for any other
-well-formed id, and the search set below. It has no profile, so `make infra-up` and
+`Patient/{id}` for the development fixtures, for the received stubs — a
+Patient each, shown as received (ADR 0020): `received-no-nric`,
+`received-no-official-name`, `received-no-name-text`, `received-no-gender` and
+`received-no-birth-date` each lack that element, and `received-wrong-format`
+holds its NRIC, its official name's text, its gender and its birth date in the
+wrong format — and for the fault stubs, a `404` for any other well-formed id,
+and the search set below. It has no profile, so `make infra-up` and
 `make integration-test` start it beside SQL Server and Redis, healthy when
 WireMock's `/__admin/health` answers. `.env.example` points the backend at it:
 
@@ -80,20 +85,23 @@ exact value or, where the search uses none, to absent — so it answers the
 SPA's five-a-page reads. Every `tan` search is `name:contains=tan`, any case,
 and `_offset=0` unless named.
 
-| Stub file                | Search                                                            | Answers                                                       |
-| ------------------------ | ----------------------------------------------------------------- | ------------------------------------------------------------- |
-| `search-name-tan-page-1` | `tan`                                                             | 5 of `total: 7`                                               |
-| `search-name-tan-page-2` | `tan`, `_offset=5`                                                | the last 2 of `total: 7`, the Patient with no Last visit last |
-| `search-name-tan-male`   | `tan`, `gender=male`                                              | `total: 3`                                                    |
-| `search-name-tan-female` | `tan`, `gender=female`                                            | `total: 4`                                                    |
-| `search-nric`            | `identifier=https://fhir.synapxe.sg/NamingSystem/nric\|S9212345A` | Siti Nurhaliza binte Ahmad, `total: 1`                        |
-| `search-no-match`        | `name:contains=nobody`                                            | no entry, `total: 0`                                          |
-| `search-fallback`        | any other `/Patient` search, at a lower priority                  | no entry, `total: 0`                                          |
+| Stub file                               | Search                                                            | Answers                                                                |
+| --------------------------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `search-name-tan-page-1`                | `tan`                                                             | 5 of `total: 7`                                                        |
+| `search-name-tan-page-2`                | `tan`, `_offset=5`                                                | the last 2 of `total: 7`, the Patient with no Last visit last          |
+| `search-name-tan-male`                  | `tan`, `gender=male`                                              | `total: 3`                                                             |
+| `search-name-tan-female`                | `tan`, `gender=female`                                            | `total: 4`                                                             |
+| `search-nric`                           | `identifier=https://fhir.synapxe.sg/NamingSystem/nric\|S9212345A` | Siti Nurhaliza binte Ahmad, `total: 1`                                 |
+| `search-nric-last-visit-not-to-the-day` | `identifier=https://fhir.synapxe.sg/NamingSystem/nric\|S9912345B` | Rajesh Kumar, `total: 1`, his Last visit `2026-10`, to the month alone |
+| `search-no-match`                       | `name:contains=nobody`                                            | no entry, `total: 0`                                                   |
+| `search-fallback`                       | any other `/Patient` search, at a lower priority                  | no entry, `total: 0`                                                   |
 
 A gender filter on any other search or page falls to `search-fallback`.
 
 Each Patient carries its Last visit as the `last-visit` extension, a
-`valueDate`, as the source does (ADR 0018).
+`valueDate`, as the source does (ADR 0018); the backend shows one not to the
+day as received (ADR 0020), so Rajesh Kumar's search is answered, his Last
+visit invalid.
 
 ```bash
 curl -s 'http://127.0.0.1:8104/Patient?name:contains=tan&_count=5&_offset=0&_total=accurate'

@@ -70,12 +70,13 @@ date of their latest visit, which FHIR's base `Patient` has no element for. The
 source carries it as an extension on each Patient,
 `https://fhir.synapxe.sg/StructureDefinition/last-visit`, a `valueDate` to the
 day, absent for a Patient with none. The adapter reads it from a search's
-entries; a value not to the day is a failure of the source. A read by id ignores it, and the R5
+entries, as received (ADR 0020): a value not to the day is shown as "Error",
+never a failure of the source. A read by id ignores it, and the R5
 `Patient` served at `GET /api/patient/{id}` does not carry it.
 
 **D5. Plain JSON, outside the FHIR namespace.** The answer is the application
 API's own shape, `{totalResults, startIndex, patients: [{id, name, nric,
-gender, birthDate, lastVisit}]}`, at `/api/patient-search` — outside
+gender, birthDate, lastVisit, invalid}]}`, at `/api/patient-search` — outside
 `/api/patient`, so its errors are `ApiError`, not a FHIR `OperationOutcome`.
 Each row carries the Patient's id, the EHR's FHIR id a read by id takes, so a
 page can open the Patient from it. `patient:read` gates it, in the handler's

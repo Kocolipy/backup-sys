@@ -22,6 +22,7 @@ const TAN_HUI_MIN = {
   gender: "female",
   birthDate: "1985-02-04",
   lastVisit: "2026-11-02",
+  invalid: [],
 };
 
 const TAN_BOON_HUAT = {
@@ -31,6 +32,7 @@ const TAN_BOON_HUAT = {
   gender: "male",
   birthDate: "1960-09-30",
   lastVisit: null,
+  invalid: [],
 };
 
 const page = (patients: readonly object[], startIndex: number, totalResults: number) =>
@@ -142,6 +144,27 @@ describe("Search", () => {
       ],
       title: "H2",
     });
+  });
+
+  it("shows a Last visit as received: Error for one in the wrong format, and the row beside it", async () => {
+    await renderSearch({
+      [TAN_PAGE_1]: page(
+        [
+          { ...TAN_HUI_MIN, lastVisit: null, invalid: ["lastVisit"] },
+          { ...TAN_BOON_HUAT, lastVisit: "2026-11" },
+        ],
+        1,
+        2,
+      ),
+    });
+
+    await search("tan");
+    await screen.findByRole("table");
+
+    expect(rows()).toEqual([
+      ["Tan Hui Min", "S8512345A", "Female", "04 Feb 1985", "Error"],
+      ["Tan Boon Huat", "S6012345C", "Male", "30 Sep 1960", "Error"],
+    ]);
   });
 
   it("shows each gender as a badge, tinting Male blue, Female pink, and leaving any other plain", async () => {
@@ -474,6 +497,7 @@ const TAN_WEI_MING_MATCH = {
   gender: "male",
   birthDate: "1985-03-12",
   lastVisit: "2026-10-15",
+  invalid: [],
 };
 
 /** Tan Hui Min's read, and the R5 `Patient` the backend serves for it. */

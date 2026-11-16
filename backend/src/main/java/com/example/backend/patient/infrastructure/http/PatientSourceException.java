@@ -22,13 +22,15 @@ import java.util.stream.Stream;
  *   <li>{@code server}: the source answered {@code 5xx}, {@code server-error};
  *   <li>{@code data}: the source answered with something the service cannot use — another status
  *       ({@code unexpected-status}), a body that is not JSON or not a Patient
- *       ({@code unreadable}), a Patient breaking one of the domain's rules, a search's answer
- *       or a history that is no searchset, has no total, or holds an entry of another
+ *       ({@code unreadable}), a Patient under another patient's id or with a military service
+ *       date not to the day, a search's match breaking one of the domain's rules, a search's
+ *       answer or a history that is no searchset, has no total, or holds an entry of another
  *       resource, or one with no id, or a Medication Record missing a field, holding a code
  *       outside its closed set or a date-time with no offset, or ending before it starts, under
  *       a reason naming Medication or an element of its own, so a record says which history
- *       broke. An FFI, a NUMC Record and an ARMC Board break no rule: their histories are shown
- *       as received (ADR 0020), so only their call or their searchset fails.
+ *       broke. An FFI, a NUMC Record, an ARMC Board, a search match's Last visit and a Patient
+ *       read by id's NRIC, name, gender and birth date break no rule: they are shown as received
+ *       (ADR 0020), so only their call, their searchset or the Patient's id fails.
  * </ul>
  *
  * <p>Its message is fixed text, naming at most a status or an element, and its cause, when it has
@@ -58,6 +60,8 @@ public final class PatientSourceException extends UpstreamFaultException {
         UNREADABLE(Reason.UNREADABLE, "unreadable", "The patient source could not be read"),
         ANOTHER_RESOURCE("another-resource", "The patient source answered with another resource",
                 ErrorCategory.DATA),
+        // A search's match breaking a rule its five elements keep (ADR 0018); a Patient read
+        // by id keeps none of these, shown as received (ADR 0020).
         NO_NRIC("no-nric", "The patient source's Patient has no NRIC", ErrorCategory.DATA),
         NO_OFFICIAL_NAME("no-official-name", "The patient source's Patient has no official name",
                 ErrorCategory.DATA),
@@ -78,9 +82,6 @@ public final class PatientSourceException extends UpstreamFaultException {
         /** A search's Patient whose {@code id} is outside FHIR's id grammar. */
         INVALID_ID("invalid-id", "The patient source's Patient's id is not a FHIR id",
                 ErrorCategory.DATA),
-        /** A search's Patient whose Last visit is no date to the day. */
-        LAST_VISIT_NOT_TO_THE_DAY("last-visit-not-to-the-day",
-                "The patient source's Patient's last visit is not to the day", ErrorCategory.DATA),
         /** A Medication History's entry with no {@code id}. */
         MEDICATION_NO_ID("medication-no-id", "The patient source's Medication Record has no id",
                 ErrorCategory.DATA),

@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { AuthUser, Permission } from "@/auth/api";
 import { clearEhrContext } from "@/auth/ehr-context";
 import { bare, holding, json, type Answers } from "@/auth/session-adapter.testHelpers";
+import { INVALID_FIELD_EXTENSION } from "@/pages/patient-api";
 import {
   withPatientInContext,
   patientReads,
@@ -147,6 +148,33 @@ describe("TopBar", () => {
 
     expect((await screen.findByRole("region", { name: "Patient in context" })).textContent).toBe(
       "Tan Wei MingS1234567A",
+    );
+  });
+
+  // Shown as received (ADR 0020), as the Patient card shows them.
+  it.each([
+    ["a name and an NRIC missing", { identifier: undefined, name: undefined }, "——"],
+    [
+      "a name and an NRIC in the wrong format",
+      {
+        extension: [
+          { url: INVALID_FIELD_EXTENSION, valueString: "identifier[0].value" },
+          { url: INVALID_FIELD_EXTENSION, valueString: "name[0].text" },
+        ],
+        identifier: [{ system: "https://fhir.synapxe.sg/NamingSystem/nric" }],
+        name: [{ use: "official" }],
+      },
+      "ErrorError",
+    ],
+    ["a name missing beside an NRIC", { name: undefined }, "—S1234567A"],
+  ])("names a patient in context with %s as received", async (_, change, named) => {
+    withTanWeiMingInContext();
+    await renderBar(["patient:read"], {
+      [TAN_WEI_MING_READ]: json({ ...TAN_WEI_MING, ...change }),
+    });
+
+    expect((await screen.findByRole("region", { name: "Patient in context" })).textContent).toBe(
+      named,
     );
   });
 

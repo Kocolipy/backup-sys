@@ -38,9 +38,10 @@ import tools.jackson.databind.json.JsonMapper;
 /**
  * The patient source's development fixtures as {@code GET /api/patient/{id}} serves them, held
  * against base FHIR R5 by HAPI FHIR's validator (test scope only; ADR 0014): every fixture the
- * stub files serve ({@link PatientSourceStubs}) is readable through the HTTP adapter, every
- * response is a valid base R5 {@code Patient} although the source answered R4 with elements of its
- * own, and the {@code 404}, {@code 400} and {@code 502} are valid base R5
+ * stub files serve ({@link PatientSourceStubs}) — and every received stub, holding elements
+ * missing or in the wrong format — is readable through the HTTP adapter, every response is a
+ * valid base R5 {@code Patient} although the source answered R4 with elements of its own, and
+ * the {@code 404}, {@code 400} and {@code 502} are valid base R5
  * {@code OperationOutcome}s. The JSON validated is the response body exactly as written, not a
  * HAPI model rebuilt from it.
  */
@@ -111,10 +112,23 @@ class PatientR5ConformanceTests {
                 .isEqualTo("eq081-VQEgP8drUUqCWzHfw3");
     }
 
-    /** Every fixture is readable, as a valid base R5 Patient. */
+    /**
+     * Every Patient the stub files serve: each fixture's id, and each received stub's — a
+     * Patient holding elements missing or in the wrong format, shown as received (ADR 0020).
+     */
+    static Stream<String> servedIds() {
+        return Stream.concat(fixtureIds(),
+                PatientSourceStubs.received().stream().map(PatientSourceStubs.ReceivedStub::id));
+    }
+
+    /**
+     * Every fixture is readable, as a valid base R5 Patient, and so is every received stub: an
+     * element missing or in the wrong format is left out, and one in the wrong format named by
+     * an extension, which base R5 admits.
+     */
     @ParameterizedTest
-    @MethodSource("fixtureIds")
-    void everyFixtureIsServedAsAValidBaseR5Patient(String id) throws Exception {
+    @MethodSource("servedIds")
+    void everyServedPatientIsAValidBaseR5Patient(String id) throws Exception {
         MockHttpServletResponse response = read(id);
 
         assertThat(response.getStatus()).isEqualTo(200);
