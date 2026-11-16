@@ -17,6 +17,7 @@ import com.example.backend.patient.domain.PatientName;
 import com.example.backend.patient.domain.PatientFilter;
 import com.example.backend.patient.domain.PatientQuery;
 import com.example.backend.patient.domain.PatientStore;
+import com.example.backend.patient.domain.SourceField;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -37,7 +38,8 @@ class PatientSearchServiceTests {
     private static PatientMatch match(String id) {
         return new PatientMatch(new Patient(new PatientId(id), "S9012345A",
                 new PatientName("Tan Hui Min", "Tan", List.of("Hui", "Min")),
-                AdministrativeGender.FEMALE, LocalDate.of(1990, 2, 4)), LocalDate.of(2026, 11, 2));
+                AdministrativeGender.FEMALE, LocalDate.of(1990, 2, 4)),
+                SourceField.present(LocalDate.of(2026, 11, 2)));
     }
 
     /** A page of two of the seven Patients the source says the search matched. */

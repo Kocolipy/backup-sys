@@ -110,7 +110,8 @@ errors.
 
 `patient-source-mock/` holds the stub files of the in-house patient source's
 mock: WireMock answering FHIR R4 `Patient/{id}` for the development
-fixtures, a failure of the source for each fault stub (`metadata.fault`),
+fixtures, a Patient shown as received for each received stub
+(`metadata.received`), a failure of the source for each fault stub (`metadata.fault`),
 `404` for any other well-formed id, and `Patient?…` for each canned Patient
 search, with an empty searchset for any other. Each patient history has the same
 shape beneath `Patient/{id}/<history>?…`: a page for each fixture's read and a

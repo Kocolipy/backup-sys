@@ -432,7 +432,8 @@ present, shown as its value; missing — no key, `null`, or a blank string —
 shown as "—"; or invalid — the wrong JSON type, or a string that is no date or
 date-time of its kind — shown as "Error". A code outside its closed set is
 shown as the raw code. Only a failure of the call or of the page's structure
-fails the read. The FFI, NUMC and ARMC Histories are read so.
+fails the read. The FFI, NUMC and ARMC Histories, a Patient read by id and a
+Patient search's Last visit are read so.
 _Avoid_: validated, sanitised, lenient (the reading is lenient; what the
 clinician sees is the data as received)
 **Demographic page**:
@@ -445,7 +446,8 @@ _Avoid_: Profile (Home's title), patient profile
 
 **Patient card**:
 The card, on Home and the Demographic page, showing the EHR context's patient — name, NRIC, gender, date of
-birth and age — or "No patient in context" when the tab holds no EHR context,
+birth and age, each shown as received, the age following the date of birth —
+or "No patient in context" when the tab holds no EHR context,
 its EHR context names no patient, or the Patient source holds none under its
 id. The Patient source failing is the card's failed state, never "No patient in
 context".
@@ -464,7 +466,7 @@ Patient)
 **Last visit**:
 The date of a Patient's latest visit, as the Patient source records it on the
 Patient (its `last-visit` extension); a Patient may have none. Patient search
-shows it in each row.
+shows it in each row, as received.
 _Avoid_: last seen, last encounter, last admission
 
 **Demographic details**:

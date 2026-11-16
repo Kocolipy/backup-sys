@@ -1,11 +1,11 @@
 {
-  "name": "Fault: a Patient with no official name",
+  "name": "Received: a Patient whose NRIC, official name's text, gender and birth date are each in the wrong format",
   "metadata": {
-    "fault": "no-official-name"
+    "received": "wrong-format"
   },
   "request": {
     "method": "GET",
-    "urlPath": "/Patient/fault-no-official-name"
+    "urlPath": "/Patient/received-wrong-format"
   },
   "response": {
     "status": 200,
@@ -14,7 +14,7 @@
     },
     "jsonBody": {
       "resourceType": "Patient",
-      "id": "fault-no-official-name",
+      "id": "received-wrong-format",
       "meta": {
         "versionId": "1",
         "lastUpdated": "2026-01-01T00:00:00Z"
@@ -23,23 +23,34 @@
         {
           "use": "usual",
           "system": "urn:oid:1.2.840.114350.1.13.0.1.7.5.737384.14",
-          "value": "900104"
+          "value": "900108"
         },
         {
           "use": "official",
           "system": "https://fhir.synapxe.sg/NamingSystem/nric",
-          "value": "S8800004A"
+          "value": 8800008
         }
       ],
       "active": true,
       "name": [
         {
           "use": "usual",
-          "text": "Ravi Shankar"
+          "text": "Wong Mei Fong"
+        },
+        {
+          "use": "official",
+          "text": [
+            "Wong",
+            "Mei Fong"
+          ],
+          "family": "Wong",
+          "given": [
+            "Mei Fong"
+          ]
         }
       ],
-      "gender": "male",
-      "birthDate": "1988-05-22"
+      "gender": 2,
+      "birthDate": "14/02/1981"
     }
   }
 }

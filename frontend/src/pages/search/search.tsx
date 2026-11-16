@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/table";
 import { formatCalendarDateTwoDigitDay } from "@/lib/time";
 import { PATIENT_GENDER_LABELS, type PatientGender } from "@/lib/patient-gender";
+import { shown } from "@/lib/source-field";
 import { PagedListing } from "@/pages/paged-listing";
 import { usePagedRead } from "@/pages/paged-read";
 import { PlainHeading } from "@/pages/sort-heading";
@@ -43,7 +44,8 @@ const GENDER_BADGE_TINTS: Readonly<Record<PatientGender, string | undefined>> = 
 /**
  * The matching Patients, one row each: the official name, the full NRIC, the
  * gender as a badge (Male blue, Female pink) and both dates as `dd MMM yyyy`,
- * a missing Last visit shown as `—`, in the patient source's own order: no
+ * the Last visit shown as received (ADR 0020) — `—` when missing, "Error" in
+ * the wrong format — in the patient source's own order: no
  * column sorts. Each row is keyed by the Patient's id, which is kept and never
  * shown.
  *
@@ -90,7 +92,7 @@ function ResultsTable({ patients }: { patients: readonly PatientMatch[] }) {
               {formatCalendarDateTwoDigitDay(patient.birthDate)}
             </TableCell>
             <TableCell className="tabular-nums">
-              {patient.lastVisit === null ? "—" : formatCalendarDateTwoDigitDay(patient.lastVisit)}
+              {shown(patient.lastVisit, formatCalendarDateTwoDigitDay)}
             </TableCell>
           </TableRow>
         ))}

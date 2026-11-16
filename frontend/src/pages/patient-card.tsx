@@ -4,9 +4,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { type Clock, completedYears, formatCalendarDate, today, systemClock } from "@/lib/time";
 
 import { PATIENT_GENDER_LABELS } from "@/lib/patient-gender";
+import { shown } from "@/lib/source-field";
 
 import type { PatientSummary } from "@/pages/patient-api";
 import { usePatientInContext } from "@/pages/patient-in-context";
+import { labelled } from "@/pages/source-code";
 
 const NOTE_CLASS = "text-sm text-muted-foreground";
 
@@ -27,21 +29,26 @@ function PlainCard({ children }: { children: ReactNode }) {
 /**
  * The loaded patient as a banner: their name as its heading, and beneath it
  * their fields, each a plain text node — whatever the backend sent is shown as
- * the text it is, never interpreted as markup.
+ * the text it is, never interpreted as markup. Each is shown as received (ADR
+ * 0020): its value, "—" when missing, "Error" when its format was wrong, a
+ * gender outside the four codes as its code; Age follows the date of birth.
  */
 function PatientBanner({ clock, patient }: { clock: Clock; patient: PatientSummary }) {
-  const rows: [label: string, value: string][] = [
-    ["NRIC", patient.nric],
-    ["Gender", PATIENT_GENDER_LABELS[patient.gender]],
-    ["Age", String(completedYears(patient.birthDate, today(clock)))],
-    ["Date of birth", formatCalendarDate(patient.birthDate)],
+  const rows: [label: string, value: ReactNode][] = [
+    ["NRIC", shown(patient.nric, String)],
+    ["Gender", shown(patient.gender, labelled(PATIENT_GENDER_LABELS))],
+    [
+      "Age",
+      shown(patient.birthDate, (birthDate) => String(completedYears(birthDate, today(clock)))),
+    ],
+    ["Date of birth", shown(patient.birthDate, formatCalendarDate)],
   ];
   return (
     <section
       aria-label="Patient"
       className="flex w-full flex-col gap-6 rounded-xl bg-linear-to-r from-ring to-primary p-5 text-primary-foreground shadow-md"
     >
-      <h2 className="text-4xl font-black tracking-tight">{patient.name}</h2>
+      <h2 className="text-4xl font-black tracking-tight">{shown(patient.name, String)}</h2>
       <dl className="flex flex-wrap gap-x-10 gap-y-4 text-sm">
         {rows.map(([label, value]) => (
           <div className="flex flex-col gap-1" key={label}>

@@ -27,9 +27,10 @@ import tools.jackson.databind.JsonNode;
  * EHR vendor's public sandbox test patients, eight under development ids of the mock's own —
  * covering every gender code, each with an NRIC that cannot be a real person's
  * (/docs/domain/patient.md, "The patient source's fixtures"). Each fixture's values as the service
- * reads them are {@code PatientStoreContract}'s. Beside them, the fault stubs serve each way the
- * source fails, under ids of their own, and the search stubs answer the documented searches with
- * the fixtures themselves.
+ * reads them are {@code PatientStoreContract}'s. Beside them, the received stubs serve Patients
+ * holding elements missing or in the wrong format, shown as received (ADR 0020), the fault stubs
+ * each way the source fails, both under ids of their own, and the search stubs answer the
+ * documented searches with the fixtures themselves.
  */
 class PatientSourceFixturesTests {
 
@@ -43,20 +44,27 @@ class PatientSourceFixturesTests {
     }
 
     /**
-     * Every NRIC the stub files hold: each fixture's, and each fault stub's that carries one — a
-     * fault stub's Patient is as dummy as a fixture's.
+     * Every NRIC the stub files hold: each fixture's, and each fault or received stub's that
+     * carries one as text — such a stub's Patient is as dummy as a fixture's.
      */
     private static List<String> stubNrics() {
-        return Stream.concat(nrics().stream(), PatientSourceStubs.faults().stream()
-                        .map(fault -> nric(fault.response().at("/jsonBody")))
-                        .flatMap(Optional::stream))
+        return Stream.of(nrics().stream(),
+                        PatientSourceStubs.faults().stream()
+                                .map(fault -> nric(fault.response().at("/jsonBody")))
+                                .flatMap(Optional::stream),
+                        PatientSourceStubs.received().stream()
+                                .map(stub -> nric(stub.response().at("/jsonBody")))
+                                .flatMap(Optional::stream))
+                .flatMap(nrics -> nrics)
                 .toList();
     }
 
     private static Optional<String> nric(JsonNode patient) {
         return StreamSupport.stream(patient.at("/identifier").spliterator(), false)
                 .filter(identifier -> NRIC_SYSTEM.equals(identifier.get("system").asString()))
-                .map(identifier -> identifier.get("value").asString())
+                .map(identifier -> identifier.path("value"))
+                .filter(JsonNode::isString)
+                .map(JsonNode::asString)
                 .findFirst();
     }
 
@@ -101,14 +109,18 @@ class PatientSourceFixturesTests {
                 .findFirst();
     }
 
-    /** Every fixture has a Last visit, a date to the day, but one: Tan Boon Huat has none. */
+    /**
+     * Every fixture has a Last visit, a date to the day, but two: Tan Boon Huat has none, and
+     * Rajesh Kumar's is to the month alone, shown as received (ADR 0020).
+     */
     @Test
-    void everyFixtureButOneHasALastVisitToTheDay() {
-        assertThat(FIXTURES).filteredOn(fixture -> lastVisit(fixture).isEmpty())
-                .extracting(fixture -> fixture.get("id").asString())
-                .containsExactly("dev-patient-10");
-        assertThat(FIXTURES).extracting(fixture -> lastVisit(fixture).orElse("2000-01-01"))
-                .allSatisfy(date -> assertThat(date).matches("\\d{4}-\\d{2}-\\d{2}"));
+    void everyFixtureButTwoHasALastVisitToTheDay() {
+        assertThat(FIXTURES).filteredOn(fixture -> !lastVisit(fixture).orElse("")
+                        .matches("\\d{4}-\\d{2}-\\d{2}"))
+                .extracting(fixture -> fixture.get("id").asString(),
+                        fixture -> lastVisit(fixture).orElse(null))
+                .containsExactlyInAnyOrder(tuple("dev-patient-10", null),
+                        tuple("dev-patient-12", "2026-10"));
     }
 
     /** Each search answers its matches as the fixtures themselves, exactly as read by id. */
@@ -119,7 +131,7 @@ class PatientSourceFixturesTests {
                 .map(entry -> entry.get("resource"))
                 .toList();
 
-        assertThat(matches).hasSize(15).allSatisfy(match -> assertThat(FIXTURES)
+        assertThat(matches).hasSize(16).allSatisfy(match -> assertThat(FIXTURES)
                 .filteredOn(fixture -> fixture.get("id").equals(match.get("id")))
                 .containsExactly(match));
     }
@@ -180,6 +192,7 @@ class PatientSourceFixturesTests {
                         tuple("Bundle", "searchset", 0),
                         tuple("Bundle", "searchset", 0),
                         tuple("Bundle", "searchset", 1),
+                        tuple("Bundle", "searchset", 1),
                         tuple("Bundle", "searchset", 7),
                         tuple("Bundle", "searchset", 7),
                         tuple("Bundle", "searchset", 3),
@@ -199,7 +212,7 @@ class PatientSourceFixturesTests {
     @Test
     void everyCannedSearchPinsEveryFilterItUsesOrNot() {
         assertThat(PatientSourceStubs.searchStubs()).filteredOn(stub -> !stub.fallback())
-                .hasSize(6)
+                .hasSize(7)
                 .allSatisfy(stub -> assertThat(FILTER_PARAMETERS)
                         .as("each filter's matcher, absent or pinned")
                         .allMatch(parameter -> pinsOrAbsent(stub.query().path(parameter))));
@@ -259,7 +272,7 @@ class PatientSourceFixturesTests {
         assertThat(nrics()).hasSize(FIXTURES.size()).doesNotHaveDuplicates();
     }
 
-    /** No two stubs, fixture or fault, share an NRIC. */
+    /** No two stubs, fixture, fault or received, share an NRIC. */
     @Test
     void everyStubNricIsUnique() {
         assertThat(stubNrics()).hasSize(FIXTURES.size() + 6).doesNotHaveDuplicates();
@@ -273,8 +286,8 @@ class PatientSourceFixturesTests {
 
     /**
      * The fault stubs, each by the failure it serves and the id it serves it under: a delay past
-     * the read timeout, a body dribbled out past it, a {@code 5xx}, and one Patient per domain
-     * rule it breaks.
+     * the read timeout, a body dribbled out past it, and a {@code 5xx}. What a Patient holds is
+     * never a failure (ADR 0020), so no fault stub serves one.
      */
     @Test
     void theFaultStubsServeEachFailureUnderAnIdOfItsOwn() {
@@ -283,12 +296,48 @@ class PatientSourceFixturesTests {
                 .containsExactlyInAnyOrder(
                         tuple("slow", "fault-slow"),
                         tuple("slow-body", "fault-slow-body"),
-                        tuple("server-error", "fault-server-error"),
-                        tuple("no-nric", "fault-no-nric"),
-                        tuple("no-official-name", "fault-no-official-name"),
-                        tuple("no-name-text", "fault-no-name-text"),
-                        tuple("no-gender", "fault-no-gender"),
-                        tuple("no-birth-date", "fault-no-birth-date"));
+                        tuple("server-error", "fault-server-error"));
+    }
+
+    /**
+     * The received stubs, each by what it holds and the id it serves it under: one Patient per
+     * element missing — the NRIC, the official name, its text, the gender and the birth date —
+     * and one whose four are each in the wrong format.
+     */
+    @Test
+    void theReceivedStubsServeEachUnderAnIdOfItsOwn() {
+        assertThat(PatientSourceStubs.received())
+                .extracting(PatientSourceStubs.ReceivedStub::received,
+                        PatientSourceStubs.ReceivedStub::id)
+                .containsExactlyInAnyOrder(
+                        tuple("no-nric", "received-no-nric"),
+                        tuple("no-official-name", "received-no-official-name"),
+                        tuple("no-name-text", "received-no-name-text"),
+                        tuple("no-gender", "received-no-gender"),
+                        tuple("no-birth-date", "received-no-birth-date"),
+                        tuple("wrong-format", "received-wrong-format"));
+    }
+
+    /**
+     * A received stub answers a {@code 200} Patient under the well-formed id it is served for,
+     * which no fixture uses and no search matches.
+     */
+    @Test
+    void everyReceivedStubIsAPatientUnderAWellFormedIdOfItsOwn() {
+        List<String> fixtureIds = FIXTURES.stream().map(fixture -> fixture.get("id").asString())
+                .toList();
+        List<String> matched = PatientSourceStubs.searches().stream()
+                .flatMap(bundle -> StreamSupport.stream(bundle.at("/entry").spliterator(), false))
+                .map(entry -> entry.at("/resource/id").asString())
+                .toList();
+        assertThat(PatientSourceStubs.received()).isNotEmpty().allSatisfy(stub -> {
+            assertThat(stub.id()).matches("[A-Za-z0-9\\-.]{1,64}").isNotIn(fixtureIds)
+                    .isNotIn(matched);
+            assertThat(List.of(stub.response().at("/status").asInt(),
+                    stub.response().at("/jsonBody/resourceType").asString(),
+                    stub.response().at("/jsonBody/id").asString()))
+                    .containsExactly(200, "Patient", stub.id());
+        });
     }
 
     /**
@@ -309,7 +358,7 @@ class PatientSourceFixturesTests {
     void everyFaultStubPatientIsUnderItsOwnId() {
         assertThat(PatientSourceStubs.faults())
                 .filteredOn(fault -> fault.response().at("/status").asInt() == 200)
-                .hasSize(7)
+                .hasSize(2)
                 .allSatisfy(fault -> assertThat(fault.response().at("/jsonBody/id").asString())
                         .isEqualTo(fault.id()));
     }
@@ -1594,7 +1643,7 @@ class PatientSourceFixturesTests {
     }
 
     /**
-     * Every dummy NRIC, a fixture's or a fault stub's, carries a check letter the algorithm rejects, so none can be a real
+     * Every dummy NRIC, a fixture's, a fault stub's or a received stub's, carries a check letter the algorithm rejects, so none can be a real
      * person's, and a real-looking value cannot slip into the stub files later.
      */
     @Test

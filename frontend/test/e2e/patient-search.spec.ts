@@ -11,8 +11,9 @@ import {
 /**
  * Patient Search as a Medical Officer meets it, against the patient source's
  * mock (`backend/patient-source-mock`): its canned name search spanning two
- * pages in the mock's own order, filtered by gender, its NRIC search, and its
- * search that matches nothing. Nothing about a search or its filter reaches
+ * pages in the mock's own order, filtered by gender, its NRIC searches — one
+ * matching a Patient whose Last visit is in the wrong format — and its search
+ * that matches nothing. Nothing about a search or its filter reaches
  * the URL. Selecting a result puts its Patient into the tab's EHR
  * context, shown on the Demographic page's Patient card and the top bar; that signing out and
  * back in leaves none is `patient-sign-out.spec.ts`'. What the page decides
@@ -74,6 +75,14 @@ test.describe("Patient Search", () => {
     ]);
     await expect(page.getByText("Showing 1 to 1 of 1 patients")).toBeVisible();
     await expect(page).toHaveURL("/search");
+  });
+
+  // The patient source is the truth (ADR 0020): Rajesh Kumar's Last visit is
+  // to the month alone, so his row shows it as "Error", and the search stands.
+  test("shows a Last visit in the wrong format as Error, in its row", async ({ page }) => {
+    await search(page, "S9912345B");
+
+    await expect(resultRows(page)).toHaveText(["Rajesh KumarS9912345BMale28 May 1999Error"]);
   });
 
   test("says when no Patient matches", async ({ page }) => {

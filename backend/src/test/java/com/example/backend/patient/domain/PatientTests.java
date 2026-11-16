@@ -11,9 +11,10 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 /**
- * What a Patient must have — every element but the name's family and given parts — and what it
- * prints as: its id, and none of the Restricted fields a record's generated {@code toString}
- * would print.
+ * What a Patient holds — its id, and its NRIC, official name's text, gender and birth date each
+ * as received (ADR 0020), none refused for what it holds — which of them it names as invalid, and
+ * what it prints as: its id, and none of the Restricted fields a record's generated
+ * {@code toString} would print.
  */
 class PatientTests {
 
@@ -21,48 +22,89 @@ class PatientTests {
     private static final PatientName NAME = new PatientName("Tan Wei Ming", null, List.of());
     private static final LocalDate BORN = LocalDate.of(1985, 3, 12);
 
+    private static final SourceField<String> NRIC = SourceField.present("S1234567A");
+    private static final SourceField<String> MALE = SourceField.present("male");
+    private static final SourceField<LocalDate> BIRTH_DATE = SourceField.present(BORN);
+
     @Test
     void aPatientNeedsAnId() {
-        assertThatThrownBy(() -> new Patient(null, "S1234567A", NAME, AdministrativeGender.MALE, BORN))
+        assertThatThrownBy(() -> new Patient(null, NRIC, NAME, MALE, BIRTH_DATE, Demographics.NONE))
                 .isInstanceOf(NullPointerException.class).hasMessage("id");
     }
 
     @Test
-    void aPatientNeedsAnNric() {
-        assertThatThrownBy(() -> new Patient(ID, null, NAME, AdministrativeGender.MALE, BORN))
+    void aPatientHoldsItsNricAsReceived() {
+        assertThatThrownBy(() -> new Patient(ID, null, NAME, MALE, BIRTH_DATE, Demographics.NONE))
                 .isInstanceOf(NullPointerException.class).hasMessage("nric");
     }
 
     @Test
-    void aPatientNeedsAName() {
-        assertThatThrownBy(() -> new Patient(ID, "S1234567A", null, AdministrativeGender.MALE, BORN))
-                .isInstanceOf(NullPointerException.class).hasMessage("name");
-    }
-
-    @Test
-    void aPatientNeedsAGender() {
-        assertThatThrownBy(() -> new Patient(ID, "S1234567A", NAME, null, BORN))
+    void aPatientHoldsItsGenderAsReceived() {
+        assertThatThrownBy(() -> new Patient(ID, NRIC, NAME, null, BIRTH_DATE, Demographics.NONE))
                 .isInstanceOf(NullPointerException.class).hasMessage("gender");
     }
 
     @Test
-    void aPatientNeedsABirthDate() {
-        assertThatThrownBy(() -> new Patient(ID, "S1234567A", NAME, AdministrativeGender.MALE, null))
+    void aPatientHoldsItsBirthDateAsReceived() {
+        assertThatThrownBy(() -> new Patient(ID, NRIC, NAME, MALE, null, Demographics.NONE))
                 .isInstanceOf(NullPointerException.class).hasMessage("birthDate");
     }
 
+    /** The source is the truth: a Patient with every element missing is still a Patient. */
     @Test
-    void aNameNeedsItsText() {
-        assertThatThrownBy(() -> new PatientName(null, "Tan", List.of("Wei")))
+    void aPatientMayHoldNoneOfItsElements() {
+        Patient bare = new Patient(ID, SourceField.missing(), null, SourceField.missing(),
+                SourceField.missing(), Demographics.NONE);
+
+        assertThat(bare.invalid()).isEmpty();
+    }
+
+    /** A gender outside the four codes is kept as it came. */
+    @Test
+    void aPatientKeepsAGenderOutsideTheFourCodes() {
+        assertThat(new Patient(ID, NRIC, NAME, SourceField.present("M"), BIRTH_DATE,
+                Demographics.NONE).gender()).isEqualTo(SourceField.present("M"));
+    }
+
+    /**
+     * A Patient names each element whose format was wrong by its path in the R5 Patient served,
+     * in the resource's order.
+     */
+    @Test
+    void aPatientNamesItsInvalidElementsByTheirPathInTheResource() {
+        Patient invalid = new Patient(ID, SourceField.invalid(),
+                new PatientName(SourceField.invalid(), "Tan", List.of()), SourceField.invalid(),
+                SourceField.invalid(), Demographics.NONE);
+
+        assertThat(invalid.invalid())
+                .containsExactly("identifier[0].value", "name[0].text", "gender", "birthDate");
+    }
+
+    @Test
+    void aPatientWithOneInvalidElementNamesThatOneAlone() {
+        Patient invalid = new Patient(ID, NRIC, NAME, MALE, SourceField.invalid(),
+                Demographics.NONE);
+
+        assertThat(invalid.invalid()).containsExactly("birthDate");
+    }
+
+    /** The five elements as the source should send them are each present. */
+    @Test
+    void aPatientOfItsFiveElementsHoldsEachPresent() {
+        assertThat(new Patient(ID, "S1234567A", NAME, AdministrativeGender.MALE, BORN))
+                .isEqualTo(new Patient(ID, NRIC, NAME, MALE, BIRTH_DATE, Demographics.NONE));
+    }
+
+    @Test
+    void aNameHoldsItsTextAsReceived() {
+        assertThatThrownBy(() -> new PatientName((SourceField<String>) null, "Tan", List.of("Wei")))
                 .isInstanceOf(NullPointerException.class).hasMessage("text");
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"", " ", "\t"})
-    void aNameTextCannotBeBlank(String blank) {
-        assertThatThrownBy(() -> new PatientName(blank, null, List.of()))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("A patient's name text is required");
+    @Test
+    void aNameOfItsTextIsPresent() {
+        assertThat(new PatientName("Suriani", null, null).text())
+                .isEqualTo(SourceField.present("Suriani"));
     }
 
     @Test
@@ -78,12 +120,6 @@ class PatientTests {
         given.clear();
 
         assertThat(name.given()).containsExactly("Wei", "Ming");
-    }
-
-    @Test
-    void aPatientKeepsTheNricItWasGiven() {
-        assertThat(new Patient(ID, "S1234567A", NAME, AdministrativeGender.MALE, BORN).nric())
-                .isEqualTo("S1234567A");
     }
 
     @Test
@@ -109,11 +145,12 @@ class PatientTests {
 
     @Test
     void aPatientWithDemographicDetailsKeepsItsFiveElements() {
-        Patient tan = new Patient(ID, "S1234567A", NAME, AdministrativeGender.MALE, BORN);
+        Patient tan = new Patient(ID, SourceField.missing(), NAME, MALE, SourceField.invalid(),
+                Demographics.NONE);
         Demographics details = new Demographics("+65 9123 4567", null, null, null, null);
 
-        assertThat(tan.withDemographics(details)).isEqualTo(
-                new Patient(ID, "S1234567A", NAME, AdministrativeGender.MALE, BORN, details));
+        assertThat(tan.withDemographics(details)).isEqualTo(new Patient(ID,
+                SourceField.missing(), NAME, MALE, SourceField.invalid(), details));
     }
 
     @Test

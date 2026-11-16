@@ -1,7 +1,7 @@
 ---
 type: Domain Rules
 title: Patients
-description: The FHIR R5 Patient the service serves — its element rules, the NRIC system, the authoritative name text, derived age, the in-house patient source it is read from and the elements copied, no caching, Patient search and the Last visit, the data classification, the error contract, the logging rules, the absence of auditing for reads by id and the audit of every search, the follow-ups before real data, the Patient card's patient in context, the Search page, the development fixtures, search stubs and fault stubs in the source's mock, and how R5 conformance is proven.
+description: The FHIR R5 Patient the service serves — its element rules, each of its four elements shown as received, the NRIC system, the authoritative name text, derived age, the in-house patient source it is read from and the elements copied, no caching, Patient search and the Last visit shown as received, the data classification, the error contract, the logging rules, the absence of auditing for reads by id and the audit of every search, the follow-ups before real data, the Patient card's patient in context, the Search page, the development fixtures, received stubs, search stubs and fault stubs in the source's mock, and how R5 conformance is proven.
 tags: [patient, fhir]
 ---
 
@@ -24,8 +24,9 @@ the source's own search passed through (ADR 0018, ["Patient search"](#patient-se
 ## The resource
 
 Base R5 `Patient`, with no `meta` and so no `meta.profile`, and no element beyond
-these and the [Demographic details](#demographic-details), each left out when
-the patient has none:
+these, the [Demographic details](#demographic-details) and the
+[invalid-field extensions](#shown-as-received), each left out when the patient
+has none:
 
 ```json
 {
@@ -57,21 +58,50 @@ the patient has none:
   digits, `-` and `.`, 1 to 64 of them), is well-formed; anything else is refused
   `400` before the source is called. The grammar lives in the domain's
   `PatientId`, which the read binds its path segment through.
-- **`identifier`** — exactly one, the NRIC, under Synapxe's NRIC NamingSystem,
+- **`identifier`** — at most one, the NRIC, under Synapxe's NRIC NamingSystem,
   `https://fhir.synapxe.sg/NamingSystem/nric` (`Patient.NRIC_SYSTEM`). Its shape
   is not checked.
-- **`name`** — exactly one `HumanName`, `use: official`.
-  - **`text` is required and authoritative**: it is the name as the person writes
-    it, and it is what the SPA shows.
+- **`name`** — at most one `HumanName`, `use: official`.
+  - **`text` is authoritative**: it is the name as the person writes it, and it
+    is what the SPA shows. It is never rebuilt from `family` and `given`.
   - `family` and `given` are optional, and are left out rather than sent empty when
     the name is not split. Many Singapore names do not split cleanly into a family
     and given names, so nothing may assume the split exists or rebuild the name
     from it.
-- **`gender`** — required; FHIR's administrative gender, one of `male`, `female`,
-  `other` or `unknown`.
-- **`birthDate`** — required, to the day.
+- **`gender`** — FHIR's administrative gender, one of `male`, `female`, `other`
+  or `unknown`, or any other code the source sent, as it came.
+- **`birthDate`** — to the day.
 
 The path follows the repo's convention: an unversioned `/api` base, held in code.
+
+### Shown as received
+
+The patient source is the truth (ADR 0020): the NRIC, the official name's
+`text`, `gender` and `birthDate` are each **present**, **missing** — a key not
+there, `null`, or text empty or only whitespace — or **in the wrong format** —
+the wrong JSON type, or a birth date that is no calendar date — and none fails
+the read. Nothing of a value's meaning is checked: a birth date in the future is
+present.
+
+- **Missing**: the element is left out — FHIR JSON has no `null`. No NRIC is no
+  `identifier`; no official name is no `name`; an official name with no `text`
+  keeps its `use`, `family` and `given`.
+- **In the wrong format**: the element is left out too, and an extension names
+  it by its path in the resource — `identifier[0].value`, `name[0].text`,
+  `gender` or `birthDate` — under the service's own URL,
+  `http://example.org/fhir/StructureDefinition/invalid-field` (a placeholder, as
+  the military service's is), its path the `valueString`. An invalid NRIC keeps
+  its identifier's `system`. The extensions follow the military service, in
+  that order. An element left out that no extension names is missing.
+- **A code outside the four** genders is present, and served as its code.
+
+So a Patient shown as received stays base R5 — the names travel in base R5's
+own extension mechanism — but for a gender outside the four, which base R5's
+required value set does not admit (ADR 0014).
+
+The SPA shows each as its value, **"—"** when missing, or **"Error"** when in the
+wrong format, on the Patient card and in the top bar, a gender outside the four
+as its code; Age follows the date of birth, "—" or "Error" as it is.
 
 ### Demographic details
 
@@ -102,11 +132,13 @@ no credential. `APP_PATIENT_SOURCE_BASE_URL` is the base, required, with no
 default (`backend/docs/configuration/patient-source.md`).
 
 - **The elements copied.** From the R4 `Patient`, the adapter copies exactly the
-  `identifier` under the NRIC NamingSystem, the `name` whose `use` is `official`,
-  `gender` and `birthDate`, and ignores every other element — another
-  identifier, a `usual` or `maiden` name, `meta` and the rest are never read.
-  R4 and R5 agree on all four, so the copy is straight and the R5 response has
-  exactly the shape above.
+  value of the first `identifier` under the NRIC NamingSystem, the first `name`
+  whose `use` is `official`, `gender` and `birthDate`, and ignores every other
+  element — another identifier, a `usual` or `maiden` name, `meta` and the rest
+  are never read. R4 and R5 agree on all four, so the copy is straight and the R5
+  response has exactly the shape above. The NRIC's value, the official name's
+  `text`, `gender` and `birthDate` are each bound as the raw JSON they arrived as
+  — so a number is not coerced into text — and read [as received](#shown-as-received).
 - **The Demographic details copied**, by a read by id alone: the first
   `telecom` with `system: phone` and a `value`, and the first with
   `system: email`; the `text` of the first `address` with `use: home` and a
@@ -120,12 +152,13 @@ default (`backend/docs/configuration/patient-source.md`).
   is a failure of the source, the `502` below: the source unreachable, no
   answer within 2 seconds to connect and 5 to answer — the whole answer, its
   body included — a connection lost before the answer was in, a `5xx` or any other
-  status, or a `200` the service cannot hold — a body that is no Patient, or a
-  Patient breaking a rule above: another patient's `id`, no `identifier` under
-  the NRIC NamingSystem, no `name` with `use: official` or one with no `text`,
-  no gender or a code outside the four, a `birthDate` missing or not to the
-  day, a military service date not to the day. An official name with no `text` is a failure even with a `family` and
-  `given`: the text is never rebuilt from them.
+  status, or a `200` the service cannot hold — a body that is no Patient, a
+  Patient under another patient's `id`, or one with a military service date not
+  to the day. **Another patient's id stays a failure**: the Patient is read by
+  the id the EHR context names, and so are its FFI, NUMC, ARMC and Medication
+  Histories, so a Patient under another id is not the patient asked for. What
+  the NRIC, the name, the gender or the birth date hold is
+  [never a failure](#shown-as-received).
 - **No caching.** No Patient is kept in Redis or in memory: every read, of the
   same patient too, is a call to the source.
 - **No grants.** No table holds a Patient, so no database login holds a grant
@@ -163,11 +196,15 @@ own, and holds and caches nothing.
 - **Checked as the request is read in.** A gender spelled any other way is
   `400`, before the source is called. Any other parameter is ignored.
 - **The answer** is plain JSON, `{totalResults, startIndex, patients: [{id,
-name, nric, gender, birthDate, lastVisit}]}`: the Patient's id (the EHR's FHIR
-  id, which `GET /api/patient/{id}` reads it by), the official name's text, the
-  NRIC, the gender code, and both dates as `YYYY-MM-DD`, `lastVisit` `null` for a
-  Patient with none. Each match is copied as a read by id copies a Patient,
-  under the same rules.
+name, nric, gender, birthDate, lastVisit, invalid}]}`: the Patient's id (the
+  EHR's FHIR id, which `GET /api/patient/{id}` reads it by), the official name's
+  text, the NRIC, the gender code, and both dates as `YYYY-MM-DD`. Each match's
+  five elements are copied as a read by id copies them, but read strictly
+  (ADR 0018), so a match must hold each, a gender of the four and a birth date
+  to the day. Its Last visit is shown as received (ADR 0020,
+  ["Last visit"](#last-visit)): `null` for a Patient with none or one in the
+  wrong format, and `invalid`, `["lastVisit"]` in the second case and `[]`
+  otherwise, tells the two apart.
 - **Errors are the application API's `ApiError`**, not an `OperationOutcome`:
   the search is outside `/api/patient`. `400` for a query too short, a gender
   the search cannot take, or a paging value that is no integer, `401` and
@@ -176,7 +213,9 @@ name, nric, gender, birthDate, lastVisit}]}`: the Patient's id (the EHR's FHIR
   within 2 seconds to connect and 5 to answer, any status but a `200` (a `404`
   included) — or answering a `200` that is no searchset Bundle, has no `total`,
   or holds an entry that is no Patient the service can hold: no `id` or one
-  outside FHIR's grammar, a Patient rule broken, or a Last visit not to the day.
+  outside FHIR's grammar, no NRIC, no official name or one with no `text`, no
+  gender or a code outside the four, or a birth date missing or not to the day.
+  A Last visit never fails it.
 - **Audited, unlike a read by id.** Each search the source answers appends one
   `PATIENT_SEARCH` (["Patient reads are not audited"](#patient-reads-are-not-audited)).
 
@@ -187,6 +226,17 @@ has no element for it, so the source carries it as an extension on each Patient
 in a search's answer, `https://fhir.synapxe.sg/StructureDefinition/last-visit`,
 a `valueDate` to the day, absent for a Patient with none. A read by id ignores
 it, and the R5 `Patient` does not carry it.
+
+A search shows it as received (ADR 0020), on the rule the histories follow: the
+first `last-visit` extension's `valueDate` is present when it is a calendar
+date, missing when there is no such extension or its `valueDate` is absent,
+`null` or blank, and invalid — "Error" on the Search page — when it is the wrong
+JSON type or no date to the day (`2026-10`, a month alone). It never fails the
+search. A search whose matches hold an invalid one writes one `WARN`
+`patient_source.invalid_fields`, its read `search` and each by its path in the
+source's answer, `entry[0].extension[0].valueDate`, never its value; each
+counts once in the `patient_source.invalid_fields` counter, tagged `read`
+`search` and `field` `lastVisit` (`backend/docs/LOG_RECORDS.md`).
 
 ### The Search page
 
@@ -202,7 +252,8 @@ NRIC", searched only on submit (Enter or the Search button).
   nothing; the results last read stay.
 - **Results**, under the heading "Search Results": a table of Patient Name (the
   official name only), NRIC (in full), Gender (a badge, Male blue and Female pink), Date of Birth and Last
-  Visit (`dd MMM yyyy`, a missing Last visit `—`), five to a page with the
+  Visit (`dd MMM yyyy`, a missing Last visit `—`, one in the wrong format
+  "Error"), five to a page with the
   numbered pager and "Showing x to y of N patients" — shown whenever there is a
   match, on a single page too. Each row keeps the Patient's id, never shown.
 - **Selecting a result** puts the row's Patient, by that id, into the tab's
@@ -336,13 +387,20 @@ adapter every namespace shares. A new FHIR resource served beneath
   or a body that stalled past it), `server-error`, `unexpected-status`,
   `unreadable` (a body that arrived whole and is not JSON or not a Patient) —
   or the rule the Patient broke — `another-resource`,
-  `no-nric`, `no-official-name`, `no-name-text`, `no-gender`,
-  `no-birth-date`, `birth-date-not-to-the-day`, `service-date-not-to-the-day`
-  — or, for a search, what its
-  answer lacked — `not-a-searchset`, `no-total`, `no-id`, `invalid-id`,
-  `last-visit-not-to-the-day` — and whose error message is the fault's fixed
+  `service-date-not-to-the-day` — or, for a search, what its answer or a match
+  lacked — `not-a-searchset`, `no-total`, `no-id`, `invalid-id`, `no-nric`,
+  `no-official-name`, `no-name-text`, `no-gender`, `no-birth-date`,
+  `birth-date-not-to-the-day` — and whose error message is the fault's fixed
   sentence. It never names the patient id, the NRIC, the name, the birth date,
   the query searched for or anything of the source's body.
+- **A Patient holding elements in the wrong format is one `WARN`**,
+  `patient_source.invalid_fields`, written by `observability.InvalidSourceFields`
+  (the module writes no record of its own), its read `patient` and each element
+  by its path in the source's answer — `identifier[1].value`, `name[2].text`,
+  `gender`, `birthDate` — never its value; and each counts once in the
+  `patient_source.invalid_fields` counter, tagged `read=patient` and `field` its
+  path in the served resource (`name[0].text`). A Patient with none writes
+  nothing. `PatientSourceAdapterContractTests` holds the record and the counter.
 - **A failure of the patient source names nothing of the patient.** Its
   exception's message is fixed text, naming at most a status or an element, and
   its cause is redacted to its type (`RedactedFaultException`): an HTTP client's
@@ -419,9 +477,13 @@ Both, and the FFI, NUMC, ARMC and Medication pages ([ffi](ffi.md), [numc](numc.m
 layout renders (`frontend/src/pages/patient-in-context.ts`): each change
 of the patient in context is one `GET /api/patient/{id}` — one read of the
 uncached patient source — on Home as on every other signed-in page, and a
-failed read is one "Couldn't load patient" on the page's error line. The SPA
+failed read is one "Couldn't load patient" on the page's error line — a body
+that is no Patient and a Patient under another id among them. The SPA
 holds no patient id beyond the EHR context, and the read is not bound to it:
-`patient:read` reads any id.
+`patient:read` reads any id. The FFI, NUMC, ARMC and Medication pages read
+their histories by the EHR context's id, never by one the Patient carries. The
+top bar names the patient, and the Patient card shows them,
+[as received](#shown-as-received).
 
 ## The patient source's fixtures
 
@@ -440,13 +502,24 @@ reaches a deployed environment. The backend holds no fixture of its own.
   the tests assert cannot drift. WireMock is a **test-scope** dependency only:
   the Enforcer's `wiremock-test-scope-only` (`backend/pom.xml`) fails the build
   if it resolves in a scope that reaches the packaged JAR.
-- **Fault stubs.** Beside the fixtures, each failure a stub can serve has a
+- **Received stubs.** A Patient shown as received has no data-fault stubs
+  (ADR 0020): beside the fixtures, each `200` Patient whose elements the source
+  holds missing or in the wrong format has a stub of its own, marked with
+  `metadata.received` and under a well-formed id no fixture uses —
+  `received-no-nric`, `received-no-official-name`, `received-no-name-text`,
+  `received-no-gender` and `received-no-birth-date` each lack that one
+  element, and `received-wrong-format` holds its NRIC, its official name's
+  text, its gender and its birth date each in the wrong format, its NRIC and
+  official name each second in their lists. A received stub is no fixture: every
+  reader of the fixtures leaves it out, and it matches no search, which reads
+  its matches strictly. Its NRIC, where it has one as text, is as dummy as a
+  fixture's, and the tests hold it to the same check. `PatientStoreContract`
+  holds what each reads as, written out.
+- **Fault stubs.** Beside them, each failure a stub can serve has a
   stub of its own, marked with `metadata.fault` and under a well-formed id no
   fixture uses: `fault-slow` answers only after the read timeout,
   `fault-slow-body` sends its headers at once and dribbles its body out past
-  the read timeout, `fault-server-error` answers `503`, and `fault-no-nric`,
-  `fault-no-official-name`, `fault-no-name-text`, `fault-no-gender` and
-  `fault-no-birth-date` each answer a Patient breaking that one rule. A fault
+  the read timeout, and `fault-server-error` answers `503`. A fault
   stub is no fixture: every reader of the fixtures leaves it out. Its NRIC, where it has one, is as
   dummy as a fixture's, and the tests hold it to the same check.
 - **Search stubs.** Each documented search has a canned stub answering a
@@ -474,8 +547,10 @@ reaches a deployed environment. The backend holds no fixture of its own.
   mock's order; `PatientStoreContract` holds what each canned search reads,
   written out.
 
-- **A Last visit on every fixture but one.** Each fixture carries the `lastVisit`
-  extension (["Last visit"](#last-visit)) but Tan Boon Huat, who has none.
+- **A Last visit to the day on every fixture but two.** Each fixture carries the
+  `last-visit` extension (["Last visit"](#last-visit)) but Tan Boon Huat, who
+  has none; Rajesh Kumar's is `2026-10`, to the month alone, which his NRIC
+  search answers as invalid.
 - **More than the five elements.** Each stub is an R4 Patient as a real source
   would answer it — an MRN identifier ahead of the NRIC, `usual` and `maiden`
   names beside the official one, `meta`, `active`, `telecom`, `address`,
@@ -527,13 +602,13 @@ fixture's own. The other eight carry development ids of the mock's own,
 | `dev-patient-09`                             | `Kavitha Tanabalan`          | `Tanabalan` | `Kavitha`            | `female`  | `S9512345A` (`G`)   | Matches `tan` at the start of a family name; first on the search's second page                  |
 | `dev-patient-10`                             | `Tan Boon Huat`              | `Tan`       | `Boon`, `Huat`       | `male`    | `S5512345A` (`D`)   | The one Patient with no Last visit, last of the search                                          |
 | `dev-patient-11`                             | `Ahmad bin Ismail`           | —           | —                    | `male`    | `S8312345B` (`A`)   | Matches no canned search                                                                        |
-| `dev-patient-12`                             | `Rajesh Kumar`               | `Kumar`     | `Rajesh`             | `male`    | `S9912345B` (`A`)   | Matches no canned search                                                                        |
+| `dev-patient-12`                             | `Rajesh Kumar`               | `Kumar`     | `Rajesh`             | `male`    | `S9912345B` (`A`)   | A Last visit not to the day, which his NRIC search shows as "Error"                             |
 
 Their Last visits, in the mock's order: Tan Hui Min `2026-11-02`, Stanley
 Goh Kok Wee `2026-10-28`, Tan Wei Ming `2026-10-15`, Lee Mei Ling `2026-09-30`,
 Nur Intan binte Yusof `2026-08-19` (the name search's first page), Kavitha
 Tanabalan `2026-05-07` and Tan Boon Huat, none (its second); and beside them
-Rajesh Kumar `2026-10-05`, Siti Nurhaliza binte Ahmad `2026-07-11`, Ahmad bin
+Rajesh Kumar `2026-10` (to the month alone), Siti Nurhaliza binte Ahmad `2026-07-11`, Ahmad bin
 Ismail `2026-06-14`, Marcus Anthony de Souza `2026-03-22` and Kumaravel
 `2025-12-01`.
 
@@ -545,8 +620,12 @@ reads it, to this table.
 
 The service writes its FHIR JSON by hand (ADR 0014), so a test holds it against
 the specification: `PatientR5ConformanceTests` reads every fixture the stub files
-serve through `GET /api/patient/{id}` and the HTTP adapter, and validates the response body exactly as
-written with **HAPI FHIR's R5 validator** against base R5 `Patient`. It does the
+serve through `GET /api/patient/{id}` and the HTTP adapter, and every received
+stub's, and validates the response body exactly as
+written with **HAPI FHIR's R5 validator** against base R5 `Patient`: an element
+missing or in the wrong format is left out, and the invalid-field extensions are
+extensions base R5 admits. A gender outside the four codes, which base R5's
+required value set refuses, is held by `FhirPatientTests` and no stub. It does the
 same for the `404`, `400` and `502` bodies against base R5 `OperationOutcome`, answered
 by the app-wide exception handler as in the running service. Any validation message
 of severity error or fatal fails the test; a warning, such as a best-practice

@@ -92,4 +92,13 @@ describe("ForPatientInContext", () => {
 
     expect(await screen.findByText(`History of ${TAN_WEI_MING.id}`)).toBeInTheDocument();
   });
+
+  it("reads the history by the id the patient was asked for, never the one the Patient read carries", async () => {
+    withPatientInContext(TAN_WEI_MING.id);
+    await renderWrapper({ [TAN_WEI_MING_READ]: json({ ...TAN_WEI_MING, id: "another-patient" }) });
+
+    expect(await screen.findByText(/^History of /)).toHaveTextContent(
+      `History of ${TAN_WEI_MING.id}`,
+    );
+  });
 });

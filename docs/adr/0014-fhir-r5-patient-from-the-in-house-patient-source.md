@@ -55,8 +55,9 @@ SPA types it with `@types/fhir`'s `fhir5`.
   so a client can tell, and a later version change is visible on the wire.
 - **Rendering by hand is small and exact.** The controller renders the FHIR
   JSON with plain records and Jackson, emitting exactly the elements the domain
-  doc lists and nothing else, which a general FHIR model would make easy to
-  drift from. No FHIR library (HAPI or other) is on the runtime classpath.
+  doc lists and nothing else — the invalid-field extensions of a Patient shown
+  as received among them (below) — which a general FHIR model would make easy
+  to drift from. No FHIR library (HAPI or other) is on the runtime classpath.
 
 ### The in-house patient source, behind the port
 
@@ -70,7 +71,9 @@ own: no table, no grant on one, no seeded fixtures.
   authorisation**, so the call presents no credential. The id is the EHR's FHIR
   id, sent unchanged: there is no mapping between ids.
 - **A straight copy.** The adapter binds the R4 JSON to plain records with
-  Jackson and copies the identifier under the NRIC NamingSystem, the name whose
+  Jackson — the four elements below as the raw JSON they arrived as, so a
+  value of the wrong type is told from one missing (ADR 0020) — and copies the
+  identifier under the NRIC NamingSystem, the name whose
   `use` is `official`, `gender` and `birthDate` into the domain's Patient, and
   on a read by id its Demographic details (`/docs/domain/patient.md`, "The
   in-house patient source"); every other element is never bound, and the
@@ -83,11 +86,27 @@ own: no table, no grant on one, no seeded fixtures.
 - **Only a `404` is no patient.** It stays the `404` the SPA reads as "No
   patient in context". Every other answer — another status, a redirect, no
   answer within the timeouts, a `200` that is not a Patient the service can hold
-  (another patient's id, no NRIC, no official name or one with no text, no
-  gender or an unknown code, a birth date missing or not to the day) — is a
-  failure of the source, the `502` `exception` outcome, distinct from the `500`
-  of a fault on this side. A silent "no patient" for a failing source would hide
-  the failure from the clinician and from operations.
+  (no Patient at all, or another patient's id: the Patient's histories are read
+  by the id asked for, so a Patient under another id is not the expected
+  resource) — is a failure of the source, the `502` `exception` outcome,
+  distinct from the `500` of a fault on this side. A silent "no patient" for a
+  failing source would hide the failure from the clinician and from operations.
+- **A Patient read by id is shown as received** (ADR 0020). Its NRIC, its
+  official name's text, its gender and its birth date are each the source's
+  value, missing or in the wrong format, and none fails the read: a Patient with
+  no NRIC, no official name or one with no text, no gender or a code outside the
+  four, or a birth date missing or not to the day, is served as it came. An
+  element missing or in the wrong format is left out of the R5 `Patient` — FHIR
+  JSON has no `null` — and one in the wrong format is named, by its path in the
+  resource (`name[0].text`), by an extension of the service's own,
+  `http://example.org/fhir/StructureDefinition/invalid-field`, a placeholder URL
+  as the military service's is. So the names travel in base R5's own extension
+  mechanism, and a Patient holding them stays base R5, which the R5 validator
+  holds every fixture and every received stub to; a top-level `invalid`, as a
+  history's row carries, is no element of base R5, and would leave a Patient
+  shown as received no R5 resource. A gender outside the four codes is served as
+  its code, the one way a Patient shown as received leaves base R5's required
+  value set. A Patient search keeps the strict reading (ADR 0018).
 - **Nothing patient-identifying in a failure.** The adapter's exception carries a
   fixed message, naming at most a status or an element, and its cause redacted
   to its type (`observability.RedactedFaultException`): an HTTP client's message
@@ -134,7 +153,10 @@ own: no table, no grant on one, no seeded fixtures.
 The source is mocked by WireMock, nested under the backend
 (`backend/patient-source-mock`), serving FHIR R4 `Patient/{id}` for the
 development fixtures — ids borrowed from an EHR vendor's public sandbox test
-patients, with dummy values — and a `404` for any other well-formed id. Compose runs it
+patients, with dummy values — Patients holding elements missing or in the
+wrong format under ids of their own (the received stubs), each failure of the
+source a stub can serve under one of its own (the fault stubs), and a `404` for
+any other well-formed id. Compose runs it
 beside SQL Server and Redis with no profile, so `make infra-up` and
 `make integration-test` start it; nothing under `infra/` builds or deploys it.
 
