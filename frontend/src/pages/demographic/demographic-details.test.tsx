@@ -69,7 +69,7 @@ describe("DemographicDetails", () => {
         "Vocation: Naval Safety Officer",
         "Enlistment Date: 15 Jan 2018",
         "ORD Date: 14 Jan 2020",
-        "MR Date: -",
+        "MR Date: —",
         "ROD Date: 08 Sep 2037",
       ],
     ]);
@@ -83,10 +83,10 @@ describe("DemographicDetails", () => {
     await user.click(within(overview).getByRole("button", { name: "Service record 3" }));
 
     expect(pairsIn(overview).slice(8, 12)).toEqual([
-      "Service Type: -",
-      "Rank: -",
-      "Unit / Service: -",
-      "Vocation: -",
+      "Service Type: —",
+      "Rank: —",
+      "Unit / Service: —",
+      "Vocation: —",
     ]);
   });
 
@@ -139,9 +139,9 @@ describe("DemographicDetails", () => {
         .getAllByRole("button")
         .map((button) => button.getAttribute("aria-expanded")),
     ]).toEqual([
-      ["Phone: -", "Email address: -", "Residential address: -"],
+      ["Phone: —", "Email address: —", "Residential address: —"],
       true,
-      ["Enlistment Date: -", "ORD Date: -", "MR Date: -", "ROD Date: -"],
+      ["Enlistment Date: —", "ORD Date: —", "MR Date: —", "ROD Date: —"],
       ["false", "false", "false"],
     ]);
   });

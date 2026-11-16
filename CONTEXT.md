@@ -86,7 +86,9 @@ The maximum age of a session from the Login that signed it in, however active it
 is; a session nobody signed in to counts from its creation.
 
 **Idle sign-out**:
-The SPA ending an idle session on its own, after warning the User.
+The SPA ending an idle session on its own, after warning the User. Only user
+input keeps the session: it renews the backend's Idle timeout, and the SPA counts
+its limit from the last renewal.
 _Avoid_: inactivity sign-out
 
 **One session per User**:
@@ -396,8 +398,7 @@ _Avoid_: role revocation
 **Dormancy job**:
 The daily scheduled job that locks dormant Users and revokes every Group
 membership of those dormant for longer. It never writes `active` and never deletes.
-_Avoid_: inactivity deactivation, dormant-authority revocation (the two jobs it
-replaced)
+_Avoid_: inactivity deactivation, dormant-authority revocation
 
 **Audit retention job**:
 The daily scheduled job that deletes audit events older than the retention period.
@@ -419,12 +420,21 @@ _Avoid_: patient record, demographics, subject (a Patient is no User)
 
 **Patient source**:
 The in-house system the backend reads every Patient from, by its EHR's FHIR id
-or by a Patient search, on every read: assumed FHIR R4 and unauthorised until
-its contract is known, and mocked by WireMock for local runs and E2E. The SPA
-never reaches it.
+or by a Patient search, on every read: FHIR R4, called with no credential, and
+mocked by WireMock for local runs and E2E. The SPA never reaches it.
 _Avoid_: patient service, patient API, FHIR server (the EHR's FHIR API is
 another system)
 
+**Shown as received**:
+How a read shows the Patient source's data, the source being the truth (ADR
+0020): no record or response is refused for what a field holds. A field is
+present, shown as its value; missing — no key, `null`, or a blank string —
+shown as "—"; or invalid — the wrong JSON type, or a string that is no date or
+date-time of its kind — shown as "Error". A code outside its closed set is
+shown as the raw code. Only a failure of the call or of the page's structure
+fails the read. The NUMC History is read so.
+_Avoid_: validated, sanitised, lenient (the reading is lenient; what the
+clinician sees is the data as received)
 **Demographic page**:
 The page at `/demographic`, linked from the navigation sidebar for a session
 holding `patient:read` and opened by selecting a Patient on the Search page:
@@ -434,21 +444,20 @@ Home, which shows the Patient card alone and is linked from no sidebar.
 _Avoid_: Profile (Home's title), patient profile
 
 **Patient card**:
-Home's card showing the EHR context's patient — name, NRIC, gender, date of
+The card, on Home and the Demographic page, showing the EHR context's patient — name, NRIC, gender, date of
 birth and age — or "No patient in context" when the tab holds no EHR context,
-its EHR context names no patient, or the Patient source holds none under its id. With no patient in context it reads nothing, and for a session without `patient:read` it reads nothing and says the account has no access to patients. The Patient source failing is the card's failed state, never "No patient in context".
+its EHR context names no patient, or the Patient source holds none under its
+id. The Patient source failing is the card's failed state, never "No patient in
+context".
 
 **Patient search**:
 Finding Patients by a name, of at least three characters, or by a full NRIC,
 typed into the Search page's one box — a page only a session holding
 `patient:read` opens or is linked to: the Patient source's own search, passed
-through and read five to a page, in the source's own stable order, and
-narrowed by gender. The source orders and filters; the service does neither.
-Every search the source answers is audited as `PATIENT_SEARCH`, by its kind,
-whether it used the gender filter and its count, and never its query or the
-filter's value; a read of one Patient
-by id is not. Selecting a result puts that Patient into the EHR context and
-opens the Demographic page.
+through in the source's own stable order and narrowed by gender. Every search
+the source answers is audited as `PATIENT_SEARCH`, never with its query; a read
+of one Patient by id is not. Selecting a result puts that Patient into the EHR
+context and opens the Demographic page.
 _Avoid_: patient lookup, patient list, patient query (no search lists every
 Patient)
 
@@ -479,6 +488,178 @@ their enlistment, ORD (Operationally Ready Date), MR and ROD (Run Out Date)
 dates.
 _Avoid_: military service (the name of its wire extension, not of the term),
 service history, NS record
+### FFIs
+
+Rules: [ffi](docs/domain/ffi.md). Decided in ADR 0019.
+
+**FFI (Fit for Instruction)**:
+One record of whether a patient was found fit for an instruction — an
+exercise, a test, a release — as the Patient source holds it: its FFI Type,
+Outcome, Issue Date, Expiry Date, Higher Authority, Submitting MC and Status,
+every one required. Read from the Patient source on every read, never held,
+and not audited.
+_Avoid_: fitness record, medical clearance, certificate
+
+**FFI History**:
+Every FFI of one patient, shown on the FFI page (`/ffi`) for the patient in
+context, in the Patient source's own order unless sorted by a Date Column. The
+source sorts and filters it; the service does neither.
+_Avoid_: FFI list, FFI log
+
+**Date Column**:
+A date a history declares it sorts by and narrows by a from–to range: its
+name, its label, the Patient source's search parameter, and its Precision. The
+FFI and NUMC Histories' are the Issue Date and Expiry Date, the ARMC and
+Medication Histories' the Start Date and End Date.
+_Avoid_: date field, sortable date
+
+**Precision**:
+How finely a Date Column is written: a calendar date, `YYYY-MM-DD`, or a
+date-time to the minute in Singapore time, `YYYY-MM-DDTHH:mm`. Both ends of a
+range are inclusive at either.
+_Avoid_: granularity, date type
+
+**FFI Type**:
+What an FFI is for, one of a closed set: Overseas Exercises, CAT A - OCS/SCS,
+IPPT FFI, Dental FFI, ORD / Release from Service, Vocational FFI.
+
+**Outcome**:
+What an FFI found, one of FIT, REQUEST WAIVER and UNFIT.
+_Avoid_: result, verdict (the dormancy job's word)
+
+**Issue Date**:
+The calendar date an FFI or a NUMC Record was issued.
+
+**Expiry Date**:
+The calendar date an FFI or a NUMC Record runs to. Nothing is derived from it:
+it does not decide an FFI's Status, and nothing works out "expired".
+
+**Higher Authority**:
+The medical authority an FFI answers to, one of CAMO, CARMO, CNMO, Comd MMI
+and DIS.
+
+**Medical Centre**:
+A camp medical centre, one of a closed set: Nee Soon Camp MC, Kranji Camp MC,
+Hendon Camp MC, Mandai Hill Camp MC and Khatib Camp MC. An FFI's Submitting MC
+and a Medication Record's Dispensary each name one.
+_Avoid_: MC set, camp MC list, a bare "Submitting MC" for the set (that is an
+FFI's field)
+
+**Submitting MC**:
+The Medical Centre that submitted an FFI.
+
+**Status**:
+Whether an FFI is Active or Inactive, as the Patient source says. It is the
+source's own and is never derived from the Expiry Date: an FFI past its
+Expiry Date may still be Active, and nothing works out "expired".
+_Avoid_: expired, valid
+
+### NUMC
+
+Rules: [numc](docs/domain/numc.md). Decided in ADR 0019 (D5) and ADR 0020.
+
+**NUMC Record**:
+One record of whether a patient was found fit for one underwater duty, as the
+Patient source holds it for the Navy Underwater Medicine Centre (NUMC): its
+NUMC Type, NUMC Outcome, Issue Date and Expiry Date, each shown as received —
+missing or invalid included, and a code outside its closed set shown raw. It
+has no Status. Read from the Patient source on every read, never held, and not
+audited.
+_Avoid_: NUMC Assessment, dive medical, underwater fitness record
+
+**NUMC History**:
+Every NUMC Record of one patient, shown on the NUMC page (`/numc`) for the
+patient in context, sorted and filtered by the Patient source as an FFI
+History is.
+_Avoid_: NUMC list, NUMC log
+
+**NUMC Type**:
+The underwater duty a NUMC Record is for, one of a closed set: Hyperbaric
+Chamber Duties, Submariner Duties, Diving Duties. A code outside it is shown
+as it came.
+
+**NUMC Outcome**:
+What a NUMC Record found, one of FIT, UNFIT, WAIVER GRANTED and WAIVER
+REJECTED. A set of its own, apart from an FFI's Outcome.
+_Avoid_: NUMC result, a bare "Outcome" (that is an FFI's)
+
+### ARMC
+
+Rules: [armc](docs/domain/armc.md). Decided in ADR 0019 (D6).
+
+**ARMC (Aeromedical Centre)**:
+The centre that sits a patient's aeromedical fitness boards. The Patient source
+holds each board it sat; the service holds none.
+
+**ARMC Board**:
+One aeromedical fitness board a patient sat, as the Patient source holds it
+for the ARMC: its ARMC Board Type, ARMC Outcome, Start Date, End Date, Medical
+Officer #1 and Medical Officer #2, every one required but the End Date. Read
+from the Patient source on every read, never held, and not audited.
+_Avoid_: ARMC Record, ARMC Assessment, aeromedical record
+
+**ARMC History**:
+Every ARMC Board of one patient, shown on the ARMC page (`/armc`) for the
+patient in context, sorted and filtered by the Patient source as an FFI
+History is.
+_Avoid_: ARMC list, ARMC log
+
+**ARMC Board Type**:
+The kind of aeromedical fitness board an ARMC Board is, one of a closed set:
+ACES.
+
+**ARMC Outcome**:
+What an ARMC Board found, one of FIT and UNFIT. A set of its own, apart from an
+FFI's Outcome and a NUMC Record's NUMC Outcome.
+_Avoid_: ARMC result, a bare "Outcome" (that is an FFI's)
+
+**Start Date**:
+The start of a record's period: a calendar date on an ARMC Board, and a
+date-time, to the minute, on a Medication Record.
+
+**End Date**:
+The end of a record's period, never before its Start Date: a calendar date on
+an ARMC Board, which may have none while it is still open, and a date-time, to
+the minute, on a Medication Record, which always has one.
+
+**Medical Officer #1** / **Medical Officer #2**:
+The two Medical Officers who sat on an ARMC Board, each a name as the Patient
+source gives it. Neither is linked to a User or an account.
+_Avoid_: MO 1 / MO 2, board member
+
+### Medication
+
+Rules: [medication](docs/domain/medication.md). Decided in ADR 0019 (D7).
+
+**Medication Record**:
+One prescription of a patient's, with how it was dispensed and who prescribed
+it, as the Patient source holds it: its Medication, Dispense Status, Start
+Date, End Date, Dispensary and Prescribing Doctor, every one required, and its
+Dosage, Route, Frequency, Step, Quantity and Duration, each optional. Every
+element but the Dispense Status, the dates and the Dispensary is free text,
+shown as the source gives it. Read from the Patient source on every read,
+never held, and not audited.
+_Avoid_: prescription record, medication order, drug record
+
+**Medication History**:
+Every Medication Record of one patient, shown on the Medication page
+(`/medication`) for the patient in context, sorted and filtered by the Patient
+source as an FFI History is.
+_Avoid_: medication list, medication log, prescription history
+
+**Dispense Status**:
+Whether a Medication Record's medication was dispensed and collected, one of a
+closed set: PENDING, DISPENSED, UNCOLLECTED.
+_Avoid_: dispensing state, a bare "Status" (that is an FFI's)
+
+**Dispensary**:
+The Medical Centre that dispenses a Medication Record's medication.
+_Avoid_: pharmacy, dispensing MC
+
+**Prescribing Doctor**:
+The doctor who prescribed a Medication Record, a name as the Patient source
+gives it. Not linked to a User or an account.
+_Avoid_: prescriber, ordering doctor
 
 ### Database
 
@@ -494,8 +675,8 @@ _Avoid_: database role (the roles are what a login is a member of), `SET ROLE`,
 a bare "login" (that is the sign-in operation)
 
 **Owner login**:
-The database login that owns the schema and runs migrations; only the migrate
-step holds it, never the running service.
+The database login that runs migrations, a member of `db_owner`; only the
+migrate step holds it, never the running service.
 _Avoid_: admin user, master user (that is RDS's own)
 
 **App login**:

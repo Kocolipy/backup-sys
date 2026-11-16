@@ -59,6 +59,15 @@ interface ScimResourceJpaRepository extends JpaRepository<ScimResourceEntity, UU
      * so a concurrent bump cannot be lost: two statements incrementing the same row
      * serialize on it, where two writes of a locally-computed number would not.
      *
+     * <p>{@code FORCESEEK} reaches each named row by its key, so the statement reads, and locks,
+     * no row it does not update. Left to the optimizer, an {@code IN} list over a small table is
+     * a clustered index scan, which takes an update lock on every row it reads and so waits on any
+     * row another writer holds: the advance, already holding the rows the lock module gave it,
+     * would then wait on a stranger's row while that writer waits on one of these, the deadlock
+     * the canonical lock order rules out ({@code ScimWriteLockAdapterIntegrationTests}). A native
+     * statement, because JPQL carries no table hint, and the hint is on a common table expression
+     * over the table because SQL Server refuses it on an {@code UPDATE}'s own target.
+     *
      * <p>The persistence context is flushed before and cleared after, for the reason the
      * account port's narrow writes were: the statement bypasses any managed copy of these
      * rows, so a stale one must not survive the call.
@@ -71,11 +80,13 @@ interface ScimResourceJpaRepository extends JpaRepository<ScimResourceEntity, UU
      * @return how many rows were advanced
      */
     @Modifying(flushAutomatically = true, clearAutomatically = true)
-    @Query("""
-            update ScimResourceEntity r
-               set r.version = r.version + 1,
-                   r.lastModifiedAt = :now
-             where r.id in :ids""")
+    @Query(value = """
+            WITH named AS (
+                SELECT version, last_modified_at FROM scim_resources WITH (FORCESEEK, ROWLOCK)
+                 WHERE id IN (:ids))
+            UPDATE named
+               SET version = version + 1,
+                   last_modified_at = :now""", nativeQuery = true)
     int advanceVersions(
             @Param("ids") Collection<UUID> ids, @Param("now") Instant now);
 

@@ -7,6 +7,7 @@ import com.example.backend.audit.RecordingAuditTrail;
 import com.example.backend.audit.RecordingAuditTrail.Recorded;
 import com.example.backend.audit.domain.AuditOperation;
 import com.example.backend.paging.domain.PageRequest;
+import com.example.backend.patient.RefusingPatientStore;
 import com.example.backend.patient.domain.AdministrativeGender;
 import com.example.backend.patient.domain.Patient;
 import com.example.backend.patient.domain.PatientId;
@@ -44,7 +45,7 @@ class PatientSearchServiceTests {
             new PatientMatches(7, List.of(match("dev-patient-05"), match("dev-patient-06")));
 
     /** A source answering every search with {@code answer}, and keeping what it was asked. */
-    private static final class AnsweringStore implements PatientStore {
+    private static final class AnsweringStore extends RefusingPatientStore {
 
         private final PatientMatches answer;
 
@@ -55,11 +56,6 @@ class PatientSearchServiceTests {
         AnsweringStore(PatientMatches answer, RuntimeException failure) {
             this.answer = answer;
             this.failure = failure;
-        }
-
-        @Override
-        public Optional<Patient> findById(PatientId id) {
-            throw new UnsupportedOperationException("a search reads no Patient by id");
         }
 
         @Override

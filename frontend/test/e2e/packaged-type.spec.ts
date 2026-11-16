@@ -32,8 +32,8 @@ test("IBM Plex Sans 500 loads from the app's own origin with an empty console", 
   page,
 }) => {
   const errors = recordConsoleErrors(page);
-  await page.goto("/");
-  // Home's Sign out button is `font-medium` text, so the page asks for the face.
+  await page.goto("/demographic");
+  // The sidebar's link to the page shown is `font-medium` text, so the page asks for the face.
   await expectNoPatientInContext(page);
   const origin = new URL(page.url()).origin;
 
@@ -68,7 +68,7 @@ test("the page title renders on headline-lg and a card title on headline-sm", as
     pageTitle: await typeOf(page.getByRole("heading", { level: 1, name: "Profile" })),
     cardTitle: await typeOf(page.getByRole("heading", { level: 3, name: "Patient" })),
   }).toEqual({
-    // DESIGN.md: IBM Plex Sans 28/36, 700, -0.02em (of 28px).
+    // headline-lg: IBM Plex Sans 28/36, 700, -0.02em (of 28px).
     pageTitle: {
       family: '"IBM Plex Sans"',
       size: "28px",
@@ -76,7 +76,7 @@ test("the page title renders on headline-lg and a card title on headline-sm", as
       weight: "700",
       letterSpacing: "-0.56px",
     },
-    // DESIGN.md: IBM Plex Sans 16/24, 600, no tracking.
+    // headline-sm: IBM Plex Sans 16/24, 600, no tracking.
     cardTitle: {
       family: '"IBM Plex Sans"',
       size: "16px",

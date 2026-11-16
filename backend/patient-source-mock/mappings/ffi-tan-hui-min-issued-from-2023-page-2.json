@@ -1,0 +1,78 @@
+{
+  "name": "FFI History: Tan Hui Min's FFIs issued from 2023, page 2",
+  "request": {
+    "method": "GET",
+    "urlPath": "/Patient/dev-patient-05/ffi",
+    "queryParameters": {
+      "_count": {
+        "equalTo": "5"
+      },
+      "_offset": {
+        "equalTo": "5"
+      },
+      "_total": {
+        "equalTo": "accurate"
+      },
+      "_sort": {
+        "absent": true
+      },
+      "type": {
+        "absent": true
+      },
+      "outcome": {
+        "absent": true
+      },
+      "issue-date": {
+        "equalTo": "ge2023-01-01"
+      },
+      "expiry-date": {
+        "absent": true
+      },
+      "higher-authority": {
+        "absent": true
+      },
+      "submitting-mc": {
+        "absent": true
+      },
+      "status": {
+        "absent": true
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/fhir+json"
+    },
+    "jsonBody": {
+      "resourceType": "Bundle",
+      "id": "ffi-history",
+      "type": "searchset",
+      "total": 6,
+      "link": [
+        {
+          "relation": "self",
+          "url": "http://127.0.0.1:8104/Patient/dev-patient-05/ffi?_offset=5&_count=5"
+        }
+      ],
+      "entry": [
+        {
+          "resource": {
+            "resourceType": "FFI",
+            "id": "ffi-tan-hui-min-6",
+            "type": "vocational",
+            "outcome": "request-waiver",
+            "issueDate": "2023-04-17",
+            "expiryDate": "2024-04-16",
+            "higherAuthority": "cnmo",
+            "submittingMc": "kranji-camp",
+            "status": "inactive"
+          },
+          "search": {
+            "mode": "match"
+          }
+        }
+      ]
+    }
+  }
+}

@@ -3,6 +3,7 @@ package arch;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import arch.PlantedClasses.Call;
 import com.example.backend.auth.application.SelfRecord;
 import com.example.backend.auth.application.SessionRevocationService;
 import com.example.backend.auth.controller.HttpSessionAttributes;
@@ -26,14 +27,17 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
- * The rules in {@link ArchitectureTest} that hold who ends a User's Sessions, which services the
- * login and administration paths share, who writes the directory, and the self-read's shape —
+ * The rules in {@link ArchitectureTest} that hold who ends a User's Sessions and who ends the
+ * caller's own, which services the login and administration paths share, who writes the
+ * directory, that the directory decides no login state, and the self-read's shape —
  * each shown reporting a planted class and passing what it allows. The service's own classes
  * comply, so the rules alone would never be seen to fail.
  *
  * <p>The path rules read a class's name and package, so their planted classes are written as
  * bytecode into a directory of their own by {@link PlantedClasses#plant}, as in
  * {@link ModuleRulesTests}: one field per type reached, which ArchUnit reads as a dependency on it.
+ * The rules that read a call in a package plant it the same way, by
+ * {@link PlantedClasses#plantCalling}.
  */
 class SessionAndIdentityRulesTests {
 
@@ -278,7 +282,83 @@ class SessionAndIdentityRulesTests {
                 .isEmpty();
     }
 
+    // ---- ending the caller's session ----------------------------------------------------------
+
+    private static final Call INVALIDATE =
+            Call.onInterface("jakarta.servlet.http.HttpSession", "invalidate", "()V");
+
+    private static final Call CLEAR_CONTEXT = Call.toStatic(
+            "org.springframework.security.core.context.SecurityContextHolder", "clearContext",
+            "()V");
+
+    @Test
+    void a_handler_invalidating_the_session_itself_is_reported() {
+        assertThat(callViolations(ArchitectureTest.only_session_ending_ends_the_callers_session,
+                        "com.example.backend.auth.controller.PlantedLogoutController", INVALIDATE))
+                .contains("PlantedLogoutController");
+    }
+
+    @Test
+    void a_class_clearing_the_security_context_itself_is_reported() {
+        assertThat(callViolations(ArchitectureTest.only_session_ending_ends_the_callers_session,
+                        "com.example.backend.auth.application.PlantedService", CLEAR_CONTEXT))
+                .contains("PlantedService");
+    }
+
+    /** A compliant auth class beside the two exempt ones keeps the rule's subject non-empty. */
+    @Test
+    void session_ending_and_the_absolute_lifetime_filter_are_not_reported() {
+        PlantedClasses.plantCalling(planted, "com.example.backend.auth.controller.SessionEnding",
+                INVALIDATE);
+        PlantedClasses.plantCalling(planted,
+                "com.example.backend.auth.controller.AbsoluteSessionLifetimeFilter", CLEAR_CONTEXT);
+        PlantedClasses.plantCalling(planted, "com.example.backend.auth.controller.PlantedReader",
+                Call.onInterface("jakarta.servlet.http.HttpSession", "getId",
+                        "()Ljava/lang/String;"));
+
+        assertThat(violations(ArchitectureTest.only_session_ending_ends_the_callers_session,
+                new ClassFileImporter().importPath(planted)))
+                .isEmpty();
+    }
+
+    // ---- the directory decides no login state -------------------------------------------------
+
+    private static final String LOGIN_STATE = "com.example.backend.scim.domain.ScimLoginState";
+
+    private static final Call A_LOGIN_STATE_TRANSITION = Call.onClass(LOGIN_STATE,
+            "withFailureCounted", "()L" + LOGIN_STATE.replace('.', '/') + ";");
+
+    @Test
+    void a_scim_class_applying_a_login_state_transition_is_reported() {
+        assertThat(callViolations(ArchitectureTest.the_directory_decides_no_login_state,
+                        "com.example.backend.scim.application.PlantedService",
+                        A_LOGIN_STATE_TRANSITION))
+                .contains("PlantedService");
+    }
+
+    @Test
+    void a_scim_class_reading_the_login_state_is_not_reported() {
+        assertThat(callViolations(ArchitectureTest.the_directory_decides_no_login_state,
+                        "com.example.backend.scim.infrastructure.persistence.PlantedAdapter",
+                        Call.onClass(LOGIN_STATE, "isLocked", "()Z")))
+                .isEmpty();
+    }
+
+    @Test
+    void the_login_path_applying_a_login_state_transition_is_not_reported() {
+        assertThat(callViolations(ArchitectureTest.the_directory_decides_no_login_state,
+                        "com.example.backend.auth.application.PlantedService",
+                        A_LOGIN_STATE_TRANSITION))
+                .isEmpty();
+    }
+
     // ---- helpers -------------------------------------------------------------------------------
+
+    /** {@code rule}'s violations on one planted class, {@code name}, making {@code call}. */
+    private String callViolations(ArchRule rule, String name, Call call) {
+        return violations(rule,
+                new ClassFileImporter().importPath(PlantedClasses.plantCalling(planted, name, call)));
+    }
 
     private static String violations(ArchRule rule, JavaClasses classes) {
         EvaluationResult result = rule.evaluate(classes);

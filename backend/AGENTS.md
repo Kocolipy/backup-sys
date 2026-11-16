@@ -112,12 +112,16 @@ errors.
 mock: WireMock answering FHIR R4 `Patient/{id}` for the development
 fixtures, a failure of the source for each fault stub (`metadata.fault`),
 `404` for any other well-formed id, and `Patient?…` for each canned Patient
-search, with an empty searchset for any other. Compose runs it beside SQL
+search, with an empty searchset for any other. Each patient history has the same
+shape beneath `Patient/{id}/<history>?…`: a page for each fixture's read and a
+failure for each `fault-<history>-*` stub. `patient-source-mock/README.md` lists
+every stub file and `/docs/domain/index.md` the histories. Compose
+runs it beside SQL
 Server and Redis (`patient-source`, no profile), so `make infra-up` and `make
 integration-test` start it; nothing under `/infra/` builds or deploys it. The
 backend's patient tests serve the same files in process, so a change to a stub
 is a change to the tests' fixtures: `/docs/domain/patient.md` ("The patient
-source's fixtures") has the rules they hold, and
+source's fixtures") and each history's domain file have the rules they hold, and
 `docs/configuration/patient-source.md` the setting and the port.
 
 ## Architecture constraints
@@ -190,10 +194,13 @@ and compare mapped routes with documented operations — so a new route or statu
 needs both its documentation and a fixture that produces it
 (`docs/api-contract-check.md`).
 
-The SPA mirrors the Permission, token-Permission, `AuditOperation` and
-`lockCause` enums and each called operation's `security`; `VOCABULARIES` in
-`/scripts/spa-contract/check.mjs` lists exactly what the root's contract check
-compares.
+The SPA mirrors part of the document by hand — closed sets, each called
+operation's `security`, the shape of each response it decodes and the query
+parameters it sends — and the root's contract check holds that copy to
+`docs/openapi.yaml`, so a change to any of them runs `make verify-contract`
+beside this app's gate. Which closed sets it compares is the table in
+`/scripts/spa-contract/README.md` and `VOCABULARIES` in
+`/scripts/spa-contract/check.mjs`.
 
 `docs/openapi.yaml` is larger than one read holds: search it for the path or
 schema you are changing.

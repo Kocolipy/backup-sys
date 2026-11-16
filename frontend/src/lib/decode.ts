@@ -13,6 +13,9 @@
  * one is a dependency decision of its own.
  */
 
+import type { SourceField } from "./source-field";
+import { isCalendarDate, isOffsetDateTime } from "./time";
+
 /** A body that does not have the shape its decoder expects. */
 export class DecodeError extends Error {
   override name = "DecodeError";
@@ -29,11 +32,17 @@ const isInteger = (value: unknown): value is number => Number.isInteger(value);
  * Typed reads of one object's fields. Every read is strict: a missing field is
  * a wrong type like any other, and a nullable read accepts `null` but not an
  * absent key, because the backend serialises its `null`s rather than dropping
- * them.
+ * them. The one exception is an optional read, for a field the backend's
+ * contract leaves out when it has no value.
  */
 export interface ObjectReader {
   string(key: string): string;
   nullableString(key: string): string | null;
+  /**
+   * A string the backend leaves out when it has none: an absent key is
+   * `undefined`, and a key that is there must hold a string, never `null`.
+   */
+  optionalString(key: string): string | undefined;
   boolean(key: string): boolean;
   nullableBoolean(key: string): boolean | null;
   integer(key: string): number;
@@ -50,12 +59,53 @@ export interface ObjectReader {
    * know would change what the ones it reads mean.
    */
   onlyFields(keys: readonly string[]): void;
+  /**
+   * The object's patient-source fields, read leniently: the one lenient field
+   * decoder ({@link SourceFieldReader}). Reads the object's `invalid` strictly.
+   */
+  sourceFields(): SourceFieldReader;
+}
+
+/**
+ * The lenient field decoder: how the patient-source fields of one row the
+ * backend answers are read (`/docs/adr/0020-patient-source-data-is-shown-as-received.md`).
+ * The row's shape is as strict as any other — each such key is always there,
+ * and its `invalid` is an array of strings — but a field's value never fails
+ * the read.
+ */
+export interface SourceFieldReader {
+  /**
+   * The field `key`: invalid when the row's `invalid` names it; missing when
+   * it is `null`; present when it is a string `accept` takes (any string, by
+   * default); and invalid for anything else — the backend's own shape held
+   * leniently, so a cell shows "Error" rather than the table failing.
+   */
+  read(key: string, accept?: (text: string) => boolean): SourceField<string>;
 }
 
 /** An array, each element decoded by `decode`; `what` names it in the error. */
 export function decodeArray<T>(value: unknown, decode: (item: unknown) => T, what: string): T[] {
   if (!Array.isArray(value)) throw new DecodeError(`${what} is not an array`);
   return value.map((item: unknown) => decode(item));
+}
+
+/**
+ * `value` read as a calendar date, `YYYY-MM-DD` and a day the calendar has
+ * ({@link isCalendarDate}); `what` names it in the error.
+ */
+export function calendarDate(value: string, what: string): string {
+  if (!isCalendarDate(value)) throw new DecodeError(`${what} is not a date`);
+  return value;
+}
+
+/**
+ * `value` read as a date-time with an offset, ISO-8601 and an instant the
+ * calendar and the clock have ({@link isOffsetDateTime}); `what` names it in
+ * the error.
+ */
+export function dateTime(value: string, what: string): string {
+  if (!isOffsetDateTime(value)) throw new DecodeError(`${what} is not a date-time`);
+  return value;
 }
 
 /** Reads `value` as an object; `what` names it in every error a read throws. */
@@ -85,6 +135,7 @@ export function readObject(value: unknown, what: string): ObjectReader {
   return {
     string,
     nullableString: (key) => (value[key] === null ? null : string(key)),
+    optionalString: (key) => (key in value ? string(key) : undefined),
     boolean,
     nullableBoolean: (key) => (value[key] === null ? null : boolean(key)),
     integer,
@@ -96,6 +147,24 @@ export function readObject(value: unknown, what: string): ObjectReader {
     onlyFields: (keys) => {
       const extra = Object.keys(value).find((key) => !keys.includes(key));
       if (extra !== undefined) throw new DecodeError(`${what}.${extra} is not expected`);
+    },
+    sourceFields: () => {
+      const invalid = value.invalid;
+      const named: readonly unknown[] = Array.isArray(invalid)
+        ? invalid
+        : fail("invalid", "an array");
+      if (!named.every((field) => typeof field === "string")) fail("invalid", "strings");
+      return {
+        read: (key, accept = () => true) => {
+          if (!(key in value)) fail(key, "a string or null");
+          const field = value[key];
+          if (named.includes(key)) return { state: "invalid" };
+          if (field === null) return { state: "missing" };
+          return typeof field === "string" && accept(field)
+            ? { state: "present", value: field }
+            : { state: "invalid" };
+        },
+      };
     },
   };
 }

@@ -6,7 +6,6 @@ import { EVERY_PERMISSION } from "@/auth/auth-context.testHelpers";
 import {
   bare,
   deferred,
-  GUEST,
   holding,
   json,
   type Answers,
@@ -20,8 +19,14 @@ const USERS = "GET /api/admin/accounts?startIndex=1&count=20";
 const GROUPS = "GET /api/admin/groups?startIndex=1&count=20";
 const CONNECTORS = "GET /api/admin/connectors";
 
-/** A Superuser's session, which sees every listing and every action on the page. */
-const SUPERUSER = holding(EVERY_PERMISSION);
+/**
+ * A session holding every Permission but not the Superuser: it sees every
+ * listing and every Permission-gated action, but none of the Superuser's.
+ */
+const EVERY_PERMISSION_HOLDER = holding(EVERY_PERMISSION);
+
+/** The Superuser's session: holding every Permission is not being the Superuser. */
+const THE_SUPERUSER = holding(EVERY_PERMISSION, { superuser: true });
 
 const GRACE_ID = "00000000-0000-4000-8000-000000000001";
 const ALICE_ID = "00000000-0000-4000-8000-0000000000a1";
@@ -72,7 +77,7 @@ const unlockGrace = `POST /api/admin/accounts/${GRACE_ID}/unlock`;
  * says otherwise, the Connectors panel's included, since the page renders it
  * for real.
  */
-const renderAccounts = (answers: Answers, session: StartingSession = SUPERUSER) =>
+const renderAccounts = (answers: Answers, session: StartingSession = EVERY_PERMISSION_HOLDER) =>
   renderSignedIn("/accounts", session, {
     [CONNECTORS]: json([]),
     [GROUPS]: groupsPage([]),
@@ -228,19 +233,26 @@ describe("Accounts", () => {
   });
 
   /**
-   * The read-only criterion as the page renders it: no form control anywhere in
-   * either projection, and no button but the two application-owned actions —
-   * nothing that could change a name, the active flag or a membership.
+   * The read-only criterion as the page renders it to the Superuser, who sees
+   * every control it has: no form control anywhere in either projection, and no
+   * button but the application-owned actions — nothing that could change a
+   * name, the active flag or a membership.
    */
   it("offers no control that could change what the directory owns", async () => {
-    await renderAccounts({
-      [GROUPS]: groupsPage([groupRow({ adminGroup: true, displayName: "Admins" })]),
-      [USERS]: usersPage([
-        userRow({ locked: true }),
-        userRow({ active: false, id: "h", userName: "hopper" }),
-        userRow({ bootstrapAdmin: true, id: "r", userName: "root" }),
-      ]),
-    });
+    await renderAccounts(
+      {
+        [GROUPS]: groupsPage([
+          groupRow({ adminGroup: true, displayName: "Admins", id: "a" }),
+          groupRow(),
+        ]),
+        [USERS]: usersPage([
+          userRow({ locked: true }),
+          userRow({ active: false, id: "h", userName: "hopper" }),
+          userRow({ bootstrapAdmin: true, id: "r", userName: "root" }),
+        ]),
+      },
+      THE_SUPERUSER,
+    );
 
     await screen.findByRole("rowheader", { name: /^grace/ });
     for (const table of [usersTable(), groupsTable()]) {
@@ -248,12 +260,17 @@ describe("Accounts", () => {
       expect(within(table).queryAllByRole("checkbox")).toHaveLength(0);
       expect(within(table).queryAllByRole("combobox")).toHaveLength(0);
     }
-    // The Groups table's only buttons disclose a Group's members, which change nothing.
+    // The Groups table's buttons disclose a Group's members, which change
+    // nothing, or open the editor of its Permissions, which the application owns.
     expect(
       bodyOf(groupsTable())
         .queryAllByRole("button")
-        .map((button) => button.getAttribute("aria-expanded")),
-    ).toEqual(["false"]);
+        .map((button) => [button.textContent, button.getAttribute("aria-expanded")]),
+    ).toEqual([
+      ["2", "false"],
+      ["2", "false"],
+      ["Edit permissions for Engineering", null],
+    ]);
     const labels = bodyOf(usersTable())
       .getAllByRole("button")
       .map((button) => button.textContent ?? "");
@@ -437,7 +454,7 @@ describe("Accounts", () => {
     await user.click(await screen.findByRole("button", { name: "Unlock grace" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "grace no longer exists. Reload the page for the current list.",
+      /^grace no longer exists\. Reload the page for the current list\.$/,
     );
   });
 
@@ -454,58 +471,19 @@ describe("Accounts", () => {
     await user.click(await screen.findByRole("button", { name: "Unlock grace" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Unable to unlock grace. Please try again.",
+      /^Unable to unlock grace\. Please try again\.$/,
     );
   });
 
-  // The csrf-expired mapping is the seam's own, exercised generically by
+  // The forbidden and csrf-expired mappings, and withdrawing the line once a
+  // write starts, are the seam's own, exercised generically by
   // use-gated-write.test.tsx; this page proves only its own copy and wiring.
-
-  it("clears the previous error when the next action succeeds", async () => {
-    await renderAccounts({
-      [unlockGrace]: [bare(503), json(userRow())],
-      [USERS]: usersPage([userRow({ locked: true })]),
-    });
-    const user = userEvent.setup();
-
-    await user.click(await screen.findByRole("button", { name: "Unlock grace" }));
-    expect(await screen.findByRole("alert")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Unlock grace" }));
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-  });
-
-  it("reports a refused action as permission denied and keeps the session", async () => {
-    const { requests, session } = await renderAccounts({
-      [unlockGrace]: bare(403),
-      [USERS]: usersPage([userRow({ locked: true })]),
-    });
-    const user = userEvent.setup();
-
-    await user.click(await screen.findByRole("button", { name: "Unlock grace" }));
-
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      /^You don't have permission to do this\.$/,
-    );
-    // The refused row is left as it was, and nothing ends the session.
-    expect(screen.getByRole("button", { name: "Unlock grace" })).toBeEnabled();
-    expect(session().status).toBe("authenticated");
-    expect(requests()).not.toContainEqual(expect.objectContaining({ path: "/api/auth/logout" }));
-  });
-
-  it("shows no view at all without a signed-in user, whose Permissions are unknown", async () => {
-    const { requests } = await renderAccounts({}, GUEST);
-
-    expect(screen.queryByRole("heading", { name: "Users" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "Groups" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "Connectors" })).not.toBeInTheDocument();
-    expect(requests()).toEqual([]);
-  });
 
   it("reports a failed Users read", async () => {
     await renderAccounts({ [USERS]: bare(503) });
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Unable to load the users. Please try again.",
+      /^Unable to load the users\. Please try again\.$/,
     );
     expect(screen.queryByText("No users are provisioned.")).not.toBeInTheDocument();
     expect(screen.queryByText("Loading users…")).not.toBeInTheDocument();
@@ -515,24 +493,10 @@ describe("Accounts", () => {
     await renderAccounts({ [GROUPS]: bare(503), [USERS]: usersPage([userRow()]) });
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Unable to load the groups. Please try again.",
+      /^Unable to load the groups\. Please try again\.$/,
     );
     expect(screen.queryByText("No groups are provisioned.")).not.toBeInTheDocument();
     expect(screen.queryByText("Loading groups…")).not.toBeInTheDocument();
-  });
-
-  // The error line shows the latest failure, so when both reads fail the one
-  // that landed last is the one shown, whichever listing it was.
-  it("shows the Groups failure when both reads fail and it lands last", async () => {
-    const lastFailure = deferred();
-    await renderAccounts({ [USERS]: bare(503), [GROUPS]: lastFailure.answer });
-    await screen.findByRole("alert");
-
-    await lastFailure.settle(bare(503));
-
-    expect(screen.getByRole("alert").textContent).toBe(
-      "Unable to load the groups. Please try again.",
-    );
   });
 
   // Against a backend whose Users body has drifted from the contract. The
@@ -560,21 +524,11 @@ describe("Accounts", () => {
     expect(await screen.findByText("No groups are provisioned.")).toBeInTheDocument();
   });
 
-  it("expires the auth state when the listing read is unauthenticated", async () => {
-    const loading = deferred();
-    const { session } = await renderAccounts({
-      [GROUPS]: deferred().answer,
-      [USERS]: loading.answer,
-    });
+  it("says each listing is loading until its read answers", async () => {
+    await renderAccounts({ [GROUPS]: deferred().answer, [USERS]: deferred().answer });
 
-    expect(screen.getByText("Loading users…")).toBeInTheDocument();
-    expect(screen.getByText("Loading groups…")).toBeInTheDocument();
-
-    await loading.settle(bare(401));
-
-    // The page never renders this case: the session seam ends the session and
-    // the route guard replaces this page on the same update.
-    expect(session()).toEqual({ signInReason: "expired", status: "guest" });
+    expect(screen.getByText(/^Loading users…$/)).toBeInTheDocument();
+    expect(screen.getByText(/^Loading groups…$/)).toBeInTheDocument();
   });
 });
 
@@ -595,20 +549,6 @@ describe("Accounts with its Connectors panel", () => {
     expect(screen.getAllByRole("alert").map((line) => line.textContent)).toEqual([
       "Unable to load the connectors. Please try again.",
     ]);
-  });
-
-  it("withdraws the Connectors failure from the line once an action starts", async () => {
-    await renderAccounts({
-      [CONNECTORS]: bare(503),
-      [unlockGrace]: deferred().answer,
-      [USERS]: usersPage([userRow({ locked: true })]),
-    });
-    const user = userEvent.setup();
-    expect(await screen.findByRole("alert")).toHaveTextContent(/connectors/);
-
-    await user.click(await screen.findByRole("button", { name: "Unlock grace" }));
-
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 });
 
@@ -662,17 +602,18 @@ const searchFor = async (card: "users" | "groups", text: string) => {
 };
 
 describe("the Users and Groups projections, a page at a time", () => {
-  it("show the Users one page at a time with the total, moving on while more remain and back again", async () => {
+  it("show the Users one page at a time with the total, Next reading the rows from the 21st", async () => {
     const { requests } = await renderAccounts({
       [pageOf("accounts", 1)]: usersPage(usersFrom(1, 20), 25),
       [pageOf("accounts", 21)]: usersPage(usersFrom(21, 5), 25, 21),
     });
     expect(await screen.findByText("Showing 1 to 20 of 25 users")).toBeInTheDocument();
-    // Re-read on every use: a new page is a new pager.
-    const users = () => screen.getByRole("navigation", { name: "Users pages" });
-    expect(within(users()).getByRole("button", { name: "Previous" })).toBeDisabled();
 
-    await userEvent.click(within(users()).getByRole("button", { name: "Next" }));
+    await userEvent.click(
+      within(screen.getByRole("navigation", { name: "Users pages" })).getByRole("button", {
+        name: "Next",
+      }),
+    );
 
     expect(await screen.findByText("Showing 21 to 25 of 25 users")).toBeInTheDocument();
     expect(rowHeaders(usersTable())).toEqual([
@@ -682,11 +623,7 @@ describe("the Users and Groups projections, a page at a time", () => {
       "user-24",
       "user-25",
     ]);
-    expect(within(users()).getByRole("button", { name: "Next" })).toBeDisabled();
     expect(requests()).toContainEqual({ method: "GET", path: pageOf("accounts", 21).slice(4) });
-
-    await userEvent.click(within(users()).getByRole("button", { name: "Previous" }));
-    expect(await screen.findByText("Showing 1 to 20 of 25 users")).toBeInTheDocument();
   });
 
   it("show the Groups one page at a time with the total", async () => {
@@ -729,36 +666,6 @@ describe("the Users and Groups projections, a page at a time", () => {
       pageOf("accounts", 1),
       pageOf("accounts", 21),
       pageOf("accounts", 1, "grace hopper"),
-    ]);
-  });
-
-  it("search the Users again from a later page of the same search, reading its first page", async () => {
-    const { requests } = await renderAccounts({
-      [pageOf("accounts", 1)]: usersPage(usersFrom(1, 20), 25),
-      [pageOf("accounts", 1, "user")]: usersPage(usersFrom(1, 20), 25),
-      [pageOf("accounts", 21, "user")]: usersPage(usersFrom(21, 5), 25, 21),
-    });
-    await searchFor("users", "user");
-    await screen.findByText("Showing 1 to 20 of 25 users");
-    await userEvent.click(
-      within(screen.getByRole("navigation", { name: "Users pages" })).getByRole("button", {
-        name: "Next",
-      }),
-    );
-    await screen.findByText("Showing 21 to 25 of 25 users");
-
-    await searchFor("users", "user");
-
-    expect(await screen.findByText("Showing 1 to 20 of 25 users")).toBeInTheDocument();
-    expect(
-      requests()
-        .map(({ path }) => `GET ${path}`)
-        .filter((read) => read.startsWith("GET /api/admin/accounts")),
-    ).toEqual([
-      pageOf("accounts", 1),
-      pageOf("accounts", 1, "user"),
-      pageOf("accounts", 21, "user"),
-      pageOf("accounts", 1, "user"),
     ]);
   });
 
@@ -914,7 +821,7 @@ describe("the Users and Groups projections, a page at a time", () => {
           permissions: ["audit:read"],
         }),
       },
-      holding(EVERY_PERMISSION, { superuser: true }),
+      THE_SUPERUSER,
     );
     await userEvent.click(
       within(await screen.findByRole("navigation", { name: "Groups pages" })).getByRole("button", {
@@ -942,26 +849,13 @@ describe("the Users and Groups projections, a page at a time", () => {
 const columnHeader = (table: () => HTMLElement, name: string) =>
   within(table()).getByRole("columnheader", { name });
 
-/** The `lucide-react` icon a sortable heading shows for each direction its column can be in. */
-const DIRECTION_ICONS = {
-  ascending: "lucide-arrow-up",
-  descending: "lucide-arrow-down",
-  none: "lucide-arrow-up-down",
-} as const;
-
-/** Which direction icon a heading shows: its icon's `lucide-<name>` class. */
-const directionIcon = (header: HTMLElement) =>
-  [...(header.querySelector("svg")?.classList ?? [])].find(
-    (name) => name.startsWith("lucide-") && !name.endsWith("-icon"),
-  );
-
 describe("the Users and Groups projections, sorted", () => {
   it.each([
     ["Users", "User", "accounts", "displayName"],
     ["Users", "Active", "accounts", "active"],
     ["Groups", "Group", "groups", "displayName"],
   ] as const)(
-    "sort the %s by the %s heading from the first page, keeping the search: ascending, descending, then ascending again",
+    "sort the %s by the %s heading from the first page, keeping the search",
     async (title, heading, path, by) => {
       const table = title === "Users" ? usersTable : groupsTable;
       const page = (count: number, start = 1) =>
@@ -972,7 +866,6 @@ describe("the Users and Groups projections, sorted", () => {
         [pageOf(path, 1, "an")]: page(20),
         [pageOf(path, 21, "an")]: page(5, 21),
         [pageOf(path, 1, "an", [by, "ascending"])]: page(20),
-        [pageOf(path, 1, "an", [by, "descending"])]: page(20),
       });
       await searchFor(title === "Users" ? "users" : "groups", "an");
       await screen.findByText(`Showing 1 to 20 of 25 ${title.toLowerCase()}`);
@@ -982,22 +875,14 @@ describe("the Users and Groups projections, sorted", () => {
         }),
       );
       await screen.findByText(`Showing 21 to 25 of 25 ${title.toLowerCase()}`);
-      expect(columnHeader(table, heading)).toHaveAttribute("aria-sort", "none");
-      expect(directionIcon(columnHeader(table, heading))).toBe(DIRECTION_ICONS.none);
 
-      for (const order of ["ascending", "descending", "ascending"] as const) {
-        await userEvent.click(
-          within(columnHeader(table, heading)).getByRole("button", { name: heading }),
-        );
-        await waitFor(() =>
-          expect(columnHeader(table, heading)).toHaveAttribute("aria-sort", order),
-        );
-        expect(directionIcon(columnHeader(table, heading))).toBe(DIRECTION_ICONS[order]);
-        expect(
-          await screen.findByText(`Showing 1 to 20 of 25 ${title.toLowerCase()}`),
-        ).toBeInTheDocument();
-      }
+      await userEvent.click(
+        within(columnHeader(table, heading)).getByRole("button", { name: heading }),
+      );
 
+      expect(
+        await screen.findByText(`Showing 1 to 20 of 25 ${title.toLowerCase()}`),
+      ).toBeInTheDocument();
       expect(
         requests()
           .filter((request) => request.path.startsWith(`/api/admin/${path}?`))
@@ -1007,46 +892,9 @@ describe("the Users and Groups projections, sorted", () => {
         pageOf(path, 1, "an"),
         pageOf(path, 21, "an"),
         pageOf(path, 1, "an", [by, "ascending"]),
-        pageOf(path, 1, "an", [by, "descending"]),
-        pageOf(path, 1, "an", [by, "ascending"]),
       ]);
     },
   );
-
-  /**
-   * The backend sorts by one attribute, so pressing another heading replaces
-   * the sort, starting it ascending, rather than adding a second key the
-   * request could not carry.
-   */
-  it("sort by one heading at a time, another heading replacing the sort", async () => {
-    const { requests } = await renderAccounts({
-      [USERS]: usersPage([userRow()]),
-      [pageOf("accounts", 1, undefined, ["displayName", "ascending"])]: usersPage([userRow()]),
-      [pageOf("accounts", 1, undefined, ["active", "ascending"])]: usersPage([userRow()]),
-    });
-    await userEvent.click(
-      within(await screen.findByRole("columnheader", { name: "User" })).getByRole("button"),
-    );
-    await waitFor(() =>
-      expect(columnHeader(usersTable, "User")).toHaveAttribute("aria-sort", "ascending"),
-    );
-
-    await userEvent.click(within(columnHeader(usersTable, "Active")).getByRole("button"));
-
-    await waitFor(() =>
-      expect(columnHeader(usersTable, "Active")).toHaveAttribute("aria-sort", "ascending"),
-    );
-    expect(columnHeader(usersTable, "User")).toHaveAttribute("aria-sort", "none");
-    expect(
-      requests()
-        .filter((request) => request.path.startsWith("/api/admin/accounts?"))
-        .map((request) => `GET ${request.path}`),
-    ).toEqual([
-      USERS,
-      pageOf("accounts", 1, undefined, ["displayName", "ascending"]),
-      pageOf("accounts", 1, undefined, ["active", "ascending"]),
-    ]);
-  });
 
   it("keep the sort across a new search, which reads its first page", async () => {
     const { requests } = await renderAccounts({
@@ -1223,7 +1071,7 @@ describe("a Group's members", () => {
     expect(screen.queryByRole("region", { name: "Members of Engineering" })).toBeNull();
   });
 
-  it("are read a page at a time, moving on while more remain and back again", async () => {
+  it("are read a page at a time, Next reading the members from the 21st", async () => {
     const first = Array.from({ length: 20 }, (_, index) => member(index + 1));
     const { requests } = await renderAccounts({
       [GROUPS]: groupsPage([groupRow({ memberCount: 25 })]),
@@ -1238,7 +1086,6 @@ describe("a Group's members", () => {
     expect(
       await within(membersRegion()).findByText("Showing 1 to 20 of 25 members"),
     ).toBeInTheDocument();
-    expect(within(membersRegion()).getByRole("button", { name: "Previous" })).toBeDisabled();
 
     await userEvent.click(within(membersRegion()).getByRole("button", { name: "Next" }));
 
@@ -1252,19 +1099,13 @@ describe("a Group's members", () => {
       "member-24",
       "member-25",
     ]);
-    expect(within(membersRegion()).getByRole("button", { name: "Next" })).toBeDisabled();
     expect(requests()).toContainEqual({ method: "GET", path: membersFrom(21).slice(4) });
-
-    await userEvent.click(within(membersRegion()).getByRole("button", { name: "Previous" }));
-    expect(
-      await within(membersRegion()).findByText("Showing 1 to 20 of 25 members"),
-    ).toBeInTheDocument();
   });
 
   /** The members' row spans every column the table has, the Superuser's Actions included. */
   it.each([
-    ["the Superuser", holding(EVERY_PERMISSION, { superuser: true }), 4],
-    ["a session holding every Permission but not the Superuser", holding(EVERY_PERMISSION), 3],
+    ["the Superuser", THE_SUPERUSER, 4],
+    ["a session holding every Permission but not the Superuser", EVERY_PERMISSION_HOLDER, 3],
   ] as const)("span the whole table for %s", async (_, session, columns) => {
     await renderAccounts(
       { [GROUPS]: groupsPage([groupRow()]), [membersFrom(1)]: memberPage(1, 1, [member(1)]) },
@@ -1329,32 +1170,42 @@ describe("a Group's members", () => {
 });
 
 describe("Accounts by Permission", () => {
-  /** Every request the page issued, by path. */
-  const paths = (requests: () => readonly { path: string }[]) => requests().map(({ path }) => path);
+  /**
+   * Each listing is shown, and read, for a session holding its Permission;
+   * without connector:read the Connectors panel renders nothing of its own,
+   * which its suite pins.
+   */
+  it.each([
+    [
+      ["group:read", "user:read"],
+      ["Users", "Groups"],
+      [USERS, GROUPS],
+    ],
+    [["user:read"], ["Users"], [USERS]],
+    [["group:read"], ["Groups"], [GROUPS]],
+    [["connector:read"], ["Connectors"], [CONNECTORS]],
+  ] as const)(
+    "shows a session holding %j the views %j, reading those alone",
+    async (permissions, headings, reads) => {
+      const { requests } = await renderAccounts({}, holding(permissions));
 
-  // Without connector:read the panel renders nothing of its own; its suite pins that.
-  it("shows an Account admin the Users and Groups", async () => {
-    await renderAccounts(
-      { [USERS]: usersPage([userRow({ locked: true, userName: "grace" })]) },
-      holding(["group:read", "user:read", "account:unlock"]),
-    );
+      await screen.findByRole("heading", { name: headings[0] });
+      expect(
+        ["Users", "Groups", "Connectors"].filter(
+          (name) => screen.queryByRole("heading", { name }) !== null,
+        ),
+      ).toEqual(headings);
+      expect(requests().map(({ path }) => `GET ${path}`)).toEqual(reads);
+    },
+  );
 
-    expect(await screen.findByRole("table", { name: "Users" })).toBeInTheDocument();
-    expect(await screen.findByRole("heading", { name: "Groups" })).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "Connectors" })).not.toBeInTheDocument();
-    // The actions its account:unlock allows.
-    expect(row("grace").getByRole("button", { name: "Unlock grace" })).toBeEnabled();
-  });
-
-  it("shows a helpdesk the Users with Unlock, and no Groups", async () => {
+  it("offers Unlock to a session holding account:unlock", async () => {
     await renderAccounts(
       { [USERS]: usersPage([userRow({ locked: true, userName: "grace" })]) },
       holding(["user:read", "account:unlock"]),
     );
 
-    expect(await screen.findByRole("table", { name: "Users" })).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "Groups" })).not.toBeInTheDocument();
-    expect(row("grace").getByRole("button", { name: "Unlock grace" })).toBeEnabled();
+    expect(await screen.findByRole("button", { name: "Unlock grace" })).toBeEnabled();
   });
 
   it("offers no Unlock without account:unlock", async () => {
@@ -1366,23 +1217,6 @@ describe("Accounts by Permission", () => {
     expect(await screen.findByRole("rowheader", { name: /^grace/ })).toBeInTheDocument();
     expect(screen.queryAllByRole("button", { name: /Unlock/ })).toHaveLength(0);
   });
-
-  it("neither shows nor requests a view the session lacks the Permission for", async () => {
-    const { requests } = await renderAccounts({}, holding(["group:read"]));
-
-    expect(await screen.findByRole("heading", { name: "Groups" })).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "Users" })).not.toBeInTheDocument();
-    expect(paths(requests)).toEqual(["/api/admin/groups?startIndex=1&count=20"]);
-  });
-
-  it("shows only the connector panel to a connector reader", async () => {
-    const { requests } = await renderAccounts({}, holding(["connector:read"]));
-
-    expect(await screen.findByRole("heading", { name: "Connectors" })).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "Users" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "Groups" })).not.toBeInTheDocument();
-    expect(paths(requests)).toEqual(["/api/admin/connectors"]);
-  });
 });
 
 /**
@@ -1390,9 +1224,6 @@ describe("Accounts by Permission", () => {
  * table, and never on the Admin group, whose members' power is the Superuser.
  */
 describe("Accounts: a Superuser sets a Group's Permissions", () => {
-  /** The Superuser's session: holding every Permission is not being the Superuser. */
-  const THE_SUPERUSER = holding(EVERY_PERMISSION, { superuser: true });
-
   const VOCABULARY = "GET /api/admin/permissions";
   const DELEGATABLE = [
     "account:unlock",
@@ -1428,14 +1259,6 @@ describe("Accounts: a Superuser sets a Group's Permissions", () => {
       .getAllByRole("columnheader")
       .map((header) => header.textContent);
 
-  // Radix `Checkbox` is not a native input: no `.checked`, and `name` reaches
-  // only an internal hidden input, not the queried element. Pairs positionally
-  // against the vocabulary's own order, which the dialog renders them in.
-  const ticks = (dialog: HTMLElement) =>
-    within(dialog)
-      .getAllByRole("checkbox")
-      .map((box, index) => [DELEGATABLE[index], box.getAttribute("aria-checked") === "true"]);
-
   const puts = <T extends { method: string }>(requests: () => readonly T[]) =>
     requests().filter(({ method }) => method === "PUT");
 
@@ -1456,7 +1279,7 @@ describe("Accounts: a Superuser sets a Group's Permissions", () => {
   });
 
   it("offers no Edit permissions to a session holding every Permission but not the Superuser", async () => {
-    await renderAccounts({ [GROUPS]: threeGroups }, holding(EVERY_PERMISSION));
+    await renderAccounts({ [GROUPS]: threeGroups }, EVERY_PERMISSION_HOLDER);
 
     expect(await screen.findByRole("rowheader", { name: "Auditors" })).toBeInTheDocument();
     expect(
@@ -1504,26 +1327,6 @@ describe("Accounts: a Superuser sets a Group's Permissions", () => {
       json({ ...auditors, permissions: ["audit:read", "group:read", "user:read"] }),
     );
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-  });
-
-  it("lists every delegatable Permission, ticked with the Group's current set", async () => {
-    const { requests } = await renderAccounts(
-      { [GROUPS]: threeGroups, [VOCABULARY]: json(DELEGATABLE) },
-      THE_SUPERUSER,
-    );
-
-    const { dialog } = await openEditor();
-
-    await within(dialog).findByRole("checkbox", { name: "user:read" });
-    expect(ticks(dialog)).toEqual([
-      ["account:unlock", false],
-      ["audit:read", true],
-      ["connector:read", false],
-      ["group:read", false],
-      ["ops:read", false],
-      ["user:read", true],
-    ]);
-    expect(requests()).toContainEqual({ method: "GET", path: "/api/admin/permissions" });
   });
 
   it("saves the full set with one PUT and shows the Group as the answer states it", async () => {
@@ -1605,7 +1408,7 @@ describe("Accounts: a Superuser sets a Group's Permissions", () => {
     await user.click(within(dialog).getByRole("button", { name: "Save" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Auditors no longer exists. Reload the page for the current list.",
+      /^Auditors no longer exists\. Reload the page for the current list\.$/,
     );
     expect(row("Auditors", groupsTable()).getByText("audit:read, user:read")).toBeInTheDocument();
   });

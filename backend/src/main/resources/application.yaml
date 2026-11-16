@@ -96,9 +96,7 @@ app:
     # as open and "SCIM is on unless someone turned it off" is a fact about the
     # code rather than about this file, which a deployment may replace wholesale.
     #
-    # It defaulted to CLOSED while only the User half of the model existed. Users
-    # and Groups are one release capability, and the Group half now exists, so the
-    # gate opened. An open gate does not mean an open service: every path in the
+    # An open gate does not mean an open service: every path in the
     # namespace, discovery included, still answers 401 without a connector token.
     #
     # Turn SCIM off with APP_SCIM_ENABLED=false; see docs/configuration/scim.md.
@@ -163,7 +161,6 @@ app:
     # APP_DORMANCY_MEMBERSHIP_REVOCATION_WINDOW (e.g. 60d); see docs/configuration/dormancy.md.
     # A zero or negative window, or a membership revocation
     # window not longer than the lockout window, fails startup.
-
 
 # The `management:` block lives in `telemetry.yaml` (imported above): health,
 # info AND the `prometheus` scrape, plus the histogram settings. A `management:`

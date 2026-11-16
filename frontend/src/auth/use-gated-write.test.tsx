@@ -141,13 +141,18 @@ describe("useGatedWrite", () => {
     });
   });
 
-  it("sends the body built from its arguments as JSON, with its decoder", async () => {
+  it("sends the body built from its arguments as JSON, handing the decoded data to the success handler once", async () => {
     const { backend, result } = renderWrite({ "POST /api/example": json({ value: 1 }) });
     const onOk = vi.fn();
 
     await act(() => result.current.run(CREATE_EXAMPLE, { args: ["Okta"], onOk }));
 
-    expect({ ok: onOk.mock.calls, sent: backend.requests({ contentType: true }) }).toEqual({
+    expect({
+      line: shownLine(),
+      ok: onOk.mock.calls,
+      sent: backend.requests({ contentType: true }),
+    }).toEqual({
+      line: null,
       ok: [[1]],
       sent: [
         {
@@ -207,17 +212,6 @@ describe("useGatedWrite", () => {
       await ran;
     });
     expect(result.current.pending).toBe(false);
-  });
-
-  it("calls the success handler exactly once, with the decoded data", async () => {
-    const { result } = renderWrite({ [CHANGED]: json({ value: 42 }) });
-    const onOk = vi.fn();
-
-    await act(() => result.current.run(CHANGE, { onOk }));
-
-    expect(onOk).toHaveBeenCalledTimes(1);
-    expect(onOk).toHaveBeenCalledWith(42);
-    expect(shownLine()).toBeNull();
   });
 
   it("ends the session once on a 401, and shows the page's failure copy meanwhile", async () => {
@@ -281,15 +275,6 @@ describe("useGatedWrite", () => {
     expect(after).toHaveBeenCalledOnce();
   });
 
-  it("sends the write for a session holding its Permission", async () => {
-    const { result } = renderWrite({ [CHANGED]: json({ value: 5 }) }, ["account:unlock"]);
-    const onOk = vi.fn();
-
-    await act(() => result.current.run(CHANGE, { onOk }));
-
-    expect(onOk).toHaveBeenCalledWith(5);
-  });
-
   it.each([
     [400, "Refused: check the values and try again."],
     [404, "It no longer exists. Reload the page for the current list."],
@@ -329,20 +314,17 @@ describe("useGatedWrite", () => {
     expect(shownLine()).toBe("grace no longer exists. Reload the page for the current list.");
   });
 
-  it.each([400, 404, 409, 503])(
-    "lets a page's own default win over the hook's for a %i refusal",
-    async (status) => {
-      const { result } = renderWrite({ [CHANGED]: bare(status) });
+  it("lets a page's own default win over the hook's copy for a status", async () => {
+    const { result } = renderWrite({ [CHANGED]: bare(404) });
 
-      await act(() =>
-        result.current.run(CHANGE, {
-          messages: { default: "Unable to update the example. Please try again." },
-        }),
-      );
+    await act(() =>
+      result.current.run(CHANGE, {
+        messages: { default: "Unable to update the example. Please try again." },
+      }),
+    );
 
-      expect(shownLine()).toBe("Unable to update the example. Please try again.");
-    },
-  );
+    expect(shownLine()).toBe("Unable to update the example. Please try again.");
+  });
 
   it("maps an undefined status to the hook's own last resort, not a page's per-status copy", async () => {
     // No answer at all, so no status either.

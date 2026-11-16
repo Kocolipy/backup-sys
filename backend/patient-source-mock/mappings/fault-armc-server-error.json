@@ -1,0 +1,26 @@
+{
+  "name": "Fault, ARMC History: the source answers 503",
+  "metadata": {
+    "fault": "server-error"
+  },
+  "request": {
+    "method": "GET",
+    "urlPath": "/Patient/fault-armc-server-error/armc"
+  },
+  "response": {
+    "status": 503,
+    "headers": {
+      "Content-Type": "application/fhir+json"
+    },
+    "jsonBody": {
+      "resourceType": "OperationOutcome",
+      "issue": [
+        {
+          "severity": "error",
+          "code": "transient",
+          "diagnostics": "ARMC store unavailable: armc-fault-0 2015-04-20"
+        }
+      ]
+    }
+  }
+}

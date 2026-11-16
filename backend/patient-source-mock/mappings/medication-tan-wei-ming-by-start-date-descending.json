@@ -1,0 +1,150 @@
+{
+  "name": "Medication History: Tan Wei Ming's six Medication Records, latest Start Date first, the first page of five",
+  "request": {
+    "method": "GET",
+    "urlPath": "/Patient/eq081-VQEgP8drUUqCWzHfw3/medication",
+    "queryParameters": {
+      "_count": {
+        "equalTo": "5"
+      },
+      "_offset": {
+        "equalTo": "0"
+      },
+      "_total": {
+        "equalTo": "accurate"
+      },
+      "_sort": {
+        "equalTo": "-start-date"
+      },
+      "dispense-status": {
+        "absent": true
+      },
+      "start-date": {
+        "absent": true
+      },
+      "end-date": {
+        "absent": true
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/fhir+json"
+    },
+    "jsonBody": {
+      "resourceType": "Bundle",
+      "id": "medication-history",
+      "type": "searchset",
+      "total": 6,
+      "link": [
+        {
+          "relation": "self",
+          "url": "http://127.0.0.1:8104/Patient/eq081-VQEgP8drUUqCWzHfw3/medication?_sort=-start-date&_offset=0&_count=5"
+        }
+      ],
+      "entry": [
+        {
+          "resource": {
+            "resourceType": "Medication",
+            "id": "medication-tan-wei-ming-2",
+            "medication": "Amoxicillin",
+            "dosage": "300 mg",
+            "route": "PO",
+            "frequency": "TDS",
+            "quantity": "20 tablets",
+            "dispenseStatus": "pending",
+            "duration": "5 days",
+            "startDate": "2026-10-18T17:31:00+08:00",
+            "endDate": "2026-10-22T17:31:00+08:00",
+            "dispensary": "khatib-camp",
+            "prescribingDoctor": "Dr Lim Wei Jie"
+          },
+          "search": {
+            "mode": "match"
+          }
+        },
+        {
+          "resource": {
+            "resourceType": "Medication",
+            "id": "medication-tan-wei-ming-1",
+            "medication": "Paracetamol",
+            "dosage": "750 mg",
+            "route": "PO",
+            "frequency": "QDS",
+            "quantity": "30 tablets",
+            "dispenseStatus": "pending",
+            "duration": "5 days",
+            "startDate": "2026-10-18T17:30:00+08:00",
+            "endDate": "2026-10-22T17:30:00+08:00",
+            "dispensary": "nee-soon-camp",
+            "prescribingDoctor": "Dr Lim Wei Jie"
+          },
+          "search": {
+            "mode": "match"
+          }
+        },
+        {
+          "resource": {
+            "resourceType": "Medication",
+            "id": "medication-tan-wei-ming-3",
+            "medication": "Paracetamol",
+            "dosage": "750 mg",
+            "route": "PO",
+            "frequency": "QDS",
+            "quantity": "30 tablets",
+            "dispenseStatus": "pending",
+            "duration": "5 days",
+            "startDate": "2026-10-18T17:30:00+08:00",
+            "endDate": "2026-10-22T17:30:00+08:00",
+            "dispensary": "nee-soon-camp",
+            "prescribingDoctor": "Dr Chen Mei Ling"
+          },
+          "search": {
+            "mode": "match"
+          }
+        },
+        {
+          "resource": {
+            "resourceType": "Medication",
+            "id": "medication-tan-wei-ming-4",
+            "medication": "Paracetamol",
+            "dosage": "500 mg",
+            "route": "PO",
+            "frequency": "QDS",
+            "quantity": "20 tablets",
+            "dispenseStatus": "dispensed",
+            "duration": "3 days",
+            "startDate": "2026-10-13T14:30:00+08:00",
+            "endDate": "2026-10-15T14:30:00+08:00",
+            "dispensary": "khatib-camp",
+            "prescribingDoctor": "Dr Rajesh Kumar"
+          },
+          "search": {
+            "mode": "match"
+          }
+        },
+        {
+          "resource": {
+            "resourceType": "Medication",
+            "id": "medication-tan-wei-ming-5",
+            "medication": "Amoxicillin",
+            "dosage": "300 mg",
+            "route": "PO",
+            "frequency": "TDS",
+            "quantity": "20 tablets",
+            "dispenseStatus": "uncollected",
+            "duration": "3 days",
+            "startDate": "2025-04-22T10:00:00+08:00",
+            "endDate": "2025-04-24T10:00:00+08:00",
+            "dispensary": "kranji-camp",
+            "prescribingDoctor": "Dr Nur Aisyah binte Rahman"
+          },
+          "search": {
+            "mode": "match"
+          }
+        }
+      ]
+    }
+  }
+}

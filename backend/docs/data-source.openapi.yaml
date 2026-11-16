@@ -33,9 +33,16 @@ tags:
       `PatientSourceAdapter`. A mock of it matches, filters, orders, pages and
       counts over its own Patients.
 
-      - **Two reads.** `GET /Patient/{id}` for one Patient (the Demographic
-        page's Patient card and Demographic details) and `GET /Patient?…` for a
-        Patient search (the Search page). The backend calls nothing else on it.
+      - **Six reads.** `GET /Patient/{id}` for one Patient (the Patient card
+        and the Demographic page's Demographic details), `GET /Patient?…` for a
+        Patient search (the Search page),
+        `GET /Patient/{id}/ffi?…` for a patient's FFI History (the FFI page,
+        ADR 0019), `GET /Patient/{id}/numc?…` for a patient's NUMC History
+        (the NUMC page, ADR 0019, D5), `GET /Patient/{id}/armc?…` for a
+        patient's ARMC History (the ARMC page, ADR 0019, D6) and
+        `GET /Patient/{id}/medication?…` for a patient's Medication History
+        (the Medication page, ADR 0019, D7). The backend calls nothing else on
+        it.
       - **FHIR R4 JSON, no credential.** Every call is a `GET` with
         `Accept: application/fhir+json` and no `Authorization` header; the
         source answers `application/fhir+json` (`application/json` is read too).
@@ -229,6 +236,737 @@ paths:
             application/fhir+json:
               schema:
                 $ref: "#/components/schemas/SearchsetBundle"
+
+  /Patient/{id}/ffi:
+    servers:
+      - url: http://127.0.0.1:8104
+        description: The patient source's local mock (`APP_PATIENT_SOURCE_BASE_URL`)
+    get:
+      tags: [patient-source]
+      operationId: readFfiHistory
+      summary: Read one page of a patient's FFI History — filtered, sorted, paged and counted by the source
+      description: |
+        The patient's FFIs (Fit for Instruction). The backend does none of this
+        work itself: it forwards the filters and the sort and shows the page
+        and the total the source answers. A mock must therefore compute every
+        step below over all the patient's FFIs, for any combination of
+        parameters.
+
+        1. **Filter** by every `type`, `outcome`, `issue-date`,
+           `expiry-date`, `higher-authority`, `submitting-mc` and `status`
+           sent, combined with AND.
+        2. **Count** what is left: that number is the Bundle's `total`,
+           whatever the page.
+        3. **Sort** by `_sort` when it is sent; with none, keep the source's
+           own default order.
+        4. **Page**: skip `_offset` FFIs, then return up to `_count` of them
+           as the Bundle's entries, in that order.
+
+        **Worked example** over the fixtures: Tan Hui Min (`dev-patient-05`)
+        has seven FFIs, so `total` is 7; `issue-date=ge2023-01-01` leaves six,
+        `total: 6`, over two pages of five. `higher-authority=camo,cnmo` leaves
+        four. Tan Wei Ming's four with `_sort=issue-date,_id` are his
+        Vocational, Overseas Exercises, Dental and IPPT FFIs, in that order.
+
+        **FHIR-shaped paging only, not FHIR-conformant**: the answer borrows a
+        searchset `Bundle`'s shape and FHIR's search-parameter syntax, and its
+        entries are a custom `FFI` object no FHIR version defines (ADR 0019).
+        The id is sent unchanged, as a read by id's is. The backend sends
+        parameters in no guaranteed order; read them by name.
+
+        **Fault ids (mock only).** Beside the fixtures' histories, the mock
+        serves one failure of this read per patient id, none a fixture's:
+
+        | Id                                     | Answers                                                    |
+        | -------------------------------------- | ---------------------------------------------------------- |
+        | `fault-ffi-unreachable`                | the connection reset, no answer                            |
+        | `fault-ffi-slow`                       | `200` page after 7 seconds, past the read timeout          |
+        | `fault-ffi-server-error`               | `503`                                                      |
+        | `fault-ffi-unexpected-status`          | `400`                                                      |
+        | `fault-ffi-not-a-searchset`            | `200` Bundle of `type: collection`                         |
+        | `fault-ffi-no-total`                   | `200` searchset with no `total`                            |
+        | `fault-ffi-no-id`                      | `200` page whose FFI has no `id`                           |
+        | `fault-ffi-invalid-id`                 | `200` page whose FFI's `id` is outside FHIR's id grammar   |
+        | `fault-ffi-no-outcome`                 | `200` page whose FFI has no `outcome`                      |
+        | `fault-ffi-unknown-higher-authority`   | `200` page whose FFI's `higherAuthority` is no code of its set |
+        | `fault-ffi-expiry-date-not-to-the-day` | `200` page whose FFI's `expiryDate` is a month             |
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[A-Za-z0-9\-.]{1,64}$'
+          example: eq081-VQEgP8drUUqCWzHfw3
+        - name: type
+          in: query
+          description: |
+            Keeps only FFIs whose `type` is any of these codes, joined by commas
+            (FHIR's OR). Sent once at most, the codes in their set's order.
+          schema:
+            type: string
+            pattern: "^(overseas-exercises|cat-a-ocs-scs|ippt|dental|ord-release-from-service|vocational)(,(overseas-exercises|cat-a-ocs-scs|ippt|dental|ord-release-from-service|vocational))*$"
+          example: ippt,dental
+        - name: outcome
+          in: query
+          description: |
+            Keeps only FFIs whose `outcome` is any of these codes, joined by
+            commas.
+          schema:
+            type: string
+            pattern: "^(fit|request-waiver|unfit)(,(fit|request-waiver|unfit))*$"
+          example: fit
+        - name: issue-date
+          in: query
+          description: |
+            An Issue Date range, inclusive: `ge<date>` keeps an `issueDate` on
+            or after the date, `le<date>` one on or before it. Sent once for each
+            end the range has, so zero, one or two times; both apply together.
+            The backend guarantees the from-date is not after the to-date.
+          style: form
+          explode: true
+          schema:
+            type: array
+            maxItems: 2
+            items:
+              type: string
+              pattern: '^(ge|le)\d{4}-\d{2}-\d{2}$'
+          example: [ge2024-01-01, le2024-12-31]
+        - name: expiry-date
+          in: query
+          description: |
+            An Expiry Date range, read as `issue-date` is but against
+            `expiryDate`.
+          style: form
+          explode: true
+          schema:
+            type: array
+            maxItems: 2
+            items:
+              type: string
+              pattern: '^(ge|le)\d{4}-\d{2}-\d{2}$'
+          example: [le2024-12-31]
+        - name: higher-authority
+          in: query
+          description: |
+            Keeps only FFIs whose `higherAuthority` is any of these codes,
+            joined by commas.
+          schema:
+            type: string
+            pattern: "^(camo|carmo|cnmo|comd-mmi|dis)(,(camo|carmo|cnmo|comd-mmi|dis))*$"
+          example: camo,cnmo
+        - name: submitting-mc
+          in: query
+          description: |
+            Keeps only FFIs whose `submittingMc` is any of these codes, joined by
+            commas.
+          schema:
+            type: string
+            pattern: "^(nee-soon-camp|kranji-camp|hendon-camp|mandai-hill-camp)(,(nee-soon-camp|kranji-camp|hendon-camp|mandai-hill-camp))*$"
+          example: kranji-camp
+        - name: status
+          in: query
+          description: |
+            Keeps only FFIs with this `status`. Absent for either.
+          schema:
+            type: string
+            enum: [active, inactive]
+        - name: _sort
+          in: query
+          description: |
+            One date column, then the id. `-` first is descending; `_id` is
+            always ascending and breaks every tie, so the order is total and a
+            page never repeats or skips an FFI. **Absent** when no sort is
+            chosen on the FFI page: the source's own default order applies.
+
+            - `issue-date`: by `issueDate`.
+            - `expiry-date`: by `expiryDate`.
+          schema:
+            type: string
+            enum:
+              - "issue-date,_id"
+              - "-issue-date,_id"
+              - "expiry-date,_id"
+              - "-expiry-date,_id"
+        - name: _count
+          in: query
+          required: true
+          description: |
+            The most FFIs to return. The FFI page asks for 5; the backend passes
+            through anything from 0 to 200. `0` returns no entries and still the
+            full `total`.
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 200
+          example: 5
+        - name: _offset
+          in: query
+          required: true
+          description: |
+            How many FFIs to skip, filtered and in sort order: the page's
+            `startIndex - 1`. An offset at or past `total` returns no entries and
+            still the full `total`, never an error.
+          schema:
+            type: integer
+            minimum: 0
+          example: 0
+        - name: _total
+          in: query
+          required: true
+          description: Always `accurate`. The `total` must be the exact count, never an estimate.
+          schema:
+            type: string
+            const: accurate
+      responses:
+        "200":
+          description: |
+            One page of the patient's FFIs the filters keep, in sort order, and
+            the `total` of every FFI they keep. A patient with none, or a filter
+            keeping none, is this answer with `total: 0`.
+          content:
+            application/fhir+json:
+              schema:
+                $ref: "#/components/schemas/FfiSearchset"
+        "404":
+          description: |
+            No patient under the id: the one answer the backend reads as "no
+            patient", shown as "No patient in context". The body is never read.
+          content:
+            application/fhir+json:
+              schema:
+                $ref: "#/components/schemas/OperationOutcome"
+
+  /Patient/{id}/numc:
+    servers:
+      - url: http://127.0.0.1:8104
+        description: The patient source's local mock (`APP_PATIENT_SOURCE_BASE_URL`)
+    get:
+      tags: [patient-source]
+      operationId: readNumcHistory
+      summary: Read one page of a patient's NUMC History — filtered, sorted, paged and counted by the source
+      description: |
+        The patient's NUMC Records (Navy Underwater Medicine Centre), each
+        whether the patient was found fit for one underwater duty. The backend
+        does none of this work itself: it forwards the filters and the sort
+        and shows the page and the total the source answers. A mock must
+        therefore compute every step below over all the patient's NUMC
+        Records, for any combination of parameters.
+
+        1. **Filter** by every `type`, `outcome`, `issue-date` and
+           `expiry-date` sent, combined with AND.
+        2. **Count** what is left: that number is the Bundle's `total`,
+           whatever the page.
+        3. **Sort** by `_sort` when it is sent; with none, keep the source's
+           own stable default order.
+        4. **Page**: skip `_offset` records, then return up to `_count` of
+           them as the Bundle's entries, in that order.
+
+        **Worked example** over the fixtures: Tan Hui Min (`dev-patient-05`)
+        has seven NUMC Records, so `total` is 7 on both of her pages of five;
+        `outcome=waiver-granted,waiver-rejected` leaves three, and
+        `type=diving` with `issue-date=ge2024-01-01` two. Tan Wei Ming's four
+        with `_sort=issue-date,_id` are his Hyperbaric Chamber Duties UNFIT and
+        FIT, Diving Duties and Submariner Duties records, in that order.
+
+        **Shown as received** (ADR 0020): the backend refuses no NUMC Record
+        for what its fields hold. A field left out, `null`, empty or blank is
+        shown missing; one of another JSON type, or a date that is no calendar
+        date, is shown "Error"; a code outside its set, or an id outside FHIR's
+        id grammar, is shown as it came. Tan Boon Huat (`dev-patient-10`) has
+        four such records. Only the page itself can fail the read.
+
+        **FHIR-shaped paging only, not FHIR-conformant**: the answer borrows a
+        searchset `Bundle`'s shape and FHIR's search-parameter syntax, and its
+        entries are a custom `NUMC` object no FHIR version defines (ADR 0019,
+        D5). The id is sent unchanged, as a
+        read by id's is. The backend sends parameters in no guaranteed order;
+        read them by name.
+
+        **Fault ids (mock only).** Beside the fixtures' histories, the mock
+        serves one failure of this read per patient id, none a fixture's:
+
+        | Id                             | Answers                                           |
+        | ------------------------------ | ------------------------------------------------- |
+        | `fault-numc-unreachable`       | the connection reset, no answer                   |
+        | `fault-numc-slow`              | `200` page after 7 seconds, past the read timeout |
+        | `fault-numc-server-error`      | `503`                                             |
+        | `fault-numc-unexpected-status` | `400`                                             |
+        | `fault-numc-not-a-searchset`   | `200` Bundle of `type: collection`                |
+        | `fault-numc-no-total`          | `200` searchset with no `total`                   |
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[A-Za-z0-9\-.]{1,64}$'
+          example: eq081-VQEgP8drUUqCWzHfw3
+        - name: type
+          in: query
+          description: |
+            Keeps only NUMC Records whose `type` is any of these codes, joined
+            by commas (FHIR's OR). Sent once at most, the codes in their set's
+            order.
+          schema:
+            type: string
+            pattern: "^(hyperbaric-chamber|submariner|diving)(,(hyperbaric-chamber|submariner|diving))*$"
+          example: hyperbaric-chamber,submariner
+        - name: outcome
+          in: query
+          description: |
+            Keeps only NUMC Records whose `outcome` is any of these NUMC
+            Outcome codes, joined by commas.
+          schema:
+            type: string
+            pattern: "^(fit|unfit|waiver-granted|waiver-rejected)(,(fit|unfit|waiver-granted|waiver-rejected))*$"
+          example: waiver-granted,waiver-rejected
+        - name: issue-date
+          in: query
+          description: |
+            An Issue Date range, inclusive: `ge<date>` keeps an `issueDate` on
+            or after the date, `le<date>` one on or before it. Sent once for each
+            end the range has, so zero, one or two times; both apply together.
+            The backend guarantees the from-date is not after the to-date.
+          style: form
+          explode: true
+          schema:
+            type: array
+            maxItems: 2
+            items:
+              type: string
+              pattern: '^(ge|le)\d{4}-\d{2}-\d{2}$'
+          example: [ge2024-01-01, le2024-12-31]
+        - name: expiry-date
+          in: query
+          description: |
+            An Expiry Date range, read as `issue-date` is but against
+            `expiryDate`.
+          style: form
+          explode: true
+          schema:
+            type: array
+            maxItems: 2
+            items:
+              type: string
+              pattern: '^(ge|le)\d{4}-\d{2}-\d{2}$'
+          example: [le2024-12-31]
+        - name: _sort
+          in: query
+          description: |
+            One date column, then the id. `-` first is descending; `_id` is
+            always ascending and breaks every tie, so the order is total and a
+            page never repeats or skips a NUMC Record. **Absent** when no sort
+            is chosen on the NUMC page: the source's own default order applies.
+
+            - `issue-date`: by `issueDate`.
+            - `expiry-date`: by `expiryDate`.
+          schema:
+            type: string
+            enum:
+              - "issue-date,_id"
+              - "-issue-date,_id"
+              - "expiry-date,_id"
+              - "-expiry-date,_id"
+        - name: _count
+          in: query
+          required: true
+          description: |
+            The most NUMC Records to return. The NUMC page asks for 5; the
+            backend passes through anything from 0 to 200. `0` returns no
+            entries and still the full `total`.
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 200
+          example: 5
+        - name: _offset
+          in: query
+          required: true
+          description: |
+            How many NUMC Records to skip, filtered and in sort order: the
+            page's `startIndex - 1`. An offset at or past `total` returns no entries
+            and still the full `total`, never an error.
+          schema:
+            type: integer
+            minimum: 0
+          example: 0
+        - name: _total
+          in: query
+          required: true
+          description: Always `accurate`. The `total` must be the exact count, never an estimate.
+          schema:
+            type: string
+            const: accurate
+      responses:
+        "200":
+          description: |
+            One page of the patient's NUMC Records the filters keep, in sort
+            order, and the `total` of every one they keep. A patient with none,
+            or a filter keeping none, is this answer with `total: 0`.
+          content:
+            application/fhir+json:
+              schema:
+                $ref: "#/components/schemas/NumcSearchset"
+        "404":
+          description: |
+            No patient under the id: the one answer the backend reads as "no
+            patient", shown as "No patient in context". The body is never read.
+          content:
+            application/fhir+json:
+              schema:
+                $ref: "#/components/schemas/OperationOutcome"
+
+  /Patient/{id}/armc:
+    servers:
+      - url: http://127.0.0.1:8104
+        description: The patient source's local mock (`APP_PATIENT_SOURCE_BASE_URL`)
+    get:
+      tags: [patient-source]
+      operationId: readArmcHistory
+      summary: Read one page of a patient's ARMC History — filtered, sorted, paged and counted by the source
+      description: |
+        The patient's ARMC Boards (Aeromedical Centre), each one aeromedical
+        fitness board the patient sat. The backend does none of this work
+        itself: it forwards the filters and the sort and shows the page and
+        the total the source answers. A mock must therefore compute every step
+        below over all the patient's ARMC Boards, for any combination of
+        parameters.
+
+        1. **Filter** by every `outcome`, `start-date` and `end-date` sent,
+           combined with AND. A board still open, with no `endDate`, matches
+           no `end-date` range: any `end-date` sent leaves it out.
+        2. **Count** what is left: that number is the Bundle's `total`,
+           whatever the page.
+        3. **Sort** by `_sort` when it is sent, breaking ties — and placing a
+           board with no `endDate` in an `end-date` sort — by the source's own
+           rule, the same on every page; with none, keep the source's own
+           stable default order.
+        4. **Page**: skip `_offset` boards, then return up to `_count` of
+           them as the Bundle's entries, in that order.
+
+        **Worked example** over the fixtures: Tan Hui Min (`dev-patient-05`)
+        has seven ARMC Boards, so `total` is 7 on both of her pages of five,
+        the first board still open; `outcome=fit` leaves four, the open board
+        among them, and `end-date=ge2023-01-01` three, the open board left out
+        though it starts in 2025. Tan Wei Ming has two, on one page, the latest
+        first; with `_sort=start-date` the earlier is first.
+
+        **FHIR-shaped paging only, not FHIR-conformant**: the answer borrows a
+        searchset `Bundle`'s shape, and its entries are a custom `ARMC` object
+        no FHIR version defines (ADR 0019, D6). The id is sent unchanged, as a
+        read by id's is. The backend sends parameters in no guaranteed order;
+        read them by name.
+
+        **Fault ids (mock only).** Beside the fixtures' histories, the mock
+        serves one failure of this read per patient id, none a fixture's:
+
+        | Id                                   | Answers                                                           |
+        | ------------------------------------ | ----------------------------------------------------------------- |
+        | `fault-armc-unreachable`             | the connection reset, no answer                                   |
+        | `fault-armc-slow`                    | `200` page after 7 seconds, past the read timeout                 |
+        | `fault-armc-server-error`            | `503`                                                             |
+        | `fault-armc-unexpected-status`       | `400`                                                             |
+        | `fault-armc-not-a-searchset`         | `200` Bundle of `type: collection`                                |
+        | `fault-armc-no-total`                | `200` searchset with no `total`                                   |
+        | `fault-armc-no-id`                   | `200` page whose ARMC Board has no `id`                           |
+        | `fault-armc-invalid-id`              | `200` page whose ARMC Board's `id` is outside FHIR's id grammar   |
+        | `fault-armc-no-outcome`              | `200` page whose ARMC Board has no `outcome`                      |
+        | `fault-armc-no-medical-officer-2`    | `200` page whose ARMC Board has no `medicalOfficer2`              |
+        | `fault-armc-unknown-board-type`      | `200` page whose ARMC Board's `boardType` is no code of its set   |
+        | `fault-armc-unknown-outcome`         | `200` page whose ARMC Board's `outcome` is a NUMC Outcome's       |
+        | `fault-armc-end-before-start`        | `200` page whose ARMC Board's `endDate` is before its `startDate` |
+        | `fault-armc-end-date-not-to-the-day` | `200` page whose ARMC Board's `endDate` is a month                |
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[A-Za-z0-9\-.]{1,64}$'
+          example: eq081-VQEgP8drUUqCWzHfw3
+        - name: outcome
+          in: query
+          description: |
+            Keeps only ARMC Boards whose `outcome` is this ARMC Outcome code.
+            Sent once at most, one code.
+          schema:
+            type: string
+            enum: [fit, unfit]
+          example: fit
+        - name: start-date
+          in: query
+          description: |
+            A Start Date range, inclusive: `ge<date>` keeps a `startDate` on or
+            after the date, `le<date>` one on or before it. Sent once for each
+            end the range has, so zero, one or two times; both apply together.
+            The backend guarantees the from-date is not after the to-date.
+          style: form
+          explode: true
+          schema:
+            type: array
+            maxItems: 2
+            items:
+              type: string
+              pattern: '^(ge|le)\d{4}-\d{2}-\d{2}$'
+          example: [ge2023-01-01, le2023-12-31]
+        - name: end-date
+          in: query
+          description: |
+            An End Date range, read as `start-date` is but against `endDate`.
+            A board with no `endDate`, still open, is in no End Date range, so
+            either end sent leaves it out.
+          style: form
+          explode: true
+          schema:
+            type: array
+            maxItems: 2
+            items:
+              type: string
+              pattern: '^(ge|le)\d{4}-\d{2}-\d{2}$'
+          example: [ge2023-01-01]
+        - name: _sort
+          in: query
+          description: |
+            One date column alone, `-` first for descending, with no `_id`
+            after it: the source breaks ties, and places a board with no
+            `endDate` in an `end-date` sort, by its own rule, the same on every
+            page, so a page never repeats or skips an ARMC Board. **Absent**
+            when no sort is chosen on the ARMC page: the source's own default
+            order applies.
+
+            - `start-date`: by `startDate`.
+            - `end-date`: by `endDate`.
+          schema:
+            type: string
+            enum:
+              - start-date
+              - -start-date
+              - end-date
+              - -end-date
+        - name: _count
+          in: query
+          required: true
+          description: |
+            The most ARMC Boards to return. The ARMC page asks for 5; the
+            backend passes through anything from 0 to 200. `0` returns no
+            entries and still the full `total`.
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 200
+          example: 5
+        - name: _offset
+          in: query
+          required: true
+          description: |
+            How many ARMC Boards to skip, filtered and in sort order: the page's
+            `startIndex - 1`. An offset at or past `total` returns no entries
+            and still the full `total`, never an error.
+          schema:
+            type: integer
+            minimum: 0
+          example: 0
+        - name: _total
+          in: query
+          required: true
+          description: Always `accurate`. The `total` must be the exact count, never an estimate.
+          schema:
+            type: string
+            const: accurate
+      responses:
+        "200":
+          description: |
+            One page of the patient's ARMC Boards the filters keep, in sort
+            order, and the `total` of every one they keep. A patient with none,
+            or a filter keeping none, is this answer with `total: 0`.
+          content:
+            application/fhir+json:
+              schema:
+                $ref: "#/components/schemas/ArmcSearchset"
+        "404":
+          description: |
+            No patient under the id: the one answer the backend reads as "no
+            patient", shown as "No patient in context". The body is never read.
+          content:
+            application/fhir+json:
+              schema:
+                $ref: "#/components/schemas/OperationOutcome"
+
+  /Patient/{id}/medication:
+    servers:
+      - url: http://127.0.0.1:8104
+        description: The patient source's local mock (`APP_PATIENT_SOURCE_BASE_URL`)
+    get:
+      tags: [patient-source]
+      operationId: readMedicationHistory
+      summary: Read one page of a patient's Medication History — filtered, sorted, paged and counted by the source
+      description: |
+        The patient's Medication Records, each one prescription, with how it
+        was dispensed and who prescribed it. The backend does none of this work
+        itself: it forwards the filters and the sort and shows the page and
+        the total the source answers. A mock must therefore compute every step
+        below over all the patient's Medication Records, for any combination
+        of parameters.
+
+        1. **Filter** by every `dispense-status`, `start-date` and `end-date`
+           sent, combined with AND, each date-time compared as the instant it
+           names, whatever offset a record gives it in.
+        2. **Count** what is left: that number is the Bundle's `total`,
+           whatever the page.
+        3. **Sort** by `_sort` when it is sent, by the whole date-time,
+           breaking ties by the source's own rule, the same on every page; with
+           none, keep the source's own stable default order.
+        4. **Page**: skip `_offset` records, then return up to `_count` of
+           them as the Bundle's entries, in that order.
+
+        **Worked example** over the fixtures: Tan Wei Ming
+        (`eq081-VQEgP8drUUqCWzHfw3`) has six Medication Records, so `total` is
+        6 on both of his pages of five; with `_sort=-start-date` his second is
+        first, starting a minute after his first and third. Tan Hui Min has
+        four, on one page; `start-date=lt2025-07-14T08:21:00Z` leaves three,
+        her second, which starts at 08:20 UTC (16:20 in Singapore), among them.
+
+        **FHIR-shaped paging only, not FHIR-conformant**: the answer borrows a
+        searchset `Bundle`'s shape, and its entries are a custom `Medication`
+        object of flat fields, not FHIR's `Medication` resource (ADR 0019,
+        D7). The id is sent unchanged, as a read by id's is. The backend sends
+        parameters in no guaranteed order; read them by name.
+
+        **Fault ids (mock only).** Beside the fixtures' histories, the mock
+        serves one failure of this read per patient id, none a fixture's:
+
+        | Id                                            | Answers                                                                 |
+        | --------------------------------------------- | ----------------------------------------------------------------------- |
+        | `fault-medication-unreachable`                | the connection reset, no answer                                         |
+        | `fault-medication-slow`                       | `200` page after 7 seconds, past the read timeout                       |
+        | `fault-medication-server-error`               | `503`                                                                   |
+        | `fault-medication-unexpected-status`          | `400`                                                                   |
+        | `fault-medication-not-a-searchset`            | `200` Bundle of `type: collection`                                      |
+        | `fault-medication-no-total`                   | `200` searchset with no `total`                                         |
+        | `fault-medication-no-id`                      | `200` page whose Medication Record has no `id`                          |
+        | `fault-medication-invalid-id`                 | `200` page whose Medication Record's `id` is outside FHIR's id grammar  |
+        | `fault-medication-no-dispense-status`         | `200` page whose Medication Record has no `dispenseStatus`              |
+        | `fault-medication-no-prescribing-doctor`      | `200` page whose Medication Record has no `prescribingDoctor`           |
+        | `fault-medication-unknown-dispense-status`    | `200` page whose `dispenseStatus` is no code of its set                 |
+        | `fault-medication-unknown-dispensary`         | `200` page whose `dispensary` is no Medical Centre's code               |
+        | `fault-medication-start-date-not-a-date-time` | `200` page whose `startDate` has no offset                              |
+        | `fault-medication-end-before-start`           | `200` page whose `endDate` is before its `startDate`                    |
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[A-Za-z0-9\-.]{1,64}$'
+          example: eq081-VQEgP8drUUqCWzHfw3
+        - name: dispense-status
+          in: query
+          description: |
+            Keeps only Medication Records whose `dispenseStatus` is any of
+            these codes, joined by commas (FHIR's OR). Sent once at most.
+          schema:
+            type: string
+            pattern: '^(pending|dispensed|uncollected)(,(pending|dispensed|uncollected))*$'
+          example: pending,uncollected
+        - name: start-date
+          in: query
+          description: |
+            A Start Date range over instants, each in UTC to the second:
+            `ge<instant>` keeps a `startDate` at or after the instant,
+            `lt<instant>` one before it. The backend sends a Singapore minute's
+            first instant as `ge` and the first instant after a to-minute as
+            `lt`, so both minutes are whole in the range. Sent once for each end
+            the range has, so zero, one or two times; both apply together. The
+            backend guarantees the `ge` instant is before the `lt` one.
+          style: form
+          explode: true
+          schema:
+            type: array
+            maxItems: 2
+            items:
+              type: string
+              pattern: '^(ge|lt)\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$'
+          example: [ge2025-07-14T08:20:00Z, lt2025-07-14T08:21:00Z]
+        - name: end-date
+          in: query
+          description: |
+            An End Date range, read as `start-date` is but against `endDate`.
+          style: form
+          explode: true
+          schema:
+            type: array
+            maxItems: 2
+            items:
+              type: string
+              pattern: '^(ge|lt)\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$'
+          example: [ge2024-12-31T16:00:00Z, lt2025-12-31T16:00:00Z]
+        - name: _sort
+          in: query
+          description: |
+            One date-time column alone, `-` first for descending, by the whole
+            date-time, with no `_id` after it: the source breaks ties by its own
+            rule, the same on every page, so a page never repeats or skips a
+            Medication Record. **Absent** when no sort is chosen on the
+            Medication page: the source's own default order applies.
+
+            - `start-date`: by `startDate`.
+            - `end-date`: by `endDate`.
+          schema:
+            type: string
+            enum:
+              - start-date
+              - -start-date
+              - end-date
+              - -end-date
+        - name: _count
+          in: query
+          required: true
+          description: |
+            The most Medication Records to return. The Medication page asks
+            for 5; the backend passes through anything from 0 to 200. `0`
+            returns no entries and still the full `total`.
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 200
+          example: 5
+        - name: _offset
+          in: query
+          required: true
+          description: |
+            How many Medication Records to skip, filtered and in sort order:
+            the page's `startIndex - 1`. An offset at or past `total` returns no
+            entries and still the full `total`, never an error.
+          schema:
+            type: integer
+            minimum: 0
+          example: 0
+        - name: _total
+          in: query
+          required: true
+          description: Always `accurate`. The `total` must be the exact count, never an estimate.
+          schema:
+            type: string
+            const: accurate
+      responses:
+        "200":
+          description: |
+            One page of the patient's Medication Records the filters keep, in
+            sort order, and the `total` of every one they keep. A patient with
+            none, or a filter keeping none, is this answer with `total: 0`.
+          content:
+            application/fhir+json:
+              schema:
+                $ref: "#/components/schemas/MedicationSearchset"
+        "404":
+          description: |
+            No patient under the id: the one answer the backend reads as "no
+            patient", shown as "No patient in context". The body is never read.
+          content:
+            application/fhir+json:
+              schema:
+                $ref: "#/components/schemas/OperationOutcome"
 
   /__admin/health:
     servers:
@@ -608,6 +1346,418 @@ components:
                   given: [Boon, Huat]
               gender: male
               birthDate: "1955-01-23"
+
+    FfiSearchset:
+      description: |
+        A FHIR-R4-shaped searchset `Bundle` of `FFI` objects: FHIR's paging
+        shape, not a FHIR-conformant Bundle. The backend reads `resourceType`,
+        `type`, `total` and each entry's `resource`; `id`, `link` and `fullUrl`
+        may be sent and are ignored.
+      type: object
+      required: [resourceType, type, total]
+      properties:
+        resourceType:
+          const: Bundle
+        type:
+          const: searchset
+        total:
+          description: Every FFI the patient has, not the page's size. Required.
+          type: integer
+          minimum: 0
+        entry:
+          description: The page, at most `_count` long. Left out, or empty, for a page with none.
+          type: array
+          items:
+            type: object
+            required: [resource]
+            properties:
+              resource:
+                $ref: "#/components/schemas/Ffi"
+      example:
+        resourceType: Bundle
+        type: searchset
+        total: 4
+        entry:
+          - resource:
+              resourceType: FFI
+              id: ffi-tan-wei-ming-2
+              type: ippt
+              outcome: request-waiver
+              issueDate: "2024-01-10"
+              expiryDate: "2025-01-09"
+              higherAuthority: cnmo
+              submittingMc: kranji-camp
+              status: active
+
+    Ffi:
+      description: |
+        One FFI (Fit for Instruction), a custom object no FHIR version defines,
+        of flat fields. Every field is required, and each rule below is one the
+        backend holds: an FFI breaking any is the source failing, the backend's
+        `502`. A field it does not read is ignored.
+      type: object
+      required:
+        [
+          resourceType,
+          id,
+          type,
+          outcome,
+          issueDate,
+          expiryDate,
+          higherAuthority,
+          submittingMc,
+          status,
+        ]
+      properties:
+        resourceType:
+          const: FFI
+        id:
+          description: The FFI's own id, in FHIR's id grammar.
+          type: string
+          pattern: '^[A-Za-z0-9\-.]{1,64}$'
+        type:
+          description: The FFI Type, by its code.
+          type: string
+          enum:
+            [
+              overseas-exercises,
+              cat-a-ocs-scs,
+              ippt,
+              dental,
+              ord-release-from-service,
+              vocational,
+            ]
+        outcome:
+          description: The Outcome, by its code.
+          type: string
+          enum: [fit, request-waiver, unfit]
+        issueDate:
+          description: To the day.
+          type: string
+          format: date
+        expiryDate:
+          description: To the day. The backend derives nothing from it.
+          type: string
+          format: date
+        higherAuthority:
+          description: The Higher Authority, by its code.
+          type: string
+          enum: [camo, carmo, cnmo, comd-mmi, dis]
+        submittingMc:
+          description: The Submitting MC, by its code — a Medical Centre's.
+          type: string
+          enum:
+            [
+              nee-soon-camp,
+              kranji-camp,
+              hendon-camp,
+              mandai-hill-camp,
+              khatib-camp,
+            ]
+        status:
+          description: |
+            The source's own Status, never derived from the Expiry Date: an FFI
+            past its Expiry Date may still be `active`.
+          type: string
+          enum: [active, inactive]
+
+    NumcSearchset:
+      description: |
+        A FHIR-R4-shaped searchset `Bundle` of `NUMC` objects: FHIR's paging
+        shape, not a FHIR-conformant Bundle. The backend reads `resourceType`,
+        `type`, `total` and each entry's `resource`; `id`, `link` and `fullUrl`
+        may be sent and are ignored.
+      type: object
+      required: [resourceType, type, total]
+      properties:
+        resourceType:
+          const: Bundle
+        type:
+          const: searchset
+        total:
+          description: Every NUMC Record the patient has, not the page's size. Required.
+          type: integer
+          minimum: 0
+        entry:
+          description: The page, at most `_count` long. Left out, or empty, for a page with none.
+          type: array
+          items:
+            type: object
+            required: [resource]
+            properties:
+              resource:
+                $ref: "#/components/schemas/Numc"
+      example:
+        resourceType: Bundle
+        type: searchset
+        total: 4
+        entry:
+          - resource:
+              resourceType: NUMC
+              id: numc-tan-wei-ming-2
+              type: submariner
+              outcome: waiver-rejected
+              issueDate: "2024-01-10"
+              expiryDate: "2025-01-09"
+
+    Numc:
+      description: |
+        One NUMC Record, a custom object no FHIR version defines, of flat
+        fields, shown as received (ADR 0020). Only its `resourceType` is
+        required: an entry of another resource is the source failing, the
+        backend's `502`. Each other field is expected in the form its
+        description names, but none is required and no value of one fails the
+        read: a field left out, `null`, empty or blank is shown missing, and
+        one of another JSON type, or a date that is no calendar date, is shown
+        "Error". It has no Status. A field it does not read is ignored.
+      type: object
+      required: [resourceType]
+      properties:
+        resourceType:
+          const: NUMC
+        id:
+          description: |
+            The NUMC Record's own id, a string; never checked, so one outside
+            FHIR's id grammar is kept.
+        type:
+          description: |
+            The NUMC Type, the underwater duty, by its code — a string, one of
+            `hyperbaric-chamber`, `submariner` and `diving`; another is shown
+            as it came.
+        outcome:
+          description: |
+            The NUMC Outcome, by its code — a string, one of `fit`, `unfit`,
+            `waiver-granted` and `waiver-rejected`, a set of its own; another,
+            an FFI's `request-waiver` among them, is shown as it came.
+        issueDate:
+          description: A calendar date, `YYYY-MM-DD`, to the day.
+        expiryDate:
+          description: |
+            A calendar date, `YYYY-MM-DD`, to the day. The backend derives
+            nothing from it, and checks it against nothing.
+
+    ArmcSearchset:
+      description: |
+        A FHIR-R4-shaped searchset `Bundle` of `ARMC` objects: FHIR's paging
+        shape, not a FHIR-conformant Bundle. The backend reads `resourceType`,
+        `type`, `total` and each entry's `resource`; `id`, `link` and `fullUrl`
+        may be sent and are ignored.
+      type: object
+      required: [resourceType, type, total]
+      properties:
+        resourceType:
+          const: Bundle
+        type:
+          const: searchset
+        total:
+          description: Every ARMC Board the patient has, not the page's size. Required.
+          type: integer
+          minimum: 0
+        entry:
+          description: The page, at most `_count` long. Left out, or empty, for a page with none.
+          type: array
+          items:
+            type: object
+            required: [resource]
+            properties:
+              resource:
+                $ref: "#/components/schemas/Armc"
+      example:
+        resourceType: Bundle
+        type: searchset
+        total: 2
+        entry:
+          - resource:
+              resourceType: ARMC
+              id: armc-tan-wei-ming-1
+              boardType: aces
+              outcome: fit
+              startDate: "2024-01-01"
+              endDate: "2024-02-10"
+              medicalOfficer1: Medical Officer 1
+              medicalOfficer2: Medical Officer 2
+
+    Armc:
+      description: |
+        One ARMC Board, a custom object no FHIR version defines, of flat
+        fields. Every field is required but `endDate`, which is left out for a
+        board still open, and each rule below is one the backend holds: a board
+        breaking any is the source failing, the backend's `502`. A field it
+        does not read is ignored.
+      type: object
+      required:
+        [
+          resourceType,
+          id,
+          boardType,
+          outcome,
+          startDate,
+          medicalOfficer1,
+          medicalOfficer2,
+        ]
+      properties:
+        resourceType:
+          const: ARMC
+        id:
+          description: The ARMC Board's own id, in FHIR's id grammar.
+          type: string
+          pattern: '^[A-Za-z0-9\-.]{1,64}$'
+        boardType:
+          description: The ARMC Board Type, by its code.
+          type: string
+          enum: [aces]
+        outcome:
+          description: |
+            The ARMC Outcome, by its code: a set of its own, so a NUMC
+            Outcome's `waiver-granted` or an FFI's `request-waiver` is outside
+            it.
+          type: string
+          enum: [fit, unfit]
+        startDate:
+          description: To the day.
+          type: string
+          format: date
+        endDate:
+          description: |
+            To the day, and on or after `startDate`. Left out for a board still
+            open; never `null`.
+          type: string
+          format: date
+        medicalOfficer1:
+          description: Medical Officer #1's name, as the source holds it. Not blank.
+          type: string
+          minLength: 1
+        medicalOfficer2:
+          description: Medical Officer #2's name, as the source holds it. Not blank.
+          type: string
+          minLength: 1
+
+    MedicationSearchset:
+      description: |
+        A FHIR-R4-shaped searchset `Bundle` of `Medication` objects: FHIR's
+        paging shape, not a FHIR-conformant Bundle. The backend reads
+        `resourceType`, `type`, `total` and each entry's `resource`; `id`,
+        `link` and `fullUrl` may be sent and are ignored.
+      type: object
+      required: [resourceType, type, total]
+      properties:
+        resourceType:
+          const: Bundle
+        type:
+          const: searchset
+        total:
+          description: Every Medication Record the patient has, not the page's size. Required.
+          type: integer
+          minimum: 0
+        entry:
+          description: The page, at most `_count` long. Left out, or empty, for a page with none.
+          type: array
+          items:
+            type: object
+            required: [resource]
+            properties:
+              resource:
+                $ref: "#/components/schemas/Medication"
+      example:
+        resourceType: Bundle
+        type: searchset
+        total: 6
+        entry:
+          - resource:
+              resourceType: Medication
+              id: medication-tan-wei-ming-1
+              medication: Paracetamol
+              dosage: 750 mg
+              route: PO
+              frequency: QDS
+              quantity: 30 tablets
+              dispenseStatus: pending
+              duration: 5 days
+              startDate: "2026-10-18T17:30:00+08:00"
+              endDate: "2026-10-22T17:30:00+08:00"
+              dispensary: nee-soon-camp
+              prescribingDoctor: Dr Lim Wei Jie
+
+    Medication:
+      description: |
+        One Medication Record, a custom object of flat fields — not FHIR's
+        `Medication` resource. Six fields are required; `dosage`, `route`,
+        `frequency`, `step`, `quantity` and `duration` are optional free text,
+        left out when the source has none. Each rule below is one the backend
+        holds: a record breaking any is the source failing, the backend's
+        `502`. A field it does not read is ignored.
+      type: object
+      required:
+        [
+          resourceType,
+          id,
+          medication,
+          dispenseStatus,
+          startDate,
+          endDate,
+          dispensary,
+          prescribingDoctor,
+        ]
+      properties:
+        resourceType:
+          const: Medication
+        id:
+          description: The Medication Record's own id, in FHIR's id grammar.
+          type: string
+          pattern: '^[A-Za-z0-9\-.]{1,64}$'
+        medication:
+          description: The Medication, free text. Not blank.
+          type: string
+          minLength: 1
+        dosage:
+          description: The Dosage, free text. Left out when there is none; never `null`.
+          type: string
+        route:
+          description: The Route, free text. Left out when there is none; never `null`.
+          type: string
+        frequency:
+          description: The Frequency, free text. Left out when there is none; never `null`.
+          type: string
+        step:
+          description: The Step, free text. Left out when there is none; never `null`.
+          type: string
+        quantity:
+          description: The Quantity, free text. Left out when there is none; never `null`.
+          type: string
+        dispenseStatus:
+          description: The Dispense Status, by its code.
+          type: string
+          enum: [pending, dispensed, uncollected]
+        duration:
+          description: |
+            The Duration, free text ("5 days"), never worked out from the
+            dates. Left out when there is none; never `null`.
+          type: string
+        startDate:
+          description: ISO-8601 with an offset (`Z` among them), to the minute or finer.
+          type: string
+          format: date-time
+        endDate:
+          description: |
+            ISO-8601 with an offset, to the minute or finer, and not before
+            `startDate` as an instant.
+          type: string
+          format: date-time
+        dispensary:
+          description: The Dispensary, by its code — a Medical Centre's, as an FFI's `submittingMc` is.
+          type: string
+          enum:
+            [
+              nee-soon-camp,
+              kranji-camp,
+              hendon-camp,
+              mandai-hill-camp,
+              khatib-camp,
+            ]
+        prescribingDoctor:
+          description: The Prescribing Doctor's name, as the source holds it. Not blank.
+          type: string
+          minLength: 1
 
     OperationOutcome:
       description: The `404`'s body, which the backend never reads.

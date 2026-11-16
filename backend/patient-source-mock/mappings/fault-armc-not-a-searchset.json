@@ -1,0 +1,45 @@
+{
+  "name": "Fault, ARMC History: a Bundle that is no searchset",
+  "metadata": {
+    "fault": "not-a-searchset"
+  },
+  "request": {
+    "method": "GET",
+    "urlPath": "/Patient/fault-armc-not-a-searchset/armc"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/fhir+json"
+    },
+    "jsonBody": {
+      "resourceType": "Bundle",
+      "id": "armc-history",
+      "type": "collection",
+      "total": 1,
+      "link": [
+        {
+          "relation": "self",
+          "url": "http://127.0.0.1:8104/Patient/fault-armc-not-a-searchset/armc?_offset=0&_count=5"
+        }
+      ],
+      "entry": [
+        {
+          "resource": {
+            "resourceType": "ARMC",
+            "id": "armc-fault-2",
+            "boardType": "aces",
+            "outcome": "fit",
+            "startDate": "2015-03-16",
+            "endDate": "2015-04-27",
+            "medicalOfficer1": "Dr Fault One",
+            "medicalOfficer2": "Dr Fault Two"
+          },
+          "search": {
+            "mode": "match"
+          }
+        }
+      ]
+    }
+  }
+}

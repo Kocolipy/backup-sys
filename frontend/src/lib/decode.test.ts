@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { DecodeError, decodeArray, jsonDecoder, readObject } from "./decode";
+import {
+  calendarDate,
+  dateTime,
+  DecodeError,
+  decodeArray,
+  jsonDecoder,
+  readObject,
+} from "./decode";
 
 const BODY = {
   name: "ada",
@@ -69,6 +76,22 @@ describe("readObject", () => {
     ["undefined", undefined],
   ])("refuses %s as an object", (_, value) => {
     expect(refusal(() => readObject(value, "Body"))).toBe("Body is not an object");
+  });
+
+  // A field the backend leaves out when it has no value: absent is no value,
+  // but a field that is there must be a string — `null` included.
+  it("reads an optional string as its value, or as undefined when absent", () => {
+    expect([body().optionalString("name"), body().optionalString("missing")]).toStrictEqual([
+      "ada",
+      undefined,
+    ]);
+  });
+
+  it.each([
+    ["null", "nickname"],
+    ["a number", "count"],
+  ])("refuses %s as an optional string, naming it", (_, key) => {
+    expect(refusal(() => body().optionalString(key))).toBe(`Body.${key} is not a string`);
   });
 
   it("refuses a missing field, naming it", () => {
@@ -170,6 +193,92 @@ describe("decodeArray", () => {
 
   it("refuses an array with one bad element", () => {
     expect(refusal(() => decodeArray(["a", 2], asString, "Tags"))).toBe("not a string");
+  });
+});
+
+// The lenient field decoder (ADR 0020): only a field's value is lenient; the
+// row's keys and its `invalid` are read as strictly as any other field.
+describe("readObject(…).sourceFields", () => {
+  const ROW = { code: "fit", day: "2024-02-29", gone: null, broken: null, invalid: ["broken"] };
+  const fields = (row: object = ROW) => readObject(row, "Row").sourceFields();
+  const isDay = (text: string) => text === "2024-02-29";
+
+  it("reads a string as present, as it came", () => {
+    expect(fields().read("code")).toStrictEqual({ state: "present", value: "fit" });
+  });
+
+  it("reads a string the field's kind accepts as present", () => {
+    expect(fields().read("day", isDay)).toStrictEqual({ state: "present", value: "2024-02-29" });
+  });
+
+  it("reads null as missing when the row does not name the field invalid", () => {
+    expect(fields().read("gone")).toStrictEqual({ state: "missing" });
+  });
+
+  it("reads a field the row names invalid as invalid", () => {
+    expect(fields().read("broken")).toStrictEqual({ state: "invalid" });
+  });
+
+  it("reads a field the row names invalid as invalid, whatever it holds", () => {
+    expect(fields({ ...ROW, invalid: ["code"] }).read("code")).toStrictEqual({ state: "invalid" });
+  });
+
+  it.each([
+    ["a number", 7],
+    ["a boolean", true],
+    ["an object", { code: "fit" }],
+    ["an array", ["fit"]],
+  ])("reads %s as invalid rather than refusing the row", (_, held) => {
+    expect(fields({ ...ROW, code: held }).read("code")).toStrictEqual({ state: "invalid" });
+  });
+
+  it("reads a string the field's kind refuses as invalid", () => {
+    expect(fields({ ...ROW, day: "2024-02-30" }).read("day", isDay)).toStrictEqual({
+      state: "invalid",
+    });
+  });
+
+  it("refuses a row without the field, which the backend always sends", () => {
+    expect(refusal(() => fields().read("absent"))).toBe("Row.absent is not a string or null");
+  });
+
+  it.each([
+    ["no invalid", { code: "fit" }, "Row.invalid is not an array"],
+    [
+      "an invalid that is no array",
+      { code: "fit", invalid: "code" },
+      "Row.invalid is not an array",
+    ],
+    ["an invalid naming no string", { code: "fit", invalid: [7] }, "Row.invalid is not strings"],
+  ])("refuses a row with %s", (_, row, message) => {
+    expect(refusal(() => fields(row))).toBe(message);
+  });
+});
+
+// Which strings are calendar dates is `isCalendarDate`'s (time.test.ts).
+describe("calendarDate", () => {
+  it("reads a calendar date as it is", () => {
+    expect(calendarDate("2024-02-29", "Visit.date")).toBe("2024-02-29");
+  });
+
+  it("refuses a string that is no calendar date, naming the field", () => {
+    expect(refusal(() => calendarDate("2025-02-30", "Visit.date"))).toBe(
+      "Visit.date is not a date",
+    );
+  });
+});
+
+// Which strings are date-times with an offset is `isOffsetDateTime`'s
+// (time.test.ts).
+describe("dateTime", () => {
+  it("reads a date-time with an offset as it is", () => {
+    expect(dateTime("2026-10-18T17:30:00+08:00", "Dose.at")).toBe("2026-10-18T17:30:00+08:00");
+  });
+
+  it("refuses a string that is no date-time with an offset, naming the field", () => {
+    expect(refusal(() => dateTime("2026-10-18T17:30:00", "Dose.at"))).toBe(
+      "Dose.at is not a date-time",
+    );
   });
 });
 

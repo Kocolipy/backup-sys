@@ -402,7 +402,7 @@ The **Demographic page** (`/demographic`, guarded by `patient:read`, which
 selecting a Patient on the Search page opens) shows the patient in context's
 **Patient card**, then their Demographic details: the Military Overview,
 Contact Details and Next of Kin / Emergency, a detail they have none of shown
-as "-", and nothing beyond the card while no patient is loaded. Home shows the
+as "—", and nothing beyond the card while no patient is loaded. Home shows the
 Patient card alone, and the navigation sidebar links it for no session. The
 Patient card shows the patient in context, and only that patient: the
 patient of the tab's **EHR context**, which selecting a Patient on the Search
@@ -415,7 +415,7 @@ patient. Home is open to every signed-in session; Patient Search, the Landing
 page of a session holding `patient:read`, is guarded by it, so a session
 without it is offered no Search link and is routed to Home. The top bar names
 the same patient by name and NRIC.
-Both render from **one reader** of the patient in context, which the signed-in
+Both, and the FFI, NUMC, ARMC and Medication pages ([ffi](ffi.md), [numc](numc.md), [armc](armc.md), [medication](medication.md)), render from **one reader** of the patient in context, which the signed-in
 layout renders (`frontend/src/pages/patient-in-context.ts`): each change
 of the patient in context is one `GET /api/patient/{id}` — one read of the
 uncached patient source — on Home as on every other signed-in page, and a
@@ -452,16 +452,19 @@ reaches a deployed environment. The backend holds no fixture of its own.
 - **Search stubs.** Each documented search has a canned stub answering a
   searchset Bundle whose entries are the fixtures themselves, exactly as their
   own stubs serve them, in the mock's one stable order — newest Last visit
-  first, ties by id, Tan Boon Huat, with none, last — matched on the query the
-  backend sends — the search, `_count=5`, `_offset`, `_total=accurate`, and the
-  `gender` filter pinned to its exact value or, where the search uses none, to
-  absent, so a filtered search never falls to an unfiltered stub:
-  - `search-name-tan-page-1` and `-page-2`, the name search `tan` (any case)
-    over its two pages of the seven fixtures with a name containing it,
-    `total: 7`; `search-nric`, the NRIC `S9212345A`, `total: 1`; and
-    `search-no-match`, the name search `nobody`, `total: 0`.
-  - **The gender filters** on the name search `tan`: `search-name-tan-male`
-    (`total: 3`) and `-female` (`total: 4`).
+  first, ties by id, a Patient with none last — matched on the query the
+  backend sends, with the `gender` filter pinned to its exact value or, where
+  the search uses none, to absent, so a filtered search never falls to an
+  unfiltered stub. `backend/docs/configuration/patient-source.md` ("The search
+  set") lists each stub and what it answers.
+
+  The FFI Histories of the fixtures, and the FFI fault stubs, are
+  [ffi](ffi.md)'s ("The patient source's FFI fixtures"); their NUMC Histories,
+  and the NUMC fault stubs, [numc](numc.md)'s ("The patient source's NUMC
+  fixtures"); their ARMC Histories, and the ARMC fault stubs, [armc](armc.md)'s
+  ("The patient source's ARMC fixtures"); their Medication Histories, and the
+  Medication fault stubs, [medication](medication.md)'s ("The patient source's
+  Medication fixtures").
 
   A low-priority fallback, `search-fallback`, answers any other `/Patient`
   search — a gender filter on any other search or page included — with an

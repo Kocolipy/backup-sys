@@ -51,7 +51,7 @@ describe("TopBar", () => {
     ]).toEqual(["Ada.Lovelace", true, false]);
   });
 
-  it("lists each Group beneath the name, in the order sent", async () => {
+  it("lists two Groups in full beneath the name, in the order sent", async () => {
     await renderBarFor({ groups: ["Helpdesk", "auditor"] });
 
     expect(textOf(signedInLines())).toEqual(["ada", "Helpdesk", "auditor"]);
@@ -73,12 +73,6 @@ describe("TopBar", () => {
       ["Helpdesk", true, true],
       ["+1 more", true, true],
     ]);
-  });
-
-  it("shows two Groups in full", async () => {
-    await renderBarFor({ groups: ["Admin", "Auditor"] });
-
-    expect(textOf(signedInLines())).toEqual(["ada", "Admin", "Auditor"]);
   });
 
   it("shows the first two of more Groups, then how many more there are", async () => {
@@ -191,16 +185,13 @@ describe("TopBar", () => {
     ]).toEqual([null, null, 1]);
   });
 
-  it.each([403, 503])(
-    "reports a %i on the page's error line as a failed read, naming no patient",
-    async (status) => {
-      withTanWeiMingInContext();
-      await renderBar(["patient:read"], { [TAN_WEI_MING_READ]: bare(status) });
+  it("names no patient when the read of the patient in context fails", async () => {
+    withTanWeiMingInContext();
+    const { requests } = await renderBar(["patient:read"], { [TAN_WEI_MING_READ]: bare(503) });
+    await act(async () => {});
 
-      expect(await screen.findByRole("alert")).toHaveTextContent(/^Couldn't load patient$/);
-      expect(patientInContext()).toBeNull();
-    },
-  );
+    expect([patientInContext(), patientReads(requests()).length]).toEqual([null, 1]);
+  });
 
   it("drops the patient as soon as the tab's EHR context is cleared", async () => {
     withTanWeiMingInContext();

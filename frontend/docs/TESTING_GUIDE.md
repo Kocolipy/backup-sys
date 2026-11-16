@@ -9,20 +9,20 @@ tags: [testing, vitest, stryker, semgrep, fallow]
 
 ## Running the suites
 
-| Command                 | What it runs                                           | Typical use                           |
-| ----------------------- | ------------------------------------------------------ | ------------------------------------- |
-| `npm test`              | vitest, single pass, everything but `test/e2e`         | after every change                    |
-| `npm run test:watch`    | vitest in watch mode                                   | while writing a test                  |
-| `npm test <path>`       | one file                                               | narrowing a failure                   |
-| `npm test -- -t "name"` | one test by name                                       | narrowing further                     |
-| `npm run typecheck`     | `tsc -b` over all three projects                       | after every change                    |
-| `npm run test:arch`     | dependency-cruiser + `test/arch`                       | after every change                    |
-| `npm run test:coverage` | vitest with v8 coverage                                | checking a gap, not a gate            |
-| `npm run test:e2e`      | Playwright against `npm run dev`, and the packaged JAR | once an implementation is complete    |
-| `npm run test:security` | Semgrep, local ruleset                                 | once an implementation is complete    |
-| `npx fallow audit`      | dead code / complexity / duplication in the changeset  | once an implementation is complete    |
-| `npm run test:mutation` | Stryker over the whole repo                            | deliberately, outside the loop        |
-| scoped Stryker          | Stryker over the source one test covers                | after writing or changing a unit test |
+| Command                 | What it runs                                                   | Typical use                           |
+| ----------------------- | -------------------------------------------------------------- | ------------------------------------- |
+| `npm test`              | vitest, single pass, everything but `test/e2e` and `test/arch` | after every change                    |
+| `npm run test:watch`    | vitest in watch mode                                           | while writing a test                  |
+| `npm test <path>`       | one file                                                       | narrowing a failure                   |
+| `npm test -- -t "name"` | one test by name                                               | narrowing further                     |
+| `npm run typecheck`     | `tsc -b` over all three projects                               | after every change                    |
+| `npm run test:arch`     | dependency-cruiser + `test/arch`                               | after every change                    |
+| `npm run test:coverage` | vitest with v8 coverage                                        | checking a gap, not a gate            |
+| `npm run test:e2e`      | Playwright against `npm run dev`, and the packaged JAR         | once an implementation is complete    |
+| `npm run test:security` | Semgrep, local ruleset                                         | once an implementation is complete    |
+| `npx fallow audit`      | dead code / complexity / duplication in the changeset          | once an implementation is complete    |
+| `npm run test:mutation` | Stryker over the whole repo                                    | deliberately, outside the loop        |
+| scoped Stryker          | Stryker over the source one test covers                        | after writing or changing a unit test |
 
 The baseline gate, the conditional gates and their triggers are in AGENTS.md
 under "Testing".
@@ -202,6 +202,10 @@ For example:
   `src/index.css`.
 - `e2eSpecRouting.test.ts` — every Playwright spec is matched by exactly one
   project's `testMatch`.
+- `cruiserPaths.test.ts` — every literal path a dependency-cruiser rule names
+  (`src/lib/http.ts`, each alternative of `(http|decode)`) matches a file, so
+  renaming the file fails the suite instead of leaving its rule matching
+  nothing. A path a rule forbids to exist is listed in `MEANT_TO_MATCH_NOTHING`.
 - `skippedTests.test.ts` — no skip or focus marker in any suite
   (`/backend/AGENTS.md`, "Test suite policy"): a skip leaves a test nothing
   runs, a focus drops every other test in its file, and the run still exits
@@ -224,6 +228,12 @@ the exemption is for.
 `sources.ts` resolves the repo root from `process.cwd()`, not
 `import.meta.url`: under vitest the latter is a served URL, not a `file:` one,
 and `fileURLToPath` throws on it.
+
+A rule that scans lines takes its two helpers from `sources.ts` too:
+`blankComments`, which blanks every comment while keeping line numbers true, so
+a comment may name a forbidden construct, and `violationsIn`, which lists each
+line matching the rule's pattern as `path:line: code`. Its planted case runs
+them on the planted lines, one per spelling the pattern names.
 
 ### Prove a new rule fails
 

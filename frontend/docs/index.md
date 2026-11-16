@@ -9,7 +9,8 @@ The SPA's reference docs. The rules an agent must hold are in `../AGENTS.md`; th
 # Architecture
 
 - [Frontend architecture](ARCHITECTURE.md) - The SPA's layers file by file, the request and time seams, the gated read and write, the @/ alias, the token pipeline and routing.
-- [Design system](DESIGN.md) - The component library's design tokens — colors, typography, spacing, shapes — and how its components use them.
+- [Frontend pages](PAGES.md) - src/pages/ file by file: each page and its API module, and the parts the pages share.
+- [Design system](DESIGN.md) - What each colour token and type level is for, and how the shared components behave; the values live in src/index.css.
 
 # Contracts
 

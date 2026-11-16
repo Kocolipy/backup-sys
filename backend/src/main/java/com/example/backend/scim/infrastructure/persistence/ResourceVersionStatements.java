@@ -14,8 +14,8 @@ import java.util.UUID;
  *
  * <p>Locking is not its concern, but it relies on the lock module ({@link ScimWriteLockAdapter}):
  * every resource an advance names is one the write already holds, locked in the canonical order
- * before the write began, so the bulk update takes no new lock and the order it updates rows in
- * cannot matter.
+ * before the write began, and the statement reaches each named row by its key and no other, so the
+ * bulk update takes no new lock and the order it updates rows in cannot matter.
  */
 final class ResourceVersionStatements {
 

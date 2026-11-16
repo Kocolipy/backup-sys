@@ -1,7 +1,7 @@
 import { clsx, type ClassValue } from "clsx";
 import { extendTailwindMerge } from "tailwind-merge";
 
-// DESIGN.md's named type scale, which src/index.css defines as `--text-<level>`
+// The design's named type scale (docs/DESIGN.md, Typography), which src/index.css defines as `--text-<level>`
 // tokens. twMerge knows only Tailwind's stock font sizes, and reads any other
 // `text-*` as a colour — so without this, a caller's `text-muted-foreground`
 // would silently drop a component's `text-headline-lg`. A level added to

@@ -286,6 +286,49 @@ class ModuleRulesTests {
                 .isEmpty();
     }
 
+    // ---- the one outbound HTTP client (ADR 0014) -----------------------------------------------
+
+    @Test
+    void a_spring_rest_client_outside_the_patient_sources_adapter_is_reported() {
+        assertThat(violations(ArchitectureTest.one_outbound_http_client,
+                        "com.example.backend.scim.infrastructure.persistence.Planted",
+                        "org.springframework.web.client.RestClient"))
+                .contains("Planted");
+    }
+
+    @Test
+    void a_reactive_web_client_outside_the_patient_sources_adapter_is_reported() {
+        assertThat(violations(ArchitectureTest.one_outbound_http_client,
+                        "com.example.backend.audit.application.Planted",
+                        "org.springframework.web.reactive.function.client.WebClient"))
+                .contains("Planted");
+    }
+
+    @Test
+    void the_jdks_http_client_outside_the_patient_sources_adapter_is_reported() {
+        assertThat(violations(ArchitectureTest.one_outbound_http_client,
+                        "com.example.backend.patient.application.Planted",
+                        "java.net.http.HttpClient"))
+                .contains("Planted");
+    }
+
+    @Test
+    void a_url_connection_outside_the_patient_sources_adapter_is_reported() {
+        assertThat(violations(ArchitectureTest.one_outbound_http_client,
+                        "com.example.backend.patient.controller.Planted",
+                        "java.net.HttpURLConnection"))
+                .contains("Planted");
+    }
+
+    @Test
+    void a_client_in_the_patient_sources_adapter_is_not_reported() {
+        assertThat(violations(ArchitectureTest.one_outbound_http_client,
+                        "com.example.backend.patient.infrastructure.http.Planted",
+                        "org.springframework.web.client.RestClient",
+                        "java.net.http.HttpClient"))
+                .isEmpty();
+    }
+
     // ---- helpers -------------------------------------------------------------------------------
 
     /** {@code rule}'s violations on one planted class, {@code name}, implementing {@code iface}. */

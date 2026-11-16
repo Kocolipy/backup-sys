@@ -41,15 +41,16 @@ this directory.
 Each app owns one **baseline gate**, named in its `AGENTS.md`, plus
 **conditional gates** (mutation testing, E2E…) with their own triggers and
 completion criteria. `make verify` (repo root) runs both baselines, then the
-**SPA–API contract check** (`make verify-contract`), which holds the vocabulary
-the SPA mirrors by hand to `backend/docs/openapi.yaml`
+**SPA–API contract check** (`make verify-contract`), which holds what the SPA
+mirrors by hand to `backend/docs/openapi.yaml`
 (`scripts/spa-contract/README.md`).
 
 **A change is complete only when the owning app's baseline gate is green, plus
 every conditional gate its change triggered.** A change to the SPA contract runs
-both apps' gates; a change to a mirrored vocabulary, a request declaration, or an
-operation's `security` in `openapi.yaml` also runs `make verify-contract`. When a
-gate cannot run, report the exact unverified scope and why.
+both apps' gates; a change to a mirrored vocabulary, a request declaration or a
+decoder, or to an operation's `security`, a response schema or a query
+parameter in `openapi.yaml`, also runs `make verify-contract`. When a gate
+cannot run, report the exact unverified scope and why.
 
 Toolchain pins are enforced by the builds (`/README.md` has the table). Two bite
 in ordinary work:
@@ -96,9 +97,12 @@ authorities:
 
 - **Runtime** (CSRF, CSP, sessions): `frontend/docs/BACKEND_CONTRACT.md` — read
   it before changing request handling on either side.
-- **Vocabulary** (Permissions, token Permissions, audit operations, lock causes,
-  each request's Permission or Superuser requirement): `backend/docs/openapi.yaml`,
-  held by the contract check, so a backend change to any lands with the SPA's.
+- **What the SPA mirrors by hand** — closed sets, each request's Permission or
+  Superuser requirement, the shape of each response it decodes and the query
+  parameters each request sends: `backend/docs/openapi.yaml`, held by the
+  contract check, so a backend change to any lands with the SPA's. Which closed
+  sets is the table in `scripts/spa-contract/README.md` and `VOCABULARIES` in
+  `scripts/spa-contract/check.mjs`.
 
 ## Line endings and ignores
 

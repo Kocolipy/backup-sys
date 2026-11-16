@@ -38,7 +38,7 @@ A unit test that runs against an in-memory fake of a port says something about p
 
 The trigger and the completion criterion are in `backend/AGENTS.md`; this is how a run is made and read.
 
-Target the touched test class and the production class it covers, with the **expanded mutator set** below and nothing else. It is a superset of PIT's `DEFAULTS` (`-Dmutators` replaces the list, so `STRONGER` carries the defaults), and the extra operators mutate lines `DEFAULTS` leaves alone — a discarded return value such as `request.changeSessionId()` yields no default mutant, so session-fixation rotation could go untested under a 100% score. One run is therefore final; line coverage below 100% beside a 100% score points at a line no operator reached:
+Target the touched test class and the production class it covers, with the **expanded mutator set** below and nothing else. It is a superset of PIT's `DEFAULTS` (`-Dmutators` replaces the list, so `STRONGER` carries the defaults), and the extra operators mutate lines `DEFAULTS` leaves alone — a call whose return value is discarded yields no default mutant, so a call made only for its effect could go untested under a 100% score. One run is therefore final; line coverage below 100% beside a 100% score points at a line no operator reached:
 
 ```bash
 ./mvnw org.pitest:pitest-maven:mutationCoverage \

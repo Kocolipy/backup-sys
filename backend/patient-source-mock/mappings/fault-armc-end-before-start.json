@@ -1,0 +1,45 @@
+{
+  "name": "Fault, ARMC History: an ARMC Board whose End Date is before its Start Date",
+  "metadata": {
+    "fault": "end-before-start"
+  },
+  "request": {
+    "method": "GET",
+    "urlPath": "/Patient/fault-armc-end-before-start/armc"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/fhir+json"
+    },
+    "jsonBody": {
+      "resourceType": "Bundle",
+      "id": "armc-history",
+      "type": "searchset",
+      "total": 1,
+      "link": [
+        {
+          "relation": "self",
+          "url": "http://127.0.0.1:8104/Patient/fault-armc-end-before-start/armc?_offset=0&_count=5"
+        }
+      ],
+      "entry": [
+        {
+          "resource": {
+            "resourceType": "ARMC",
+            "id": "armc-fault-10",
+            "boardType": "aces",
+            "outcome": "fit",
+            "startDate": "2015-06-15",
+            "endDate": "2015-06-01",
+            "medicalOfficer1": "Dr Fault One",
+            "medicalOfficer2": "Dr Fault Two"
+          },
+          "search": {
+            "mode": "match"
+          }
+        }
+      ]
+    }
+  }
+}

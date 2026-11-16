@@ -21,6 +21,19 @@ export const ROUTE_READY: Record<string, (page: Page) => Promise<void>> = {
     ).toBeVisible();
   },
   "/": expectNoPatientInContext,
+  // A walk starts with no patient in context, so the page reads nothing and says so.
+  "/ffi": async (page) => {
+    await expect(page.getByRole("main").getByText("No patient in context")).toBeVisible();
+  },
+  "/medication": async (page) => {
+    await expect(page.getByRole("main").getByText("No patient in context")).toBeVisible();
+  },
+  "/numc": async (page) => {
+    await expect(page.getByRole("main").getByText("No patient in context")).toBeVisible();
+  },
+  "/armc": async (page) => {
+    await expect(page.getByRole("main").getByText("No patient in context")).toBeVisible();
+  },
   "/accounts": async (page) => {
     await expect(page.getByRole("table", { name: "Users" }).getByRole("row").nth(1)).toBeVisible();
     await expect(page.getByRole("table", { name: "Groups" }).getByRole("row").nth(1)).toBeVisible();

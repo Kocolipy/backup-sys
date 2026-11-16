@@ -3,15 +3,17 @@ import { expect, test, type Page } from "@playwright/test";
 import { DEV_FIXTURES, expectSignedInLines, loginAsFixture, type DevFixture } from "./auth.helpers";
 import { expectNoPatientAccess, recordPatientRequests } from "./patient.helpers";
 
-// The development fixtures holding administrative Permissions, and only those:
-// each fixture's User signs in through the login page and sees exactly the
-// pages and actions its Group's Permissions allow (the `local` profile's stored
-// Group Permissions, ADR 0015), and the top bar names it beneath its username by
-// its Group, upper-cased. The Medical Officers are left out on purpose:
+// A development fixture holding administrative Permissions: its User signs in
+// through the login page and sees exactly the pages and actions its Group's
+// Permissions allow (the `local` profile's stored Group Permissions, ADR 0015),
+// and the top bar names it beneath its username by its Group, upper-cased. The
+// Auditor stands for both such fixtures: the Helpdesk is shown the same pages
+// and actions, its `account:unlock` aside, and its Unlock from the page is
+// `dormancy.spec.ts`'. The Medical Officers are left out on purpose:
 // a further sign-in as `mo1` or `mo2` would end the session the
 // `medical-officer` or `patient-sign-out` project relies on beside this file,
-// and their pages are `roles-medical-officer.spec.ts`'. None of them is the Superuser,
-// so none is offered connector administration, though each holds
+// and their pages are `roles-medical-officer.spec.ts`'. The Auditor is not the
+// Superuser, so it is offered no connector administration, though it holds
 // `connector:read`, which lists connectors and does no more. What each holds,
 // and the backend refusing each direct call outside it, need no browser:
 // `DevelopmentFixturesIntegrationTests` and `AuthorizationContractTests` prove
@@ -21,14 +23,15 @@ import { expectNoPatientAccess, recordPatientRequests } from "./patient.helpers"
 // subject. The Superuser is left out on purpose: its User is the Bootstrap
 // Admin, whose sign-in would end the session `admin.json` replays and that
 // `login.spec.ts` uses beside this file; what it holds is the backend's
-// `DevelopmentFixturesIntegrationTests`' to prove. Each fixture User is signed in by this file alone,
-// and by one test, so a parallel run never signs one of them out of another.
+// `DevelopmentFixturesIntegrationTests`' to prove. The fixture User is signed in
+// by one test, so a parallel run never signs it out of another; `dormancy.spec.ts`
+// signs it in again only after this project.
 
 /** What the Accounts page shows a fixture, or `null` when its deep link routes away. */
 type AccountsView = { users: boolean; groups: boolean; connectors: boolean } | null;
 
 const EXPECTED: Record<
-  Exclude<DevFixture, "superuser">,
+  Extract<DevFixture, "auditor">,
   { accounts: AccountsView; audit: boolean; createConnector: boolean; groupLines: string[] }
 > = {
   auditor: {
@@ -36,12 +39,6 @@ const EXPECTED: Record<
     audit: true,
     createConnector: false,
     groupLines: ["AUDITOR"],
-  },
-  helpdesk: {
-    accounts: { connectors: true, groups: true, users: true },
-    audit: true,
-    createConnector: false,
-    groupLines: ["HELPDESK"],
   },
 };
 

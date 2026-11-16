@@ -33,6 +33,14 @@ reasoning behind each rule.
 
 - **A response body is never cast** (`as T`): a hand-written decoder built from
   `src/lib/decode.ts`'s primitives reads it, beside the wire type it decodes.
+  Every decoder is strict about the backend's shape — the page envelope, each
+  field there, a field it does not know refused. **A patient-source field shown
+  as received** (ADR 0020) is the one lenient value: it is read only through
+  the lenient field decoder, `readObject(…).sourceFields()`, into a
+  `SourceField` (`src/lib/source-field.ts`), shown only through `shown` — its
+  value, "—" when missing, "Error" when invalid — and a code's label or badge
+  found only through `byCode`, which falls back to the raw code. The NUMC
+  History is read so (ADR 0020).
 - **The auth state changes, and the CSRF token is forgotten, only through
   `src/auth/session-transitions.ts`**, which owns the session generation: a `401`
   ends only the session its request was sent under.
@@ -69,9 +77,8 @@ These rules are review-blocking, and `npm run test:arch` enforces them:
   `test/arch/designTokens.test.ts` is what catches a literal color.
 
 `src/components/ui/` is the in-house shadcn library in source form.
-`docs/DESIGN.md` documents the visual language it was built against, but the
-token _values_ live only in `src/index.css`: a DESIGN.md change that is not
-also an `index.css` change never reaches the page.
+`docs/DESIGN.md` says what each token is for and how each component behaves;
+the token _values_ live only in `src/index.css`.
 
 ## Backend contract
 
@@ -79,11 +86,14 @@ also an `index.css` change never reaches the page.
 request, reads a status, or touches the CSRF token, the session window, logout
 or the CSP — and update it in the same change when the backend side moves.
 
-The closed sets decoded strictly from the API, and every declaration's
-`permission`, are held to `/backend/docs/openapi.yaml` by the root's
-`make verify-contract`, which `npm run verify` does not run. A declaration's
-`path` must build its absolute path from its arguments alone, so the check can
-find its operation.
+The root's `make verify-contract`, which `npm run verify` does not run, holds
+to `/backend/docs/openapi.yaml` the closed sets it mirrors from the API,
+every declaration's `permission`, the query parameters each declaration's
+`path` sends, and each declaration's `decode`, run over sample bodies built
+from its operation's success response (`/scripts/spa-contract/README.md`). A
+declaration's `path` must build its absolute path and every query parameter's
+name from its arguments alone, so the check can find its operation and see
+each parameter it can send.
 
 ## Testing
 

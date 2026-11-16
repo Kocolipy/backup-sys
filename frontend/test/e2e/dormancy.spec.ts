@@ -1,7 +1,14 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { applyAuditFilters, detailField, eventRows, openEventDetail } from "./audit.helpers";
-import { FIXTURE_PASSWORD, loginAsFixture, submitLogin, userIdOf } from "./auth.helpers";
+import {
+  FIXTURE_PASSWORD,
+  INCORRECT_CREDENTIALS,
+  loginAsFixture,
+  submitLogin,
+  submitPasswordChange,
+  userIdOf,
+} from "./auth.helpers";
 import { FIXTURE_GROUPS, freshBrowser, rowOf, searchCard } from "./scim.helpers";
 
 /**
@@ -38,13 +45,6 @@ const GROUPS_COLUMN = 0;
 /** The two Groups seeding puts the fixture back into (`dormant-groups` in `authorization.yaml`). */
 const { auditors: AUDITORS, helpdesk: HELPDESK } = FIXTURE_GROUPS;
 
-async function changePassword(page: Page, current: string, next: string) {
-  await page.getByLabel("Current password").fill(current);
-  await page.getByLabel("New password", { exact: true }).fill(next);
-  await page.getByLabel("Confirm new password").fill(next);
-  await page.getByRole("button", { name: "Change password" }).click();
-}
-
 test("a dormant account is locked for dormancy until the Helpdesk unlocks it", async ({
   browser,
   page,
@@ -69,24 +69,27 @@ test("a dormant account is locked for dormancy until the Helpdesk unlocks it", a
     const dormantId = await userIdOf(page, DORMANT);
     // In a browser of its own: the dormant User signs in through `returning` below.
     const auditing = await freshBrowser(browser);
-    const reader = await auditing.newPage();
-    await loginAsFixture(reader, "auditor");
-    await reader.goto("/audit");
-    await applyAuditFilters(reader, {
-      operation: "Dormancy membership revocation",
-      resourceId: dormantId,
-    });
-    const newest = await openEventDetail(eventRows(reader).first());
-    await expect(await detailField(newest, "Details")).toHaveText(
-      "permissions: account:unlock, audit:read, connector:read, group:read, ops:read, user:read" +
-        ` → none · groups: ${AUDITORS}, ${HELPDESK}`,
-    );
-    await auditing.close();
+    try {
+      const reader = await auditing.newPage();
+      await loginAsFixture(reader, "auditor");
+      await reader.goto("/audit");
+      await applyAuditFilters(reader, {
+        operation: "Dormancy membership revocation",
+        resourceId: dormantId,
+      });
+      const newest = await openEventDetail(eventRows(reader).first());
+      await expect(await detailField(newest, "Details")).toHaveText(
+        "permissions: account:unlock, audit:read, connector:read, group:read, ops:read, user:read" +
+          ` → none · groups: ${AUDITORS}, ${HELPDESK}`,
+      );
+    } finally {
+      await auditing.close();
+    }
 
     // The dormant User cannot sign in: the same refusal a wrong password gets.
     const own = await returning.newPage();
     await submitLogin(own, DORMANT, FIXTURE_PASSWORD);
-    await expect(own.getByRole("alert")).toHaveText("The username or password is incorrect.");
+    await expect(own.getByRole("alert")).toHaveText(INCORRECT_CREDENTIALS);
     await expect(own).toHaveURL(/\/login$/);
 
     // The Helpdesk unlocks it from the page.
@@ -98,7 +101,7 @@ test("a dormant account is locked for dormancy until the Helpdesk unlocks it", a
     // Its password now works — into the mandatory change, which it makes.
     await submitLogin(own, DORMANT, FIXTURE_PASSWORD);
     await expect(own).toHaveURL(/\/settings$/);
-    await changePassword(own, FIXTURE_PASSWORD, CHOSEN);
+    await submitPasswordChange(own, FIXTURE_PASSWORD, CHOSEN);
     await expect(own.getByRole("status")).toHaveText(
       "Your password was changed. Sign in with your new password.",
     );

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { readSources } from "./sources";
+import { blankComments, readSources, violationsIn } from "./sources";
 
 // Architecture rule `no_web_storage_outside_its_keeper` (docs/BACKEND_CONTRACT.md,
 // the EHR context). The SPA keeps exactly one thing in the browser, per tab in
@@ -15,29 +15,12 @@ const STORAGE_MODULES = [EHR_CONTEXT];
 
 const WEB_STORAGE = /\b(localStorage|sessionStorage|indexedDB)\b/;
 
-// Same blanking as rawNetwork.test.ts: comments may name these freely, and
-// line numbers stay true.
-const blankComments = (source: string): string =>
-  source
-    .replace(/\/\*[\s\S]*?\*\//g, (match) => match.replace(/[^\n]/g, " "))
-    .replace(/(^|[^:])\/\/.*$/gm, (match, prefix: string) => prefix.padEnd(match.length));
-
 const sources = readSources("src", [".ts", ".tsx"]).filter(
   ({ path }) => !/\.(test|spec|testHelpers)\.[tj]sx?$/.test(path),
 );
 const files = sources
   .filter(({ path }) => !STORAGE_MODULES.includes(path))
   .map(({ path, code }) => ({ path, code: blankComments(code) }));
-
-/** Each line of `files` that reaches browser storage, as `path:line: code`. */
-const violationsIn = (checked: { path: string; code: string }[]): string[] =>
-  checked.flatMap(({ path, code }) =>
-    code
-      .split("\n")
-      .map((line, index) => ({ line, number: index + 1 }))
-      .filter(({ line }) => WEB_STORAGE.test(line))
-      .map(({ line, number }) => `${path}:${number}: ${line.trim()}`),
-  );
 
 describe("browser storage", () => {
   it("finds the sources to check", () => {
@@ -53,22 +36,28 @@ describe("browser storage", () => {
     expect(WEB_STORAGE.test(blankComments(module?.code ?? ""))).toBe(true);
   });
 
-  it("reports storage reached outside its keeper, and not in a comment", () => {
+  it("reports each kind of storage reached outside its keeper, and not in a comment", () => {
+    // One planted line per storage the pattern names, so dropping any one of
+    // them from WEB_STORAGE fails here.
     const planted = [
-      { path: "src/pages/planted.tsx", code: 'window.localStorage.setItem("token", value);' },
+      { path: "src/pages/planted-local.tsx", code: 'window.localStorage.setItem("token", value);' },
+      { path: "src/pages/planted-session.tsx", code: 'sessionStorage.setItem("token", value);' },
+      { path: "src/pages/planted-indexed.tsx", code: 'indexedDB.open("cache");' },
       {
         path: "src/pages/planted-comment.tsx",
         code: blankComments("// sessionStorage is not ours"),
       },
     ];
 
-    expect(violationsIn(planted)).toEqual([
-      'src/pages/planted.tsx:1: window.localStorage.setItem("token", value);',
+    expect(violationsIn(planted, WEB_STORAGE)).toEqual([
+      'src/pages/planted-local.tsx:1: window.localStorage.setItem("token", value);',
+      'src/pages/planted-session.tsx:1: sessionStorage.setItem("token", value);',
+      'src/pages/planted-indexed.tsx:1: indexedDB.open("cache");',
     ]);
   });
 
   it("has no no_web_storage_outside_its_keeper violation", () => {
-    const violations = violationsIn(files);
+    const violations = violationsIn(files, WEB_STORAGE);
 
     const why =
       `The tab keeps the EHR context (${EHR_CONTEXT}), and nothing else: its keeper decodes ` +

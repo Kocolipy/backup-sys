@@ -12,6 +12,7 @@ import {
   adminRequest,
   csrfHeaderFor,
   everyRowOf,
+  LOCKOUT_MAX_ATTEMPTS,
   PROJECTIONS,
   submitLoginViaApi,
   type Projection,
@@ -228,6 +229,34 @@ export async function settlePassword(
 }
 
 /**
+ * Refuses `attempts` logins as `userName`, the way a forgetful person does,
+ * through a jar of its own. Each is a refusal the audit trail records against
+ * the User; at {@link LOCKOUT_MAX_ATTEMPTS} the last of them locks it.
+ */
+export async function refuseLogins(userName: string, attempts: number) {
+  const guesser = await anonymousApi();
+  try {
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+      expect((await submitLoginViaApi(guesser, userName, "not-the-password")).status()).toBe(401);
+    }
+  } finally {
+    await guesser.dispose();
+  }
+}
+
+/** Locks `userName` by refused logins, the only way a lockout starts. */
+export const lockOut = (userName: string) => refuseLogins(userName, LOCKOUT_MAX_ATTEMPTS);
+
+/** Every connector, as the admin API of `adminPage`'s session lists them. */
+export async function listConnectors(
+  adminPage: Page,
+): Promise<Array<{ displayName: string; id: string }>> {
+  const listed = await adminPage.request.get("/api/admin/connectors");
+  expect(listed.status(), "listing the connectors").toBe(200);
+  return (await listed.json()) as Array<{ displayName: string; id: string }>;
+}
+
+/**
  * Searches one card of the Accounts page — its Users or its Groups — for
  * `text`, as an operator does, and waits for the first page of what it
  * matches. The cards show a page at a time, so a spec finds the row it acts on
@@ -335,12 +364,7 @@ export async function sweepLeftovers(adminPage: Page) {
     }
   }
 
-  const connectors = (await (
-    await adminPage.request.get("/api/admin/connectors")
-  ).json()) as Array<{
-    displayName: string;
-    id: string;
-  }>;
+  const connectors = await listConnectors(adminPage);
   for (const leftover of connectors.filter((c) => c.displayName.startsWith(E2E_PREFIX))) {
     await deleteConnector(adminPage, leftover.id);
   }

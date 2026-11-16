@@ -158,13 +158,14 @@ stable `app.event.action`.
 `LogEventTests.everyOperationHasAnActionOrADocumentedException` holds this list
 to the code.
 
-| `app.event.action`     | Why no allowed value fits                                                                                                                                                                                                                 |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `http.request`         | It is the access record for every request, whatever the request did. Any one action would mislabel most requests, and `access-control` would merge every request into the authorization decisions a security search on that value is for. |
-| `http.request.refusal` | It records the API refusing malformed input, not an identity operation or an access decision.                                                                                                                                             |
-| `http.request.fault`   | It records an unexpected failure, which is not an operation of any kind.                                                                                                                                                                  |
-| `audit.retention`      | It deletes aged-out audit rows. No User, session or access is involved.                                                                                                                                                                   |
-| `audit.append`         | It records an audit write failing, which is an operational alert rather than an identity operation.                                                                                                                                       |
+| `app.event.action`              | Why no allowed value fits                                                                                                                                                                                                                 |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `http.request`                  | It is the access record for every request, whatever the request did. Any one action would mislabel most requests, and `access-control` would merge every request into the authorization decisions a security search on that value is for. |
+| `http.request.refusal`          | It records the API refusing malformed input, not an identity operation or an access decision.                                                                                                                                             |
+| `http.request.fault`            | It records an unexpected failure, which is not an operation of any kind.                                                                                                                                                                  |
+| `audit.retention`               | It deletes aged-out audit rows. No User, session or access is involved.                                                                                                                                                                   |
+| `audit.append`                  | It records an audit write failing, which is an operational alert rather than an identity operation.                                                                                                                                       |
+| `patient_source.invalid_fields` | It records the patient source answering fields in the wrong format (ADR 0020): a data-quality signal about another system, not an identity operation, an access decision or a lifecycle event.                                            |
 
 ### Records are built in shapes
 
@@ -204,7 +205,9 @@ only one feature adds to its records is declared in that feature:
 `AuditLogFields` in `audit.application`, `ScimLogFields` in `scim.application`, and
 `PermissionLogFields` in `authorization.domain`. Each is a list of names only, so the
 dependency still runs from the feature to `observability`, and the records are
-still built by the shapes above.
+still built by the shapes above. The patient module writes no record (ADR 0014),
+so the fields of the patient source's invalid-fields record are declared by
+`InvalidSourceFields`, in `observability`, which writes it.
 
 Semgrep `be-log-record-outside-log-event` refuses, in production code outside
 `LogEvent`:

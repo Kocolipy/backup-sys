@@ -1,0 +1,71 @@
+{
+  "name": "Medication History: Tan Hui Min's PENDING Medication Records",
+  "request": {
+    "method": "GET",
+    "urlPath": "/Patient/dev-patient-05/medication",
+    "queryParameters": {
+      "_count": {
+        "equalTo": "5"
+      },
+      "_offset": {
+        "equalTo": "0"
+      },
+      "_total": {
+        "equalTo": "accurate"
+      },
+      "_sort": {
+        "absent": true
+      },
+      "dispense-status": {
+        "equalTo": "pending"
+      },
+      "start-date": {
+        "absent": true
+      },
+      "end-date": {
+        "absent": true
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/fhir+json"
+    },
+    "jsonBody": {
+      "resourceType": "Bundle",
+      "id": "medication-history",
+      "type": "searchset",
+      "total": 1,
+      "link": [
+        {
+          "relation": "self",
+          "url": "http://127.0.0.1:8104/Patient/dev-patient-05/medication?dispense-status=pending&_offset=0&_count=5"
+        }
+      ],
+      "entry": [
+        {
+          "resource": {
+            "resourceType": "Medication",
+            "id": "medication-tan-hui-min-3",
+            "medication": "Prednisolone",
+            "dosage": "20 mg",
+            "route": "PO",
+            "frequency": "OM",
+            "step": "2",
+            "quantity": "7 tablets",
+            "dispenseStatus": "pending",
+            "duration": "7 days",
+            "startDate": "2025-02-10T08:45:00+08:00",
+            "endDate": "2025-02-17T08:45:00+08:00",
+            "dispensary": "mandai-hill-camp",
+            "prescribingDoctor": "Dr Chen Mei Ling"
+          },
+          "search": {
+            "mode": "match"
+          }
+        }
+      ]
+    }
+  }
+}

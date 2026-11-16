@@ -1,0 +1,85 @@
+{
+  "name": "Medication History: Tan Hui Min's DISPENSED Medication Records",
+  "request": {
+    "method": "GET",
+    "urlPath": "/Patient/dev-patient-05/medication",
+    "queryParameters": {
+      "_count": {
+        "equalTo": "5"
+      },
+      "_offset": {
+        "equalTo": "0"
+      },
+      "_total": {
+        "equalTo": "accurate"
+      },
+      "_sort": {
+        "absent": true
+      },
+      "dispense-status": {
+        "equalTo": "dispensed"
+      },
+      "start-date": {
+        "absent": true
+      },
+      "end-date": {
+        "absent": true
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/fhir+json"
+    },
+    "jsonBody": {
+      "resourceType": "Bundle",
+      "id": "medication-history",
+      "type": "searchset",
+      "total": 2,
+      "link": [
+        {
+          "relation": "self",
+          "url": "http://127.0.0.1:8104/Patient/dev-patient-05/medication?dispense-status=dispensed&_offset=0&_count=5"
+        }
+      ],
+      "entry": [
+        {
+          "resource": {
+            "resourceType": "Medication",
+            "id": "medication-tan-hui-min-1",
+            "medication": "Ibuprofen",
+            "dosage": "400 mg",
+            "route": "PO",
+            "frequency": "TDS",
+            "quantity": "15 tablets",
+            "dispenseStatus": "dispensed",
+            "duration": "5 days",
+            "startDate": "2026-03-01T02:00:00Z",
+            "endDate": "2026-03-06T02:00:00Z",
+            "dispensary": "hendon-camp",
+            "prescribingDoctor": "Dr Rajesh Kumar"
+          },
+          "search": {
+            "mode": "match"
+          }
+        },
+        {
+          "resource": {
+            "resourceType": "Medication",
+            "id": "medication-tan-hui-min-4",
+            "medication": "Oral rehydration salts",
+            "dispenseStatus": "dispensed",
+            "startDate": "2024-08-05T11:05:00+08:00",
+            "endDate": "2024-08-05T11:05:00+08:00",
+            "dispensary": "kranji-camp",
+            "prescribingDoctor": "Dr Lim Wei Jie"
+          },
+          "search": {
+            "mode": "match"
+          }
+        }
+      ]
+    }
+  }
+}

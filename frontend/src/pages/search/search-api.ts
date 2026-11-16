@@ -10,9 +10,8 @@
  */
 
 import type { ReadDeclaration } from "@/auth/declarations";
-import { DecodeError, jsonDecoder, readObject } from "@/lib/decode";
+import { calendarDate, jsonDecoder, readObject } from "@/lib/decode";
 import { pageDecoder, pagedPath, type Page, type PageAt } from "@/lib/paging";
-import { isCalendarDate } from "@/lib/time";
 import { PATIENT_GENDERS, type PatientGender } from "@/lib/patient-gender";
 
 /**
@@ -55,23 +54,21 @@ export function parsePatientQuery(typed: string): ParsedPatientQuery {
   return { message: `Enter at least ${SHORTEST_NAME} characters to search by name.`, ok: false };
 }
 
-/** A FHIR `date` to the day, as the backend sends a Patient's dates. */
-function calendarDate(value: string | null, what: string): string | null {
-  if (value !== null && !isCalendarDate(value)) throw new DecodeError(`${what} is not a date`);
-  return value;
+/** A FHIR `date` to the day, as the backend sends a Patient's dates; `null` stays `null`. */
+function nullableCalendarDate(value: string | null, what: string): string | null {
+  return value === null ? null : calendarDate(value, what);
 }
 
 export const decodePatientMatch = (value: unknown): PatientMatch => {
   const patient = readObject(value, "PatientMatch");
-  const birthDate = patient.string("birthDate");
-  calendarDate(birthDate, "PatientMatch.birthDate");
+  const birthDate = calendarDate(patient.string("birthDate"), "PatientMatch.birthDate");
   return {
     id: patient.string("id"),
     name: patient.string("name"),
     nric: patient.string("nric"),
     gender: patient.oneOf("gender", PATIENT_GENDERS),
     birthDate,
-    lastVisit: calendarDate(patient.nullableString("lastVisit"), "PatientMatch.lastVisit"),
+    lastVisit: nullableCalendarDate(patient.nullableString("lastVisit"), "PatientMatch.lastVisit"),
   };
 };
 

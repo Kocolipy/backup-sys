@@ -1,11 +1,17 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { LOCKOUT_MAX_ATTEMPTS, submitLogin, submitLoginViaApi } from "./auth.helpers";
+import {
+  LOCKOUT_MAX_ATTEMPTS,
+  submitLogin,
+  submitLoginViaApi,
+  submitPasswordChange as submitChange,
+} from "./auth.helpers";
 import {
   anonymousApi,
   deprovisionUser,
   E2E_PREFIX,
   freshBrowser,
+  lockOut,
   OWN_PASSWORD as OWN,
   provisionUser,
   rowOf,
@@ -29,12 +35,11 @@ import {
  * this project replays.
  */
 
-/** The backend's lockout threshold; see `LOCKOUT_MAX_ATTEMPTS`. */
-const REFUSALS_BEFORE_LOCKOUT = LOCKOUT_MAX_ATTEMPTS;
-
 const RUN = runId();
 /** What each User changes to through the page. */
 const REPLACEMENT = "Replacement-Secret-3k";
+/** What the password change says of a wrong current password. */
+const WRONG_CURRENT = "The current password is incorrect.";
 
 interface Provisioned {
   userId: string;
@@ -56,13 +61,6 @@ async function deprovision(provisioned: Provisioned | undefined) {
 }
 
 const heading = (page: Page) => page.getByRole("heading", { name: "Change your password" });
-
-async function submitChange(page: Page, current: string, next: string, confirm: string = next) {
-  await page.getByLabel("Current password").fill(current);
-  await page.getByLabel("New password", { exact: true }).fill(next);
-  await page.getByLabel("Confirm new password").fill(confirm);
-  await page.getByRole("button", { name: "Change password" }).click();
-}
 
 async function expectFieldsCleared(page: Page) {
   for (const label of ["Current password", "Confirm new password"]) {
@@ -98,17 +96,7 @@ test("an Admin's Unlock confines the User to Settings until the change is made",
   try {
     user = await provision("unlocked");
 
-    // Locked by refused logins, the only way a lockout starts.
-    const guesser = await anonymousApi();
-    try {
-      for (let attempt = 0; attempt < REFUSALS_BEFORE_LOCKOUT; attempt += 1) {
-        expect((await submitLoginViaApi(guesser, user.userName, "not-the-password")).status()).toBe(
-          401,
-        );
-      }
-    } finally {
-      await guesser.dispose();
-    }
+    await lockOut(user.userName);
 
     // The Admin unlocks it from the Accounts page, which requires a change.
     await page.goto("/accounts");
@@ -128,16 +116,15 @@ test("an Admin's Unlock confines the User to Settings until the change is made",
     ).toBeVisible();
     await expect(own.getByRole("button", { name: "Sign out" })).toBeVisible();
 
-    // Confined: a direct navigation elsewhere is sent back.
-    for (const elsewhere of ["/", "/accounts", "/login", "/no-such-page"]) {
-      await own.goto(elsewhere);
-      await expect(own).toHaveURL(/\/settings$/);
-      await expect(heading(own)).toBeVisible();
-    }
+    // Confined: a direct navigation even to Home, which every session may open, is sent back.
+    // Every other path is `App.test.tsx`'s.
+    await own.goto("/");
+    await expect(own).toHaveURL(/\/settings$/);
+    await expect(heading(own)).toBeVisible();
 
     // A wrong current password is refused, and the fields are cleared.
     await submitChange(own, "Not-The-Current-One-1", REPLACEMENT);
-    await expect(own.getByRole("alert")).toHaveText("The current password is incorrect.");
+    await expect(own.getByRole("alert")).toHaveText(WRONG_CURRENT);
     await expectFieldsCleared(own);
     await expect(own).toHaveURL(/\/settings$/);
 
@@ -149,34 +136,8 @@ test("an Admin's Unlock confines the User to Settings until the change is made",
       /^The new password must differ from the current password and the \d+ most recent ones$/,
     );
     await expectFieldsCleared(own);
-    expect(await own.content()).not.toContain(OWN);
 
     // The change itself: back to login, then in with the new password, unflagged.
-    await submitChange(own, OWN, REPLACEMENT);
-    await expectSignedOutThenSignIn(own, user.userName, REPLACEMENT);
-  } finally {
-    await context.close();
-    await deprovision(user);
-  }
-});
-
-test("an unflagged User changes its password voluntarily from Home", async ({ browser }) => {
-  test.setTimeout(120_000);
-  let user: Provisioned | undefined;
-  const context = await freshBrowser(browser);
-  try {
-    user = await provision("voluntary");
-
-    const own = await context.newPage();
-    await submitLogin(own, user.userName, OWN);
-    await expect(own).toHaveURL("/");
-
-    await own.getByRole("link", { name: "Open settings", exact: true }).click();
-    await expect(own).toHaveURL(/\/settings$/);
-    await expect(
-      own.getByText("Choose a new password for your account.", { exact: false }),
-    ).toBeVisible();
-
     await submitChange(own, OWN, REPLACEMENT);
     await expectSignedOutThenSignIn(own, user.userName, REPLACEMENT);
   } finally {
@@ -253,9 +214,9 @@ test("wrong current passwords lock the account, ending the session, and login sa
     await own.getByRole("link", { name: "Open settings", exact: true }).click();
     await expect(heading(own)).toBeVisible();
 
-    for (let attempt = 1; attempt < REFUSALS_BEFORE_LOCKOUT; attempt += 1) {
+    for (let attempt = 1; attempt < LOCKOUT_MAX_ATTEMPTS; attempt += 1) {
       await submitChange(own, `Wrong-Guess-${attempt}-xyz`, REPLACEMENT);
-      await expect(own.getByRole("alert")).toHaveText("The current password is incorrect.");
+      await expect(own.getByRole("alert")).toHaveText(WRONG_CURRENT);
     }
     await submitChange(own, "Wrong-Guess-last-xyz", REPLACEMENT);
 

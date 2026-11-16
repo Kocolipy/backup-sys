@@ -1,7 +1,8 @@
 /**
- * The endpoint the patient in context is read through — the patient Home and
- * the Demographic page show — an `api.ts` the pages share, so it sits at
- * `src/pages/` itself rather than in either page's folder.
+ * The endpoint the patient in context is read from — the patient the Patient
+ * card, the top bar and the Demographic page show, and whose id the Medication,
+ * FFI, NUMC and ARMC pages read their histories by — shared by those pages, so
+ * it sits beside them in `src/pages/`.
  *
  * Nothing here requests anything: the one reader of the patient in context
  * (`patient-in-context.ts`) sends the declaration through `useGatedRead` (behind `useSessionRequest`), so a `401` still ends
@@ -11,8 +12,7 @@
  */
 
 import type { ReadDeclaration } from "@/auth/declarations";
-import { decodeArray, DecodeError, jsonDecoder, readObject } from "@/lib/decode";
-import { isCalendarDate } from "@/lib/time";
+import { calendarDate, decodeArray, DecodeError, jsonDecoder, readObject } from "@/lib/decode";
 import { PATIENT_GENDERS, type PatientGender } from "@/lib/patient-gender";
 
 /** Synapxe's NRIC NamingSystem, the `system` of the identifier that holds a patient's NRIC. */
@@ -30,6 +30,7 @@ const CONTACT_ROLE_SYSTEM = "http://terminology.hl7.org/CodeSystem/v2-0131";
  * `fhir5.Patient` fixtures through the decoder): the official
  * name's `text`, which is authoritative (its `family` and `given` parts are
  * optional and never read), the NRIC, the gender code and the birth date;
+ * the id the patient's Medication, FFI, NUMC and ARMC Histories are read by;
  * and, where the patient has them, the Demographic details: the phone and
  * email, the `home` address's text, the Next of kin (the first contact coded
  * v2-0131 `N`) and the Military history. No age: age is derived where it is
@@ -39,6 +40,8 @@ export interface PatientSummary {
   birthDate: string;
   email?: string;
   gender: PatientGender;
+  /** Its FHIR id, which the patient's other reads (its Medication, FFI, NUMC and ARMC Histories) name it by. */
+  id: string;
   militaryHistory?: MilitaryHistory;
   name: string;
   nextOfKin?: NextOfKin;
@@ -177,9 +180,10 @@ const militaryHistoryOf = (extensions: unknown[]): MilitaryHistory | undefined =
     }
     const date = SERVICE_DATES.find((candidate) => candidate === url);
     if (date === undefined) continue;
-    const value = readObject(sub, `military-service.${url}`).string("valueDate");
-    if (!isCalendarDate(value)) throw new DecodeError(`military-service.${url} is not a date`);
-    history[date] = value;
+    history[date] = calendarDate(
+      readObject(sub, `military-service.${url}`).string("valueDate"),
+      `military-service.${url}`,
+    );
   }
   return history;
 };
@@ -204,9 +208,8 @@ const decodePatient = jsonDecoder((body: unknown): PatientSummary => {
   if (patient.string("resourceType") !== "Patient") {
     throw new DecodeError("Patient.resourceType is not Patient");
   }
-  const birthDate = patient.string("birthDate");
   // A FHIR `date` to the day, the precision the backend serves a birth date at.
-  if (!isCalendarDate(birthDate)) throw new DecodeError("Patient.birthDate is not a date");
+  const birthDate = calendarDate(patient.string("birthDate"), "Patient.birthDate");
   const telecom = optionalArray(body, "telecom", "Patient");
   const email = contactPointOf(telecom, "email");
   const phone = contactPointOf(telecom, "phone");
@@ -217,6 +220,7 @@ const decodePatient = jsonDecoder((body: unknown): PatientSummary => {
   return {
     birthDate,
     gender: patient.oneOf("gender", PATIENT_GENDERS),
+    id: patient.string("id"),
     name: nameTextOf(patient.array("name", (name) => name)),
     nric: nricOf(patient.array("identifier", (identifier) => identifier)),
     ...(email === undefined ? {} : { email }),

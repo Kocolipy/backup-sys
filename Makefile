@@ -70,7 +70,7 @@ verify-backend: ## Backend gate: backend/ baseline (scripts/verify.sh)
 # The one check that belongs to neither app: it reads both, which neither app
 # may do (AGENTS.md, "Paths"), so it lives in scripts/ and runs after both
 # app gates, once each side is known sound on its own.
-verify-contract: ## SPA–API contract check: hold the SPA's mirrored vocabulary to backend/docs/openapi.yaml (scripts/verify-contract.sh)
+verify-contract: ## SPA–API contract check: hold what the SPA mirrors by hand to backend/docs/openapi.yaml (scripts/verify-contract.sh)
 	@scripts/verify-contract.sh
 
 verify: verify-frontend verify-backend verify-contract ## Run both app gates, then the SPA–API contract check, serially

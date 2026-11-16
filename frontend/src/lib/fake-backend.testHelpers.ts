@@ -75,8 +75,10 @@ export function deferred(): Deferred {
     settle: (given) =>
       act(async () => {
         resolve(given);
-        // A macrotask, so the whole fetch → decode → state chain has drained.
-        await new Promise((done) => setTimeout(done, 0));
+        // A macrotask, so the whole fetch → decode → state chain has drained:
+        // under fake timers a real one would never come, so the fake clock gives it.
+        if (vi.isFakeTimers()) await vi.advanceTimersByTimeAsync(0);
+        else await new Promise((done) => setTimeout(done, 0));
       }),
   };
 }

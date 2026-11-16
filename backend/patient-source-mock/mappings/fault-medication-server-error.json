@@ -1,0 +1,26 @@
+{
+  "name": "Fault, Medication History: the source answers 503",
+  "metadata": {
+    "fault": "server-error"
+  },
+  "request": {
+    "method": "GET",
+    "urlPath": "/Patient/fault-medication-server-error/medication"
+  },
+  "response": {
+    "status": 503,
+    "headers": {
+      "Content-Type": "application/fhir+json"
+    },
+    "jsonBody": {
+      "resourceType": "OperationOutcome",
+      "issue": [
+        {
+          "severity": "error",
+          "code": "transient",
+          "diagnostics": "Medication store unavailable: medication-fault-0 Dr Fault Zero"
+        }
+      ]
+    }
+  }
+}

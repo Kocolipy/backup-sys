@@ -1,0 +1,110 @@
+{
+  "name": "FFI History: Tan Hui Min's FFIs that are Active",
+  "request": {
+    "method": "GET",
+    "urlPath": "/Patient/dev-patient-05/ffi",
+    "queryParameters": {
+      "_count": {
+        "equalTo": "5"
+      },
+      "_offset": {
+        "equalTo": "0"
+      },
+      "_total": {
+        "equalTo": "accurate"
+      },
+      "_sort": {
+        "absent": true
+      },
+      "type": {
+        "absent": true
+      },
+      "outcome": {
+        "absent": true
+      },
+      "issue-date": {
+        "absent": true
+      },
+      "expiry-date": {
+        "absent": true
+      },
+      "higher-authority": {
+        "absent": true
+      },
+      "submitting-mc": {
+        "absent": true
+      },
+      "status": {
+        "equalTo": "active"
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/fhir+json"
+    },
+    "jsonBody": {
+      "resourceType": "Bundle",
+      "id": "ffi-history",
+      "type": "searchset",
+      "total": 3,
+      "link": [
+        {
+          "relation": "self",
+          "url": "http://127.0.0.1:8104/Patient/dev-patient-05/ffi?_offset=0&_count=5"
+        }
+      ],
+      "entry": [
+        {
+          "resource": {
+            "resourceType": "FFI",
+            "id": "ffi-tan-hui-min-1",
+            "type": "ord-release-from-service",
+            "outcome": "fit",
+            "issueDate": "2025-03-03",
+            "expiryDate": "2026-03-02",
+            "higherAuthority": "dis",
+            "submittingMc": "nee-soon-camp",
+            "status": "active"
+          },
+          "search": {
+            "mode": "match"
+          }
+        },
+        {
+          "resource": {
+            "resourceType": "FFI",
+            "id": "ffi-tan-hui-min-3",
+            "type": "ippt",
+            "outcome": "request-waiver",
+            "issueDate": "2024-06-10",
+            "expiryDate": "2025-06-09",
+            "higherAuthority": "cnmo",
+            "submittingMc": "hendon-camp",
+            "status": "active"
+          },
+          "search": {
+            "mode": "match"
+          }
+        },
+        {
+          "resource": {
+            "resourceType": "FFI",
+            "id": "ffi-tan-hui-min-4",
+            "type": "overseas-exercises",
+            "outcome": "fit",
+            "issueDate": "2024-02-26",
+            "expiryDate": "2025-02-25",
+            "higherAuthority": "carmo",
+            "submittingMc": "mandai-hill-camp",
+            "status": "active"
+          },
+          "search": {
+            "mode": "match"
+          }
+        }
+      ]
+    }
+  }
+}

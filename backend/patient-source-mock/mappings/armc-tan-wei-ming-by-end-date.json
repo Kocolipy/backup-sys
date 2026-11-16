@@ -1,0 +1,80 @@
+{
+  "name": "ARMC History: Tan Wei Ming's two ARMC Boards, earliest End Date first",
+  "request": {
+    "method": "GET",
+    "urlPath": "/Patient/eq081-VQEgP8drUUqCWzHfw3/armc",
+    "queryParameters": {
+      "_count": {
+        "equalTo": "5"
+      },
+      "_offset": {
+        "equalTo": "0"
+      },
+      "_total": {
+        "equalTo": "accurate"
+      },
+      "_sort": {
+        "equalTo": "end-date"
+      },
+      "outcome": {
+        "absent": true
+      },
+      "start-date": {
+        "absent": true
+      },
+      "end-date": {
+        "absent": true
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/fhir+json"
+    },
+    "jsonBody": {
+      "resourceType": "Bundle",
+      "id": "armc-history",
+      "type": "searchset",
+      "total": 2,
+      "link": [
+        {
+          "relation": "self",
+          "url": "http://127.0.0.1:8104/Patient/eq081-VQEgP8drUUqCWzHfw3/armc?_sort=end-date&_offset=0&_count=5"
+        }
+      ],
+      "entry": [
+        {
+          "resource": {
+            "resourceType": "ARMC",
+            "id": "armc-tan-wei-ming-2",
+            "boardType": "aces",
+            "outcome": "unfit",
+            "startDate": "2020-11-21",
+            "endDate": "2021-04-02",
+            "medicalOfficer1": "Medical Officer 3",
+            "medicalOfficer2": "Medical Officer 4"
+          },
+          "search": {
+            "mode": "match"
+          }
+        },
+        {
+          "resource": {
+            "resourceType": "ARMC",
+            "id": "armc-tan-wei-ming-1",
+            "boardType": "aces",
+            "outcome": "fit",
+            "startDate": "2024-01-01",
+            "endDate": "2024-02-10",
+            "medicalOfficer1": "Medical Officer 1",
+            "medicalOfficer2": "Medical Officer 2"
+          },
+          "search": {
+            "mode": "match"
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,7 +1,6 @@
 package com.example.backend.patient.domain;
 
 import java.util.Objects;
-import java.util.regex.Pattern;
 
 /**
  * A Patient's id: its EHR's FHIR id, so the patient the EHR context names is read by that id
@@ -17,11 +16,9 @@ import java.util.regex.Pattern;
  */
 public record PatientId(String value) {
 
-    private static final Pattern FHIR_ID = Pattern.compile("[A-Za-z0-9\\-.]{1,64}");
-
     public PatientId {
         Objects.requireNonNull(value, "value");
-        if (!FHIR_ID.matcher(value).matches()) {
+        if (!FhirId.matches(value)) {
             throw new IllegalArgumentException("A patient id must match the FHIR id grammar");
         }
     }

@@ -111,6 +111,51 @@ change, when the backend side moves. What the SPA has to honour:
   the Search page reports with a Retry. Its query and filter travel only in
   that request's query string — the query through `encodeURIComponent` —
   never in the page's URL.
+- **A patient's FFI History answers plain JSON, not FHIR.**
+  `GET /api/patient-ffi/{patientId}` sits outside `/api/patient` too, so it
+  answers `application/json` and every refusal or fault the application API's
+  `ApiError`. Its declaration (`FFI_HISTORY`, `src/pages/ffi/ffi-api.ts`) opts
+  in to `absentOnNotFound`: the `404` of a patient the source holds none under
+  is the FFI page's "No patient in context" and reports nothing; the `502` of
+  the source failing is "Couldn't load FFIs" with Try again. The `{patientId}`
+  is the EHR context's patient, sent through `encodeURIComponent`. Each FFI is
+  decoded strictly: an unknown code or a field the decoder does not know is a
+  failure, never passed through.
+- **A patient's NUMC History answers plain JSON too, on the same terms.**
+  `GET /api/patient-numc/{patientId}` answers `application/json`, every
+  refusal or fault an `ApiError`. Its declaration (`NUMC_HISTORY`,
+  `src/pages/numc/numc-api.ts`) opts in to `absentOnNotFound`, so the `404` is
+  the NUMC page's "No patient in context" and the `502` "Couldn't load NUMC
+  records" with Try again; the `{patientId}` is sent through
+  `encodeURIComponent`. A NUMC Record is shown as received (ADR 0020): its shape
+  is decoded strictly — every field there, `invalid` an array of strings, and a
+  field it does not know, a Status among them, refused — but each element's
+  value through the lenient field decoder (`readObject(…).sourceFields()`): a
+  `null` element is missing, "—", one its row names in `invalid` is "Error",
+  and a code outside its closed set is shown as it came, so no element fails
+  the read.
+- **A patient's ARMC History answers plain JSON too, on the same terms.**
+  `GET /api/patient-armc/{patientId}` answers `application/json`, every
+  refusal or fault an `ApiError`. Its declaration (`ARMC_HISTORY`,
+  `src/pages/armc/armc-api.ts`) opts in to `absentOnNotFound`, so the `404` is
+  the ARMC page's "No patient in context" and the `502` "Couldn't load ARMC
+  records" with Try again; the `{patientId}` is sent through
+  `encodeURIComponent`, and each ARMC Board is decoded strictly. A board still
+  open has no `endDate` at all — the backend leaves it out rather than sending
+  `null` — and the decoder reads its absence as the board still open, and a
+  `null` one as a failure.
+- **A patient's Medication History answers plain JSON too, on the same
+  terms.** `GET /api/patient-medication/{patientId}` answers
+  `application/json`, every refusal or fault an `ApiError`. Its declaration
+  (`MEDICATION_HISTORY`, `src/pages/medication/medication-api.ts`) opts in to
+  `absentOnNotFound`, so the `404` is the Medication page's "No patient in
+  context" and the `502` "Couldn't load medication records" with Try again;
+  the `{patientId}` is sent through `encodeURIComponent`, and each Medication
+  Record is decoded strictly. An optional element the source lacks — its
+  Dosage, Route, Frequency, Step, Quantity or Duration — is left out, never
+  sent as `null`, and the decoder refuses a `null` one. The Start Date and End
+  Date are ISO-8601 date-times with an offset, which the decoder holds to that
+  shape and the page shows in Singapore time.
 - **A request body is JSON, and says so.** The backend reads a request body
   through its JSON converter only, so a body sent without
   `Content-Type: application/json` is refused `415` before any handler runs.
@@ -171,15 +216,24 @@ change, when the backend side moves. What the SPA has to honour:
 - **Sessions expire after 15 minutes** of inactivity, the single default in
   every environment. The SPA never hardcodes that figure: `GET /api/auth/me`
   and the login response carry `idleTimeoutSeconds`, read off the session
-  itself, and `src/auth/idle-sign-out.tsx` times its own sign-out by it. That
-  sign-out counts only user input (pointer, key, touch, wheel, scroll) as
-  activity, never a request, and shares it across tabs over a
-  `BroadcastChannel`. A minute before the limit an `alertdialog` offers to stay
-  signed in, which is a `GET /api/auth/me` sent through `useSessionRequest` —
-  so a session already ended takes that seam's one `401` rule — and renews the
-  backend's idle clock too; at the limit the SPA calls logout, discards the CSRF token and
-  sends the user to login with the sign-in reason `inactive`. A session the backend ended first
-  still takes the ordinary `401` path above.
+  itself, and `src/auth/idle-sign-out.tsx` times its own sign-out by it. Only
+  user input (pointer, key, touch, wheel, scroll) renews the backend's idle
+  clock: input arriving when the last renewal the tab knows of is older than a
+  minute (a quarter of a limit under four minutes) sends a `GET /api/auth/me`
+  through `useSessionRequest`. No timer, poll or background request sends it,
+  so an unattended page still signs out at the limit. The SPA's clock counts
+  from the last successful renewal it knows of, stamped when its request went
+  out, never from the last input, so its warning and its sign-out never come
+  after the backend's own end of the session. A renewal is shared with the other
+  tabs over a `BroadcastChannel`, carrying its time; input that renewed nothing
+  is not. A minute before the limit an `alertdialog` offers to stay signed in,
+  which is a renewal too; passive input while it is open neither dismisses it
+  nor renews anything, and another tab's renewal dismisses it. A renewal
+  answered `401` takes that seam's one `401` rule; any other failure leaves the
+  clock where it was, and the next input tries again. At the limit the SPA
+  calls logout, discards the CSRF token and sends the user to login with the
+  sign-in reason `inactive`. A session the backend ended first still takes the
+  ordinary `401` path above.
 - **Sessions are also capped at 8 hours from the Login** that signed them in,
   however active.
   Whichever bound is reached first ends the session, and the SPA cannot tell
@@ -204,10 +258,11 @@ change, when the backend side moves. What the SPA has to honour:
   below, and the card shows "No patient in context" with none. The read
   is not bound to the EHR context: `patient:read` reads any id. It is a
   delegatable Permission the backend issues only to a member of a Group that
-  carries it and to the Superuser; a session without it is refused the read
-  and the Patient search `403`, so the SPA sends neither — the Patient card
-  says the account has no access to patients, and Patient Search is neither
-  linked nor opened.
+  carries it and to the Superuser; a session without it is refused the read,
+  the Patient search, the FFI History, the NUMC History, the ARMC History and
+  the Medication History `403`, so the SPA sends none of them — the Patient
+  card says the account has no access to patients, and none of Patient
+  Search, Medication, FFI, NUMC or ARMC is linked or opened.
 - **Logout answers `Clear-Site-Data: "cache","cookies","storage"`** — on a
   successful logout and on the `401` a logout with no live session gets. The
   browser drops anything in `localStorage` / `sessionStorage` along with the

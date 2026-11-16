@@ -1,7 +1,7 @@
 ---
 type: Testing Guide
 title: Frontend E2E guide
-description: The Playwright projects and the order they run in, routing a new spec, calling the API from a spec, forcing a refused request, sharing backend state under fullyParallel, and the flakiness rules.
+description: The Playwright projects and the order they run in, which cases belong in a spec, routing a new spec, calling the API from a spec, forcing a refused request, sharing backend state under fullyParallel, and the flakiness rules.
 tags: [testing, e2e, playwright]
 ---
 
@@ -35,7 +35,8 @@ declaring the previous one in `dependencies`, and a project that signs in as a
 User of its own runs beside them:
 
 - `medical-officer` depends on `setup` alone: it replays the saved `mo1`
-  session and runs the Patient Search spec and the Medical Officer role check.
+  session and runs the Patient Search, Medication, FFI, NUMC and ARMC specs
+  and the Medical Officer role check.
 - `patient-sign-out` depends on no project: it signs in and out as `mo2`, the
   Medical Officer nothing else signs in as, for the "no patient in context
   after signing out and back in" journey.
@@ -47,8 +48,8 @@ User of its own runs beside them:
 - `guest` follows `routes` (and the `packaged` project below, when declared)
   because `login.spec.ts` signs in as the seeded Admin, and beside the
   `admin` project it turned that project's specs into 401s.
-- `dormancy` runs last and alone: it signs in as the Helpdesk fixture User
-  and consumes the `dormant` fixture's locked state, which only a backend
+- `dormancy` runs last and alone: it signs in as the Helpdesk and Auditor
+  fixture Users and consumes the `dormant` fixture's locked state, which only a backend
   restart re-arms.
 
 `login.spec.ts` also opts out of `fullyParallel` with
@@ -73,6 +74,31 @@ arch test reads its `testMatch` either way:
   origin, so its specs load the built bundle under the backend's CSP rather
   than Vite's dev server; it signs no one in. Its route walk loads Accounts,
   so it runs after the projects that write connectors, as `routes` does.
+
+## A case with the backend in play
+
+**A spec case exists for what only the running backend can answer.** Before
+writing one, name the request it sends and what the backend, or the patient
+source's mock behind it, decides about that request: the rows a filter reads,
+a `401`, a session ended, the CSP. A case whose outcome is settled before any
+request leaves the page — a route guard, a link the session is not offered, an
+empty EHR context, copy, a control's own state — is a unit test's, through the
+test adapter (`docs/TESTING_GUIDE.md`, "Unit-testing a module that calls the
+API"): there it runs in milliseconds, and Stryker checks it is load-bearing.
+
+- **No request, no case.** A case that asserts the page sent nothing has no
+  backend in play. `armc.test.tsx` holds "No patient in context"; no spec
+  repeats it.
+- **A rule every page shares is read once.** One spec proves it against the
+  backend, and the pages' unit tests hold their own wiring: `roles-user.spec.ts`
+  owns what a session without `patient:read` is offered, `App.test.tsx` each
+  route it is turned away from, and `medication.spec.ts` the one history page
+  that reads the backend's real `502`.
+- **Say in the spec's header what it leaves out and which test holds it**, as
+  `ffi.spec.ts` does, so the next reader does not add the case back.
+
+Done when you can name, for each case, the backend answer it would fail on
+that no unit test can.
 
 ## Routing a new spec
 
@@ -150,8 +176,9 @@ the backend on `SERVER_PORT`, `8080` when unset — SCIM is not behind the Vite
 through `POST /api/auth/change-password`, locks both with refused logins, unlocks
 one from the page, and unlocks the other behind the page's back so its Unlock
 button meets the `409` an Unlock of an unlocked User gets. It deletes the Users
-and the connector in a `finally`. It is `test.describe.serial` because its steps
-depend on each other. The refusals of an Unlock — of a User serving no lockout,
+and the connector in a `finally`. Those steps depend on each other, so they are
+one test, and each of the spec's tests issues the token it acts with, so none
+waits on another. The refusals of an Unlock — of a User serving no lockout,
 of the caller's own account, of an id no User has — and the response shapes are
 covered in the backend's `AdminAccountEndpointTests` and
 `PasswordChangeLifecycleIntegrationTests`, not here.
@@ -159,6 +186,7 @@ covered in the backend's `AdminAccountEndpointTests` and
 The fixtures for that pattern live in `test/e2e/scim.helpers.ts`: a connector
 and token (`createConnector`, or `workerConnector` for one shared by every test a
 worker runs from a file), `provisionUser` / `settlePassword` / `deprovisionUser`,
+`lockOut` (a lockout's worth of refused logins, through a jar of its own),
 and `scimPatch`, which sends the resource's current ETag as `If-Match`. Every
 User and connector a spec creates is named with the `e2e-` prefix plus a
 `runId()` suffix, and a spec deletes only what carries **its own** suffix. A
@@ -254,7 +282,10 @@ session and one for its token, so it changes nothing another spec reads.
 ## Flakiness — the rules that keep these tests green
 
 A spec that flakes despite these rules is confirmed and ledgered in
-`/docs/agents/flaky-tests.md`.
+`/docs/agents/flaky-tests.md`. Every failing test keeps its trace
+(`trace: "retain-on-failure"`), beside its screenshot under `test-results/`:
+open it with `npx playwright show-trace <trace.zip>` and record what the page
+showed in the ledger entry's **Suspected cause**.
 
 Playwright auto-waits and auto-retries every web-first assertion (`toBeVisible`,
 `toHaveText`, `toBeEnabled`, `toHaveAttribute`), so lean on those instead of

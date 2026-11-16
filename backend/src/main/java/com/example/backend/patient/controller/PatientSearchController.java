@@ -1,13 +1,13 @@
 package com.example.backend.patient.controller;
 
+import static com.example.backend.patient.controller.QueryParameters.spelled;
+
 import com.example.backend.paging.domain.PageParameter;
 import com.example.backend.paging.domain.PageRequest;
 import com.example.backend.patient.application.PatientSearchService;
 import com.example.backend.patient.domain.AdministrativeGender;
 import com.example.backend.patient.domain.PatientFilter;
 import com.example.backend.patient.domain.PatientQuery;
-import java.beans.PropertyEditorSupport;
-import java.util.function.Function;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.WebDataBinder;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -73,15 +73,5 @@ public class PatientSearchController {
         PageRequest page = PageRequest.of(startIndex, count);
         return PatientSearchPage.of(searches.search(q, new PatientFilter(gender), page),
                 page.startIndex());
-    }
-
-    /** An editor reading a parameter's text through {@code read}, whose refusal fails the binding. */
-    private static PropertyEditorSupport spelled(Function<String, ?> read) {
-        return new PropertyEditorSupport() {
-            @Override
-            public void setAsText(String text) {
-                setValue(read.apply(text));
-            }
-        };
     }
 }

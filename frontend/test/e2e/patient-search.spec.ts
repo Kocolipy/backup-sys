@@ -133,7 +133,7 @@ test.describe("Patient Search", () => {
       "Naval Safety Officer",
       "15 Jan 2018",
       "14 Jan 2020",
-      "-",
+      "—",
       "08 Sep 2037",
     ]);
     await expect(

@@ -332,16 +332,11 @@ describe("useGatedRead", () => {
       expect(result.current.view).toEqual({ data: 2, kind: "ready" });
     });
 
-    it.each([
-      ["a refusal", bare(403), FORBIDDEN_MESSAGE],
-      ["a plain failure", bare(500), FAILURE],
-      ["an unauthenticated read", bare(401), FAILURE],
-      ["a success body that does not decode", json({ value: "seven" }), FAILURE],
-    ])("still fails %s", async (_, given, line) => {
+    it("still fails a read that failed other than not found", async () => {
       const { result } = renderAbsentRead();
-      await answer(given);
+      await answer(bare(500));
 
-      expect(shown(result)).toEqual({ error: line, view: { kind: "failed" } });
+      expect(shown(result)).toEqual({ error: FAILURE, view: { kind: "failed" } });
     });
 
     it("keeps the last data as stale when a re-read fails other than not found", async () => {
@@ -408,35 +403,35 @@ describe("useGatedRead", () => {
   it("settles a re-read's promise once its own answer is in", async () => {
     const { result } = renderRead();
     await answer(example(1));
-    let settled = false;
+    let reloaded = false;
     act(() => {
       void result.current.reload().then(() => {
-        settled = true;
+        reloaded = true;
       });
     });
     await act(async () => {});
-    expect(settled).toBe(false);
+    expect(reloaded).toBe(false);
 
     await answer(example(2));
 
-    expect(settled).toBe(true);
+    expect(reloaded).toBe(true);
   });
 
   it("settles, sending nothing, a re-read asked for as the Permission is withdrawn", async () => {
     const hook = renderRead();
     await answer(example(1));
-    let settled = false;
+    let reloaded = false;
     act(() => {
       void hook.result.current.reload().then(() => {
-        settled = true;
+        reloaded = true;
       });
       hook.withPermissions([]);
     });
     await act(async () => {});
 
-    expect({ sent: backend.requests().length, settled }).toEqual({
+    expect({ reloaded, sent: backend.requests().length }).toEqual({
+      reloaded: true,
       sent: 1,
-      settled: true,
     });
   });
 

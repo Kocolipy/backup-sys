@@ -40,3 +40,25 @@ export function readSources(dir: string, suffixes: string[]): SourceFile[] {
 export function readSource(path: string): string {
   return readFileSync(join(ROOT, path), "utf8");
 }
+
+/**
+ * `source` with every comment blanked to spaces, keeping its line count and
+ * column positions: a comment may name a forbidden construct freely, and a
+ * reported line number still points at the real source.
+ */
+export function blankComments(source: string): string {
+  return source
+    .replace(/\/\*[\s\S]*?\*\//g, (match) => match.replace(/[^\n]/g, " "))
+    .replace(/(^|[^:])\/\/.*$/gm, (match, prefix: string) => prefix.padEnd(match.length));
+}
+
+/** Each line of `checked` matching `pattern`, as `path:line: code`. */
+export function violationsIn(checked: SourceFile[], pattern: RegExp): string[] {
+  return checked.flatMap(({ path, code }) =>
+    code
+      .split("\n")
+      .map((line, index) => ({ line, number: index + 1 }))
+      .filter(({ line }) => pattern.test(line))
+      .map(({ line, number }) => `${path}:${number}: ${line.trim()}`),
+  );
+}

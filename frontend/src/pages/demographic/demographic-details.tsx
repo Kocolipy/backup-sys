@@ -22,7 +22,7 @@ import type {
 import { usePatientInContext } from "@/pages/patient-in-context";
 
 /** What a field the patient has no value for shows. */
-const NONE = "-";
+const NONE = "—";
 
 /** The service record slots the overview always lays out, filled or not. */
 const SERVICE_RECORD_SLOTS = 3;
@@ -231,7 +231,7 @@ function NextOfKinCard({ nextOfKin }: { nextOfKin?: NextOfKin }) {
  * context (`usePatientInContext`), reading nothing itself; with no patient
  * loaded — none in context, a `404`, no `patient:read`, still loading or
  * failed — it renders nothing, the Patient card saying why. A field the
- * patient has no value for shows "-". Every value is a plain text node.
+ * patient has no value for shows "—". Every value is a plain text node.
  */
 export function DemographicDetails() {
   const view = usePatientInContext();

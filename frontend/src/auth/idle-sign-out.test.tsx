@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   bare,
   CURRENT_PASSWORD_REFUSED,
+  deferred,
   fakeBackend,
   json,
   requestKey,
@@ -92,8 +93,8 @@ const sent = (request: string) =>
 /** How many logouts were sent. */
 const logouts = () => sent(LOGOUT);
 
-/** How many stays were sent: every session check after the start-up one. */
-const stays = () => sent(ME) - 1;
+/** How many renewals were sent, a stay's included: every session check after the start-up one. */
+const renewals = () => sent(ME) - 1;
 
 /** Clicks the button named `name`, and lets the requests it sends settle. */
 const click = (name: string) =>
@@ -163,6 +164,49 @@ async function expectSignedOutForInactivity() {
   expect(screen.getByRole("heading", { name: "Welcome back" })).toBeInTheDocument();
   expect(screen.getByRole("status")).toHaveTextContent(new RegExp(`^${INACTIVE_MESSAGE}$`));
   expect(screen.queryByText("Accounts page")).not.toBeInTheDocument();
+}
+
+/** Scrolls the page, the input a User reading one page gives, and lets what it sends settle. */
+const scroll = () =>
+  act(async () => {
+    fireEvent.scroll(document);
+  });
+
+/**
+ * The backend's Idle timeout as the wire shows it: how long the backend has
+ * gone without a request, as of the moment it is asked. Read it after every
+ * step, so each new request is seen at the moment it went out.
+ */
+function backendIdleClock() {
+  let seen = backend.requests().length;
+  let lastRequestAt = Date.now();
+  return () => {
+    const count = backend.requests().length;
+    if (count !== seen) {
+      seen = count;
+      lastRequestAt = Date.now();
+    }
+    return Date.now() - lastRequestAt;
+  };
+}
+
+/**
+ * A User working on one page: input every `everyMs` for `forMs`, and nothing
+ * else. Reports the longest stretch the backend went without a request, and
+ * whether the warning was ever open.
+ */
+async function workFor(forMs: number, everyMs: number) {
+  const backendIdle = backendIdleClock();
+  let longestWithoutRequest = 0;
+  let warned = false;
+  for (let elapsed = 0; elapsed < forMs; elapsed += everyMs) {
+    await advance(everyMs);
+    warned ||= warning() !== null;
+    longestWithoutRequest = Math.max(longestWithoutRequest, backendIdle());
+    await scroll();
+    longestWithoutRequest = Math.max(longestWithoutRequest, backendIdle());
+  }
+  return { longestWithoutRequest, warned };
 }
 
 describe("IdleSignOut", () => {
@@ -242,15 +286,27 @@ describe("IdleSignOut", () => {
       ["a wheel turn", () => fireEvent.wheel(document)],
       // Scroll does not bubble; the listener is captured so an inner scroller counts.
       ["scrolling an inner element", () => fireEvent.scroll(screen.getByText("Accounts page"))],
-    ])("restarts the clock on %s before the limit", async (_, input) => {
+    ])("renews the session on %s, and counts the limit from the renewal", async (_, input) => {
       await signedIn();
       await advance(200_000);
 
-      input();
+      await act(async () => input());
 
+      expect(renewals()).toBe(1);
       await advance(LIMIT_MS - 1);
       expect(logouts()).toBe(0);
       await advance(1);
+      await expectSignedOutForInactivity();
+    });
+
+    it("sends no renewal while no input comes, so the warning and the sign-out come on time", async () => {
+      await signedIn();
+
+      await advance(WARN_AT_MS);
+      expect(warning()).toBeInTheDocument();
+      await advance(LIMIT_MS - WARN_AT_MS);
+
+      expect(renewals()).toBe(0);
       await expectSignedOutForInactivity();
     });
 
@@ -264,24 +320,62 @@ describe("IdleSignOut", () => {
       await expectSignedOutForInactivity();
     });
 
-    it("ignores input within a second of the last activity, and counts it from then on", async () => {
+    it("sends no renewal for input while the last renewal is under a minute old", async () => {
+      await signedIn();
+      const sentBy = [];
+
+      await advance(59_999);
+      await scroll();
+      sentBy.push(renewals());
+      await advance(1);
+      await scroll();
+      sentBy.push(renewals());
+
+      expect(sentBy).toEqual([0, 1]);
+    });
+
+    it("does not move the clock for input that renewed nothing", async () => {
       await signedIn();
 
-      await advance(999);
-      fireEvent.keyDown(document);
-      await advance(WARN_AT_MS - 999);
+      await advance(59_999);
+      await scroll();
+      await advance(WARN_AT_MS - 59_999);
+
       expect(warning()).toBeInTheDocument();
     });
 
-    it("counts input a full second after the last activity", async () => {
+    it("throttles renewals to a quarter of a limit under four minutes", async () => {
+      await signedIn(user(60));
+      const sentBy = [];
+
+      await advance(14_999);
+      await scroll();
+      sentBy.push(renewals());
+      await advance(1);
+      await scroll();
+      sentBy.push(renewals());
+
+      expect(sentBy).toEqual([0, 1]);
+    });
+
+    it("renews no more often than once a minute, however continuous the input", async () => {
       await signedIn();
 
-      await advance(1_000);
-      fireEvent.keyDown(document);
-      await advance(WARN_AT_MS - 1);
-      expect(warning()).not.toBeInTheDocument();
-      await advance(1_000);
-      expect(warning()).toBeInTheDocument();
+      await workFor(600_000, 1_000);
+
+      expect(renewals()).toBe(10);
+    });
+
+    it("keeps an active User of a one-minute limit signed in, never warned", async () => {
+      await signedIn(user(60));
+
+      const worked = await workFor(180_000, 1_000);
+
+      expect({ ...worked, logouts: logouts() }).toEqual({
+        longestWithoutRequest: 15_000,
+        logouts: 0,
+        warned: false,
+      });
     });
 
     it("signs straight out when a late timer finds the limit already passed", async () => {
@@ -312,6 +406,7 @@ describe("IdleSignOut", () => {
       await advance(10 * 60 * 60 * 1000);
 
       expect(logouts()).toBe(0);
+      expect(warning()).not.toBeInTheDocument();
       expect(FakeBroadcastChannel.open).toHaveLength(0);
     });
 
@@ -320,7 +415,7 @@ describe("IdleSignOut", () => {
       await signedIn();
 
       await advance(200_000);
-      fireEvent.keyDown(document);
+      await scroll();
       await advance(LIMIT_MS - 1);
       expect(logouts()).toBe(0);
       await advance(1);
@@ -396,14 +491,20 @@ describe("IdleSignOut", () => {
         expect(removed).toHaveBeenCalledWith(type, expect.any(Function), { capture: true });
       }
     });
+  });
 
-    it("never opens the warning before its time", async () => {
+  describe("an active User", () => {
+    it("keeps the backend's session past the Idle timeout, unwarned, through input alone", async () => {
       await signedIn();
 
-      await advance(WARN_AT_MS - 1);
-      expect(warning()).not.toBeInTheDocument();
-      await advance(1);
-      expect(warning()).toBeInTheDocument();
+      const worked = await workFor(2 * LIMIT_MS, 10_000);
+
+      expect({ ...worked, signedIn: screen.queryByText("Accounts page") !== null }).toEqual({
+        // A renewal a minute after the last one, at the first input from then.
+        longestWithoutRequest: 60_000,
+        signedIn: true,
+        warned: false,
+      });
     });
   });
 
@@ -426,14 +527,37 @@ describe("IdleSignOut", () => {
       expect(logouts()).toBe(0);
     });
 
-    it("is not dismissed by passive input, which would leave the backend's clock running", async () => {
+    it("opens only while the backend's session is still live, so staying keeps it", async () => {
+      await signedIn();
+      const backendIdle = backendIdleClock();
+      await advance(200_000);
+      await scroll();
+      backendIdle();
+
+      await advance(WARN_AT_MS);
+      const whenWarned = { backendIdleMs: backendIdle(), open: warning() !== null };
+      await click("Stay signed in");
+
+      expect({ ...whenWarned, kept: warning() === null }).toEqual({
+        backendIdleMs: WARN_AT_MS,
+        kept: true,
+        open: true,
+      });
+    });
+
+    it("is neither dismissed nor renewed by passive input in its own tab", async () => {
       await signedIn();
       await advance(WARN_AT_MS);
 
-      fireEvent.keyDown(document);
-      fireEvent.pointerMove(document);
+      await act(async () => {
+        fireEvent.keyDown(document);
+        fireEvent.pointerMove(document);
+      });
 
-      expect(warning()).toBeInTheDocument();
+      expect({ open: warning() !== null, renewals: renewals() }).toEqual({
+        open: true,
+        renewals: 0,
+      });
       await advance(LIMIT_MS - WARN_AT_MS);
       await expectSignedOutForInactivity();
     });
@@ -444,7 +568,7 @@ describe("IdleSignOut", () => {
 
       await click("Stay signed in");
 
-      expect(stays()).toBe(1);
+      expect(renewals()).toBe(1);
       expect(warning()).not.toBeInTheDocument();
       // A full limit from the stay, not from the last input.
       await advance(WARN_AT_MS - 1);
@@ -458,17 +582,13 @@ describe("IdleSignOut", () => {
     it("shows the stay in progress while its request is out", async () => {
       await signedIn();
       await advance(WARN_AT_MS);
-      let answer: (given: WireAnswer) => void = () => undefined;
-      stayAnswers(
-        new Promise((resolve) => {
-          answer = resolve;
-        }),
-      );
+      const out = deferred();
+      stayAnswers(out.answer);
 
       await click("Stay signed in");
       expect(screen.getByRole("button", { name: "Staying signed in…" })).toBeDisabled();
 
-      await act(async () => answer(json(user())));
+      await out.settle(json(user()));
       expect(warning()).not.toBeInTheDocument();
     });
 
@@ -480,7 +600,7 @@ describe("IdleSignOut", () => {
         fireEvent.keyDown(document, { key: "Escape" });
       });
 
-      expect(stays()).toBe(1);
+      expect(renewals()).toBe(1);
       expect(warning()).not.toBeInTheDocument();
     });
 
@@ -532,29 +652,23 @@ describe("IdleSignOut", () => {
       expect(screen.queryByRole("status")).not.toBeInTheDocument();
     });
 
-    it("keeps the session when a requested sign-out fails", async () => {
-      await signedIn();
-      await advance(WARN_AT_MS);
-      backend.answer({ [LOGOUT]: bare(500) });
-
-      await click("Sign out");
-
-      expect(screen.getByText("Accounts page")).toBeInTheDocument();
-    });
-
     // Running the requested Sign out — pending, which outcome signed out, its
     // copy, the line withdrawn on the next try — is `use-session-action.test.tsx`'s;
     // these prove the dialog renders what it hands back.
-    it("says in the dialog that the User is still signed in when a requested sign-out fails", async () => {
+    it("keeps the session when a requested sign-out fails, saying so in the dialog", async () => {
       await signedIn();
       await advance(WARN_AT_MS);
       backend.answer({ [LOGOUT]: bare(500) });
 
       await click("Sign out");
 
-      expect(within(warning()!).getByRole("alert").textContent).toBe(
-        "Unable to sign out. Please try again. You are still signed in.",
-      );
+      expect({
+        line: within(warning()!).getByRole("alert").textContent,
+        page: screen.queryByText("Accounts page") !== null,
+      }).toEqual({
+        line: "Unable to sign out. Please try again. You are still signed in.",
+        page: true,
+      });
     });
 
     it("opens with no error line", async () => {
@@ -573,24 +687,92 @@ describe("IdleSignOut", () => {
 
       expect(screen.getByRole("button", { name: "Signing out…" })).toBeDisabled();
     });
+  });
 
-    it("still ends the session at the limit when the inactivity logout fails", async () => {
+  describe("a renewal that fails", () => {
+    it("ends the session as an Expired session when it is answered 401", async () => {
       await signedIn();
-      backend.answer({ [LOGOUT]: bare(500) });
+      await advance(200_000);
+      await backend.holdToken();
+      stayAnswers(bare(401));
 
-      await advance(LIMIT_MS);
+      await scroll();
 
+      expect(logouts()).toBe(0);
+      expect(await backend.tokenForgotten()).toBe(true);
+      expect(screen.getByRole("status")).toHaveTextContent(
+        /^Your session ended\. Please sign in again\.$/,
+      );
+    });
+
+    it.each([
+      ["cannot reach the backend", UNREACHABLE],
+      ["fails", bare(500)],
+      ["is refused", bare(403)],
+    ] as const)("leaves the clock where it was when it %s", async (_, answer: WireAnswer) => {
+      await signedIn();
+      await advance(200_000);
+      stayAnswers(answer);
+
+      await scroll();
+
+      expect(renewals()).toBe(1);
+      await advance(LIMIT_MS - 200_000);
       await expectSignedOutForInactivity();
+    });
+
+    it("is tried again by the next input", async () => {
+      await signedIn();
+      await advance(200_000);
+      backend.answer({ [ME]: [bare(500), json(user())] });
+
+      await scroll();
+      await scroll();
+
+      expect(renewals()).toBe(2);
+      await advance(LIMIT_MS - 1);
+      expect(logouts()).toBe(0);
+      await advance(1);
+      await expectSignedOutForInactivity();
+    });
+
+    it("is not sent again while one is still out", async () => {
+      await signedIn();
+      await advance(200_000);
+      const out = deferred();
+      stayAnswers(out.answer);
+
+      await scroll();
+      await advance(5_000);
+      await scroll();
+
+      expect(renewals()).toBe(1);
+      await out.settle(json(user()));
+    });
+
+    it("changes nothing once the session it was sent under has been signed out", async () => {
+      await signedIn();
+      await advance(200_000);
+      const out = deferred();
+      stayAnswers(out.answer);
+      await scroll();
+      await advance(WARN_AT_MS - 200_000);
+      await click("Sign out");
+
+      await out.settle(json(user()));
+      await advance(2 * LIMIT_MS);
+
+      expect(logouts()).toBe(1);
     });
   });
 
   describe("across tabs", () => {
-    it("restarts the clock on activity broadcast from another tab", async () => {
+    it("restarts the clock on a renewal broadcast from another tab", async () => {
       await signedIn();
       const tab = otherTab();
       await advance(200_000);
 
-      tab.postMessage("activity");
+      tab.postMessage(Date.now());
 
       await advance(LIMIT_MS - 1);
       expect(logouts()).toBe(0);
@@ -598,39 +780,109 @@ describe("IdleSignOut", () => {
       await expectSignedOutForInactivity();
     });
 
-    it("dismisses the warning when another tab is active", async () => {
+    it("dismisses the warning once another tab has renewed the session", async () => {
       await signedIn();
       const tab = otherTab();
       await advance(WARN_AT_MS);
       expect(warning()).toBeInTheDocument();
 
-      await act(async () => tab.postMessage("activity"));
+      await act(async () => tab.postMessage(Date.now()));
 
       expect(warning()).not.toBeInTheDocument();
     });
 
-    it("tells the other tabs about local input", async () => {
+    it.each([
+      ["nothing", () => null],
+      ["a time as text", () => String(Date.now())],
+    ])("keeps the warning up for a message carrying %s", async (_, message) => {
+      await signedIn();
+      const tab = otherTab();
+      await advance(WARN_AT_MS);
+
+      await act(async () => tab.postMessage(message()));
+
+      expect(warning()).toBeInTheDocument();
+      await advance(LIMIT_MS - WARN_AT_MS);
+      await expectSignedOutForInactivity();
+    });
+
+    it("ignores a renewal older than the last one this tab knows of", async () => {
+      await signedIn();
+      const tab = otherTab();
+      const signedInAt = Date.now();
+      await advance(200_000);
+      await scroll();
+
+      tab.postMessage(signedInAt + 100_000);
+
+      await advance(LIMIT_MS - 1);
+      expect(logouts()).toBe(0);
+    });
+
+    it("ignores a renewal stamped later than now", async () => {
+      await signedIn();
+      const tab = otherTab();
+
+      tab.postMessage(Date.now() + LIMIT_MS);
+
+      await advance(LIMIT_MS);
+      await expectSignedOutForInactivity();
+    });
+
+    it("tells the other tabs of a renewal once it succeeds, stamped when it went out", async () => {
+      await signedIn();
+      const tab = otherTab();
+      const heard: unknown[] = [];
+      tab.onmessage = ({ data }) => heard.push(data);
+      await advance(200_000);
+      const sentAt = Date.now();
+      const out = deferred();
+      stayAnswers(out.answer);
+
+      await scroll();
+      const whileOut = [...heard];
+      await advance(3_000);
+      await out.settle(json(user()));
+
+      expect({ heard, whileOut }).toEqual({ heard: [sentAt], whileOut: [] });
+    });
+
+    it("tells the other tabs nothing of input that renewed nothing", async () => {
+      await signedIn();
+      const tab = otherTab();
+      const heard = vi.fn();
+      tab.onmessage = heard;
+      await advance(30_000);
+
+      await scroll();
+
+      expect(heard).not.toHaveBeenCalled();
+    });
+
+    it("tells the other tabs nothing of a renewal that failed", async () => {
       await signedIn();
       const tab = otherTab();
       const heard = vi.fn();
       tab.onmessage = heard;
       await advance(200_000);
+      stayAnswers(bare(500));
 
-      fireEvent.keyDown(document);
+      await scroll();
 
-      expect(heard).toHaveBeenCalledOnce();
+      expect(heard).not.toHaveBeenCalled();
     });
 
     it("tells the other tabs when the user stays signed in", async () => {
       await signedIn();
       const tab = otherTab();
-      const heard = vi.fn();
-      tab.onmessage = heard;
+      const heard: unknown[] = [];
+      tab.onmessage = ({ data }) => heard.push(data);
       await advance(WARN_AT_MS);
+      const sentAt = Date.now();
 
       await click("Stay signed in");
 
-      expect(heard).toHaveBeenCalledOnce();
+      expect(heard).toEqual([sentAt]);
     });
   });
 });

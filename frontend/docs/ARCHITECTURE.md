@@ -171,184 +171,9 @@ decide where a visitor goes. A page's folder never imports another's: a part
 two pages share moves up to `src/pages/` itself, and imports no page folder
 (`mb-pages-do-not-import-another-page`, `mb-shared-page-parts-do-not-import-a-page`).
 
-- `accounts.tsx` — the widest page: the Users and Groups projections, each
-  read a page at a time with a search box and one shared pager, Unlock
-  of a locked User by stable id, a Group's members a page at a time behind
-  its member count (only for a session holding `group:read` and `user:read`,
-  the one read declared `{ allOf }`), and — for the Superuser alone, on
-  every Group but the Admin group — "Edit permissions". An action replaces the
-  affected row on the page shown from its response, which _is_ that User's or
-  Group's new state, rather than re-reading. Nothing the directory owns has a control, and the page
-  hides the actions the backend would refuse (its own row, the one whose stable
-  id the session's `AuthUser.id` holds; Unlock on a User
-  that is not locked, the Bootstrap Admin always among them; the Admin group's
-  Permissions). An Unlock the backend still refuses `409` — another
-  administrator unlocked the User first — says the User is no longer locked.
-  Both projections render their rows directly through the shadcn `Table`
-  primitives, and the page owns only their sort headings and the Groups
-  whose members are open: the backend sorts and pages, `paged-read.ts` holds
-  the page shown, and the pager moves from the page's own `startIndex` and row
-  count. A search or sort, the search shown submitted again included, reads
-  the first page afresh. Every pager, the audit page's included, is the
-  shadcn `Pagination` holding `Button` moves — «, a number per page, » —
-  « and » each disabled at its end, and none of it while every row sits on
-  the first page — except where a listing asks for its range named anyway
-  (`onePage="shown"`), as Patient Search does.
-- `group-permissions-dialog.tsx` — the Accounts page's Group Permissions editor,
-  not a page: a modal checkbox dialog fed by `GET /api/admin/permissions` and
-  pre-ticked with the Group's current set. It hands the complete set to the
-  page, which owns the `PUT` — the dialog closes once the save settles, and a
-  reporter that unmounts withdraws what it reported, so the write's outcome must
-  belong to the page's line.
-- `connectors.tsx` — the Accounts page's connector panel, not a page: it lists,
-  creates and deletes connectors and issues, rotates and revokes their tokens.
-  Each connector section reads its own active tokens, five at a time through
-  the shared pager, and re-reads that page after every token change (one change
-  can touch more than one token); creating or deleting a connector re-reads the
-  listing. A token's plaintext lives only in component state, shown once.
-  Create, delete and every token action are offered only to a Superuser (the
-  declarations require it); a `connector:read` holder sees the listing alone. A
-  delete is sent only from its confirmation dialog, which states that every token
-  is revoked, provisioning stops at once, the connector's Users and Groups are
-  kept, and the deletion cannot be undone. The issue form offers every token
-  Permission, Users before Groups and read before write, while the request keeps
-  the backend's order; a rotation refused `409` has its own copy.
-- `accounts-api.ts` — the wire types both share and every endpoint they call;
-  derives `ADMINISTRATION_PERMISSIONS` from the listing declarations.
-- `audit.tsx` / `audit-filter-popover.tsx` / `audit-api.ts` — the audit listing,
-  20 a page, filtered on the server by one or more operations, outcome, actor id,
-  resource id and a time range. The API module checks each filter before the
-  request is built, so a malformed one is refused in the filter panel, beside its field. Ids stay ids
-  (resolving them would need `user:read`). It reads on mount, on Apply, Reset, paging and
-  Refresh, **never on a timer**: every
-  request renews the server session, so a polling page would never reach the idle
-  timeout. The pager names a total only once a read of the current query has stated one.
-  A row shows Occurred, Operation, Outcome, Actor and Resource; its disclosure
-  button, or a click on the row or its open detail, toggles a detail row with the
-  changed paths, status, request and details. A click that ends a text selection
-  toggles nothing, so ids stay copyable.
-- `audit-operation-labels.ts` — each operation's label, in the rows and in the
-  Operation picker, which searches and shows labels and sends the operation, and
-  while anything is selected offers Clear selection first and last in its list. A
-  `Record` keyed by `AuditOperation`, so a new operation fails typecheck until
-  it has one.
-- `status-badge.tsx` — the one status-to-Badge-variant mapping, for an audit
-  outcome and a User's active state (a Deactivated User reads "Deactivated"),
-  on Accounts and Audit.
-- `search.tsx` / `search-api.ts` — Patient Search, `/search`, first in the
-  sidebar for every signed-in session. One box; `parsePatientQuery` sends a
-  full NRIC, or a name of at least three characters, trimmed, and refuses
-  anything shorter beside the box with nothing sent. The search is held in
-  component state alone, never the URL, and read only on submit: each submit
-  remounts the results, which read `GET /api/patient-search` five at a time
-  through `PATIENT_SEARCH` and the shared paged listing, naming the range
-  whenever there is a match, in the patient source's own order: every heading
-  is a `PlainHeading`. `patient-filter-popover.tsx` holds the Filter panel, its
-  one filter the gender; the filter is component state too, and a change of it
-  reads from the first page. A failure is reported on the
-  page's line, with a Retry that reads the same page again. Each row keeps the
-  Patient's id, which it never shows.
-- `sort-heading.tsx` — the sortable column heading of the accounts listing:
-  `aria-sort`, a direction icon, and a press that sorts its column ascending
-  first, then toggles descending → ascending → …, never returning a sorted
-  column to the listing's default order — and `PlainHeading`, the heading of a
-  column that does not sort, every column of the Search page's. The sort it
-  sets, `ColumnSort`, lives in `src/lib/sorting.ts` beside `sortParameters`,
-  the one encoding of a sort as its `sortBy` and `sortOrder` query
-  parameters, so each listing's `*-api.ts` names its sort by it and sends it
-  through it (`lb-api-modules-are-data`), keeping only its own search and
-  filter parameters.
-- `home.tsx` — the Patient card. Home is the landing page of a session without
-  `patient:read`, and the sidebar links it for no session.
-- `demographic/demographic.tsx` — the Demographic page, guarded by
-  `patient:read`, which Patient Search opens on selecting a result: the shared
-  Patient card, then the Demographic details.
-- `demographic/demographic-details.tsx` — the Demographic details of the
-  patient in context, rendered from `usePatientInContext()` (and importing
-  `patient-api.ts` for its types alone), and nothing while no patient is
-  loaded: the Military Overview (at least three service record slots, a
-  filled one open and an empty one folded at first, then the service dates as
-  `dd MMM yyyy`), Contact Details and Next of Kin /
-  Emergency. A value the patient has none of shows "-"; every value renders as
-  a plain text node.
-- `patient-in-context.ts` / `patient-api.ts` — the **one reader of the patient in
-  context**. `PatientInContextScope`, which the signed-in layout renders once
-  inside its page status, reads `GET /api/patient/{id}` through `PATIENT`
-  (opting in to `absent`, a `403` reported as failure) for the EHR context's
-  patient, decoding the R5 `Patient` (typed by `@types/fhir`'s `fhir5`); with
-  none in context it reads nothing. A new id is a new path, so a new first read,
-  and a late answer for the id before never lands. A failure is reported to the
-  page's error line once, by this read. `usePatientInContext()` hands its view —
-  `none`, or the gated read's — to the top bar, the Patient card and the
-  Demographic details, which only
-  render it, so each patient change sends one request on every page. The read is
-  a sibling of the layout's children, never their parent, so a patient coming
-  into context or leaving it never remounts the page. It lives at `src/pages/`
-  itself, a part the pages share, because that is the lowest layer the shell,
-  Home and the Demographic page may all import that also holds `PATIENT`:
-  `mb-pages-do-not-import-the-shell` rules out `src/shell/`, and
-  `mb-pages-do-not-import-another-page` any one page's folder.
-- `patient-card.tsx` — the Patient card, a part Home and the Demographic page
-  share, rendered from `usePatientInContext()`:
-  "No patient in context" for none or a `404`, "Loading the patient…", an empty
-  card for a failure (its copy is on the error line), or the banner. Every
-  field renders as a plain text node; the age is computed from the card's
-  injectable `Clock`.
-- `listing-body.tsx` — the one listing body: skeleton rows during the first
-  read, with the page's loading copy visually hidden in a `status` region for
-  screen readers; an icon above the page's empty copy for a successful read
-  with no rows; and a blank body for a failure (whose copy is on the error
-  line) or a session without the read's Permission. Each caller names its
-  `staleRows` choice: Connectors keeps the last rows, and `paged-listing.tsx`
-  hides them for every paged read. Its `ReadAgain` is the one "Try again"
-  every listing offers, only once the latest read was refused or failed: the
-  paged listing places it beside its pager, and Connectors, the one listing
-  that is not paged, under its body, so a failed connector listing is read
-  again without a reload of the page. The Patient card and the Group
-  Permissions dialog render their own states, not through it.
-- `paged-read.ts` — **the paged read**, `usePagedRead`: the one hook every
-  paged listing reads through — the Users and Groups projections, a Group's
-  members, each connector's tokens and the audit trail. A listing hands it its
-  declaration, its own arguments (a search and sort, a Group's id, a parsed
-  filter set) and its page size; the hook holds the `startIndex`, sends the
-  gated read, and hands `PagedListing` the view, the move, the page size and
-  the read again. New arguments read the first page again, in the same render,
-  and `restart` reads the first page afresh as one read, even for the
-  arguments shown: a projection's search or sort goes through it.
-  The declarations are data in each `*-api.ts`, built from the paging
-  vocabulary in `src/lib/paging.ts` (ADR 0017): `pagedPath`, the one query
-  string, the listing's own parameters then `startIndex` and `count`; and
-  `pageDecoder`, the one decoder of a page's `totalResults`, `startIndex` and
-  rows, which refuses any other field and hands the rows on as `rows`
-  whatever field they arrived in. An API module imports no hook
-  (`lb-api-modules-are-data`), which is why the vocabulary sits in `lib/`.
-- `paged-listing.tsx` — the one paged listing, which every paged read renders
-  through, handed the `usePagedRead` result: the listing body, the pager and
-  "Try again", around the rows the page renders as its own table or list. It
-  decides, once, for every page: rows a failed re-read could not
-  confirm are hidden; the empty line comes from `page-empty-copy.ts`; the
-  pager shows for the page the latest read stated for the current path —
-  `ready`, or `stale` — and never while a first read is in flight or after one
-  failed with nothing read; and "Try again" re-reads the current path through
-  the read's `reload`, keeping the page shown, where searching again on
-  Accounts restarts from the first page. Audit passes `readAgain={false}` and offers
-  "Refresh" always, in its card header's top right, since the trail grows with
-  nothing on the page to say so. Filters, search boxes and toolbars stay the
-  page's.
-- `pager-move.tsx` — a pager's Previous or Next: a `Button` with its chevron,
-  not shadcn's `PaginationPrevious` / `PaginationNext`, whose `<a>` would have
-  no `href` because paging is component state rather than a URL. `pager.tsx`
-  places it in its `PaginationItem`s.
-- `pager.tsx` — the one pager, for every paged read on Accounts and Audit, which
-  `paged-listing.tsx` places: the position line, the Previous and Next rules,
-  and what an empty page shows. `page-empty-copy.ts` chooses the body's empty
-  line for the same reads: a later page says it emptied, where the first gives
-  the listing's own copy.
-- `change-password.tsx` — runs `changePassword` through `useSessionAction`, not
-  `useSessionRequest`: its marked `401` is about the current password, and the
-  seam would end the session on it (`docs/BACKEND_CONTRACT.md`). Its inputs are
-  uncontrolled, because React mirrors a controlled input's value into the DOM
-  `value` attribute.
+**`PAGES.md` is the per-file map of `src/pages/`** — read it before adding or
+changing a page, its API module, or a part the pages share (the paged read,
+the listing body, the pager, the filter parts, the patient in context).
 
 ### Why every request goes through `lib/http.ts`
 
@@ -370,6 +195,16 @@ sessions or React — `mb-lib-is-a-leaf` holds that.
 `test/arch/rawNetwork.test.ts` (`no_raw_network_outside_transport`) names
 `lib/http.ts` and no other module.
 
+### Why nothing reads on a timer
+
+Every request renews the server session, so a page that read on a schedule
+would hold off the idle timeout for as long as its tab stayed open. A page reads
+on mount and on the user's action — Apply, Reset, paging, Refresh — and never on
+a timer. `test/arch/timers.test.ts` (`no_timer_outside_idle_sign_out`) fails
+any `setTimeout`, `setInterval`, `requestAnimationFrame` or
+`requestIdleCallback` outside `auth/idle-sign-out.tsx`, whose timer times the
+session's own window and sends nothing on a schedule.
+
 ### Why every time goes through `lib/time.ts`
 
 The SPA reads and shows every time in Asia/Singapore, the zone the backend
@@ -388,8 +223,8 @@ formats through `Intl` or a local getter, or names a zone.
 ### Why `components/ui/` is fenced off
 
 It holds the in-house shadcn component library, in source form rather than as
-a published package — `frontend/docs/DESIGN.md` documents the design language
-(colors, type scale, spacing, shapes) it was built against. It stays leaf-only
+a published package — `DESIGN.md` documents its design language: what each
+token is for and how each component behaves. It stays leaf-only
 on purpose: `mb-ui-primitives-are-leaves` holds its contents to `cn()` and its
 own siblings, so a primitive can never depend on a page or a feature, and
 stays swappable for the published package the day that exists. Shared
@@ -460,7 +295,7 @@ browser: `smoke.spec.ts` asserts the body's computed `background-color`
 resolved, and `packaged-type.spec.ts` the packaged bundle's type scale and
 IBM Plex Sans 500 face. The one unit test that reads the pipeline is
 `src/type-scale.test.ts`, which compiles `src/index.css` with Tailwind itself
-and checks each type-scale utility against DESIGN.md.
+and checks each type-scale utility against the values it states.
 
 ## Build
 

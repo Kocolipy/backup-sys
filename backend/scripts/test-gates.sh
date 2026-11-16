@@ -37,6 +37,7 @@ MVN=${MVN:-./mvnw}
 FAST_GATE=(
   arch/ArchitectureTest
   arch/AuditTrailRulesTests
+  arch/ClockRulesTests
   arch/DeadlockRetryRulesTests
   arch/ErrorNamespaceRulesTests
   arch/ModuleRulesTests
@@ -47,6 +48,7 @@ FAST_GATE=(
   arch/TestSourceArchitectureTest
   arch/TrustServerCertificateTest
   arch/UtilityClassRulesTests
+  arch/WebAdapterRulesTests
   com/example/backend/audit/application/AuditRetentionServiceTests
   com/example/backend/audit/application/AuditTrailServiceTests
   com/example/backend/audit/config/AuditAppendPoolConfigTests
@@ -124,6 +126,7 @@ FAST_GATE=(
   com/example/backend/observability/EcsErrorFieldsCustomizerTests
   com/example/backend/observability/EcsTimestampCustomizerTests
   com/example/backend/observability/FeatureLogFieldsTests
+  com/example/backend/observability/InvalidSourceFieldsTests
   com/example/backend/observability/LogContextTests
   com/example/backend/observability/LogEventTests
   com/example/backend/observability/LogFileTests
@@ -142,16 +145,43 @@ FAST_GATE=(
   com/example/backend/paging/domain/PageRequestTests
   com/example/backend/patient/PatientSourceFixturesTests
   com/example/backend/patient/application/PatientSearchServiceTests
+  com/example/backend/patient/controller/PatientArmcControllerTests
   com/example/backend/patient/controller/PatientControllerTests
+  com/example/backend/patient/controller/PatientFfiControllerTests
+  com/example/backend/patient/controller/PatientHistoriesControllerTests
+  com/example/backend/patient/controller/PatientMedicationControllerTests
+  com/example/backend/patient/controller/PatientNumcControllerTests
   com/example/backend/patient/controller/PatientSearchControllerTests
   com/example/backend/patient/controller/PatientR5ConformanceTests
+  com/example/backend/patient/controller/QueryParametersTests
+  com/example/backend/patient/domain/ArmcBoardTests
+  com/example/backend/patient/domain/ArmcFilterTests
+  com/example/backend/patient/domain/DatePrecisionTests
+  com/example/backend/patient/domain/FfiFilterTests
+  com/example/backend/patient/domain/FfiTests
+  com/example/backend/patient/domain/HistoryColumnTests
+  com/example/backend/patient/domain/HistorySortTests
+  com/example/backend/patient/domain/MedicationFilterTests
+  com/example/backend/patient/domain/MedicationRecordTests
+  com/example/backend/patient/domain/NumcFilterTests
+  com/example/backend/patient/domain/NumcRecordTests
   com/example/backend/patient/domain/PatientFilterTests
   com/example/backend/patient/domain/PatientIdTests
   com/example/backend/patient/domain/PatientMatchTests
   com/example/backend/patient/domain/PatientQueryTests
   com/example/backend/patient/domain/PatientTests
+  com/example/backend/patient/domain/SortOrderTests
+  com/example/backend/patient/domain/SourceCodeTests
+  com/example/backend/patient/domain/SourceFieldTests
   com/example/backend/patient/infrastructure/http/PatientSourceAdapterContractTests
+  com/example/backend/patient/infrastructure/http/PatientSourceArmcAdapterTests
+  com/example/backend/patient/infrastructure/http/PatientSourceFfiAdapterTests
+  com/example/backend/patient/infrastructure/http/PatientSourceHistoriesAdapterTests
+  com/example/backend/patient/infrastructure/http/PatientSourceMedicationAdapterTests
+  com/example/backend/patient/infrastructure/http/PatientSourceNumcAdapterTests
   com/example/backend/patient/infrastructure/http/PatientSourceSearchAdapterTests
+  com/example/backend/patient/infrastructure/http/ReceivedFieldsTests
+  com/example/backend/patient/infrastructure/http/SourceQueryTests
   com/example/backend/scheduling/InMemoryScheduledJobLockContractTests
   com/example/backend/scheduling/application/ScheduledJobRunServiceTests
   com/example/backend/scheduling/infrastructure/persistence/ScheduledJobLockAdapterTests

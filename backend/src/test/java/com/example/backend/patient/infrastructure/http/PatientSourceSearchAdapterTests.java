@@ -26,7 +26,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
-import org.springframework.web.client.RestClient;
 
 /**
  * A Patient search as the HTTP adapter makes it (ADR 0018), against the patient source's mock in
@@ -67,7 +66,7 @@ class PatientSourceSearchAdapterTests {
             oneMatch("\"total\": 1,", "\"id\": \"probe-Q7xKd2.v9\",", "2026-01-02");
 
     private static PatientSourceAdapter adapter() {
-        return new PatientSourceAdapter(RestClient.builder(), SOURCE.baseUrl());
+        return PatientSourceAdapters.at(SOURCE.baseUrl());
     }
 
     private static void answering(String body) {
@@ -252,8 +251,7 @@ class PatientSourceSearchAdapterTests {
     void aSearchUnansweredWithinTheReadTimeoutTimesOut() {
         SOURCE.stubFor(get(urlPathEqualTo(PROBE_SEARCH)).atPriority(1)
                 .willReturn(okJson(WELL_FORMED).withFixedDelay(1000)));
-        PatientSourceAdapter impatient = new PatientSourceAdapter(RestClient.builder(),
-                SOURCE.baseUrl(), Duration.ofSeconds(2), Duration.ofMillis(100));
+        PatientSourceAdapter impatient = PatientSourceAdapters.at(SOURCE.baseUrl(), Duration.ofSeconds(2), Duration.ofMillis(100));
 
         assertThat(faultSearching(impatient)).isEqualTo(new Fault(
                 "The patient source did not answer in time", "timed-out", ErrorCategory.NETWORK));
@@ -266,10 +264,10 @@ class PatientSourceSearchAdapterTests {
      */
     @ParameterizedTest
     @CsvSource(delimiter = '|', textBlock = """
-        {"resourceType": "Bundle", "type": "collection", "total": 0} | not-a-searchset | The patient source's search answered with no searchset
-        {"resourceType": "OperationOutcome", "type": "searchset", "total": 0} | not-a-searchset | The patient source's search answered with no searchset
-        {"resourceType": "Bundle", "type": "searchset"} | no-total | The patient source's search has no total
-        {"resourceType": "Bundle", "type": "searchset", "total": -1} | no-total | The patient source's search has no total
+        {"resourceType": "Bundle", "type": "collection", "total": 0} | not-a-searchset | The patient source's page is no searchset
+        {"resourceType": "OperationOutcome", "type": "searchset", "total": 0} | not-a-searchset | The patient source's page is no searchset
+        {"resourceType": "Bundle", "type": "searchset"} | no-total | The patient source's page has no total
+        {"resourceType": "Bundle", "type": "searchset", "total": -1} | no-total | The patient source's page has no total
         {"resourceType": "Bundle", "type": "searchset", "total": 1, "entry": [{}]} | another-resource | The patient source answered with another resource
         {"resourceType": "Bundle", "type": "searchset", "total": 1, "entry": [{"resource": {"resourceType": "OperationOutcome", "id": "x"}}]} | another-resource | The patient source answered with another resource
         """)

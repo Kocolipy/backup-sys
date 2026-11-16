@@ -41,9 +41,9 @@ fails startup. The test JVMs drop all of them (`pom.xml`).
 Beside the grants the audit table carries an `INSTEAD OF UPDATE, DELETE` trigger
 that refuses **every** `UPDATE`, from every principal, and every `DELETE` unless
 the caller is a member of `backend_audit_retention` and not of `db_owner`, with
-error 50001. That second half is what refuses the owner login, which owns the
-database — so the grants do not bind it — and a sysadmin, which enters as its
-owner. Append-only therefore survives a console session or a misused owner
+error 50001. That second half is what refuses the owner login, a member of
+`db_owner` — so the grants do not bind it — and a sysadmin, which enters as
+the database's owner. Append-only therefore survives a console session or a misused owner
 credential. `AuditAppendOnlyIntegrationTests` connects as each login and asserts
 each refusal.
 
@@ -105,7 +105,7 @@ statement.
 
 ## Local setup
 
-`compose.yaml` runs **SQL Server 2022** (CU27, Developer Edition, pinned by tag
+`compose.yaml` runs **SQL Server 2022** (Developer Edition, pinned by tag
 and digest, `linux/amd64`) on `localhost:1433`, capped at 2 GB, with a health
 check, beside Redis and the in-house patient source's mock
 (`patient-source.md`). Its one-shot `sqlserver-init` service, in a profile of its own
@@ -132,12 +132,8 @@ T-SQL, run on its instance as the RDS master user (`infra/docs/database-boot.md`
 bootstrap").
 
 The local server keeps its default collation and only the database is collated
-`Latin1_General_100_BIN2_UTF8`. The deployed RDS server is collated
-`Latin1_General_100_BIN2_UTF8` too (`infra/docs/database-engine.md`, "Collation and time
-zone"), but on this image a server collated `BIN2_UTF8`
-cannot load the internal procedures behind `sp_getapplock`, which Flyway takes to
-guard every migration. The service's own seed lock is a row lock and needs
-neither (ADR 0013, "Collation and the seed lock").
+`Latin1_General_100_BIN2_UTF8`; the deployed RDS server is collated so too. ADR
+0013 ("Collation and the seed lock") has why they differ.
 
 The `.env` variables it reads:
 

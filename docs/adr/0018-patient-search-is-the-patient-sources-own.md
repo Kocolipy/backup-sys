@@ -12,7 +12,7 @@ Date: 2026-11-10
 ## Status
 
 Accepted. `GET /api/patient-search` searches the Patients by name or by full
-NRIC, filtered by gender, and the SPA's Search page reads it five at a time.
+NRIC, filtered by gender, and the SPA's Search page reads it a page at a time.
 `/docs/domain/patient.md` ("Patient search") is the behaviour in full; this
 file holds the decisions and their reasons.
 
@@ -128,10 +128,8 @@ kept as it was stored, and the Audit page shows it verbatim.
 - **No query or filter value reaches a log or the trail.** The request's record
   names the route template, never the query string, and the audit row carries
   only the kind and whether the filter was used.
-- **The local mock answers only the documented searches.** Its canned stubs
-  answer the name search `tan` (two pages), each gender filter on it, one NRIC
-  and one search that matches nothing, each in the mock's one stable order; any
-  other search is an empty searchset with `total: 0`
+- **The local mock answers only the documented searches**, each in the mock's
+  one stable order; any other search is an empty searchset with `total: 0`
   (`backend/docs/configuration/patient-source.md`).
 
 ## Alternatives considered

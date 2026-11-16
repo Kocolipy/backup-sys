@@ -1,38 +1,64 @@
 package com.example.backend.patient.infrastructure.http;
 
+import com.example.backend.observability.InvalidSourceFields;
+import com.example.backend.observability.SourceRead;
 import com.example.backend.observability.OutboundCallFailure;
 import com.example.backend.observability.RedactedFaultException;
 import com.example.backend.paging.domain.PageRequest;
+import com.example.backend.patient.domain.ArmcFilter;
+import com.example.backend.patient.domain.ArmcHistory;
+import com.example.backend.patient.domain.FfiFilter;
+import com.example.backend.patient.domain.FfiHistory;
+import com.example.backend.patient.domain.HistorySort;
+import com.example.backend.patient.domain.MedicationFilter;
+import com.example.backend.patient.domain.MedicationHistory;
+import com.example.backend.patient.domain.NumcFilter;
+import com.example.backend.patient.domain.NumcHistory;
 import com.example.backend.patient.domain.Patient;
 import com.example.backend.patient.domain.PatientId;
+import com.example.backend.patient.domain.PatientMatch;
 import com.example.backend.patient.domain.PatientMatches;
 import com.example.backend.patient.domain.PatientFilter;
 import com.example.backend.patient.domain.PatientQuery;
 import com.example.backend.patient.domain.PatientStore;
+import com.example.backend.patient.domain.ReceivedRecord;
 import com.example.backend.patient.infrastructure.http.PatientSourceException.Failure;
+import com.example.backend.patient.infrastructure.http.SourceQuery.Ties;
+import io.micrometer.core.instrument.MeterRegistry;
+import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.http.HttpClient;
 import java.net.http.HttpTimeoutException;
 import java.time.Duration;
-import java.util.HashMap;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.BiFunction;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.convert.DurationStyle;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.ClientHttpResponse;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
 /**
  * Adapts the domain's {@link PatientStore} port onto the in-house patient source (ADR 0014):
- * {@code GET {base}/Patient/{id}} for a read by id, and {@code GET {base}/Patient?…} for a
- * Patient search ({@link #search}, ADR 0018). The source is assumed to answer FHIR R4 and to need
+ * {@code GET {base}/Patient/{id}} for a read by id, {@code GET {base}/Patient?…} for a
+ * Patient search ({@link #search}, ADR 0018), {@code GET {base}/Patient/{id}/ffi?…} for a
+ * patient's FFI History ({@link #findFfiHistory}, ADR 0019), and
+ * {@code GET {base}/Patient/{id}/numc?…} for a patient's NUMC History ({@link #findNumcHistory},
+ * ADR 0019, D5), {@code GET {base}/Patient/{id}/armc?…} for a patient's ARMC History
+ * ({@link #findArmcHistory}, ADR 0019, D6), and {@code GET {base}/Patient/{id}/medication?…} for
+ * a patient's Medication History ({@link #findMedicationHistory}, ADR 0019, D7). The source is assumed to answer FHIR R4 and to need
  * no authorisation, so the call carries no credential of any kind. The patient's id is its EHR's
  * FHIR id, sent unchanged.
  *
@@ -52,7 +78,9 @@ import org.springframework.web.client.RestClient;
  * built from Spring Boot's {@link RestClient.Builder}, so each call is observed as every client's
  * is ({@code http.client.requests}, under the URI template, never the id), on the JDK client with
  * redirects off and the timeouts below: a fixed connect timeout, and a read timeout a deployment
- * may set ({@code APP_PATIENT_SOURCE_READ_TIMEOUT}). Nothing here logs.
+ * may set ({@code APP_PATIENT_SOURCE_READ_TIMEOUT}). Nothing here logs: a NUMC History, shown as
+ * received (ADR 0020), hands the paths of the fields its answer held in the wrong format to
+ * {@link InvalidSourceFields}, which reports them.
  */
 @Component
 class PatientSourceAdapter implements PatientStore {
@@ -71,7 +99,57 @@ class PatientSourceAdapter implements PatientStore {
     private static final Set<String> SCHEMES = Set.of("http", "https");
 
     /** The source's paging, which every search asks for alike. */
-    private static final String SEARCH_PAGE = "&_count={count}&_offset={offset}&_total=accurate";
+    private static final String SEARCH_PAGE = "&" + SourceSearchset.PAGE_QUERY;
+
+    /** A searchset of Patients, a search's answer. */
+    private static final ParameterizedTypeReference<SourceSearchset<R4Patient>> PATIENTS =
+            new ParameterizedTypeReference<>() {
+            };
+
+    /**
+     * A patient's FFI History, a page at a time (ADR 0019), before the filters and the sort a read
+     * adds to it.
+     */
+    static final String FFI_HISTORY = "/Patient/{id}/ffi?" + SourceSearchset.PAGE_QUERY;
+
+    /** A searchset of FFIs, an FFI History's answer. */
+    private static final ParameterizedTypeReference<SourceSearchset<SourceFfi>> FFIS =
+            new ParameterizedTypeReference<>() {
+            };
+
+    /**
+     * A patient's NUMC History, a page at a time (ADR 0019), before the filters and the sort a
+     * read adds to it.
+     */
+    static final String NUMC_HISTORY = "/Patient/{id}/numc?" + SourceSearchset.PAGE_QUERY;
+
+    /** A searchset of NUMC Records, a NUMC History's answer. */
+    private static final ParameterizedTypeReference<SourceSearchset<SourceNumc>> NUMC_RECORDS =
+            new ParameterizedTypeReference<>() {
+            };
+
+    /**
+     * A patient's ARMC History, a page at a time (ADR 0019, D6), before the filters and the sort a
+     * read adds to it.
+     */
+    static final String ARMC_HISTORY = "/Patient/{id}/armc?" + SourceSearchset.PAGE_QUERY;
+
+    /** A searchset of ARMC Boards, an ARMC History's answer. */
+    private static final ParameterizedTypeReference<SourceSearchset<SourceArmc>> ARMC_BOARDS =
+            new ParameterizedTypeReference<>() {
+            };
+
+    /**
+     * A patient's Medication History, a page at a time (ADR 0019, D7), before the filters and the
+     * sort a read adds to it.
+     */
+    static final String MEDICATION_HISTORY = "/Patient/{id}/medication?"
+            + SourceSearchset.PAGE_QUERY;
+
+    /** A searchset of Medication Records, a Medication History's answer. */
+    private static final ParameterizedTypeReference<SourceSearchset<SourceMedication>>
+            MEDICATION_RECORDS = new ParameterizedTypeReference<>() {
+            };
 
     /** A name search: FHIR's {@code name:contains}, matched as the source decides. */
     static final String SEARCH_BY_NAME = "/Patient?name:contains={name}";
@@ -84,29 +162,35 @@ class PatientSourceAdapter implements PatientStore {
     /** The client's read timeout, by which a body read that failed is told timed out. */
     private final Duration readTimeout;
 
+    /** Where a response's invalid fields are reported: one WARN, and a count for each. */
+    private final InvalidSourceFields invalidFields;
+
     /**
      * @param baseUrl     the source's FHIR base, {@code APP_PATIENT_SOURCE_BASE_URL}: required,
      *                    with no default, so a deployment that forgot it fails to start
      * @param readTimeout {@code APP_PATIENT_SOURCE_READ_TIMEOUT}, as {@link #readTimeout} reads it
+     * @param meters      where an answer's invalid fields are counted ({@link InvalidSourceFields})
      */
     @Autowired
     PatientSourceAdapter(RestClient.Builder builder,
             @Value("${app.patient-source.base-url}") String baseUrl,
-            @Value("${app.patient-source.read-timeout:}") String readTimeout) {
-        this(builder, baseUrl, CONNECT_TIMEOUT, readTimeout(readTimeout));
+            @Value("${app.patient-source.read-timeout:}") String readTimeout,
+            MeterRegistry meters) {
+        this(builder, baseUrl, CONNECT_TIMEOUT, readTimeout(readTimeout), meters);
     }
 
     /** An adapter on the source at {@code baseUrl}, under the default timeouts. */
-    PatientSourceAdapter(RestClient.Builder builder, String baseUrl) {
-        this(builder, baseUrl, CONNECT_TIMEOUT, DEFAULT_READ_TIMEOUT);
+    PatientSourceAdapter(RestClient.Builder builder, String baseUrl, MeterRegistry meters) {
+        this(builder, baseUrl, CONNECT_TIMEOUT, DEFAULT_READ_TIMEOUT, meters);
     }
 
     PatientSourceAdapter(RestClient.Builder builder, String baseUrl, Duration connectTimeout,
-            Duration readTimeout) {
+            Duration readTimeout, MeterRegistry meters) {
         JdkClientHttpRequestFactory requests =
                 new JdkClientHttpRequestFactory(httpClient(connectTimeout));
         requests.setReadTimeout(readTimeout);
         this.readTimeout = readTimeout;
+        this.invalidFields = new InvalidSourceFields(meters);
         this.source = builder
                 .baseUrl(base(baseUrl))
                 .requestFactory(requests)
@@ -118,15 +202,9 @@ class PatientSourceAdapter implements PatientStore {
         return called(() -> source.get()
                 .uri("/Patient/{id}", id.value())
                 .accept(FHIR_JSON)
-                .exchange((request, response) -> {
-                    if (response.getStatusCode().isSameCodeAs(HttpStatus.NOT_FOUND)) {
-                        return Optional.<Patient>empty();
-                    }
-                    if (!response.getStatusCode().isSameCodeAs(HttpStatus.OK)) {
-                        throw PatientSourceException.answered(response.getStatusCode().value());
-                    }
-                    return Optional.of(response.bodyTo(R4Patient.class).toPatient(id));
-                }));
+                .exchange((request, response) -> found(response)
+                        ? Optional.of(response.bodyTo(R4Patient.class).toPatient(id))
+                        : Optional.<Patient>empty()));
     }
 
     /**
@@ -140,26 +218,21 @@ class PatientSourceAdapter implements PatientStore {
      * whether the gender filter was asked for, and none of the values.
      */
     @Override
-    public PatientMatches search(PatientQuery query, PatientFilter filter, PageRequest page) {
-        Map<String, Object> variables = new HashMap<>();
-        variables.put("count", page.count());
-        variables.put("offset", page.offset());
-        StringBuilder template = new StringBuilder(switch (query) {
-            case PatientQuery.ByName name -> {
-                variables.put("name", name.text());
-                yield SEARCH_BY_NAME;
-            }
-            case PatientQuery.ByNric nric -> {
-                variables.put("identifier", Patient.NRIC_SYSTEM + "|" + nric.nric());
-                yield SEARCH_BY_NRIC;
-            }
-        });
+    public PatientMatches search(PatientQuery patientQuery, PatientFilter filter,
+            PageRequest page) {
+        SourceQuery query = switch (patientQuery) {
+            case PatientQuery.ByName name ->
+                    new SourceQuery(SEARCH_BY_NAME).variable("name", name.text());
+            case PatientQuery.ByNric nric -> new SourceQuery(SEARCH_BY_NRIC)
+                    .variable("identifier", Patient.NRIC_SYSTEM + "|" + nric.nric());
+        };
+        query.paged(page);
         if (filter.gender() != null) {
-            template.append("&gender={gender}");
-            variables.put("gender", filter.gender().code());
+            query.parameter("gender", "gender", filter.gender().code());
         }
-        template.append(SEARCH_PAGE);
-        String uri = template.toString();
+        query.append(SEARCH_PAGE);
+        String uri = query.template();
+        Map<String, Object> variables = query.variables();
         return called(() -> source.get()
                 .uri(uri, variables)
                 .accept(FHIR_JSON)
@@ -167,8 +240,193 @@ class PatientSourceAdapter implements PatientStore {
                     if (!response.getStatusCode().isSameCodeAs(HttpStatus.OK)) {
                         throw PatientSourceException.answered(response.getStatusCode().value());
                     }
-                    return response.bodyTo(R4SearchBundle.class).toMatches();
+                    SourceSearchset.Page<PatientMatch> matches =
+                            response.bodyTo(PATIENTS).page(R4Patient::toMatch);
+                    return new PatientMatches(matches.total(), matches.entries());
                 }));
+    }
+
+    /**
+     * {@code GET {base}/Patient/{id}/ffi?…}: the patient's FFI History, filtered, sorted, paged and
+     * counted by the source (ADR 0019) — each set of codes as its search parameter once, its codes
+     * joined by commas, FHIR's OR ({@code type}, {@code outcome}, {@code higher-authority},
+     * {@code submitting-mc}); the Status as {@code status}; each end of a date range as its search
+     * parameter, {@code issue-date} or {@code expiry-date}, {@code ge} the from-date and {@code le}
+     * the to-date; and a sort as {@code _sort} on the same date parameters, {@code -} first for
+     * descending, ties broken by id. With no column to sort by, no {@code _sort} is sent, and the
+     * order is the source's own. A {@code 404} is no patient under the id; the one other good
+     * answer is a {@code 200} searchset of FFIs, and anything else is a fault, as is a searchset
+     * with no total or an entry that is no FFI the service can hold. The id and the filters'
+     * values are URI variables, so the call is observed under the template alone: which filters
+     * were asked for and the sort, and none of their values.
+     */
+    @Override
+    public Optional<FfiHistory> findFfiHistory(PatientId id, FfiFilter filter, HistorySort sort,
+            PageRequest page) {
+        SourceQuery query = new SourceQuery(FFI_HISTORY).variable("id", id.value());
+        query.paged(page);
+        query.anyOf("type", "type", filter.types());
+        query.anyOf("outcome", "outcome", filter.outcomes());
+        query.narrowing(FfiHistory.ISSUE_DATE, filter.issueDate());
+        query.narrowing(FfiHistory.EXPIRY_DATE, filter.expiryDate());
+        query.anyOf("higher-authority", "higherAuthority", filter.higherAuthorities());
+        query.anyOf("submitting-mc", "submittingMc", filter.submittingMcs());
+        if (filter.status() != null) {
+            query.parameter("status", "status", filter.status().code());
+        }
+        query.sorted(sort, Ties.BY_ID);
+        return history(query, FFIS, SourceFfi::toFfi, FfiHistory::new);
+    }
+
+    /**
+     * {@code GET {base}/Patient/{id}/numc?…}: the patient's NUMC History, filtered, sorted, paged
+     * and counted by the source (ADR 0019) — the NUMC Types and the NUMC Outcomes each as its
+     * search parameter once, {@code type} and {@code outcome}, its codes joined by commas, FHIR's
+     * OR; each end of a date range as its search parameter, {@code issue-date} or
+     * {@code expiry-date}, {@code ge} the from-date and {@code le} the to-date; and a sort as
+     * {@code _sort} on the same date parameters, {@code -} first for descending, ties broken by
+     * id. With no column to sort by, no {@code _sort} is sent, and the order is the source's own.
+     * A {@code 404} is no patient under the id; the one other good answer is a {@code 200}
+     * searchset of NUMC Records, and anything else is a fault, as is a searchset with no total or
+     * an entry that is no NUMC Record the service can hold. The id and the filters' values are
+     * URI variables, so the call is observed under the template alone: which filters were asked
+     * for and the sort, and none of their values.
+     */
+    @Override
+    public Optional<NumcHistory> findNumcHistory(PatientId id, NumcFilter filter,
+            HistorySort sort, PageRequest page) {
+        SourceQuery query = new SourceQuery(NUMC_HISTORY).variable("id", id.value());
+        query.paged(page);
+        query.anyOf("type", "type", filter.types());
+        query.anyOf("outcome", "outcome", filter.outcomes());
+        query.narrowing(NumcHistory.ISSUE_DATE, filter.issueDate());
+        query.narrowing(NumcHistory.EXPIRY_DATE, filter.expiryDate());
+        query.sorted(sort, Ties.BY_ID);
+        return history(query, NUMC_RECORDS, SourceNumc::toRecord,
+                reportingInvalidFields(SourceRead.NUMC, NumcHistory::new));
+    }
+
+    /**
+     * {@code GET {base}/Patient/{id}/armc?…}: the patient's ARMC History, filtered, sorted, paged
+     * and counted by the source (ADR 0019, D6) — the ARMC Outcome as {@code outcome}, its one
+     * code; each end of a date range as its search parameter, {@code start-date} or
+     * {@code end-date}, {@code ge} the from-date and {@code le} the to-date, the source leaving a
+     * board with no End Date out of any End Date range; and a sort as {@code _sort} on the same
+     * date parameters, {@code -} first for descending, the column alone: the source breaks ties.
+     * With no column to sort by, no {@code _sort} is sent, and the order is the source's own. A
+     * {@code 404} is no patient under the id; the one other good answer is a {@code 200}
+     * searchset of ARMC Boards, and anything else is a fault, as is a searchset with no total or
+     * an entry that is no ARMC Board the service can hold. The id and the filters' values are URI
+     * variables, so the call is observed under the template alone: which filters were asked for
+     * and the sort, and none of their values.
+     */
+    @Override
+    public Optional<ArmcHistory> findArmcHistory(PatientId id, ArmcFilter filter,
+            HistorySort sort, PageRequest page) {
+        SourceQuery query = new SourceQuery(ARMC_HISTORY).variable("id", id.value());
+        query.paged(page);
+        if (filter.outcome() != null) {
+            query.parameter("outcome", "outcome", filter.outcome().code());
+        }
+        query.narrowing(ArmcHistory.START_DATE, filter.startDate());
+        query.narrowing(ArmcHistory.END_DATE, filter.endDate());
+        query.sorted(sort, Ties.THE_SOURCES);
+        return history(query, ARMC_BOARDS, SourceArmc::toBoard, ArmcHistory::new);
+    }
+
+    /**
+     * {@code GET {base}/Patient/{id}/medication?…}: the patient's Medication History, filtered,
+     * sorted, paged and counted by the source (ADR 0019, D7) — the Dispense Statuses as
+     * {@code dispense-status} once, its codes joined by commas, FHIR's OR; each end of a date-time
+     * range as its search parameter, {@code start-date} or {@code end-date}, the instant its
+     * Singapore minute names in UTC, {@code ge} the from-minute and {@code lt} the minute after the
+     * to-minute ({@link SourceQuery#narrowing}); and a sort as {@code _sort} on the same date
+     * parameters, {@code -} first for descending, the column alone: the source breaks ties. With
+     * no column to sort by, no {@code _sort} is sent, and the order is the source's own. A
+     * {@code 404} is no patient under the id; the one other good answer is a {@code 200}
+     * searchset of Medication Records, and anything else is a fault, as is a searchset with no
+     * total or an entry that is no Medication Record the service can hold. The id and the
+     * filters' values are URI variables, so the call is observed under the template alone: which
+     * filters were asked for and the sort, and none of their values.
+     */
+    @Override
+    public Optional<MedicationHistory> findMedicationHistory(PatientId id,
+            MedicationFilter filter, HistorySort sort, PageRequest page) {
+        SourceQuery query = new SourceQuery(MEDICATION_HISTORY).variable("id", id.value());
+        query.paged(page);
+        query.anyOf("dispense-status", "dispenseStatus", filter.dispenseStatuses());
+        query.narrowing(MedicationHistory.START_DATE, filter.startDate());
+        query.narrowing(MedicationHistory.END_DATE, filter.endDate());
+        query.sorted(sort, Ties.THE_SOURCES);
+        return history(query, MEDICATION_RECORDS, SourceMedication::toRecord,
+                MedicationHistory::new);
+    }
+
+    /**
+     * {@code query}'s answer as one page of a patient's history: empty on a {@code 404}, no
+     * patient under the id; on a {@code 200}, the searchset {@code body} reads, each entry read
+     * by {@code read}, and its total and entries made the page by {@code page}. Any other status
+     * is a fault, as is a searchset with no total or an entry {@code read} refuses.
+     */
+    private <R, E, H> Optional<H> history(SourceQuery query,
+            ParameterizedTypeReference<SourceSearchset<R>> body, Function<R, E> read,
+            BiFunction<Integer, List<E>, H> page) {
+        String uri = query.template();
+        Map<String, Object> variables = query.variables();
+        return called(() -> source.get()
+                .uri(uri, variables)
+                .accept(FHIR_JSON)
+                .exchange((request, response) -> {
+                    if (!found(response)) {
+                        return Optional.<H>empty();
+                    }
+                    SourceSearchset.Page<E> entries = response.bodyTo(body).page(read);
+                    return Optional.of(page.apply(entries.total(), entries.entries()));
+                }));
+    }
+
+    /**
+     * {@code page}, after the invalid fields of its entries are reported as the read {@code read}'s
+     * ({@link InvalidSourceFields}): a page of a history shown as received (ADR 0020).
+     */
+    private <E extends ReceivedRecord, H> BiFunction<Integer, List<E>, H> reportingInvalidFields(
+            SourceRead read, BiFunction<Integer, List<E>, H> page) {
+        return (total, entries) -> {
+            invalidFields.report(read, invalidAmong(entries));
+            return page.apply(total, entries);
+        };
+    }
+
+    /**
+     * Each field of {@code entries} whose format was wrong, by its path in the searchset —
+     * {@code entry[3].issueDate}, the entry counted from zero — in the searchset's order.
+     */
+    private static List<InvalidSourceFields.Field> invalidAmong(
+            List<? extends ReceivedRecord> entries) {
+        List<InvalidSourceFields.Field> invalid = new ArrayList<>();
+        for (int entry = 0; entry < entries.size(); entry++) {
+            for (String field : entries.get(entry).invalid()) {
+                invalid.add(new InvalidSourceFields.Field("entry[" + entry + "]." + field,
+                        field));
+            }
+        }
+        return invalid;
+    }
+
+    /**
+     * Whether a read of one patient by its id found them: a {@code 200} is the patient's answer
+     * and a {@code 404} is no patient under the id. Any other status is a fault.
+     *
+     * @throws PatientSourceException for any status but those two
+     */
+    private static boolean found(ClientHttpResponse response) throws IOException {
+        if (response.getStatusCode().isSameCodeAs(HttpStatus.NOT_FOUND)) {
+            return false;
+        }
+        if (!response.getStatusCode().isSameCodeAs(HttpStatus.OK)) {
+            throw PatientSourceException.answered(response.getStatusCode().value());
+        }
+        return true;
     }
 
     /**

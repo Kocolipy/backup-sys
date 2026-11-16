@@ -4,8 +4,8 @@ import { join } from "node:path";
 import { compile } from "tailwindcss";
 import { describe, expect, it } from "vitest";
 
-// The design doc's named type scale (frontend/docs/DESIGN.md, `typography:`),
-// as the utilities src/index.css generates for it. vitest stubs every CSS
+// The design's named type scale (frontend/docs/DESIGN.md, Typography), as the
+// utilities src/index.css generates for it. vitest stubs every CSS
 // import, so this compiles the token file with Tailwind itself and reads back
 // the rule a class in markup would receive.
 //
@@ -47,8 +47,8 @@ async function declarationsOf(className: string): Promise<Record<string, string>
   );
 }
 
-// Transcribed from DESIGN.md by hand, so the expectation cannot drift with the
-// token file it checks.
+// Each level's values, stated here by hand and read from nowhere, so the
+// expectation cannot drift with the token file it checks.
 const TYPE_SCALE = {
   "text-body-sm": { "font-size": "12px", "line-height": "18px", "font-weight": "400" },
   "text-body-md": { "font-size": "14px", "line-height": "20px", "font-weight": "400" },
@@ -72,7 +72,7 @@ const TYPE_SCALE = {
 
 describe("the design's type scale", () => {
   it.each(Object.entries(TYPE_SCALE))(
-    "%s sets the level DESIGN.md specifies",
+    "%s sets its level of the type scale",
     async (name, level) => {
       expect(await declarationsOf(name)).toEqual(level);
     },
