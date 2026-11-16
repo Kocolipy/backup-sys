@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import { checkDateRanges } from "@/lib/date-range";
 import { DecodeError } from "@/lib/decode";
-import { describeDecoder, STRING } from "@/lib/decode.testHelpers";
 
 import {
   countNumcFilters,
@@ -13,13 +12,23 @@ import {
   type NumcFilters,
 } from "./numc-api";
 
-/** One NUMC Record exactly as the backend serialises it. */
+/** One NUMC Record exactly as the backend serialises it, every field present. */
 const SUBMARINER = {
   id: "numc-tan-wei-ming-2",
   type: "submariner",
   outcome: "waiver-rejected",
   issueDate: "2024-01-10",
   expiryDate: "2025-01-09",
+  invalid: [],
+};
+
+/** {@link SUBMARINER} as the page reads it. */
+const SUBMARINER_READ = {
+  id: { state: "present", value: "numc-tan-wei-ming-2" },
+  type: { state: "present", value: "submariner" },
+  outcome: { state: "present", value: "waiver-rejected" },
+  issueDate: { state: "present", value: "2024-01-10" },
+  expiryDate: { state: "present", value: "2025-01-09" },
 };
 
 /** `decode(body)`'s refusal, read through the declaration as a `Response`. */
@@ -30,23 +39,106 @@ async function refused(body: unknown) {
   );
 }
 
-// Every element is required, and each is read as a string first. A code is
-// matched exactly, so a label, another case, another spelling or another
-// set's code is outside its set; which strings are calendar dates is
-// `isCalendarDate`'s (lib/time.test.ts).
-describeDecoder(
-  "NumcRecord",
-  decodeNumcRecord,
-  SUBMARINER,
-  {
-    id: STRING,
-    type: ["Submariner Duties", "hyperbaric-chamber | submariner | diving", "a string"],
-    outcome: ["request-waiver", "fit | unfit | waiver-granted | waiver-rejected", "a string"],
-    issueDate: ["10 Jan 2024", "a date", "a string"],
-    expiryDate: ["2025-02-30", "a date", "a string"],
-  },
-  { strict: true },
-);
+// A NUMC Record is shown as received (ADR 0020): each field is read by the
+// lenient field decoder (`readObject(…).sourceFields()`, lib/decode.test.ts),
+// so its value never refuses the record — only its shape does.
+describe("decodeNumcRecord", () => {
+  it("reads every field present as it came", () => {
+    expect(decodeNumcRecord(SUBMARINER)).toStrictEqual(SUBMARINER_READ);
+  });
+
+  it("reads a null field as missing, and one the row names invalid as invalid", () => {
+    expect(
+      decodeNumcRecord({
+        ...SUBMARINER,
+        id: null,
+        outcome: null,
+        expiryDate: null,
+        invalid: ["expiryDate"],
+      }),
+    ).toStrictEqual({
+      ...SUBMARINER_READ,
+      id: { state: "missing" },
+      outcome: { state: "missing" },
+      expiryDate: { state: "invalid" },
+    });
+  });
+
+  it.each(["id", "type", "outcome", "issueDate", "expiryDate"])(
+    "reads %s invalid when the row names it",
+    (field) => {
+      expect(decodeNumcRecord({ ...SUBMARINER, [field]: null, invalid: [field] })).toStrictEqual({
+        ...SUBMARINER_READ,
+        [field]: { state: "invalid" },
+      });
+    },
+  );
+
+  // Which strings are calendar dates is `isCalendarDate`'s (lib/time.test.ts).
+  it.each(["issueDate", "expiryDate"] as const)(
+    "reads %s invalid when it is no calendar date",
+    (field) => {
+      expect(decodeNumcRecord({ ...SUBMARINER, [field]: "2025-02-30" })[field]).toStrictEqual({
+        state: "invalid",
+      });
+    },
+  );
+
+  // A code is matched by the page, not the decoder: a label, another case or
+  // another set's code is kept as the source sent it.
+  it.each([
+    ["type", "Submariner Duties"],
+    ["type", "parachuting"],
+    ["outcome", "WAIVER GRANTED"],
+    ["outcome", "request-waiver"],
+  ])("reads %s outside its closed set as present, as it came: %s", (field, code) => {
+    expect(decodeNumcRecord({ ...SUBMARINER, [field]: code })).toStrictEqual({
+      ...SUBMARINER_READ,
+      [field]: { state: "present", value: code },
+    });
+  });
+
+  it("reads an id outside FHIR's id grammar as present: ids are not checked", () => {
+    expect(decodeNumcRecord({ ...SUBMARINER, id: "numc tan/1" }).id).toStrictEqual({
+      state: "present",
+      value: "numc tan/1",
+    });
+  });
+
+  it.each(["id", "type", "outcome", "issueDate", "expiryDate"])(
+    "refuses a record without %s, which the backend always sends",
+    (field) => {
+      expect(() =>
+        decodeNumcRecord(
+          Object.fromEntries(Object.entries(SUBMARINER).filter(([key]) => key !== field)),
+        ),
+      ).toThrow(new DecodeError(`NumcRecord.${field} is not a string or null`));
+    },
+  );
+
+  it("refuses a record without invalid", () => {
+    expect(() =>
+      decodeNumcRecord(
+        Object.fromEntries(Object.entries(SUBMARINER).filter(([key]) => key !== "invalid")),
+      ),
+    ).toThrow(new DecodeError("NumcRecord.invalid is not an array"));
+  });
+
+  // A NUMC Record has no Status: one sent is a field the record does not have.
+  it("refuses a field the record does not have", () => {
+    expect(() => decodeNumcRecord({ ...SUBMARINER, status: "active" })).toThrow(
+      new DecodeError("NumcRecord.status is not expected"),
+    );
+  });
+
+  it.each([
+    ["an array", [SUBMARINER]],
+    ["null", null],
+    ["a string", "record"],
+  ])("refuses %s as a record", (_, value) => {
+    expect(() => decodeNumcRecord(value)).toThrow(new DecodeError("NumcRecord is not an object"));
+  });
+});
 
 // How a date range is checked is `checkDateRanges`' (lib/date-range.test.ts):
 // here, that the NUMC History's two ranges are the ones checked, by name.
@@ -176,30 +268,17 @@ describe("NUMC_HISTORY", () => {
       NUMC_HISTORY.decode(
         new Response(JSON.stringify({ records: [SUBMARINER], startIndex: 1, totalResults: 4 })),
       ),
-    ).resolves.toStrictEqual({ rows: [SUBMARINER], startIndex: 1, totalResults: 4 });
+    ).resolves.toStrictEqual({ rows: [SUBMARINER_READ], startIndex: 1, totalResults: 4 });
   });
 
-  it("refuses a page holding a NUMC Record it cannot read", async () => {
+  it("refuses a page holding a NUMC Record whose shape it cannot read", async () => {
     expect(
       await refused({
-        records: [{ ...SUBMARINER, outcome: "expired" }],
+        records: [{ ...SUBMARINER, invalid: "outcome" }],
         startIndex: 1,
         totalResults: 1,
       }),
-    ).toStrictEqual(
-      new DecodeError("NumcRecord.outcome is not fit | unfit | waiver-granted | waiver-rejected"),
-    );
-  });
-
-  // A NUMC Record has no Status: one sent is a field the record does not have.
-  it("refuses a NUMC Record carrying a Status", async () => {
-    expect(
-      await refused({
-        records: [{ ...SUBMARINER, status: "active" }],
-        startIndex: 1,
-        totalResults: 1,
-      }),
-    ).toStrictEqual(new DecodeError("NumcRecord.status is not expected"));
+    ).toStrictEqual(new DecodeError("NumcRecord.invalid is not an array"));
   });
 
   it("refuses a page holding a field it does not know", async () => {

@@ -23,13 +23,14 @@ import java.util.stream.Stream;
  *   <li>{@code data}: the source answered with something the service cannot use — another status
  *       ({@code unexpected-status}), a body that is not JSON or not a Patient
  *       ({@code unreadable}), a Patient breaking one of the domain's rules, a search's answer
- *       or a history that is no searchset, has no total, or holds an entry with no id, or an
- *       FFI, a NUMC Record, an ARMC Board or a Medication Record missing a field, holding a
- *       code outside its closed set, a date not to the day or a date-time with no offset, or
- *       an ARMC Board or a Medication Record ending before it starts — a NUMC Record's each
- *       under a reason naming NUMC, an ARMC Board's under one naming ARMC and a Medication
- *       Record's under one naming Medication or an element of its own, so a record says which
- *       history broke.
+ *       or a history that is no searchset, has no total, or holds an entry of another
+ *       resource, or one with no id, or an FFI, an ARMC Board or a Medication Record missing a
+ *       field, holding a code outside its closed set, a date not to the day or a date-time with
+ *       no offset, or an ARMC Board or a Medication Record ending before it starts — an ARMC
+ *       Board's under a reason naming ARMC and a Medication Record's under one naming
+ *       Medication or an element of its own, so a record says which history broke. A NUMC
+ *       Record breaks no rule: its NUMC History is shown as received (ADR 0020), so only its
+ *       call or its searchset fails.
  * </ul>
  *
  * <p>Its message is fixed text, naming at most a status or an element, and its cause, when it has
@@ -127,39 +128,6 @@ public final class PatientSourceException extends UpstreamFaultException {
         NO_STATUS("no-status", "The patient source's FFI has no status", ErrorCategory.DATA),
         /** An FFI whose {@code status} is no Status's code. */
         UNKNOWN_STATUS("unknown-status", "The patient source's FFI's status is not a Status",
-                ErrorCategory.DATA),
-        /** A NUMC History's entry with no {@code id}. */
-        NUMC_NO_ID("numc-no-id", "The patient source's NUMC Record has no id",
-                ErrorCategory.DATA),
-        /** A NUMC History's entry whose {@code id} is outside FHIR's id grammar. */
-        NUMC_INVALID_ID("numc-invalid-id",
-                "The patient source's NUMC Record's id is not a FHIR id", ErrorCategory.DATA),
-        /** A NUMC Record with no {@code type}. */
-        NO_NUMC_TYPE("no-numc-type", "The patient source's NUMC Record has no type",
-                ErrorCategory.DATA),
-        /** A NUMC Record whose {@code type} is no NUMC Type's code. */
-        UNKNOWN_NUMC_TYPE("unknown-numc-type",
-                "The patient source's NUMC Record's type is not a NUMC Type", ErrorCategory.DATA),
-        /** A NUMC Record with no {@code outcome}. */
-        NO_NUMC_OUTCOME("no-numc-outcome", "The patient source's NUMC Record has no outcome",
-                ErrorCategory.DATA),
-        /** A NUMC Record whose {@code outcome} is no NUMC Outcome's code. */
-        UNKNOWN_NUMC_OUTCOME("unknown-numc-outcome",
-                "The patient source's NUMC Record's outcome is not a NUMC Outcome",
-                ErrorCategory.DATA),
-        /** A NUMC Record with no {@code issueDate}. */
-        NO_NUMC_ISSUE_DATE("no-numc-issue-date",
-                "The patient source's NUMC Record has no issue date", ErrorCategory.DATA),
-        /** A NUMC Record whose Issue Date is no date to the day. */
-        NUMC_ISSUE_DATE_NOT_TO_THE_DAY("numc-issue-date-not-to-the-day",
-                "The patient source's NUMC Record's issue date is not to the day",
-                ErrorCategory.DATA),
-        /** A NUMC Record with no {@code expiryDate}. */
-        NO_NUMC_EXPIRY_DATE("no-numc-expiry-date",
-                "The patient source's NUMC Record has no expiry date", ErrorCategory.DATA),
-        /** A NUMC Record whose Expiry Date is no date to the day. */
-        NUMC_EXPIRY_DATE_NOT_TO_THE_DAY("numc-expiry-date-not-to-the-day",
-                "The patient source's NUMC Record's expiry date is not to the day",
                 ErrorCategory.DATA),
         /** An ARMC History's entry with no {@code id}. */
         ARMC_NO_ID("armc-no-id", "The patient source's ARMC Board has no id",

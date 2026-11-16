@@ -1,5 +1,7 @@
 package com.example.backend.patient.infrastructure.http;
 
+import com.example.backend.observability.InvalidSourceFields;
+import com.example.backend.observability.SourceRead;
 import com.example.backend.observability.OutboundCallFailure;
 import com.example.backend.observability.RedactedFaultException;
 import com.example.backend.paging.domain.PageRequest;
@@ -19,14 +21,17 @@ import com.example.backend.patient.domain.PatientMatches;
 import com.example.backend.patient.domain.PatientFilter;
 import com.example.backend.patient.domain.PatientQuery;
 import com.example.backend.patient.domain.PatientStore;
+import com.example.backend.patient.domain.ReceivedRecord;
 import com.example.backend.patient.infrastructure.http.PatientSourceException.Failure;
 import com.example.backend.patient.infrastructure.http.SourceQuery.Ties;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.http.HttpClient;
 import java.net.http.HttpTimeoutException;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -73,7 +78,9 @@ import org.springframework.web.client.RestClient;
  * built from Spring Boot's {@link RestClient.Builder}, so each call is observed as every client's
  * is ({@code http.client.requests}, under the URI template, never the id), on the JDK client with
  * redirects off and the timeouts below: a fixed connect timeout, and a read timeout a deployment
- * may set ({@code APP_PATIENT_SOURCE_READ_TIMEOUT}). Nothing here logs.
+ * may set ({@code APP_PATIENT_SOURCE_READ_TIMEOUT}). Nothing here logs: a NUMC History, shown as
+ * received (ADR 0020), hands the paths of the fields its answer held in the wrong format to
+ * {@link InvalidSourceFields}, which reports them.
  */
 @Component
 class PatientSourceAdapter implements PatientStore {
@@ -155,29 +162,35 @@ class PatientSourceAdapter implements PatientStore {
     /** The client's read timeout, by which a body read that failed is told timed out. */
     private final Duration readTimeout;
 
+    /** Where a response's invalid fields are reported: one WARN, and a count for each. */
+    private final InvalidSourceFields invalidFields;
+
     /**
      * @param baseUrl     the source's FHIR base, {@code APP_PATIENT_SOURCE_BASE_URL}: required,
      *                    with no default, so a deployment that forgot it fails to start
      * @param readTimeout {@code APP_PATIENT_SOURCE_READ_TIMEOUT}, as {@link #readTimeout} reads it
+     * @param meters      where an answer's invalid fields are counted ({@link InvalidSourceFields})
      */
     @Autowired
     PatientSourceAdapter(RestClient.Builder builder,
             @Value("${app.patient-source.base-url}") String baseUrl,
-            @Value("${app.patient-source.read-timeout:}") String readTimeout) {
-        this(builder, baseUrl, CONNECT_TIMEOUT, readTimeout(readTimeout));
+            @Value("${app.patient-source.read-timeout:}") String readTimeout,
+            MeterRegistry meters) {
+        this(builder, baseUrl, CONNECT_TIMEOUT, readTimeout(readTimeout), meters);
     }
 
     /** An adapter on the source at {@code baseUrl}, under the default timeouts. */
-    PatientSourceAdapter(RestClient.Builder builder, String baseUrl) {
-        this(builder, baseUrl, CONNECT_TIMEOUT, DEFAULT_READ_TIMEOUT);
+    PatientSourceAdapter(RestClient.Builder builder, String baseUrl, MeterRegistry meters) {
+        this(builder, baseUrl, CONNECT_TIMEOUT, DEFAULT_READ_TIMEOUT, meters);
     }
 
     PatientSourceAdapter(RestClient.Builder builder, String baseUrl, Duration connectTimeout,
-            Duration readTimeout) {
+            Duration readTimeout, MeterRegistry meters) {
         JdkClientHttpRequestFactory requests =
                 new JdkClientHttpRequestFactory(httpClient(connectTimeout));
         requests.setReadTimeout(readTimeout);
         this.readTimeout = readTimeout;
+        this.invalidFields = new InvalidSourceFields(meters);
         this.source = builder
                 .baseUrl(base(baseUrl))
                 .requestFactory(requests)
@@ -289,7 +302,8 @@ class PatientSourceAdapter implements PatientStore {
         query.narrowing(NumcHistory.ISSUE_DATE, filter.issueDate());
         query.narrowing(NumcHistory.EXPIRY_DATE, filter.expiryDate());
         query.sorted(sort, Ties.BY_ID);
-        return history(query, NUMC_RECORDS, SourceNumc::toRecord, NumcHistory::new);
+        return history(query, NUMC_RECORDS, SourceNumc::toRecord,
+                reportingInvalidFields(SourceRead.NUMC, NumcHistory::new));
     }
 
     /**
@@ -369,6 +383,34 @@ class PatientSourceAdapter implements PatientStore {
                     SourceSearchset.Page<E> entries = response.bodyTo(body).page(read);
                     return Optional.of(page.apply(entries.total(), entries.entries()));
                 }));
+    }
+
+    /**
+     * {@code page}, after the invalid fields of its entries are reported as the read {@code read}'s
+     * ({@link InvalidSourceFields}): a page of a history shown as received (ADR 0020).
+     */
+    private <E extends ReceivedRecord, H> BiFunction<Integer, List<E>, H> reportingInvalidFields(
+            SourceRead read, BiFunction<Integer, List<E>, H> page) {
+        return (total, entries) -> {
+            invalidFields.report(read, invalidAmong(entries));
+            return page.apply(total, entries);
+        };
+    }
+
+    /**
+     * Each field of {@code entries} whose format was wrong, by its path in the searchset —
+     * {@code entry[3].issueDate}, the entry counted from zero — in the searchset's order.
+     */
+    private static List<InvalidSourceFields.Field> invalidAmong(
+            List<? extends ReceivedRecord> entries) {
+        List<InvalidSourceFields.Field> invalid = new ArrayList<>();
+        for (int entry = 0; entry < entries.size(); entry++) {
+            for (String field : entries.get(entry).invalid()) {
+                invalid.add(new InvalidSourceFields.Field("entry[" + entry + "]." + field,
+                        field));
+            }
+        }
+        return invalid;
     }
 
     /**

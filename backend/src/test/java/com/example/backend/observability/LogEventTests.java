@@ -75,7 +75,8 @@ class LogEventTests {
             Operation.HTTP_REQUEST_REFUSAL, NO_ACTION_SECTION,
             Operation.HTTP_REQUEST_FAULT, NO_ACTION_SECTION,
             Operation.AUDIT_RETENTION, NO_ACTION_SECTION,
-            Operation.AUDIT_APPEND, NO_ACTION_SECTION);
+            Operation.AUDIT_APPEND, NO_ACTION_SECTION,
+            Operation.PATIENT_SOURCE_INVALID_FIELDS, NO_ACTION_SECTION);
 
     /**
      * Every operation either maps onto a standard action or is a documented exception —

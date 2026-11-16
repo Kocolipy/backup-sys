@@ -13,6 +13,7 @@
  * one is a dependency decision of its own.
  */
 
+import type { SourceField } from "./source-field";
 import { isCalendarDate, isOffsetDateTime } from "./time";
 
 /** A body that does not have the shape its decoder expects. */
@@ -58,6 +59,28 @@ export interface ObjectReader {
    * know would change what the ones it reads mean.
    */
   onlyFields(keys: readonly string[]): void;
+  /**
+   * The object's patient-source fields, read leniently: the one lenient field
+   * decoder ({@link SourceFieldReader}). Reads the object's `invalid` strictly.
+   */
+  sourceFields(): SourceFieldReader;
+}
+
+/**
+ * The lenient field decoder: how the patient-source fields of one row the
+ * backend answers are read (`/docs/adr/0020-patient-source-data-is-shown-as-received.md`).
+ * The row's shape is as strict as any other — each such key is always there,
+ * and its `invalid` is an array of strings — but a field's value never fails
+ * the read.
+ */
+export interface SourceFieldReader {
+  /**
+   * The field `key`: invalid when the row's `invalid` names it; missing when
+   * it is `null`; present when it is a string `accept` takes (any string, by
+   * default); and invalid for anything else — the backend's own shape held
+   * leniently, so a cell shows "Error" rather than the table failing.
+   */
+  read(key: string, accept?: (text: string) => boolean): SourceField<string>;
 }
 
 /** An array, each element decoded by `decode`; `what` names it in the error. */
@@ -124,6 +147,24 @@ export function readObject(value: unknown, what: string): ObjectReader {
     onlyFields: (keys) => {
       const extra = Object.keys(value).find((key) => !keys.includes(key));
       if (extra !== undefined) throw new DecodeError(`${what}.${extra} is not expected`);
+    },
+    sourceFields: () => {
+      const invalid = value.invalid;
+      const named: readonly unknown[] = Array.isArray(invalid)
+        ? invalid
+        : fail("invalid", "an array");
+      if (!named.every((field) => typeof field === "string")) fail("invalid", "strings");
+      return {
+        read: (key, accept = () => true) => {
+          if (!(key in value)) fail(key, "a string or null");
+          const field = value[key];
+          if (named.includes(key)) return { state: "invalid" };
+          if (field === null) return { state: "missing" };
+          return typeof field === "string" && accept(field)
+            ? { state: "present", value: field }
+            : { state: "invalid" };
+        },
+      };
     },
   };
 }

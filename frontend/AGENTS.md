@@ -33,6 +33,14 @@ reasoning behind each rule.
 
 - **A response body is never cast** (`as T`): a hand-written decoder built from
   `src/lib/decode.ts`'s primitives reads it, beside the wire type it decodes.
+  Every decoder is strict about the backend's shape — the page envelope, each
+  field there, a field it does not know refused. **A patient-source field shown
+  as received** (ADR 0020) is the one lenient value: it is read only through
+  the lenient field decoder, `readObject(…).sourceFields()`, into a
+  `SourceField` (`src/lib/source-field.ts`), shown only through `shown` — its
+  value, "—" when missing, "Error" when invalid — and a code's label or badge
+  found only through `byCode`, which falls back to the raw code. The NUMC
+  History is read so (ADR 0020).
 - **The auth state changes, and the CSRF token is forgotten, only through
   `src/auth/session-transitions.ts`**, which owns the session generation: a `401`
   ends only the session its request was sent under.
@@ -79,7 +87,7 @@ request, reads a status, or touches the CSRF token, the session window, logout
 or the CSP — and update it in the same change when the backend side moves.
 
 The root's `make verify-contract`, which `npm run verify` does not run, holds
-to `/backend/docs/openapi.yaml` the closed sets decoded strictly from the API,
+to `/backend/docs/openapi.yaml` the closed sets it mirrors from the API,
 every declaration's `permission`, the query parameters each declaration's
 `path` sends, and each declaration's `decode`, run over sample bodies built
 from its operation's success response (`/scripts/spa-contract/README.md`). A

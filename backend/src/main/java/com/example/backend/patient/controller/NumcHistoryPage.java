@@ -2,6 +2,7 @@ package com.example.backend.patient.controller;
 
 import com.example.backend.patient.domain.NumcHistory;
 import com.example.backend.patient.domain.NumcRecord;
+import java.time.LocalDate;
 import java.util.List;
 
 /**
@@ -22,19 +23,26 @@ public record NumcHistoryPage(int totalResults, int startIndex, List<Row> record
     }
 
     /**
-     * One NUMC Record: its id, each closed set's member as its code, and its dates as
-     * {@code YYYY-MM-DD}. The SPA names each code with its label.
+     * One NUMC Record as received (ADR 0020): each field the source sent, each closed set's code
+     * as it came — known to its set or not — and its dates as {@code YYYY-MM-DD}. A field the
+     * source left out, sent blank or sent in the wrong format is {@code null}, and {@code invalid}
+     * names those whose format was wrong: a {@code null} field it does not name is missing. The
+     * SPA names each known code with its label.
+     *
+     * @param invalid the fields whose format was wrong, in the row's order; none when each field
+     *                is present or missing
      */
     public record Row(String id, String type, String outcome, String issueDate,
-            String expiryDate) {
+            String expiryDate, List<String> invalid) {
 
         static Row of(NumcRecord record) {
             return new Row(
-                    record.id(),
-                    record.type().code(),
-                    record.outcome().code(),
-                    record.issueDate().toString(),
-                    record.expiryDate().toString());
+                    record.id().value(),
+                    record.type().value(),
+                    record.outcome().value(),
+                    record.issueDate().map(LocalDate::toString).value(),
+                    record.expiryDate().map(LocalDate::toString).value(),
+                    record.invalid());
         }
 
         /** A NUMC Record is Restricted data: printed, it names the record by id alone. */

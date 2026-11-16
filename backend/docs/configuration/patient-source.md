@@ -154,29 +154,30 @@ objects, matched on `_count=5`, `_offset`, `_total=accurate`, the `_sort` and
 every filter — `type`, `outcome`, `issue-date`, `expiry-date` — each pinned to
 its value or to absent:
 
-| Stub file                                           | Read                                                           | Answers                                         |
-| --------------------------------------------------- | -------------------------------------------------------------- | ----------------------------------------------- |
-| `numc-tan-wei-ming`                                 | `eq081-VQEgP8drUUqCWzHfw3`                                     | Tan Wei Ming's 4 NUMC Records, `total: 4`       |
-| `numc-tan-wei-ming-by-issue-date`                   | Tan Wei Ming, `_sort=issue-date,_id`                           | his 4, earliest Issue Date first                |
-| `numc-tan-wei-ming-by-issue-date-descending`        | Tan Wei Ming, `_sort=-issue-date,_id`                          | his 4, latest Issue Date first                  |
-| `numc-tan-wei-ming-by-expiry-date`                  | Tan Wei Ming, `_sort=expiry-date,_id`                          | his 4, earliest Expiry Date first               |
-| `numc-tan-wei-ming-by-expiry-date-descending`       | Tan Wei Ming, `_sort=-expiry-date,_id`                         | his 4, latest Expiry Date first                 |
-| `numc-tan-hui-min-page-1`                           | `dev-patient-05`                                               | 5 of `total: 7`                                 |
-| `numc-tan-hui-min-page-2`                           | `dev-patient-05`, `_offset=5`                                  | the last 2 of `total: 7`                        |
-| `numc-tan-hui-min-hyperbaric-chamber-or-submariner` | Tan Hui Min, `type=hyperbaric-chamber,submariner`              | `total: 4`                                      |
-| `numc-tan-hui-min-waiver-granted-or-rejected`       | Tan Hui Min, `outcome=waiver-granted,waiver-rejected`          | `total: 3`                                      |
-| `numc-tan-hui-min-issued-2024`                      | Tan Hui Min, `issue-date=ge2024-01-01&issue-date=le2024-12-31` | `total: 3`                                      |
-| `numc-tan-hui-min-expiring-to-2024`                 | Tan Hui Min, `expiry-date=le2024-12-31`                        | `total: 3`                                      |
-| `numc-tan-hui-min-diving-issued-from-2024`          | Tan Hui Min, `type=diving&issue-date=ge2024-01-01`             | `total: 2`: two filters combined                |
-| `numc-tan-hui-min-expiring-to-2022`                 | Tan Hui Min, `expiry-date=le2022-12-31`                        | no entry, `total: 0`: a filter matching nothing |
-| `numc-fallback`                                     | any other read of a development fixture's, lower priority      | no entry, `total: 0`                            |
-| `numc-not-found`                                    | any other well-formed id, lowest priority                      | `404`, as a read by id of an unknown id         |
+| Stub file                                           | Read                                                           | Answers                                                                                                                |
+| --------------------------------------------------- | -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `numc-tan-wei-ming`                                 | `eq081-VQEgP8drUUqCWzHfw3`                                     | Tan Wei Ming's 4 NUMC Records, `total: 4`                                                                              |
+| `numc-tan-wei-ming-by-issue-date`                   | Tan Wei Ming, `_sort=issue-date,_id`                           | his 4, earliest Issue Date first                                                                                       |
+| `numc-tan-wei-ming-by-issue-date-descending`        | Tan Wei Ming, `_sort=-issue-date,_id`                          | his 4, latest Issue Date first                                                                                         |
+| `numc-tan-wei-ming-by-expiry-date`                  | Tan Wei Ming, `_sort=expiry-date,_id`                          | his 4, earliest Expiry Date first                                                                                      |
+| `numc-tan-wei-ming-by-expiry-date-descending`       | Tan Wei Ming, `_sort=-expiry-date,_id`                         | his 4, latest Expiry Date first                                                                                        |
+| `numc-tan-hui-min-page-1`                           | `dev-patient-05`                                               | 5 of `total: 7`                                                                                                        |
+| `numc-tan-hui-min-page-2`                           | `dev-patient-05`, `_offset=5`                                  | the last 2 of `total: 7`                                                                                               |
+| `numc-tan-hui-min-hyperbaric-chamber-or-submariner` | Tan Hui Min, `type=hyperbaric-chamber,submariner`              | `total: 4`                                                                                                             |
+| `numc-tan-hui-min-waiver-granted-or-rejected`       | Tan Hui Min, `outcome=waiver-granted,waiver-rejected`          | `total: 3`                                                                                                             |
+| `numc-tan-hui-min-issued-2024`                      | Tan Hui Min, `issue-date=ge2024-01-01&issue-date=le2024-12-31` | `total: 3`                                                                                                             |
+| `numc-tan-hui-min-expiring-to-2024`                 | Tan Hui Min, `expiry-date=le2024-12-31`                        | `total: 3`                                                                                                             |
+| `numc-tan-hui-min-diving-issued-from-2024`          | Tan Hui Min, `type=diving&issue-date=ge2024-01-01`             | `total: 2`: two filters combined                                                                                       |
+| `numc-tan-hui-min-expiring-to-2022`                 | Tan Hui Min, `expiry-date=le2022-12-31`                        | no entry, `total: 0`: a filter matching nothing                                                                        |
+| `numc-tan-boon-huat`                                | `dev-patient-10`                                               | Tan Boon Huat's 4, `total: 4`, shown as received: elements missing, malformed and outside their closed sets (ADR 0020) |
+| `numc-fallback`                                     | any other read of a development fixture's, lower priority      | no entry, `total: 0`                                                                                                   |
+| `numc-not-found`                                    | any other well-formed id, lowest priority                      | `404`, as a read by id of an unknown id                                                                                |
 
 Beside them, `fault-numc-<failure>` answers each failure of a NUMC read under a
 patient id of its own — `unreachable` (the connection reset), `slow` (after 7
 seconds), `server-error` (`503`), `unexpected-status` (`400`),
-`not-a-searchset`, `no-total`, `no-id`, `invalid-id`, `no-outcome`,
-`unknown-type`, `unknown-outcome` and `expiry-date-not-to-the-day`.
+`not-a-searchset` and `no-total`. What a NUMC Record holds is never a failure:
+Tan Boon Huat's page carries it.
 
 ```bash
 curl -s 'http://127.0.0.1:8104/Patient/eq081-VQEgP8drUUqCWzHfw3/numc?_offset=0&_count=5&_total=accurate'

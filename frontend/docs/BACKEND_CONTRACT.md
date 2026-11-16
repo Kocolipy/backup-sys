@@ -127,8 +127,13 @@ change, when the backend side moves. What the SPA has to honour:
   `src/pages/numc/numc-api.ts`) opts in to `absentOnNotFound`, so the `404` is
   the NUMC page's "No patient in context" and the `502` "Couldn't load NUMC
   records" with Try again; the `{patientId}` is sent through
-  `encodeURIComponent`, and each NUMC Record is decoded strictly, a Status
-  among the fields it refuses.
+  `encodeURIComponent`. A NUMC Record is shown as received (ADR 0020): its shape
+  is decoded strictly — every field there, `invalid` an array of strings, and a
+  field it does not know, a Status among them, refused — but each element's
+  value through the lenient field decoder (`readObject(…).sourceFields()`): a
+  `null` element is missing, "—", one its row names in `invalid` is "Error",
+  and a code outside its closed set is shown as it came, so no element fails
+  the read.
 - **A patient's ARMC History answers plain JSON too, on the same terms.**
   `GET /api/patient-armc/{patientId}` answers `application/json`, every
   refusal or fault an `ApiError`. Its declaration (`ARMC_HISTORY`,
