@@ -493,13 +493,15 @@ class ApiContractFixtureTests {
 
     private static void patientMedication(List<Fixture> all) {
         add(all, "patient Medication History: a page of Medication Records, one with no optional"
-                + " element, sorted and filtered, a patient with none, an unknown patient, a"
-                + " malformed id, a filter or sort it cannot take, a failing source, and the"
-                + " refusals", t -> {
+                + " element, sorted and filtered, one with fields missing, invalid and outside"
+                + " their closed sets, a patient with none, an unknown patient, a malformed id, a"
+                + " filter or sort it cannot take, a failing source, and the refusals", t -> {
             // patient:read is a Group's to confer, as for an FFI History. The histories are the
             // patient source's mock's (PatientSourceStubs): Tan Wei Ming has six Medication
-            // Records, Tan Hui Min four, the last with no optional element, Siti Nurhaliza binte
-            // Ahmad none.
+            // Records, Tan Hui Min four, the last with no optional element, Tan Boon Huat four
+            // shown as received (ADR 0020) — fields missing and invalid, codes outside their
+            // closed sets, ids outside FHIR's grammar and none — and Siti Nurhaliza binte Ahmad
+            // none.
             Cookie user = t.medicalOfficer(t.logIn(ADMIN, ADMIN_PASSWORD));
             Cookie inNoGroup = t.settle(t.provision(true));
             Cookie confined = t.logIn(t.provision(true), CONNECTOR_PASSWORD);
@@ -512,6 +514,7 @@ class ApiContractFixtureTests {
                     + "&dispenseStatus=pending&dispenseStatus=uncollected").cookie(user), 200);
             t.expect(t.get("/api/patient-medication/dev-patient-05?count=5"
                     + "&startDateTo=2025-07-14T16:20").cookie(user), 200);
+            t.expect(t.get("/api/patient-medication/dev-patient-10?count=5").cookie(user), 200);
             t.expect(t.get("/api/patient-medication/erXuFYUfucBZaryVksYEcMg3?count=5")
                     .cookie(user), 200);
             t.expect(t.get("/api/patient-medication/not-a-uuid").cookie(user), 404);

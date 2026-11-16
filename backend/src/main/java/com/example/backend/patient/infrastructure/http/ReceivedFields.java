@@ -2,7 +2,9 @@ package com.example.backend.patient.infrastructure.http;
 
 import com.example.backend.patient.domain.SourceField;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
+import java.util.function.Function;
 import java.util.regex.Pattern;
 import tools.jackson.databind.JsonNode;
 
@@ -27,6 +29,13 @@ final class ReceivedFields {
     /** A calendar date's shape, {@code YYYY-MM-DD}: a four-digit year, unsigned. */
     private static final Pattern CALENDAR_DATE = Pattern.compile("\\d{4}-\\d{2}-\\d{2}");
 
+    /**
+     * A date-time with an offset's shape, as the SPA reads it too: a calendar date's, {@code T},
+     * the hour and minute, seconds and a fraction where given, and {@code Z} or {@code ±hh:mm}.
+     */
+    private static final Pattern OFFSET_DATE_TIME = Pattern.compile(
+            "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2}(\\.\\d{1,9})?)?(Z|[+-]\\d{2}:\\d{2})");
+
     private ReceivedFields() {
     }
 
@@ -47,16 +56,36 @@ final class ReceivedFields {
      * is invalid.
      */
     static SourceField<LocalDate> day(JsonNode node) {
+        return parsed(node, CALENDAR_DATE, LocalDate::parse);
+    }
+
+    /**
+     * A date-time with its offset, ISO-8601 — {@code YYYY-MM-DDTHH:mm}, seconds and their fraction
+     * where given, then {@code Z} or {@code ±hh:mm} — at a time the calendar and the clock have,
+     * its offset no further than 18 hours from UTC, kept as it came: text that is no such
+     * date-time, one with no offset among them, is invalid.
+     */
+    static SourceField<OffsetDateTime> dateTime(JsonNode node) {
+        return parsed(node, OFFSET_DATE_TIME, OffsetDateTime::parse);
+    }
+
+    /**
+     * Text read as a value of a kind of its own: missing or invalid as the text is, invalid when
+     * it is not of the kind's {@code shape} or {@code parse} refuses it, and present with what
+     * {@code parse} makes of it otherwise.
+     */
+    private static <T> SourceField<T> parsed(JsonNode node, Pattern shape,
+            Function<String, T> parse) {
         SourceField<String> text = text(node);
         if (!text.isPresent()) {
-            return text.map(LocalDate::parse);
+            return new SourceField<>(text.received(), null);
         }
-        if (!CALENDAR_DATE.matcher(text.value()).matches()) {
+        if (!shape.matcher(text.value()).matches()) {
             return SourceField.invalid();
         }
         try {
-            return SourceField.present(LocalDate.parse(text.value()));
-        } catch (DateTimeParseException noSuchDay) {
+            return SourceField.present(parse.apply(text.value()));
+        } catch (DateTimeParseException noSuchValue) {
             return SourceField.invalid();
         }
     }

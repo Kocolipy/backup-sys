@@ -24,12 +24,11 @@ import java.util.stream.Stream;
  *       ({@code unexpected-status}), a body that is not JSON or not a Patient
  *       ({@code unreadable}), a Patient breaking one of the domain's rules, a search's answer
  *       or a history that is no searchset, has no total, or holds an entry of another
- *       resource, or one with no id, or an ARMC Board or a Medication Record missing a field,
- *       holding a code outside its closed set, a date not to the day or a date-time with no
- *       offset, or ending before it starts — an ARMC Board's under a reason naming ARMC and a
- *       Medication Record's under one naming Medication or an element of its own, so a record
- *       says which history broke. An FFI and a NUMC Record break no rule: their histories are
- *       shown as received (ADR 0020), so only their call or their searchset fails.
+ *       resource, or one with no id, or an ARMC Board missing a field, holding a code outside
+ *       its closed set or a date not to the day, or ending before it starts, under a reason
+ *       naming ARMC, so a record says which history broke. An FFI, a NUMC Record and a
+ *       Medication Record break no rule: their histories are shown as received (ADR 0020), so
+ *       only their call or their searchset fails.
  * </ul>
  *
  * <p>Its message is fixed text, naming at most a status or an element, and its cause, when it has
@@ -122,56 +121,6 @@ public final class PatientSourceException extends UpstreamFaultException {
         /** An ARMC Board with no {@code medicalOfficer2}, or a blank one. */
         NO_ARMC_MEDICAL_OFFICER_2("no-armc-medical-officer-2",
                 "The patient source's ARMC Board has no Medical Officer #2", ErrorCategory.DATA),
-        /** A Medication History's entry with no {@code id}. */
-        MEDICATION_NO_ID("medication-no-id", "The patient source's Medication Record has no id",
-                ErrorCategory.DATA),
-        /** A Medication History's entry whose {@code id} is outside FHIR's id grammar. */
-        MEDICATION_INVALID_ID("medication-invalid-id",
-                "The patient source's Medication Record's id is not a FHIR id",
-                ErrorCategory.DATA),
-        /** A Medication Record with no {@code medication}, or a blank one. */
-        NO_MEDICATION("no-medication", "The patient source's Medication Record has no medication",
-                ErrorCategory.DATA),
-        /** A Medication Record with no {@code dispenseStatus}. */
-        NO_DISPENSE_STATUS("no-dispense-status",
-                "The patient source's Medication Record has no dispense status",
-                ErrorCategory.DATA),
-        /** A Medication Record whose {@code dispenseStatus} is no Dispense Status's code. */
-        UNKNOWN_DISPENSE_STATUS("unknown-dispense-status",
-                "The patient source's Medication Record's dispense status is not a Dispense"
-                        + " Status",
-                ErrorCategory.DATA),
-        /** A Medication Record with no {@code startDate}. */
-        NO_MEDICATION_START_DATE("no-medication-start-date",
-                "The patient source's Medication Record has no start date", ErrorCategory.DATA),
-        /** A Medication Record whose Start Date is no date-time with an offset. */
-        MEDICATION_START_DATE_NOT_A_DATE_TIME("medication-start-date-not-a-date-time",
-                "The patient source's Medication Record's start date is not a date-time with an"
-                        + " offset",
-                ErrorCategory.DATA),
-        /** A Medication Record with no {@code endDate}. */
-        NO_MEDICATION_END_DATE("no-medication-end-date",
-                "The patient source's Medication Record has no end date", ErrorCategory.DATA),
-        /** A Medication Record whose End Date is no date-time with an offset. */
-        MEDICATION_END_DATE_NOT_A_DATE_TIME("medication-end-date-not-a-date-time",
-                "The patient source's Medication Record's end date is not a date-time with an"
-                        + " offset",
-                ErrorCategory.DATA),
-        /** A Medication Record whose End Date is before its Start Date. */
-        MEDICATION_END_BEFORE_START("medication-end-before-start",
-                "The patient source's Medication Record ends before it starts",
-                ErrorCategory.DATA),
-        /** A Medication Record with no {@code dispensary}. */
-        NO_DISPENSARY("no-dispensary", "The patient source's Medication Record has no dispensary",
-                ErrorCategory.DATA),
-        /** A Medication Record whose {@code dispensary} is no Medical Centre's code. */
-        UNKNOWN_DISPENSARY("unknown-dispensary",
-                "The patient source's Medication Record's dispensary is not a Medical Centre",
-                ErrorCategory.DATA),
-        /** A Medication Record with no {@code prescribingDoctor}, or a blank one. */
-        NO_PRESCRIBING_DOCTOR("no-prescribing-doctor",
-                "The patient source's Medication Record has no prescribing doctor",
-                ErrorCategory.DATA),
         /** A Patient read by id whose military service has a date that is no date to the day. */
         SERVICE_DATE_NOT_TO_THE_DAY("service-date-not-to-the-day",
                 "The patient source's Patient's military service date is not to the day",

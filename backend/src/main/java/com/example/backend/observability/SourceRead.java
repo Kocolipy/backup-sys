@@ -11,7 +11,10 @@ public enum SourceRead {
     FFI("ffi"),
 
     /** A patient's NUMC History. */
-    NUMC("numc");
+    NUMC("numc"),
+
+    /** A patient's Medication History. */
+    MEDICATION("medication");
 
     private final String tag;
 

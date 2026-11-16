@@ -1,9 +1,8 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { clearEhrContext } from "@/auth/ehr-context";
-import { without } from "@/lib/decode.testHelpers";
 import { bare, deferred, holding, json, type Answers } from "@/auth/session-adapter.testHelpers";
 import { TAN_WEI_MING, TAN_WEI_MING_READ, withPatientInContext } from "@/pages/patient.testHelpers";
 import { renderSignedIn } from "@/shell/signed-in-shell.testHelpers";
@@ -20,11 +19,11 @@ const FIRST_PAGE = "GET /api/patient-medication/eq081-VQEgP8drUUqCWzHfw3?startIn
 const SECOND_PAGE = "GET /api/patient-medication/eq081-VQEgP8drUUqCWzHfw3?startIndex=6&count=5";
 
 /**
- * One Medication Record as the backend sends it, its elements given by
- * `fields` over a pending Paracetamol one's, with every optional element but
- * the Step.
+ * One Medication Record as the backend sends it, its fields given by
+ * `fields` over a pending Paracetamol one's, every element there but the
+ * Step, which is missing, and none invalid.
  */
-const record = (id: string, fields: Record<string, string> = {}) => ({
+const record = (id: string | null, fields: Record<string, string | null | string[]> = {}) => ({
   dispensary: "nee-soon-camp",
   dispenseStatus: "pending",
   dosage: "750 mg",
@@ -32,11 +31,13 @@ const record = (id: string, fields: Record<string, string> = {}) => ({
   endDate: "2026-10-22T17:30:00+08:00",
   frequency: "QDS",
   id,
+  invalid: [],
   medication: "Paracetamol",
   prescribingDoctor: "Dr Lim Wei Jie",
   quantity: "30 tablets",
   route: "PO",
   startDate: "2026-10-18T17:30:00+08:00",
+  step: null,
   ...fields,
 });
 
@@ -234,28 +235,192 @@ describe("Medication", () => {
     expect(rows()[0]!.slice(8, 10)).toEqual(["02 Mar 2026 05:30", "06 Mar 2026 10:00"]);
   });
 
-  it("shows — for each optional element the source lacks", async () => {
-    const lacking = ["dosage", "route", "frequency", "step", "quantity", "duration"].reduce<object>(
-      (fields, field) => without(fields, field),
-      record("medication-bare", { medication: "Oral rehydration salts" }),
+  // The patient source is the truth (ADR 0020): its data is shown as received.
+  it('shows a missing element as "—", the rest of the row as any other', async () => {
+    await renderMedication(
+      page(
+        [
+          record("medication-1", {
+            dosage: null,
+            duration: null,
+            frequency: null,
+            quantity: null,
+            route: null,
+          }),
+          record("medication-2", {
+            dispensary: null,
+            dispenseStatus: null,
+            endDate: null,
+            medication: null,
+            prescribingDoctor: null,
+            startDate: null,
+          }),
+        ],
+        1,
+        2,
+      ),
     );
-    await renderMedication(page([lacking], 1, 1));
     await screen.findByRole("table", { name: "Medication History" });
 
-    expect(rows()[0]).toEqual([
-      "Oral rehydration salts",
-      "—",
-      "—",
-      "—",
-      "—",
-      "—",
-      "PENDING",
-      "—",
-      "18 Oct 2026 17:30",
-      "22 Oct 2026 17:30",
-      "Nee Soon Camp MC",
-      "Dr Lim Wei Jie",
+    expect(rows()).toEqual([
+      [
+        "Paracetamol",
+        "—",
+        "—",
+        "—",
+        "—",
+        "—",
+        "PENDING",
+        "—",
+        "18 Oct 2026 17:30",
+        "22 Oct 2026 17:30",
+        "Nee Soon Camp MC",
+        "Dr Lim Wei Jie",
+      ],
+      ["—", "750 mg", "PO", "QDS", "—", "30 tablets", "—", "5 days", "—", "—", "—", "—"],
     ]);
+  });
+
+  it('shows an element in the wrong format as "Error", the rest of the row as any other', async () => {
+    await renderMedication(
+      page(
+        [
+          record("medication-1", {
+            dosage: null,
+            invalid: ["dosage", "quantity", "startDate"],
+            quantity: null,
+            startDate: null,
+          }),
+          record("medication-2", {
+            dispensary: null,
+            dispenseStatus: null,
+            endDate: null,
+            invalid: ["medication", "step", "dispenseStatus", "endDate", "dispensary"],
+            medication: null,
+          }),
+        ],
+        1,
+        2,
+      ),
+    );
+    await screen.findByRole("table", { name: "Medication History" });
+
+    expect(rows()).toEqual([
+      [
+        "Paracetamol",
+        "Error",
+        "PO",
+        "QDS",
+        "—",
+        "Error",
+        "PENDING",
+        "5 days",
+        "Error",
+        "22 Oct 2026 17:30",
+        "Nee Soon Camp MC",
+        "Dr Lim Wei Jie",
+      ],
+      [
+        "Error",
+        "750 mg",
+        "PO",
+        "QDS",
+        "Error",
+        "30 tablets",
+        "Error",
+        "5 days",
+        "18 Oct 2026 17:30",
+        "Error",
+        "Error",
+        "Dr Lim Wei Jie",
+      ],
+    ]);
+  });
+
+  // The backend's classification is trusted, but a date-time it sends in a
+  // shape the SPA cannot read is "Error" in its cell, never a failed read.
+  it('shows a date-time the SPA cannot read as "Error"', async () => {
+    await renderMedication(
+      page([record("medication-1", { endDate: "2026-10-22", startDate: "17:30" })], 1, 1),
+    );
+    await screen.findByRole("table", { name: "Medication History" });
+
+    expect(rows()[0]!.slice(8, 10)).toEqual(["Error", "Error"]);
+  });
+
+  it("shows a code outside its closed set as it came, the Dispense Status on a neutral badge", async () => {
+    await renderMedication(
+      page(
+        [record("medication-1", { dispensary: "tengah-air-base", dispenseStatus: "on-hold" })],
+        1,
+        1,
+      ),
+    );
+    await screen.findByRole("table", { name: "Medication History" });
+
+    expect({ badges: statusBadges(), cells: [rows()[0]![6], rows()[0]![10]] }).toEqual({
+      badges: ["on-hold outline"],
+      cells: ["on-hold", "tengah-air-base"],
+    });
+  });
+
+  // A code spelling an Object member is no member of a closed set.
+  it("shows a code that names an Object member as it came", async () => {
+    await renderMedication(
+      page(
+        [record("medication-1", { dispensary: "constructor", dispenseStatus: "toString" })],
+        1,
+        1,
+      ),
+    );
+    await screen.findByRole("table", { name: "Medication History" });
+
+    expect({ badges: statusBadges(), cells: [rows()[0]![6], rows()[0]![10]] }).toEqual({
+      badges: ["toString outline"],
+      cells: ["toString", "constructor"],
+    });
+  });
+
+  // No semantic check is made of the data: a record ending before it starts
+  // is shown as the source sent it.
+  it("shows a record ending before it starts as it came", async () => {
+    await renderMedication(
+      page(
+        [
+          record("medication-1", {
+            endDate: "2022-03-14T09:00:00+08:00",
+            startDate: "2022-03-16T09:00:00+08:00",
+          }),
+        ],
+        1,
+        1,
+      ),
+    );
+    await screen.findByRole("table", { name: "Medication History" });
+
+    expect(rows()[0]!.slice(8, 10)).toEqual(["16 Mar 2022 09:00", "14 Mar 2022 09:00"]);
+  });
+
+  it("keys a row with no id by its place, as React needs each row keyed", async () => {
+    const warned = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    await renderMedication(
+      page(
+        [
+          record(null),
+          record(null, { invalid: ["id"] }),
+          record("medication-3", { medication: "Ibuprofen" }),
+        ],
+        1,
+        3,
+      ),
+    );
+    await screen.findByRole("table", { name: "Medication History" });
+
+    expect({
+      keyWarnings: warned.mock.calls.filter((call) => String(call[0]).includes("key")),
+      rows: rows().length,
+    }).toEqual({ keyWarnings: [], rows: 3 });
+    warned.mockRestore();
   });
 
   it("shows free text exactly as the source gives it", async () => {

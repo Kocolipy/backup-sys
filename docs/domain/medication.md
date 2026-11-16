@@ -1,7 +1,7 @@
 ---
 type: Domain Rules
 title: Medication
-description: A patient's Medication History — the in-house patient source's own Medication Records, read through it at GET {base}/Patient/{id}/medication on the FFI History's terms, the six required and six optional elements, the free text shown as the source gives it, the Start Date and End Date as date-times with an offset shown in Singapore time, the Dispense Status and the Dispensary's Medical Centre carried as codes, the source's order and paging, the sort by either date-time and the filters on the Dispense Status and a date-time range over either date, the failures and their Medication log reasons, the logging rules, no caching, no auditing, the Medication page and its states, and the mock's Medication fixtures and fault stubs.
+description: A patient's Medication History — the in-house patient source's own Medication Records, read through it at GET {base}/Patient/{id}/medication on the FFI History's terms and shown as received, the twelve elements, the free text shown as the source gives it, the Start Date and End Date as date-times with an offset shown in Singapore time, the Dispense Status and the Dispensary's Medical Centre carried as codes, a field missing, in the wrong format or outside its set, the source's order and paging, the sort by either date-time and the filters on the Dispense Status and a date-time range over either date, the failures, the logging rules and the invalid-fields WARN and counter, no caching, no auditing, the Medication page and its states, and the mock's Medication fixtures, sort and filter stubs and fault stubs.
 tags: [patient, medication]
 ---
 
@@ -21,65 +21,62 @@ It is read on the same terms as an FFI History (ADR 0019, D7): what the
 its failures, its logging, caching and auditing holds here too, and this file
 says only where a Medication History differs — the endpoint, the twelve
 elements, the date-times, the closed sets, and its sort and filters — and what
-is its own. One rule of the FFI History's does not hold: an FFI is shown as
-received (ADR 0020), and a Medication Record is read strictly, a field missing
-or malformed or a code outside its set a failure of the source
-([Failures](#failures)). The wire
+is its own. As an FFI History is, it is **shown as received** (ADR 0020): no
+Medication Record fails the read for what its fields hold. The wire
 contract is `backend/docs/openapi.yaml`. The SPA never reaches the source:
 SPA → `GET /api/patient-medication/{patientId}` → backend →
 `GET {base}/Patient/{id}/medication`.
 
 ## The elements
 
-Six elements are required — the Medication, Dispense Status, Start Date, End
-Date, Dispensary and Prescribing Doctor — and six optional: the Dosage, Route,
-Frequency, Step, Quantity and Duration.
+A Medication Record has twelve elements, each read as the patient source sent
+it ([Shown as received](#shown-as-received)).
 
 | Element            | On the wire (both sides)                       | Shown as                                                                                                      |
 | ------------------ | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
 | Medication         | `medication`, free text                        | as the source gives it, in bold                                                                               |
-| Dosage             | `dosage`, free text, or absent                 | as the source gives it, or `—`                                                                                |
-| Route              | `route`, free text, or absent                  | as the source gives it, or `—`                                                                                |
-| Frequency          | `frequency`, free text, or absent              | as the source gives it, or `—`                                                                                |
-| Step               | `step`, free text, or absent                   | as the source gives it, or `—`                                                                                |
-| Quantity           | `quantity`, free text, or absent               | as the source gives it, or `—`                                                                                |
+| Dosage             | `dosage`, free text                            | as the source gives it                                                                                        |
+| Route              | `route`, free text                             | as the source gives it                                                                                        |
+| Frequency          | `frequency`, free text                         | as the source gives it                                                                                        |
+| Step               | `step`, free text                              | as the source gives it                                                                                        |
+| Quantity           | `quantity`, free text                          | as the source gives it                                                                                        |
 | Dispense Status    | `dispenseStatus`, a code                       | `pending` PENDING (muted badge) · `dispensed` DISPENSED (green badge) · `uncollected` UNCOLLECTED (red badge) |
-| Duration           | `duration`, free text, or absent               | as the source gives it, or `—`                                                                                |
+| Duration           | `duration`, free text                          | as the source gives it                                                                                        |
 | Start Date         | `startDate`, ISO-8601 date-time with an offset | `18 Oct 2026 17:30`, in Singapore time                                                                        |
 | End Date           | `endDate`, ISO-8601 date-time with an offset   | `22 Oct 2026 17:30`, in Singapore time                                                                        |
 | Dispensary         | `dispensary`, a code                           | a Medical Centre's label ([ffi](ffi.md), "The closed sets")                                                   |
 | Prescribing Doctor | `prescribingDoctor`, a name                    | the name, as the source gives it                                                                              |
 
-Each Medication Record also carries its own `id` at the source, in FHIR's id
-grammar, which the page keys its row by and never shows.
+Each Medication Record also carries its own `id` at the source, never checked,
+which the page keys its row by and never shows; a row with none is keyed by
+its place.
 
 - **Free text is the source's.** The Medication, Dosage, Route, Frequency,
   Step, Quantity, Duration and Prescribing Doctor are shown exactly as the
   source gives them, and nothing reads them. The Duration is its own element
-  ("5 days"): nothing works it out from the dates.
+  ("5 days"): nothing works it out from the dates. A prescription may lack any
+  of them, the Dosage, Route, Frequency, Step, Quantity and Duration most
+  often: a missing one is shown "—".
 - **The Prescribing Doctor is a name.** It is not linked to our Users or
-  accounts, and nothing looks it up. A missing or blank one is a failure of
-  the source, as a missing or blank Medication is.
-- **An optional element the source lacks** is left out by the source, and by
-  our API, as an ARMC Board's End Date is ([armc](armc.md), "The elements"):
-  never sent as `null`, and shown as `—`.
+  accounts, and nothing looks it up.
 - **The Start Date and End Date are date-times**, to the minute. The source
   gives each as ISO-8601 with an offset (`Z` among them), and our API passes
   each on with the offset the source gave. The page shows each in Singapore
-  time, `dd MMM yyyy HH:mm`, its seconds dropped. Both are required.
-- **The End Date is never before the Start Date**, compared as instants,
-  whatever offset each was given in; a record may end the minute it starts. The
-  rule is the domain's own (`MedicationRecord`), so a record ending before it
-  starts is a failure of the source, never a row.
+  time, `dd MMM yyyy HH:mm`, its seconds dropped. One with no offset names no
+  instant: it is in the wrong format, "Error" in its cell.
+- **Nothing compares the two dates.** An End Date before the Start Date is
+  shown as the source sent it, as is a record ending the minute it starts.
 
 ### The closed sets
 
 The Dispense Status and the Dispensary are closed sets, carried as an FFI's are
 ([ffi](ffi.md), "The closed sets"): each value travels as its code, from the
-source and to the SPA, matched exactly, and the SPA alone names it with its
-label. Unlike an FFI's, shown as received, a code the service does not know is
-a failure of the source, never a row with a blank cell — a Medical Centre an
-FFI's Submitting MC would show raw among them.
+source and to the SPA, and the SPA alone names a known code with its label. **A
+code outside its set is shown as the raw code**, the Dispense Status's on a
+neutral badge (ADR 0020, D2) — never a failure of the source, and never a blank
+cell. The sets check what the service is asked: a filter's Dispense Status is
+matched exactly, and the Filter panel offers only the known codes
+([Sort and filters](#sort-and-filters)).
 
 - **Dispense Status** is one Java enum (`DispenseStatus`, codes through
   `SourceCode`), one enum in `backend/docs/openapi.yaml` (`DispenseStatus`) and
@@ -91,6 +88,24 @@ FFI's Submitting MC would show raw among them.
 
 Each is held set-equal by `VocabularyContractTests` and by
 `make verify-contract` (`/scripts/spa-contract/README.md`).
+
+### Shown as received
+
+The patient source is the truth (ADR 0020): nothing refuses a Medication
+Record, or the response, for what a field holds. Each field — the twelve
+elements and the `id` — is one of three things, read by the adapter from the
+raw JSON it arrived as (`ReceivedFields`, so a number is never coerced into a
+string):
+
+| The source sent                                                                                                                                             | The field is | Our API                              | The page shows |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | ------------------------------------ | -------------- |
+| No key, `null`, `""`, or only whitespace                                                                                                                    | missing      | `null`                               | "—"            |
+| A number, a boolean, an object or an array, free text included; a date that is no date-time with an offset — a date alone, one with no offset, no such time | invalid      | `null`, named in the row's `invalid` | "Error"        |
+| Any other string, as it came: a code outside its set, an id outside FHIR's grammar, any date-time with an offset                                            | present      | the value                            | the value      |
+
+**No semantic or range check is made**: a date-time in the future, or an End
+Date before its Start Date, is shown as received. The domain's
+`MedicationRecord` holds each element as a `SourceField` and refuses none.
 
 ## The source contract
 
@@ -107,16 +122,18 @@ only — not FHIR-conformant:
   `entry[].resource` — whose every resource is a custom
   `"resourceType": "Medication"` object of flat fields: `id`, `medication`,
   `dosage`, `route`, `frequency`, `step`, `quantity`, `dispenseStatus`,
-  `duration`, `startDate`, `endDate`, `dispensary` and `prescribingDoctor`, the
-  six optional ones absent when the source has none. Nothing else in the Bundle
-  is read, and any other field of a record is never bound.
+  `duration`, `startDate`, `endDate`, `dispensary` and `prescribingDoctor`.
+  Nothing else in the Bundle is read, and any other field of a record is never
+  bound.
 - **The page.** Read by ADR 0017's rules and sent as `_offset`
   (`startIndex - 1`) and `_count`; `totalResults` is the source's `total`, and
   the source is asked even for `count=0` or a page past the end (ADR 0018, D3).
   The SPA asks for 5. `SourceSearchset` reads it, as it reads an FFI History's,
-  and `SourceFields` each field, its date-time with an offset for each date.
-- **Only a `404` is no patient**, our API's `404` too. Every other answer is a
-  failure of the source, our `502` ([Failures](#failures)).
+  and `ReceivedFields` each field, a date-time with an offset for each date.
+- **Only a `404` is no patient**, our API's `404` too. Every other status, and
+  a `200` that is no searchset of Medication Records, is a failure of the
+  source, our `502` ([Failures](#failures)); what a record's fields hold never
+  is.
 - **No caching.** No Medication Record is kept in Redis or in memory: every
   read, of the same page too, is a call to the source.
 
@@ -166,7 +183,8 @@ date columns are declared on the shared sort and range as **date-times**
   case, a Java constant's name, or another set's code — an end that is no
   date-time to the minute — a date alone, seconds, an offset, a day or minute
   the calendar or the clock has not — and a from-end after its to-end are each
-  `400`, before the source is called.
+  `400`, before the source is called. A record may carry a code no filter can
+  name ([Shown as received](#shown-as-received)).
 
 ## Our API
 
@@ -174,11 +192,13 @@ date columns are declared on the shared sort and range as **date-times**
 filters and sort, outside the
 `/api/patient` FHIR namespace: plain JSON, `{totalResults, startIndex,
 records: [{id, medication, dosage, route, frequency, step, quantity,
-dispenseStatus, duration, startDate, endDate, dispensary, prescribingDoctor}]}`,
-each code as the source sent it, the free text as the source gave it, each
-optional element absent when the source lacks it, and both date-times ISO-8601
-with the offset the source gave. `totalResults` counts the Medication Records
-the filters select. Errors are the application API's `ApiError`:
+dispenseStatus, duration, startDate, endDate, dispensary, prescribingDoctor,
+invalid}]}`, each code as the source sent it, known to its set or not, the free
+text as the source gave it, and both date-times ISO-8601 with the offset the
+source gave. Every field is always there: one missing or in the wrong format is
+`null`, and `invalid` names, in the row's order, those whose format was wrong —
+a `null` it does not name is missing. `totalResults` counts the Medication
+Records the filters select. Errors are the application API's `ApiError`:
 
 | Case                                                                                                                                                       | Status |
 | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
@@ -195,30 +215,26 @@ audited as an `ACCESS_DENIED` and logged as every authorization refusal is.
 ## Failures
 
 Each of these is a failure of the source, our `502`, and its one fault record's
-`event.reason`. A failure of the call or of the searchset is the one every paged
-read of the source shares; **every rule a Medication Record breaks has a reason
-naming Medication or an element of its own**, so a log line says which history
-broke.
+`event.reason`: a failure of the call or of the searchset, the one every paged
+read of the source shares. **No Medication Record is a failure**, whatever its
+fields hold ([Shown as received](#shown-as-received)), so no reason names
+Medication.
 
-| Failure                                                                 | `event.reason`                                                                                                                        | `error.category` |
-| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
-| No connection, or one refused, reset or dropped                         | `unreachable`                                                                                                                         | `network`        |
-| No connection within 2 seconds, or no whole answer within 5             | `timed-out`                                                                                                                           | `network`        |
-| A `5xx`                                                                 | `server-error`                                                                                                                        | `server`         |
-| Any other status but a `200` or a `404`                                 | `unexpected-status`                                                                                                                   | `data`           |
-| A body that arrived whole and is not JSON or not the shape              | `unreadable`                                                                                                                          | `data`           |
-| A `200` that is no searchset `Bundle`                                   | `not-a-searchset`                                                                                                                     | `data`           |
-| A searchset with no `total`, or a negative one                          | `no-total`                                                                                                                            | `data`           |
-| An entry with no resource, or one that is no `Medication`               | `another-resource`                                                                                                                    | `data`           |
-| An entry with no `id`, or one outside FHIR's id grammar                 | `medication-no-id`, `medication-invalid-id`                                                                                           | `data`           |
-| A record missing a required element, or naming a blank one of its texts | `no-medication`, `no-dispense-status`, `no-medication-start-date`, `no-medication-end-date`, `no-dispensary`, `no-prescribing-doctor` | `data`           |
-| A code outside its closed set                                           | `unknown-dispense-status`, `unknown-dispensary`                                                                                       | `data`           |
-| A date that is no date-time with an offset                              | `medication-start-date-not-a-date-time`, `medication-end-date-not-a-date-time`                                                        | `data`           |
-| An End Date before its Start Date                                       | `medication-end-before-start`                                                                                                         | `data`           |
+| Failure                                                     | `event.reason`      | `error.category` |
+| ----------------------------------------------------------- | ------------------- | ---------------- |
+| No connection, or one refused, reset or dropped             | `unreachable`       | `network`        |
+| No connection within 2 seconds, or no whole answer within 5 | `timed-out`         | `network`        |
+| A `5xx`                                                     | `server-error`      | `server`         |
+| Any other status but a `200` or a `404`                     | `unexpected-status` | `data`           |
+| A body that arrived whole and is not JSON or not the shape  | `unreadable`        | `data`           |
+| A `200` that is no searchset `Bundle`                       | `not-a-searchset`   | `data`           |
+| A searchset with no `total`, or a negative one              | `no-total`          | `data`           |
+| An entry with no resource, or one that is no `Medication`   | `another-resource`  | `data`           |
+| An entry whose resource is no object                        | `unreadable`        | `data`           |
 
-An absent optional element is none of these. The adapter raises each as a
-`PatientSourceException`, which the app-wide handler answers `502` with the
-generic `server-error` `ApiError`, as for an FFI History.
+The adapter raises each as a `PatientSourceException`, which the app-wide
+handler answers `502` with the generic `server-error` `ApiError`, as for an FFI
+History.
 
 ## Logging
 
@@ -226,10 +242,20 @@ As an FFI History's ([ffi](ffi.md), "Logging"): each failure of the source is
 exactly one `ERROR`, the `502`'s `http.request.fault` record naming its reason;
 neither the log nor the exception's message names the patient id or anything of
 the source's body — not a record's id, text, code or date, nor an error
-answer's body; and a read adds no record of its own, the request record naming
-the route template (`/api/patient-medication/{patientId}`), never the id.
+answer's body; and the request record names the route template
+(`/api/patient-medication/{patientId}`), never the id.
+
+**A response holding fields in the wrong format is one `WARN`** beside the
+request record, `patient_source.invalid_fields` (`observability.InvalidSourceFields`,
+ADR 0020): its `app.patient_source.read` is `medication`, and its
+`app.patient_source.invalid_fields` lists each such field by its path in the
+source's answer, the entry counted from zero — `entry[1].startDate` — never its
+value, a record's id or the patient. The `patient_source.invalid_fields` counter
+counts each such field, tagged `read=medication` and `field`. A response with
+none, a field missing included, writes and counts nothing.
 `PatientHistoriesIntegrationTests` holds each Medication fault stub's read to
-exactly one `ERROR` naming its failure under its category, and the stream, for
+exactly one `ERROR` naming its failure under its category, Tan Boon Huat's read
+to exactly one `WARN` naming its invalid fields' paths, and the stream, for
 those reads and for successful ones, to naming neither the patient id nor any
 record's id, Medication, dates or Prescribing Doctor.
 
@@ -256,10 +282,12 @@ a session without it is offered no link and is routed to its landing page.
   action.
 - **The table**: Medication, Dosage, Route, Frequency, Step, Quantity, Dispense
   Status, Duration, Start Date, End Date, Dispensary, Prescribing Doctor — the
-  Medication in bold, the free text as the source gave it and `—` for an
-  absent optional element, the Dispense Status as its badge
-  ([the elements](#the-elements)), both date-times in Singapore time as
-  `dd MMM yyyy HH:mm`, and the Dispensary by its Medical Centre's label. The
+  Medication in bold, the free text as the source gave it, the Dispense Status
+  as its badge ([the elements](#the-elements)), both date-times in Singapore
+  time as `dd MMM yyyy HH:mm`, and the Dispensary by its Medical Centre's
+  label; a code outside its set as it came, the Dispense Status's on a neutral
+  badge; a missing element "—" and one in the wrong format "Error", the rest
+  of the row as any other ([Shown as received](#shown-as-received)). The
   table is wider than its card: each
   cell keeps to one line and the table scrolls sideways inside the card rather
   than squeezing its columns.
@@ -330,11 +358,30 @@ patients, and the backend's tests read the same stub files
 
 - **Tan Hui Min** (`dev-patient-05`) has four Medication Records on one page
   (`medication-tan-hui-min`), between them every Dispense Status and some
-  absent optional elements: the first's dates are given in UTC (`Z`) and shown
+  elements left out: the first's dates are given in UTC (`Z`) and shown
   in Singapore time, the second lacks its Dosage, Frequency, Step and Duration,
-  and the fourth has none of the six optional elements and ends the minute it
-  starts. The two histories hold every Medical Centre between them as their
+  and the fourth has no Dosage, Route, Frequency, Step, Quantity or Duration
+  and ends the minute it starts. The two histories hold every Medical Centre between them as their
   Dispensaries.
+- **Tan Boon Huat** (`dev-patient-10`) has four Medication Records, on one
+  page, shown as received (`medication-tan-boon-huat`): a Paracetamol record
+  whose Dosage is `null`, Route empty and Quantity a number, its Dispense
+  Status `on-hold` and Dispensary `tengah-air-base` outside their sets, and
+  its End Date two days before its Start Date; an Ibuprofen record whose Start
+  Date has no offset, End Date is a number and Prescribing Doctor is blank;
+  one whose id is outside FHIR's grammar, whose Medication is an object, its
+  Dispense Status `null`, its End Date a date alone and its Dispensary empty;
+  and an Oral rehydration salts one with no id, a blank Start Date, a `null`
+  End Date and its Dosage, Route, Frequency, Step, Quantity, Duration,
+  Dispensary and Prescribing Doctor left out:
+
+  | Medication             | Dosage | Route | Frequency | Step | Quantity   | Dispense Status | Duration | Start Date        | End Date          | Dispensary      | Prescribing Doctor |
+  | ---------------------- | ------ | ----- | --------- | ---- | ---------- | --------------- | -------- | ----------------- | ----------------- | --------------- | ------------------ |
+  | Paracetamol            | —      | —     | —         | —    | Error      | on-hold         | 3 days   | 16 Mar 2022 09:00 | 14 Mar 2022 09:00 | tengah-air-base | Dr Lim Wei Jie     |
+  | Ibuprofen              | 400 mg | PO    | TDS       | —    | 15 tablets | DISPENSED       | 5 days   | Error             | Error             | Kranji Camp MC  | —                  |
+  | Error                  | —      | —     | —         | —    | —          | —               | —        | 16 Mar 2020 09:00 | Error             | —               | Dr Chen Mei Ling   |
+  | Oral rehydration salts | —      | —     | —         | —    | —          | PENDING         | —        | —                 | —                 | —               | —                  |
+
 - **Every other fixture** has none — Siti Nurhaliza binte Ahmad
   (`erXuFYUfucBZaryVksYEcMg3`) is the one the tests read — answered by
   `medication-fallback`, which also answers any page of a fixture's history
@@ -346,7 +393,7 @@ Each canned page is matched on the whole query the backend sends — `_count=5`,
 value or, where the read uses none, to absent — so a filtered or sorted read
 never falls to an unfiltered page, and a read of any other page, filter or
 sort falls to the fallback. Each fixture is selectable on Patient Search (the
-name search `tan` finds both Tans).
+name search `tan` finds the three Tans, Tan Boon Huat on its second page).
 
 **Sort and filter stubs.** Beside the pages in the source's order:
 
@@ -382,15 +429,14 @@ date-time, every filter and each Dispense Status, a from-bound and a to-bound
 each on a record's exact minute and keeping it, filters combined and a filter
 matching none.
 
-**Fault stubs.** Beside them, each failure above has a stub of its own under a
-well-formed patient id no fixture uses, `fault-medication-<failure>`, marked
-with `metadata.fault`: `unreachable` (the connection reset), `slow` (the answer
-after 7 seconds), `server-error` (`503`), `unexpected-status` (`400`),
-`not-a-searchset`, `no-total`, `no-id`, `invalid-id`, `no-dispense-status` and
-`no-prescribing-doctor` (a record missing a required element),
-`unknown-dispense-status` and `unknown-dispensary` (a code outside each set),
-`start-date-not-a-date-time` (a Start Date with no offset) and
-`end-before-start`. A fault stub is no fixture. `PatientSourceFixturesTests`
-holds the fixtures to these rules, `PatientStoreContract` holds what each
-history reads, written out, and `PatientSourceMedicationAdapterTests` each
-fault stub's failure.
+**Fault stubs.** Beside them, each failure above that the mock can serve has a
+stub of its own under a well-formed patient id no fixture uses,
+`fault-medication-<failure>`, marked with `metadata.fault`: `unreachable` (the
+connection reset), `slow` (the answer after 7 seconds), `server-error`
+(`503`), `unexpected-status` (`400`), `not-a-searchset` and `no-total` — the
+failures every history shares. A Medication Record's data is no fault: what
+its fields may hold is Tan Boon Huat's page. A fault stub is no fixture.
+`PatientSourceFixturesTests` holds the fixtures to these rules, Tan Boon
+Huat's written out, `PatientStoreContract` holds what each history reads,
+written out, `PatientSourceHistoriesAdapterTests` each fault stub's failure,
+and `PatientSourceMedicationAdapterTests` how each field is read.

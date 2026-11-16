@@ -1,8 +1,8 @@
 ---
 type: Decision Record
 title: "ADR 0020: Patient-source data is shown as received"
-description: The patient source is the truth, so no record or response is refused for what a field holds — a missing field is shown as "—", one in the wrong format as "Error", a code outside its closed set as the raw code — while transport and structural failures still fail the read; the shared pieces each read adopts it through, enacted for the FFI and NUMC Histories, and the parts of ADR 0014, 0018 and 0019 it supersedes.
-tags: [patient, ffi, numc, integration, observability, spa]
+description: The patient source is the truth, so no record or response is refused for what a field holds — a missing field is shown as "—", one in the wrong format as "Error", a code outside its closed set as the raw code — while transport and structural failures still fail the read; the shared pieces each read adopts it through, enacted for the FFI, NUMC and Medication Histories, and the parts of ADR 0014, 0018 and 0019 it supersedes.
+tags: [patient, ffi, numc, medication, integration, observability, spa]
 ---
 
 # 20. Patient-source data is shown as received
@@ -11,11 +11,12 @@ Date: 2026-11-16
 
 ## Status
 
-Accepted. Enacted for the FFI History (`/docs/domain/ffi.md`) and the NUMC
-History (`/docs/domain/numc.md`). The other patient-source reads — the ARMC and
-Medication Histories, a Patient by id and a Patient search — keep the strict
-reading their ADRs describe until each adopts the shared pieces below; the rule
-is decided for all of them.
+Accepted. Enacted for the FFI History (`/docs/domain/ffi.md`), the NUMC
+History (`/docs/domain/numc.md`) and the Medication History
+(`/docs/domain/medication.md`). The other patient-source reads — the ARMC
+History, a Patient by id and a Patient search — keep the strict reading their
+ADRs describe until each adopts the shared pieces below; the rule is decided
+for all of them.
 
 ## Context
 
@@ -96,15 +97,20 @@ and ADR 0019, D4 have it: a malformed field sorts wherever the source puts it.
   (`shown`) turns present, missing and invalid into the value, "—" and
   "Error", and label and badge lookups fall back to the raw code (`byCode`).
 
-**D6. What this supersedes.** For the FFI History and the NUMC History:
+**D6. What this supersedes.** For the FFI, the NUMC and the Medication History:
 
 - ADR 0019, D2: "every one required", and a code outside a closed set being a
   failure of the source — any of an FFI's five, its Submitting MC's Medical
-  Centre included, which a Medication Record's Dispensary still reads strictly.
-- ADR 0019, D4: each rule an FFI or a NUMC Record breaks being logged under a
-  reason of its own — `no-id`, `invalid-id`, each `no-<field>`, each
-  `unknown-<set>` and each `<date>-not-to-the-day` for an FFI, each naming NUMC
-  for a NUMC Record — no FFI or NUMC Record breaks one.
+  Centre included, and a Medication Record's Dispense Status and Dispensary,
+  the same Medical Centre.
+- ADR 0019, D4: each rule an FFI, a NUMC or a Medication Record breaks being
+  logged under a reason of its own — `no-id`, `invalid-id`, each `no-<field>`,
+  each `unknown-<set>` and each `<date>-not-to-the-day` for an FFI, each naming
+  NUMC for a NUMC Record, each naming Medication or one of its elements for a
+  Medication Record — no FFI, NUMC or Medication Record breaks one.
+- ADR 0019, D7: a Medication Record's date-time with no offset, an End Date
+  before its Start Date, or a missing element — its six optional ones left out
+  of our answer rather than `null` — being a failure of the source.
 - ADR 0019, Consequences: a new code being "a `502`, not a row shown with a
   blank cell", and the source having to "send every required element".
 
@@ -115,9 +121,8 @@ For each other read, as it adopts the rule:
   missing or not to the day being a failure of the source. Another patient's
   id stays one: it is not the expected resource.
 - ADR 0018, D1: a search's entry with no `id` being a failure of the source.
-- ADR 0019, D6 and D7: an ARMC Board or a Medication Record ending before it
-  starts, a date-time with no offset, a missing required element or an unknown
-  code being a failure of the source.
+- ADR 0019, D6: an ARMC Board ending before it starts, a missing required
+  element or an unknown code being a failure of the source.
 
 ## Consequences
 

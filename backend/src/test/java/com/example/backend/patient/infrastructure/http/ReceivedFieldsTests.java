@@ -4,8 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.backend.patient.domain.SourceField;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
@@ -13,7 +16,8 @@ import tools.jackson.databind.json.JsonMapper;
 /**
  * How a patient-source field is classified as it is read (ADR 0020): present, missing — no key,
  * {@code null}, or a blank string — or invalid — the wrong JSON type, or a string that is no
- * value of the field's kind. Nothing is refused, and nothing of a value's meaning is checked.
+ * value of the field's kind: text, a calendar date or a date-time with its offset. Nothing is
+ * refused, and nothing of a value's meaning is checked.
  */
 class ReceivedFieldsTests {
 
@@ -99,5 +103,65 @@ class ReceivedFieldsTests {
     @ValueSource(strings = {"20240110", "true", "{}", "[\"2024-01-10\"]"})
     void aDateOfAnotherJsonTypeIsInvalid(String json) {
         assertThat(ReceivedFields.day(field(json))).isEqualTo(SourceField.invalid());
+    }
+
+    // ---- a date-time with its offset -----------------------------------------------------
+
+    /**
+     * A date-time with an offset is present with the offset it came in, {@code Z} among them,
+     * its seconds and their fraction optional: whatever instant it names, one in the future too.
+     */
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', textBlock = """
+        2017-02-13T10:00:00+08:00     | 2017-02-13T10:00+08:00
+        2017-02-15T02:00:00Z          | 2017-02-15T02:00Z
+        2017-02-13T10:00+08:00        | 2017-02-13T10:00+08:00
+        2017-02-13T10:00:30.25-05:30  | 2017-02-13T10:00:30.250-05:30
+        2999-12-31T23:59:59+14:00     | 2999-12-31T23:59:59+14:00
+        """)
+    void aDateTimeWithAnOffsetIsPresentInItsOffset(String dateTime, String read) {
+        assertThat(ReceivedFields.dateTime(field("\"" + dateTime + "\"")))
+                .isEqualTo(SourceField.present(OffsetDateTime.parse(read)));
+    }
+
+    /** The offset a date-time came in is kept, not turned to another naming the same instant. */
+    @Test
+    void aDateTimeKeepsItsOwnOffset() {
+        assertThat(ReceivedFields.dateTime(field("\"2017-02-13T10:00:00+08:00\"")).value()
+                .getOffset()).isEqualTo(ZoneOffset.ofHours(8));
+    }
+
+    @Test
+    void aDateTimeWithNoKeyIsMissing() {
+        assertThat(ReceivedFields.dateTime(NO_KEY)).isEqualTo(SourceField.missing());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"null", "\"\"", "\"  \""})
+    void aNullOrBlankDateTimeIsMissing(String json) {
+        assertThat(ReceivedFields.dateTime(field(json))).isEqualTo(SourceField.missing());
+    }
+
+    /**
+     * A date-time must be ISO-8601 with an offset, on a day the calendar has at a time the clock
+     * has: a date alone, one with no offset, no such day or time, an offset past 18 hours, another
+     * year's spelling, a lower-case {@code t} or {@code z}, a padded one or another spelling is
+     * invalid.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"2017-02-13", "2017-02-13T10:00", "2017-02-15T10:00:00",
+        "2017-02-30T10:00:00+08:00", "2017-02-13T24:00:00+08:00", "2017-02-13T10:60:00Z",
+        "2017-02-13T10:00:00+19:00", "+10000-01-01T00:00:00Z", "2017-02-13t10:00:00z",
+        " 2017-02-13T10:00:00Z", "2017-02-13 10:00:00+08:00", "2017-02-13T10:00:00+0800",
+        "13 Feb 2017 10:00", "2017-02-13T10:00:00+08:00[Asia/Singapore]"})
+    void aStringThatIsNoDateTimeWithAnOffsetIsInvalid(String dateTime) {
+        assertThat(ReceivedFields.dateTime(field("\"" + dateTime + "\"")))
+                .isEqualTo(SourceField.invalid());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"20170213100000", "true", "{}", "[\"2017-02-13T10:00:00Z\"]"})
+    void aDateTimeOfAnotherJsonTypeIsInvalid(String json) {
+        assertThat(ReceivedFields.dateTime(field(json))).isEqualTo(SourceField.invalid());
     }
 }

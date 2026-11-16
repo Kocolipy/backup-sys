@@ -15,9 +15,11 @@
 
 import type { ReadDeclaration } from "@/auth/declarations";
 import { codeParameters } from "@/lib/code-parameters";
-import { dateTime, jsonDecoder, readObject } from "@/lib/decode";
+import { jsonDecoder, readObject } from "@/lib/decode";
 import { pageDecoder, pagedPath, type Page, type PageAt } from "@/lib/paging";
 import { sortParameters, type ColumnSort } from "@/lib/sorting";
+import type { SourceField } from "@/lib/source-field";
+import { isOffsetDateTime } from "@/lib/time";
 import {
   countHistoryDates,
   type DateColumnOf,
@@ -26,13 +28,14 @@ import {
   type HistoryDates,
   noHistoryDates,
 } from "@/pages/history-api";
-import { MEDICAL_CENTRES, type MedicalCentre } from "@/pages/medical-centre-api";
 
 /**
  * A Medication Record's Dispense Status, as the API carries it, by its codes,
  * in the order the Filter panel lists them. Exported for the SPA–API contract
  * check (`/scripts/spa-contract/`), which holds it to its enum in
- * `/backend/docs/openapi.yaml` from outside this app's import graph.
+ * `/backend/docs/openapi.yaml` from outside this app's import graph. A record
+ * may carry a code outside the set, shown as it came (ADR 0020); only the
+ * Filter panel is limited to these.
  */
 export const DISPENSE_STATUSES = ["pending", "dispensed", "uncollected"] as const;
 
@@ -46,28 +49,29 @@ export const DISPENSE_STATUS_LABELS: Readonly<Record<DispenseStatus, string>> = 
 };
 
 /**
- * One Medication Record of a patient's Medication History, as the backend
- * answers it: its id, which the page keeps but never shows, its free text as
- * the source gives it, each closed set's code, and its Start Date and End Date,
- * each ISO-8601 with an offset. An optional element the source lacks is
- * absent.
+ * One Medication Record of a patient's Medication History, shown as the
+ * patient source sent it (ADR 0020): each element present, missing or in the
+ * wrong format — its id, which the page keys its row by but never shows, its
+ * free text as the source gives it, each closed set's code, known to the set
+ * or not, and its Start Date and End Date, each ISO-8601 with an offset.
  */
 export interface MedicationRecord {
-  id: string;
-  medication: string;
-  dosage?: string;
-  route?: string;
-  frequency?: string;
-  step?: string;
-  quantity?: string;
-  dispenseStatus: DispenseStatus;
-  duration?: string;
-  startDate: string;
-  endDate: string;
-  dispensary: MedicalCentre;
-  prescribingDoctor: string;
+  id: SourceField<string>;
+  medication: SourceField<string>;
+  dosage: SourceField<string>;
+  route: SourceField<string>;
+  frequency: SourceField<string>;
+  step: SourceField<string>;
+  quantity: SourceField<string>;
+  dispenseStatus: SourceField<string>;
+  duration: SourceField<string>;
+  startDate: SourceField<string>;
+  endDate: SourceField<string>;
+  dispensary: SourceField<string>;
+  prescribingDoctor: SourceField<string>;
 }
 
+/** Every field the backend sends of a Medication Record: its elements, and which were invalid. */
 const MEDICATION_RECORD_FIELDS = [
   "id",
   "medication",
@@ -82,36 +86,36 @@ const MEDICATION_RECORD_FIELDS = [
   "endDate",
   "dispensary",
   "prescribingDoctor",
-] as const satisfies readonly (keyof MedicationRecord)[];
-
-/** The six optional elements: free text the backend leaves out when the source has none. */
-const OPTIONAL_TEXT = ["dosage", "route", "frequency", "step", "quantity", "duration"] as const;
+  "invalid",
+] as const satisfies readonly (keyof MedicationRecord | "invalid")[];
 
 /** The page size the Medication page asks for, and its pager moves by. */
 export const MEDICATION_HISTORY_PAGE_SIZE = 5;
 
 /**
- * A Medication Record, read strictly: six elements are required, and each of
- * the six optional ones, when there, a string — never `null`; each code must
- * be one of its set's, each date a date-time with an offset, and a field the
- * record does not have is refused rather than dropped.
+ * A Medication Record, its shape read strictly — every field there, and a
+ * field the record does not have refused rather than dropped — and each
+ * element's value leniently, by the lenient field decoder: free text and a
+ * code are any string, a date a date-time with an offset or invalid, and
+ * nothing an element holds refuses the record.
  */
 export const decodeMedicationRecord = (value: unknown): MedicationRecord => {
   const record = readObject(value, "MedicationRecord");
-  const optional: Partial<Record<(typeof OPTIONAL_TEXT)[number], string>> = {};
-  for (const field of OPTIONAL_TEXT) {
-    const text = record.optionalString(field);
-    if (text !== undefined) optional[field] = text;
-  }
+  const fields = record.sourceFields();
   const decoded: MedicationRecord = {
-    id: record.string("id"),
-    medication: record.string("medication"),
-    ...optional,
-    dispenseStatus: record.oneOf("dispenseStatus", DISPENSE_STATUSES),
-    startDate: dateTime(record.string("startDate"), "MedicationRecord.startDate"),
-    endDate: dateTime(record.string("endDate"), "MedicationRecord.endDate"),
-    dispensary: record.oneOf("dispensary", MEDICAL_CENTRES),
-    prescribingDoctor: record.string("prescribingDoctor"),
+    id: fields.read("id"),
+    medication: fields.read("medication"),
+    dosage: fields.read("dosage"),
+    route: fields.read("route"),
+    frequency: fields.read("frequency"),
+    step: fields.read("step"),
+    quantity: fields.read("quantity"),
+    dispenseStatus: fields.read("dispenseStatus"),
+    duration: fields.read("duration"),
+    startDate: fields.read("startDate", isOffsetDateTime),
+    endDate: fields.read("endDate", isOffsetDateTime),
+    dispensary: fields.read("dispensary"),
+    prescribingDoctor: fields.read("prescribingDoctor"),
   };
   record.onlyFields(MEDICATION_RECORD_FIELDS);
   return decoded;

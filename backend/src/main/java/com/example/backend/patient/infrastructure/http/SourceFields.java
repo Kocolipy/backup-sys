@@ -3,18 +3,15 @@ package com.example.backend.patient.infrastructure.http;
 import com.example.backend.patient.domain.SourceCode;
 import com.example.backend.patient.infrastructure.http.PatientSourceException.Failure;
 import java.time.LocalDate;
-import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
 
 /**
- * How an entry of a history the patient source pages and the service reads strictly — an ARMC
- * Board, a Medication Record — reads its flat fields: a closed set's code, a calendar date,
- * required or optional, a date-time with its offset, and text an entry must have, each failure
- * named by the history's own {@link Failure}, quoting no value. A date is required unless its
- * history says otherwise: an ARMC Board's End Date is the one optional date. Optional free text
- * needs no reading: it is the source's string, or {@code null} when the source sent none. A
- * history shown as received (ADR 0020), the FFI or the NUMC History, reads its fields by
- * {@link ReceivedFields} instead.
+ * How an entry of a history the patient source pages and the service reads strictly, an ARMC
+ * Board, reads its flat fields: a closed set's code, a calendar date, required or optional, and
+ * text an entry must have, each failure named by the history's own {@link Failure}, quoting no
+ * value. A date is required unless its history says otherwise: an ARMC Board's End Date is the
+ * one optional date. A history shown as received (ADR 0020), the FFI, the NUMC or the Medication
+ * History, reads its fields by {@link ReceivedFields} instead.
  */
 final class SourceFields {
 
@@ -44,22 +41,6 @@ final class SourceFields {
      */
     static LocalDate optionalDay(String date, Failure notToTheDay) {
         return date == null ? null : toTheDay(date, notToTheDay);
-    }
-
-    /**
-     * The date-time {@code dateTime} is, which must be there and be ISO-8601 with an offset,
-     * {@code Z} among them: one with no offset, or no time the calendar has, is
-     * {@code notADateTime}.
-     */
-    static OffsetDateTime dateTime(String dateTime, Failure none, Failure notADateTime) {
-        if (dateTime == null) {
-            throw PatientSourceException.failed(none);
-        }
-        try {
-            return OffsetDateTime.parse(dateTime);
-        } catch (DateTimeParseException noDateTimeWithAnOffset) {
-            throw PatientSourceException.failed(notADateTime);
-        }
     }
 
     /**

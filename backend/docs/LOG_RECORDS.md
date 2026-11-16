@@ -243,13 +243,13 @@ page, which quoted the path.
 
 ### The patient source's invalid fields
 
-A read that shows the patient source's data as received — the FFI History or
-the NUMC History —
+A read that shows the patient source's data as received — the FFI, the NUMC or
+the Medication History —
 answers a field in the wrong format as `null`, shown as "Error" (ADR 0020), and
 writes one `WARN` `patient_source.invalid_fields` (`successAtWarn`,
 `event.category` `network`, `event.type` `info`) for the whole response that
 held any, beside the request's own record. It carries
-`app.patient_source.read`, the read (`ffi` or `numc`), and
+`app.patient_source.read`, the read (`ffi`, `numc` or `medication`), and
 `app.patient_source.invalid_fields`, the path of each such field in the
 source's answer, in its order (`entry[1].issueDate`) — never a value, a
 record's id or the patient. A response with none writes nothing. The

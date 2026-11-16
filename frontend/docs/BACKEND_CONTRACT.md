@@ -154,12 +154,15 @@ change, when the backend side moves. What the SPA has to honour:
   (`MEDICATION_HISTORY`, `src/pages/medication/medication-api.ts`) opts in to
   `absentOnNotFound`, so the `404` is the Medication page's "No patient in
   context" and the `502` "Couldn't load medication records" with Try again;
-  the `{patientId}` is sent through `encodeURIComponent`, and each Medication
-  Record is decoded strictly. An optional element the source lacks — its
-  Dosage, Route, Frequency, Step, Quantity or Duration — is left out, never
-  sent as `null`, and the decoder refuses a `null` one. The Start Date and End
-  Date are ISO-8601 date-times with an offset, which the decoder holds to that
-  shape and the page shows in Singapore time.
+  the `{patientId}` is sent through `encodeURIComponent`. A Medication Record
+  is shown as received (ADR 0020): its shape is decoded strictly — every field
+  there, `null` included, `invalid` an array of strings, and a field it does
+  not know refused — but each field's value through the lenient field decoder
+  (`readObject(…).sourceFields()`): a `null` field is missing, "—", one its row
+  names in `invalid` is "Error", and a code outside the Dispense Status's or
+  the Medical Centre's set is shown as it came, so no field fails the read. The
+  Start Date and End Date are ISO-8601 date-times with an offset, which the
+  page shows in Singapore time; one in another shape is "Error" in its cell.
 - **A request body is JSON, and says so.** The backend reads a request body
   through its JSON converter only, so a body sent without
   `Content-Type: application/json` is refused `415` before any handler runs.

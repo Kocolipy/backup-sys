@@ -1209,21 +1209,28 @@ class PatientSourceFixturesTests {
                 .toList();
     }
 
-    /** Every Medication Record of every fixture's Medication History, each once, as its pages hold it. */
-    private static List<JsonNode> everyMedicationRecord() {
+    /** The patient whose Medication History is shown as received: the one whose records are malformed. */
+    private static final String MEDICATION_AS_RECEIVED = "/Patient/dev-patient-10/medication";
+
+    /**
+     * Every Medication Record of every fixture's Medication History but Tan Boon Huat's, whose
+     * every record is well-formed, each once, as its pages hold it.
+     */
+    private static List<JsonNode> wellFormedMedicationRecords() {
         return PatientSourceStubs.medicationHistories().stream()
                 .filter(stub -> inTheSourcesOrder(stub, MEDICATION_FILTER_PARAMETERS))
+                .filter(stub -> !stub.path().equals(MEDICATION_AS_RECEIVED))
                 .flatMap(stub -> resourcesOf(stub).stream())
                 .toList();
     }
 
     /**
-     * Two fixtures have Medication Records, each page its own stub — Tan Wei Ming's two pages of
-     * six and Tan Hui Min's one of four — and a fallback answers every fixture's other read with
-     * none.
+     * Three fixtures have Medication Records, each page its own stub — Tan Wei Ming's two pages
+     * of six, Tan Hui Min's one of four and Tan Boon Huat's one of four, shown as received — and
+     * a fallback answers every fixture's other read with none.
      */
     @Test
-    void twoFixturesHaveAMedicationHistoryAndTheFallbackServesEveryFixture() {
+    void threeFixturesHaveAMedicationHistoryAndTheFallbackServesEveryFixture() {
         List<String> exact = PatientSourceStubs.medicationHistories().stream()
                 .filter(stub -> inTheSourcesOrder(stub, MEDICATION_FILTER_PARAMETERS))
                 .map(stub -> stub.path() + " " + stub.query().at("/_offset/equalTo").asString()
@@ -1237,10 +1244,11 @@ class PatientSourceFixturesTests {
         assertThat(exact).containsExactlyInAnyOrder(
                 "/Patient/eq081-VQEgP8drUUqCWzHfw3/medication 0 of 6",
                 "/Patient/eq081-VQEgP8drUUqCWzHfw3/medication 5 of 6",
-                "/Patient/dev-patient-05/medication 0 of 4");
+                "/Patient/dev-patient-05/medication 0 of 4",
+                "/Patient/dev-patient-10/medication 0 of 4");
         assertThat(fixtureIds()).allSatisfy(id ->
                 assertThat("/Patient/" + id + "/medication").matches(fallback));
-        assertThat("/Patient/fault-medication-no-id/medication").doesNotMatch(fallback);
+        assertThat("/Patient/fault-medication-no-total/medication").doesNotMatch(fallback);
     }
 
     /**
@@ -1254,7 +1262,7 @@ class PatientSourceFixturesTests {
     void everyCannedMedicationReadPinsItsPageItsSortAndEveryFilterItUsesOrNot() {
         assertThat(PatientSourceStubs.medicationHistories())
                 .filteredOn(PatientSourceFixturesTests::canned)
-                .hasSize(16)
+                .hasSize(17)
                 .allSatisfy(stub -> assertThat(List.of(
                         stub.query().at("/_count/equalTo").asString(),
                         stub.query().at("/_offset/equalTo").isString(),
@@ -1272,7 +1280,8 @@ class PatientSourceFixturesTests {
         assertThat(PatientSourceStubs.medicationHistories())
                 .allSatisfy(stub -> assertThat(resourcesOf(stub)).hasSizeLessThanOrEqualTo(5));
         assertThat(List.of(medicationsOf("eq081-VQEgP8drUUqCWzHfw3").size(),
-                medicationsOf("dev-patient-05").size())).containsExactly(6, 4);
+                medicationsOf("dev-patient-05").size(), medicationsOf("dev-patient-10").size()))
+                .containsExactly(6, 4, 4);
     }
 
     /** Tan Hui Min's history holds every Dispense Status, so a page reading it shows each badge. */
@@ -1284,13 +1293,13 @@ class PatientSourceFixturesTests {
                 .contains("pending", "dispensed", "uncollected");
     }
 
-    /** The two histories hold every Medical Centre between them, as their Dispensaries. */
+    /** The two well-formed histories hold every Medical Centre between them, as their Dispensaries. */
     @Test
     void theMedicationHistoriesCoverEveryMedicalCentre() {
         Set<String> centres = Set.of("nee-soon-camp", "kranji-camp", "hendon-camp",
                 "mandai-hill-camp", "khatib-camp");
 
-        assertThat(everyMedicationRecord())
+        assertThat(wellFormedMedicationRecords())
                 .extracting(record -> record.get("dispensary").asString())
                 .containsOnlyElementsOf(centres)
                 .containsAll(centres);
@@ -1306,12 +1315,12 @@ class PatientSourceFixturesTests {
             "frequency", "step", "quantity", "duration");
 
     /**
-     * Every Medication Record is a {@code Medication} of every required element, its id and
-     * any of the optional ones, nothing else; one fixture's record has none of the six.
+     * Every well-formed Medication Record is a {@code Medication} of every required element, its
+     * id and any of the optional ones, nothing else; one fixture's record has none of the six.
      */
     @Test
     void everyMedicationRecordHoldsItsRequiredElementsAndOneHasNoOptionalOne() {
-        assertThat(everyMedicationRecord()).hasSize(10)
+        assertThat(wellFormedMedicationRecords()).hasSize(10)
                 .allSatisfy(record -> assertThat(List.<Object>of(
                         record.get("resourceType").asString(),
                         REQUIRED_MEDICATION_FIELDS.stream().allMatch(record::has),
@@ -1324,7 +1333,10 @@ class PatientSourceFixturesTests {
                 .containsExactly("medication-tan-hui-min-4");
     }
 
-    /** Every Medication Record any stub answers, sorted or filtered too, holds its elements alone. */
+    /**
+     * Every Medication Record any stub answers, sorted or filtered too, is a {@code Medication} of
+     * its elements and its id alone, and every one but Tan Boon Huat's has every required one.
+     */
     @Test
     void everyMedicationRecordAnyStubAnswersHoldsItsElementsAlone() {
         assertThat(PatientSourceStubs.medicationHistories().stream()
@@ -1332,27 +1344,63 @@ class PatientSourceFixturesTests {
                 .isNotEmpty()
                 .allSatisfy(record -> assertThat(List.<Object>of(
                         record.get("resourceType").asString(),
-                        REQUIRED_MEDICATION_FIELDS.stream().allMatch(record::has),
                         record.propertyNames().stream()
                                 .allMatch(field -> REQUIRED_MEDICATION_FIELDS.contains(field)
                                         || OPTIONAL_MEDICATION_FIELDS.contains(field))))
-                        .containsExactly("Medication", true, true));
+                        .containsExactly("Medication", true));
+        assertThat(PatientSourceStubs.medicationHistories().stream()
+                .filter(stub -> !stub.path().equals(MEDICATION_AS_RECEIVED))
+                .flatMap(stub -> resourcesOf(stub).stream()))
+                .allSatisfy(record -> assertThat(REQUIRED_MEDICATION_FIELDS)
+                        .allMatch(record::has));
     }
 
-    /** Every fixture's record ends on or after the instant it starts. */
+    /**
+     * Tan Boon Huat's four Medication Records are the patient source's data as received (ADR
+     * 0020): free text {@code null}, empty, blank, left out and of the wrong JSON type, a
+     * Dispense Status and a Dispensary outside their closed sets, an End Date before its Start
+     * Date, a Start Date with no offset, an End Date of the wrong JSON type and one a date alone,
+     * a Start Date blank and an End Date {@code null}, an id outside FHIR's grammar and none at
+     * all, written out record by record.
+     */
+    @Test
+    void tanBoonHuatsMedicationHistoryHoldsMissingMalformedAndUnknownFields() {
+        assertThat(medicationsOf("dev-patient-10")).extracting(JsonNode::toString).containsExactly(
+                "{\"resourceType\":\"Medication\",\"id\":\"medication-tan-boon-huat-1\","
+                        + "\"medication\":\"Paracetamol\",\"dosage\":null,\"route\":\"\","
+                        + "\"quantity\":20,\"dispenseStatus\":\"on-hold\","
+                        + "\"duration\":\"3 days\",\"startDate\":\"2022-03-16T09:00:00+08:00\","
+                        + "\"endDate\":\"2022-03-14T09:00:00+08:00\","
+                        + "\"dispensary\":\"tengah-air-base\","
+                        + "\"prescribingDoctor\":\"Dr Lim Wei Jie\"}",
+                "{\"resourceType\":\"Medication\",\"id\":\"medication-tan-boon-huat-2\","
+                        + "\"medication\":\"Ibuprofen\",\"dosage\":\"400 mg\",\"route\":\"PO\","
+                        + "\"frequency\":\"TDS\",\"quantity\":\"15 tablets\","
+                        + "\"dispenseStatus\":\"dispensed\",\"duration\":\"5 days\","
+                        + "\"startDate\":\"2021-03-16T09:00:00\",\"endDate\":20210321,"
+                        + "\"dispensary\":\"kranji-camp\",\"prescribingDoctor\":\"  \"}",
+                "{\"resourceType\":\"Medication\",\"id\":\"medication tan boon huat 3\","
+                        + "\"medication\":{\"text\":\"Amoxicillin\"},\"dispenseStatus\":null,"
+                        + "\"startDate\":\"2020-03-16T01:00:00Z\",\"endDate\":\"2020-03-21\","
+                        + "\"dispensary\":\"\",\"prescribingDoctor\":\"Dr Chen Mei Ling\"}",
+                "{\"resourceType\":\"Medication\",\"medication\":\"Oral rehydration salts\","
+                        + "\"dispenseStatus\":\"pending\",\"startDate\":\"  \",\"endDate\":null}");
+    }
+
+    /** Every well-formed record ends on or after the instant it starts. */
     @Test
     void everyMedicationRecordEndsOnOrAfterItStarts() {
-        assertThat(everyMedicationRecord())
+        assertThat(wellFormedMedicationRecords())
                 .allSatisfy(record -> assertThat(
                         OffsetDateTime.parse(record.get("endDate").asString()))
                         .isAfterOrEqualTo(OffsetDateTime.parse(
                                 record.get("startDate").asString())));
     }
 
-    /** Every Medication Record's id is in FHIR's id grammar and no other record's. */
+    /** Every well-formed Medication Record's id is in FHIR's id grammar and no other record's. */
     @Test
     void everyMedicationRecordIdIsAFhirIdOfItsOwn() {
-        List<String> ids = everyMedicationRecord().stream()
+        List<String> ids = wellFormedMedicationRecords().stream()
                 .map(record -> record.get("id").asString())
                 .toList();
         Stream<String> others = Stream.of(PatientSourceStubs.ffiHistories(),
@@ -1505,7 +1553,9 @@ class PatientSourceFixturesTests {
 
     /**
      * The Medication fault stubs, each by the failure it serves under a well-formed patient id
-     * no fixture uses, so it never shadows a fixture's history and the read reaches the source.
+     * no fixture uses, so it never shadows a fixture's history and the read reaches the source: a
+     * failure of the call or of the searchset alone, since no Medication Record fails a read (ADR
+     * 0020).
      */
     @Test
     void theMedicationFaultStubsServeEachFailureUnderAPatientIdOfItsOwn() {
@@ -1516,10 +1566,7 @@ class PatientSourceFixturesTests {
                         .isNotIn(fixtureIds()))
                 .extracting(PatientSourceStubs.FaultStub::fault)
                 .containsExactlyInAnyOrder("unreachable", "slow", "server-error",
-                        "unexpected-status", "not-a-searchset", "no-total", "no-id",
-                        "invalid-id", "no-dispense-status", "no-prescribing-doctor",
-                        "unknown-dispense-status", "unknown-dispensary",
-                        "start-date-not-a-date-time", "end-before-start");
+                        "unexpected-status", "not-a-searchset", "no-total");
     }
 
     /**
