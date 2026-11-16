@@ -118,7 +118,7 @@ describe("Search", () => {
 
     await search("tan");
 
-    expect(await screen.findByRole("status")).toHaveTextContent(/^Searching for patients…$/);
+    expect(await screen.findByRole("status")).toHaveTextContent(/^Searching records…$/);
     await answer.settle(page([TAN_HUI_MIN], 1, 1));
   });
 
@@ -217,7 +217,7 @@ describe("Search", () => {
       [TAN_PAGE_2]: page([TAN_BOON_HUAT, { ...TAN_HUI_MIN, id: "p6" }], 6, 7),
     });
     await search("tan");
-    await screen.findByText(/^Showing 1 to 5 of 7 patients$/);
+    await screen.findByText(/^Showing 1 to 5 of 7 records$/);
 
     await userEvent.click(
       within(screen.getByRole("navigation", { name: "Search result pages" })).getByRole("button", {
@@ -225,7 +225,7 @@ describe("Search", () => {
       }),
     );
 
-    expect(await screen.findByText(/^Showing 6 to 7 of 7 patients$/)).toBeInTheDocument();
+    expect(await screen.findByText(/^Showing 6 to 7 of 7 records$/)).toBeInTheDocument();
   });
 
   it("says no Patients match a search that found none, with no range", async () => {
@@ -236,7 +236,7 @@ describe("Search", () => {
     await search("nobody");
 
     expect({
-      empty: (await screen.findByText(/^No patients match your search$/)).tagName,
+      empty: (await screen.findByText(/^No records match your search\.$/)).tagName,
       range: screen.queryByText(/^Showing/),
       table: screen.queryByRole("table"),
     }).toEqual({ empty: "P", range: null, table: null });
@@ -277,13 +277,13 @@ describe("Search", () => {
       [TAN_PAGE_2]: page([TAN_BOON_HUAT, { ...TAN_HUI_MIN, id: "p6" }], 6, 7),
     });
     await search("tan");
-    await screen.findByText(/^Showing 1 to 5 of 7 patients$/);
+    await screen.findByText(/^Showing 1 to 5 of 7 records$/);
     await userEvent.click(screen.getByRole("button", { name: "Page 2" }));
-    await screen.findByText(/^Showing 6 to 7 of 7 patients$/);
+    await screen.findByText(/^Showing 6 to 7 of 7 records$/);
 
     await search("tan");
 
-    await screen.findByText(/^Showing 1 to 5 of 7 patients$/);
+    await screen.findByText(/^Showing 1 to 5 of 7 records$/);
     expect(requests().map(({ path }) => path)).toEqual([
       "/api/patient-search?q=tan&startIndex=1&count=5",
       "/api/patient-search?q=tan&startIndex=6&count=5",
@@ -327,9 +327,9 @@ const lastSearchSent = (requests: () => readonly { path: string }[]) =>
 
 /** Moves the results to their second page, and waits for it. */
 async function toSecondPage() {
-  await screen.findByText(/^Showing 1 to 5 of 7 patients$/);
+  await screen.findByText(/^Showing 1 to 5 of 7 records$/);
   await userEvent.click(screen.getByRole("button", { name: "Page 2" }));
-  await screen.findByText(/^Showing 6 to 7 of 7 patients$/);
+  await screen.findByText(/^Showing 6 to 7 of 7 records$/);
 }
 
 type User = ReturnType<typeof userEvent.setup>;
@@ -417,7 +417,7 @@ describe("Search, filtered", () => {
     await openFilters(user);
     await user.click(within(filterPanel()).getByRole("radio", { name: "Male" }));
     await apply(user);
-    await screen.findByText(/^Showing 1 to 1 of 1 patients$/);
+    await screen.findByText(/^Showing 1 to 1 of 1 record$/);
 
     expect({
       badge: within(filterTrigger()).getByText("1").dataset.slot,
@@ -448,7 +448,7 @@ describe("Search, filtered", () => {
 
     await openFilters(user);
     await user.click(within(filterPanel()).getByRole("button", { name: "Reset" }));
-    await screen.findByText(/^Showing 1 to 5 of 7 patients$/);
+    await screen.findByText(/^Showing 1 to 5 of 7 records$/);
     const sent = lastSearchSent(requests);
     await openFilters(user);
 

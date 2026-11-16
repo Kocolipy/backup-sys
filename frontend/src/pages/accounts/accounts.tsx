@@ -268,12 +268,8 @@ function GroupMembers({ group, id }: { group: GroupRow; id: string }) {
   return (
     <div aria-label={`Members of ${group.displayName}`} id={id} role="region">
       <PagedListing
-        copy={{
-          empty: `${group.displayName} has no members.`,
-          loading: "Loading members…",
-          noun: "members",
-          pagerLabel: `Pages of the members of ${group.displayName}`,
-        }}
+        narrowing="none"
+        pagerLabel={`Pages of the members of ${group.displayName}`}
         read={members}
       >
         {({ rows }) => (
@@ -443,7 +439,8 @@ function SearchBox({
 /**
  * A projection's card — its search and the shared paged listing — or nothing
  * for a session without the projection's read Permission. The body says which
- * empty it is: nothing matches the search, or nothing is provisioned at all.
+ * empty it is: with a search entered, that no records match it, and with
+ * none, that no records are found.
  *
  * A failed re-read hides the rows: a row's actions act on what it states, so
  * rows the listing could not confirm are not offered. The page re-reads
@@ -454,18 +451,16 @@ function SearchBox({
 function ProjectionCard<R>({
   children,
   description,
-  noun,
   onSearch,
   pending,
   read,
   search,
+  searchName,
   title,
 }: {
   /** The page shown, which has at least one row. */
   children: (page: Page<R>) => ReactNode;
   description: string;
-  /** The rows' name, lower-case and plural: "users". */
-  noun: string;
   onSearch: (search: string) => void;
   /**
    * Whether an action is in flight. Its answer replaces a row of the page
@@ -475,6 +470,8 @@ function ProjectionCard<R>({
   read: PagedRead<R>;
   /** The search the shown page was read for; empty for none. */
   search: string;
+  /** The search box's accessible name: "Search users". */
+  searchName: string;
   title: string;
 }) {
   if (read.view.kind === "not-permitted") return null;
@@ -488,17 +485,13 @@ function ProjectionCard<R>({
         <SearchBox
           disabled={pending}
           label={`${title} search`}
-          name={`Search ${noun}`}
+          name={searchName}
           onSearch={onSearch}
         />
         <PagedListing
-          copy={{
-            empty: search === "" ? `No ${noun} are provisioned.` : `No ${noun} match "${search}".`,
-            loading: `Loading ${noun}…`,
-            noun,
-            pagerLabel: `${title} pages`,
-          }}
           disabled={pending}
+          narrowing={search === "" ? "none" : "search"}
+          pagerLabel={`${title} pages`}
           read={read}
         >
           {children}
@@ -639,11 +632,11 @@ export function Accounts() {
     <div className="flex flex-col gap-6">
       <ProjectionCard
         description={`Identity, active status and Group membership come from the directory and are read-only here. ${UNLOCK_EXPLANATION}`}
-        noun="users"
         onSearch={users.search}
         pending={pending}
         read={users.read}
         search={users.query.search}
+        searchName="Search users"
         title="Users"
       >
         {(page) => (
@@ -660,11 +653,11 @@ export function Accounts() {
 
       <ProjectionCard
         description="Groups and their membership come from the directory and are read-only here. A Group grants its Permissions to its direct members from their next sign-in, and a Group with none grants nothing. The Admin group's direct members are the Superuser."
-        noun="groups"
         onSearch={groups.search}
         pending={pending}
         read={groups.read}
         search={groups.query.search}
+        searchName="Search groups"
         title="Groups"
       >
         {(page) => (

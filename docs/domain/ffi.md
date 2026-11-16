@@ -287,7 +287,8 @@ offered no link and is routed to its landing page. Headed "FFI History".
   badge; a missing field "—" and one in the wrong format "Error", the rest of
   the row as any other ([Shown as received](#shown-as-received)).
 - **The shared paged listing**: the numbered pager and "Showing x to y of N
-  FFIs", named on a single page too, the page shown held while the next loads.
+  records", named on a single page too, the page shown held while the next
+  loads.
 - **Sort.** Only the Issue Date and Expiry Date headings sort, one at a time,
   each the shared sortable column heading stating its direction with
   `aria-sort`, as Patient Search's do; every other heading is plain. The
@@ -317,8 +318,9 @@ offered no link and is routed to its landing page. Headed "FFI History".
   patient under its id — shows "No patient in context" and reads no FFIs.
 - **The source's `404`** for the patient is our `404`, and shows the same "No
   patient in context", reporting nothing.
-- **A patient with no FFIs** — a `200` with `total: 0` — shows "No FFIs". A
-  filter matching none of a patient's FFIs shows "No FFIs match the filters".
+- **A patient with no FFIs** — a `200` with `total: 0` — shows "No records
+  found." A filter matching none of a patient's FFIs shows "No records match
+  the filters."
 - **The source failing** shows "Couldn't load FFIs" on the page's error line,
   and Try again, which reads the same page again.
 

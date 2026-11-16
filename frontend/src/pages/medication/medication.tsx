@@ -103,25 +103,16 @@ function MedicationTable({
 
 /**
  * The Medication History of the patient `patientId`, five Medication Records
- * a page, through the shared filtered history ({@link FilteredHistory}):
- * "Showing x to y of N medication records", "Couldn't load medication
- * records" for a failed read, and "No medication records", or with a filter
- * applied "No medication records match the filters", for an empty one. It
- * sorts by Start Date or End Date, each by its whole date-time, and the
- * Filter panel narrows it by the Dispense Status and by a date-time range
- * over either date.
+ * a page, through the shared filtered history ({@link FilteredHistory}), its
+ * rows named records as every paged table's are, and "Couldn't load
+ * medication records" for a failed read. It sorts by Start Date or End Date,
+ * each by its whole date-time, and the Filter panel narrows it by the
+ * Dispense Status and by a date-time range over either date.
  */
 function MedicationHistory({ patientId }: { patientId: string }) {
   return (
     <FilteredHistory
-      copy={{
-        empty: "No medication records",
-        emptyFiltered: "No medication records match the filters",
-        failure: "Couldn't load medication records",
-        loading: "Loading medication records…",
-        noun: "medication records",
-        pagerLabel: "Medication History pages",
-      }}
+      copy={{ failure: "Couldn't load medication records", pagerLabel: "Medication History pages" }}
       countFilters={countMedicationFilters}
       declaration={MEDICATION_HISTORY}
       filterPopover={MedicationFilterPopover}
@@ -137,15 +128,15 @@ function MedicationHistory({ patientId }: { patientId: string }) {
 
 /**
  * Medication: the Medication History of the patient in context, read from
- * the patient source, and "Loading medication records…" while the patient is
- * read ({@link ForPatientInContext}). A new patient in context is a new
- * history, read from its first page.
+ * the patient source, and "Loading records…" while the patient is read
+ * ({@link ForPatientInContext}). A new patient in context is a new history,
+ * read from its first page.
  */
 export function Medications() {
   return (
     <Card>
       <CardContent className="flex flex-col gap-4">
-        <ForPatientInContext history={MedicationHistory} loading="Loading medication records…" />
+        <ForPatientInContext history={MedicationHistory} />
       </CardContent>
     </Card>
   );

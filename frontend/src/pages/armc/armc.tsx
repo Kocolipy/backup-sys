@@ -93,23 +93,15 @@ function ArmcTable({
 
 /**
  * The ARMC History of the patient `patientId`, five ARMC Boards a page,
- * through the shared filtered history ({@link FilteredHistory}): "Showing x
- * to y of N ARMC records", "Couldn't load ARMC records" for a failed read,
- * and "No ARMC records", or with a filter applied "No ARMC records match the
- * filters", for an empty one. It sorts by Start Date or End Date, and the
+ * through the shared filtered history ({@link FilteredHistory}), its rows
+ * named records as every paged table's are, and "Couldn't load ARMC records"
+ * for a failed read. It sorts by Start Date or End Date, and the
  * Filter panel narrows it by its Outcome and either date.
  */
 function ArmcHistory({ patientId }: { patientId: string }) {
   return (
     <FilteredHistory
-      copy={{
-        empty: "No ARMC records",
-        emptyFiltered: "No ARMC records match the filters",
-        failure: "Couldn't load ARMC records",
-        loading: "Loading ARMC records…",
-        noun: "ARMC records",
-        pagerLabel: "ARMC History pages",
-      }}
+      copy={{ failure: "Couldn't load ARMC records", pagerLabel: "ARMC History pages" }}
       countFilters={countArmcFilters}
       declaration={ARMC_HISTORY}
       filterPopover={ArmcFilterPopover}
@@ -125,7 +117,7 @@ function ArmcHistory({ patientId }: { patientId: string }) {
 
 /**
  * ARMC: the ARMC History of the patient in context, read from the patient
- * source, and "Loading ARMC records…" while the patient is read
+ * source, and "Loading records…" while the patient is read
  * ({@link ForPatientInContext}). A new patient in context is a new history,
  * read from its first page.
  */
@@ -133,7 +125,7 @@ export function ArmcBoards() {
   return (
     <Card>
       <CardContent className="flex flex-col gap-4">
-        <ForPatientInContext history={ArmcHistory} loading="Loading ARMC records…" />
+        <ForPatientInContext history={ArmcHistory} />
       </CardContent>
     </Card>
   );

@@ -1,3 +1,5 @@
+import type { Page } from "@/lib/paging";
+
 /**
  * The empty line for a page of a paged read. A page that is not the first says
  * only that it emptied: a row removed between the read that counted the listing
@@ -5,7 +7,10 @@
  * the listing is not empty at all. Only the first page, or no page read yet, may
  * make the claim of absence in the listing's own copy.
  */
-export function emptyCopyOf(page: { startIndex: number } | null, listingCopy: string): string {
+export function emptyCopyOf(
+  page: Pick<Page<unknown>, "startIndex"> | null,
+  listingCopy: string,
+): string {
   return page !== null && page.startIndex > 1
     ? "This page is now empty. Use Previous to go back."
     : listingCopy;

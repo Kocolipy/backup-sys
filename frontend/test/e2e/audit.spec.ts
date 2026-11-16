@@ -110,7 +110,7 @@ test("an Admin's Unlock and the refused logins that locked the User are found on
       // An operation the User never had performed on it matches nothing: it was
       // locked by its failure run, never by the dormancy job.
       await applyAuditFilters(page, { operation: "Dormancy lockout", resourceId: id });
-      await expect(page.getByText("No audit events match the current filters.")).toBeVisible();
+      await expect(page.getByText("No records match the filters.", { exact: true })).toBeVisible();
     },
     LOCKOUT_MAX_ATTEMPTS,
   );
@@ -148,7 +148,7 @@ test("two operations selected through the picker's search list events of both, a
       await openAuditFilters(page);
       await expect(operationPicker(page)).toHaveText("Operation: Any");
       await expect(page.getByLabel("Resource id")).toHaveValue("");
-      await expect(page.getByText(/^Showing 1 to \d+ of \d+ events$/)).toBeVisible();
+      await expect(page.getByText(/^Showing 1 to \d+ of \d+ records$/)).toBeVisible();
     },
     LOCKOUT_MAX_ATTEMPTS,
   );
@@ -216,9 +216,9 @@ test("pages through the trail with its filters, refreshes it, and narrows it by 
   try {
     for (let count = 0; count <= PAGE_SIZE; count += 1) await unlock();
     const adminId = await userIdOf(page, ADMIN_USERNAME);
-    // The pager names the range shown, "Showing 1 to 20 of 21 events".
-    const position = page.getByText(/^Showing \d+ to \d+ of \d+ events$/);
-    const firstPageOf = (total: number) => `Showing 1 to ${PAGE_SIZE} of ${total} events`;
+    // The pager names the range shown, "Showing 1 to 20 of 21 records".
+    const position = page.getByText(/^Showing \d+ to \d+ of \d+ records$/);
+    const firstPageOf = (total: number) => `Showing 1 to ${PAGE_SIZE} of ${total} records`;
     const previous = page.getByRole("button", { name: "Previous" });
     const next = page.getByRole("button", { name: "Next" });
 
@@ -235,7 +235,7 @@ test("pages through the trail with its filters, refreshes it, and narrows it by 
 
     await next.click();
     await expect(position).toHaveText(
-      `Showing ${PAGE_SIZE + 1} to ${PAGE_SIZE + 1} of ${PAGE_SIZE + 1} events`,
+      `Showing ${PAGE_SIZE + 1} to ${PAGE_SIZE + 1} of ${PAGE_SIZE + 1} records`,
     );
     await expect(eventRows(page)).toHaveCount(1);
     await expect(next).toBeDisabled();
@@ -251,7 +251,7 @@ test("pages through the trail with its filters, refreshes it, and narrows it by 
     await page.getByRole("button", { name: "Refresh" }).click();
     await expect(eventRows(page)).toHaveCount(2);
     await expect(position).toHaveText(
-      `Showing ${PAGE_SIZE + 1} to ${PAGE_SIZE + 2} of ${PAGE_SIZE + 2} events`,
+      `Showing ${PAGE_SIZE + 1} to ${PAGE_SIZE + 2} of ${PAGE_SIZE + 2} records`,
     );
 
     await previous.click();
@@ -267,7 +267,7 @@ test("pages through the trail with its filters, refreshes it, and narrows it by 
       operation: "Lockout lifted",
       resourceId: id,
     });
-    await expect(page.getByText("No audit events match the current filters.")).toBeVisible();
+    await expect(page.getByText("No records match the filters.", { exact: true })).toBeVisible();
 
     // A To far in the future keeps every one; a To before any of them keeps none.
     await openAuditFilters(page);
@@ -278,7 +278,7 @@ test("pages through the trail with its filters, refreshes it, and narrows it by 
     await openAuditFilters(page);
     await page.getByLabel("To", { exact: true }).fill("2000-01-01T00:00");
     await applyAuditFilters(page, { operation: "Lockout lifted", resourceId: id });
-    await expect(page.getByText("No audit events match the current filters.")).toBeVisible();
+    await expect(page.getByText("No records match the filters.", { exact: true })).toBeVisible();
   } finally {
     await deprovisionUser(connector.scim, id);
   }

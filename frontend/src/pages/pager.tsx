@@ -5,6 +5,7 @@ import {
   PaginationItem,
 } from "@/components/ui/pagination";
 import type { Page } from "@/lib/paging";
+import { recordsCounted } from "@/pages/listing-copy";
 import { PagerMove } from "@/pages/pager-move";
 
 /** Up to this many pages, every page number shows; past it, the ends and the pages beside the one shown. */
@@ -34,7 +35,8 @@ function pageNumbersOf(current: number, count: number): (number | "gap")[] {
 }
 
 /**
- * Where the page shown sits among every row its read matched, and the moves
+ * Where the page shown sits among every row its read matched, counted in
+ * records ("Showing 21 to 40 of 45 records", "… of 1 record"), and the moves
  * from it: « back by one page, never before the first; » on from where this
  * page ended — counted from the page's own `startIndex` and row count, so a
  * page that came back short is moved on from its last row; and a number for
@@ -54,7 +56,6 @@ function pageNumbersOf(current: number, count: number): (number | "gap")[] {
 export function Pager({
   disabled = false,
   label,
-  noun,
   onMove,
   onePage = "hidden",
   page: { rows, startIndex, totalResults },
@@ -64,8 +65,6 @@ export function Pager({
   disabled?: boolean;
   /** The control's accessible name. */
   label: string;
-  /** What the rows are, lower-case and plural, as the position line names them: "Showing 1 to 20 of 45 users". */
-  noun: string;
   onMove: (startIndex: number) => void;
   /** Whether a first page holding every row, and at least one, shows the pager anyway. */
   onePage?: "hidden" | "shown";
@@ -85,8 +84,8 @@ export function Pager({
           many rows there are in all instead of a range that contradicts itself. */}
       <p className="text-sm text-muted-foreground">
         {rows.length === 0
-          ? `Showing 0 of ${totalResults} ${noun}`
-          : `Showing ${startIndex} to ${last} of ${totalResults} ${noun}`}
+          ? `Showing 0 of ${recordsCounted(totalResults)}`
+          : `Showing ${startIndex} to ${last} of ${recordsCounted(totalResults)}`}
       </p>
       <PaginationContent className="gap-1.5">
         <PaginationItem>

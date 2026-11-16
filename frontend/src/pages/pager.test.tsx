@@ -17,7 +17,6 @@ function renderPager(
     <Pager
       disabled={disabled}
       label="Widget pages"
-      noun="widgets"
       onMove={onMove}
       onePage={onePage}
       page={{ rows: Array.from({ length: rows }), startIndex, totalResults }}
@@ -41,10 +40,16 @@ describe("Pager", () => {
     expect(screen.getByRole("navigation", { name: "Widget pages" })).toBeInTheDocument();
   });
 
-  it("names the range shown and the total", () => {
+  it("names the range shown and the total, in records", () => {
     renderPager({ rows: 20, startIndex: 21, totalResults: 45 });
 
-    expect(screen.getByText(/^Showing 21 to 40 of 45 widgets$/)).toBeInTheDocument();
+    expect(screen.getByText(/^Showing 21 to 40 of 45 records$/)).toBeInTheDocument();
+  });
+
+  it("names a total of one as one record", () => {
+    renderPager({ rows: 1, startIndex: 1, totalResults: 1 }, false, "shown");
+
+    expect(screen.getByText(/^Showing 1 to 1 of 1 record$/)).toBeInTheDocument();
   });
 
   it.each([
@@ -113,7 +118,7 @@ describe("Pager", () => {
       next: next().hasAttribute("disabled"),
       pages: pageNumbers(),
       previous: previous().hasAttribute("disabled"),
-      range: screen.getByText(/^Showing 1 to 3 of 3 widgets$/).tagName,
+      range: screen.getByText(/^Showing 1 to 3 of 3 records$/).tagName,
     }).toEqual({ next: true, pages: ["Page 1"], previous: true, range: "P" });
   });
 
@@ -187,9 +192,15 @@ describe("Pager", () => {
   it("keeps an empty later page's Previous, naming the count instead of a backwards range", () => {
     renderPager({ rows: 0, startIndex: 21, totalResults: 3 });
 
-    expect(screen.getByText(/^Showing 0 of 3 widgets$/)).toBeInTheDocument();
+    expect(screen.getByText(/^Showing 0 of 3 records$/)).toBeInTheDocument();
     expect(previous()).toBeEnabled();
     expect(next()).toBeDisabled();
+  });
+
+  it("names a total of one as one record on an empty later page", () => {
+    renderPager({ rows: 0, startIndex: 21, totalResults: 1 });
+
+    expect(screen.getByText(/^Showing 0 of 1 record$/)).toBeInTheDocument();
   });
 
   it("holds both moves still while disabled", () => {

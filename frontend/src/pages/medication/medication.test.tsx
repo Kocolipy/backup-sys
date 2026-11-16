@@ -285,7 +285,7 @@ describe("Medication", () => {
     const answer = deferred();
     await renderMedication(answer.answer);
 
-    expect(await screen.findByRole("status")).toHaveTextContent(/^Loading medication records…$/);
+    expect(await screen.findByRole("status")).toHaveTextContent(/^Loading records…$/);
     await answer.settle(page(FOUR_RECORDS, 1, 4));
   });
 
@@ -294,7 +294,7 @@ describe("Medication", () => {
     const { requests } = await renderMedication(page(fiveOfSix, 1, 6), {
       [SECOND_PAGE]: page([record("medication-6", { medication: "Prednisolone" })], 6, 6),
     });
-    await screen.findByText("Showing 1 to 5 of 6 medication records");
+    await screen.findByText("Showing 1 to 5 of 6 records");
 
     await userEvent.click(
       within(screen.getByRole("navigation", { name: "Medication History pages" })).getByRole(
@@ -303,17 +303,17 @@ describe("Medication", () => {
       ),
     );
 
-    expect(await screen.findByText("Showing 6 to 6 of 6 medication records")).toBeInTheDocument();
+    expect(await screen.findByText("Showing 6 to 6 of 6 records")).toBeInTheDocument();
     expect({ reads: medicationReads(requests()), rows: rows().map((row) => row[0]) }).toEqual({
       reads: [FIRST_PAGE, SECOND_PAGE],
       rows: ["Prednisolone"],
     });
   });
 
-  it("says No medication records for a patient with none", async () => {
+  it("says no records are found for a patient with none", async () => {
     await renderMedication(page([], 1, 0));
 
-    expect(await screen.findByText("No medication records")).toBeInTheDocument();
+    expect(await screen.findByText("No records found.")).toBeInTheDocument();
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
   });
 
@@ -334,7 +334,7 @@ describe("Medication", () => {
 
     await patient.settle(json(TAN_WEI_MING));
 
-    expect(await screen.findByText("Showing 1 to 4 of 4 medication records")).toBeInTheDocument();
+    expect(await screen.findByText("Showing 1 to 4 of 4 records")).toBeInTheDocument();
     expect({ after: medicationReads(requests()), before }).toEqual({
       after: [FIRST_PAGE],
       before: [],
@@ -350,7 +350,7 @@ describe("Medication", () => {
     });
 
     expect(screen.getByRole("main").querySelector("[role=status]")).toHaveTextContent(
-      /^Loading medication records…$/,
+      /^Loading records…$/,
     );
     await patient.settle(json(TAN_WEI_MING));
   });
@@ -393,9 +393,9 @@ const sortButton = (name: string) => within(columnHeader(name)).getByRole("butto
 
 /** Moves the history to its second page, and waits for it. */
 async function toSecondPage() {
-  await screen.findByText("Showing 1 to 5 of 6 medication records");
+  await screen.findByText("Showing 1 to 5 of 6 records");
   await userEvent.click(screen.getByRole("button", { name: "Page 2" }));
-  await screen.findByText("Showing 6 to 6 of 6 medication records");
+  await screen.findByText("Showing 6 to 6 of 6 records");
 }
 
 describe("Medication, sorted", () => {
@@ -441,7 +441,7 @@ describe("Medication, sorted", () => {
     await toSecondPage();
 
     await userEvent.click(sortButton(heading));
-    await screen.findByText("Showing 1 to 5 of 6 medication records");
+    await screen.findByText("Showing 1 to 5 of 6 records");
 
     expect({
       direction: columnHeader(heading).getAttribute("aria-sort"),
@@ -455,7 +455,7 @@ describe("Medication, sorted", () => {
   it("holds the page, busy, and both sort headings still while a read is pending", async () => {
     const next = deferred();
     await renderMedication(FIVE_OF_SIX, { [SECOND_PAGE]: next.answer });
-    await screen.findByText("Showing 1 to 5 of 6 medication records");
+    await screen.findByText("Showing 1 to 5 of 6 records");
 
     await userEvent.click(screen.getByRole("button", { name: "Page 2" }));
 
@@ -574,7 +574,7 @@ describe("Medication, filtered", () => {
 
       await pickStatuses(user, ...labels);
       await apply(user);
-      await screen.findByText("Showing 1 to 1 of 1 medication records");
+      await screen.findByText("Showing 1 to 1 of 1 record");
 
       expect({
         count: filterTrigger().getAttribute("aria-label"),
@@ -601,7 +601,7 @@ describe("Medication, filtered", () => {
       setDateTime(range, "From", from);
       setDateTime(range, "To", to);
       await apply(user);
-      await screen.findByText("Showing 1 to 1 of 1 medication records");
+      await screen.findByText("Showing 1 to 1 of 1 record");
 
       expect({
         count: filterTrigger().getAttribute("aria-label"),
@@ -623,7 +623,7 @@ describe("Medication, filtered", () => {
     setDateTime("Start Date", "From", "2025-07-14T16:20");
     setDateTime("Start Date", "To", "2025-07-14T16:20");
     await apply(user);
-    await screen.findByText("Showing 1 to 1 of 1 medication records");
+    await screen.findByText("Showing 1 to 1 of 1 record");
 
     expect(medicationReads(requests()).slice(-1)[0]).toBe(historyPage(1, asked));
   });
@@ -645,7 +645,7 @@ describe("Medication, filtered", () => {
     await pickStatuses(user, "DISPENSED");
     setDateTime("Start Date", "From", "2025-01-01T00:00");
     await apply(user);
-    await screen.findByText("Showing 1 to 1 of 1 medication records");
+    await screen.findByText("Showing 1 to 1 of 1 record");
 
     expect({
       count: filterTrigger().getAttribute("aria-label"),
@@ -700,11 +700,11 @@ describe("Medication, filtered", () => {
     await pickStatuses(user, "UNCOLLECTED");
     setDateTime("End Date", "From", "2025-01-01T00:00");
     await apply(user);
-    await screen.findByText("Showing 1 to 1 of 1 medication records");
+    await screen.findByText("Showing 1 to 1 of 1 record");
 
     await openFilters(user);
     await user.click(within(filterPanel()).getByRole("button", { name: "Reset" }));
-    await screen.findByText("Showing 1 to 4 of 4 medication records");
+    await screen.findByText("Showing 1 to 4 of 4 records");
 
     expect({
       count: filterTrigger().getAttribute("aria-label"),
@@ -712,7 +712,7 @@ describe("Medication, filtered", () => {
     }).toEqual({ count: "Filter", read: FIRST_PAGE });
   });
 
-  it("says No medication records match the filters for a filter matching none, and offers the filters still", async () => {
+  it("says no records match the filters for a filter matching none, and offers the filters still", async () => {
     const user = userEvent.setup();
     await renderMedication(page(FOUR_RECORDS, 1, 4), {
       [historyPage(1, "endDateTo=2023-12-31T23:59")]: page([], 1, 0),
@@ -724,11 +724,11 @@ describe("Medication, filtered", () => {
     await apply(user);
 
     expect({
-      empty: (await screen.findByText(/^No medication records/)).textContent,
+      empty: (await screen.findByText(/^No records/)).textContent,
       filter: filterTrigger().getAttribute("aria-label"),
       table: screen.queryByRole("table"),
     }).toEqual({
-      empty: "No medication records match the filters",
+      empty: "No records match the filters.",
       filter: "Filter, 1 set",
       table: null,
     });

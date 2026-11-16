@@ -179,6 +179,21 @@ export const EMPTY_AUDIT_FILTERS: AuditFilters = {
 };
 
 /**
+ * How many of `filters` narrow the listing: the operations, as one, the
+ * outcome, and each typed field that is set.
+ */
+export function countAuditFilters(filters: AuditFilters): number {
+  return [
+    filters.operations.length > 0,
+    filters.outcome !== "ANY",
+    filters.actorId !== "",
+    filters.resourceId !== "",
+    filters.from !== "",
+    filters.to !== "",
+  ].filter(Boolean).length;
+}
+
+/**
  * The listing, as a filter set parsed into it: each filter as it is sent, an
  * unset one `null` — no operation for every operation. It is built once, when
  * the filters parse, so rendering never touches a filter again;

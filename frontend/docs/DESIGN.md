@@ -180,13 +180,17 @@ reserved for real single- or multiple-open semantics.
 ### Loading & empty states
 
 Every listing renders these through the one listing body
-(`src/pages/listing-body.tsx`), so they look the same on every page:
+(`src/pages/listing-body.tsx`), so they look the same on every page, and say
+the same: every table names its rows "records", never a noun of its own. The
+wording lives in `src/pages/listing-copy.ts`, chosen from one flag a listing
+passes, whether its rows are narrowed and how (`Narrowing`: none, filters,
+search, or the Search page's results):
 
 - **Loading** — while a listing's first read is in flight, full-width
   `Skeleton` rows stand where its rows will be. The skeletons are
-  `aria-hidden`; the listing's loading copy ("Loading users…") sits beside
-  them in a `status` region, visually hidden, so a screen reader still hears
-  it.
+  `aria-hidden`; the loading copy — "Loading records…", or the Search
+  page's "Searching records…" — sits beside them in a `status` region,
+  visually hidden, so a screen reader still hears it.
 - **A later read of a paged listing** — a move, a sort, a filter — holds the
   page last read in place, dimmed after a short delay, `aria-busy` and out of
   the pointer's reach, with the pager disabled, so the listing never drops
@@ -195,9 +199,14 @@ Every listing renders these through the one listing body
   the held page. A page short of rows stands as tall as the listing's last
   full page did, so the pager stays where it was.
 - **Empty** — a successful read with no rows shows a centred, muted,
-  decorative `Inbox` icon above the listing's empty copy. The copy is the
-  listing's own: "No connectors exist.", or a search's "No users match …", or,
-  for a later page that emptied, the pager's "This page is now empty."
+  decorative `Inbox` icon above the empty copy: "No records found." when
+  nothing narrows the listing, "No records match the filters." with a filter
+  set, "No records match your search." on the Search page and with a search
+  term entered (the term is not echoed), or, for a later page that emptied,
+  "This page is now empty. Use Previous to go back."
+- **The pager's position line** counts records: "Showing 21 to 40 of 45
+  records", "Showing 1 to 1 of 1 record", and on a page with no rows "Showing
+  0 of 45 records".
 - **Failed or not permitted** — the body is blank. A failure is never drawn as
   empty or as a load still under way; the page's one error line says what went
   wrong. Whether a failed refresh keeps the last rows is each listing's own

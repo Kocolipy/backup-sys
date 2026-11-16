@@ -4,6 +4,9 @@ import type { ReactNode } from "react";
 import type { ReadView } from "@/auth/use-gated-read";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import type { Page } from "@/lib/paging";
+import { listingCopyOf, type Narrowing } from "@/pages/listing-copy";
+import { emptyCopyOf } from "@/pages/page-empty-copy";
 
 /**
  * What a page shows after a refresh fails: the rows last read, under the
@@ -16,10 +19,14 @@ interface ListingBodyProps<T, R> {
   view: ReadView<T>;
   /** The rows in the read's data — the data itself, for a plain list. */
   rows: (data: T) => readonly R[];
-  /** The line shown while the first read is in flight. */
-  loading: string;
-  /** The line shown when a successful read has no rows. */
-  empty: string;
+  /** How the rows are narrowed, which decides the loading and empty copy ({@link listingCopyOf}). */
+  narrowing: Narrowing;
+  /**
+   * The page shown, for a paged read: a later page with no rows says only that
+   * it emptied ({@link emptyCopyOf}). Absent, or `null` while no page is read,
+   * the empty copy is the listing's own.
+   */
+  pageShown?: Pick<Page<unknown>, "startIndex"> | null;
   staleRows: StaleRows;
   /** The rows themselves, beside the read they came from; called only with at least one row. */
   children: (rows: readonly R[], data: T) => ReactNode;
@@ -60,18 +67,20 @@ function LoadingRows({ copy }: { copy: string }): ReactNode {
 
 /**
  * The one listing body every listing page renders: loading, empty and failed
- * look the same on every page. A failure is never shown as empty or as a load
+ * look the same on every page, and say the same — the copy of how the rows
+ * are narrowed, never a page's own. A failure is never shown as empty or as a load
  * still under way — the body is blank, and the page's error line says what
  * went wrong — and a session without the read's Permission sees nothing at all.
  */
 export function ListingBody<T, R>({
   children,
-  empty,
-  loading,
+  narrowing,
+  pageShown = null,
   rows,
   staleRows,
   view,
 }: ListingBodyProps<T, R>): ReactNode {
+  const { empty, loading } = listingCopyOf(narrowing);
   switch (view.kind) {
     case "not-permitted":
     case "failed":
@@ -84,7 +93,11 @@ export function ListingBody<T, R>({
     }
     case "ready": {
       const read = rows(view.data);
-      return read.length > 0 ? children(read, view.data) : <EmptyNote copy={empty} />;
+      return read.length > 0 ? (
+        children(read, view.data)
+      ) : (
+        <EmptyNote copy={emptyCopyOf(pageShown, empty)} />
+      );
     }
   }
 }

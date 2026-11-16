@@ -250,13 +250,9 @@ function ConnectorSection({
       ) : null}
 
       <PagedListing
-        copy={{
-          empty: "No active tokens.",
-          loading: "Loading tokens…",
-          noun: "tokens",
-          pagerLabel: `Pages of the tokens of ${connector.displayName}`,
-        }}
         disabled={pending}
+        narrowing="none"
+        pagerLabel={`Pages of the tokens of ${connector.displayName}`}
         read={tokens}
       >
         {({ rows }) => (
@@ -614,13 +610,7 @@ export function Connectors() {
             error line: every change re-reads, and a refused re-read says
             nothing new about connectors the page has just shown. Try again,
             the one every listing offers, reads them again. */}
-        <ListingBody
-          empty="No connectors exist."
-          loading="Loading connectors…"
-          rows={everyConnector}
-          staleRows="keep"
-          view={view}
-        >
+        <ListingBody narrowing="none" rows={everyConnector} staleRows="keep" view={view}>
           {(connectors) =>
             connectors.map((connector) => (
               <ConnectorSection

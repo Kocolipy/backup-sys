@@ -9,6 +9,7 @@ import { MultiSelectPicker } from "@/pages/multi-select-picker";
 
 import {
   AUDIT_OPERATIONS,
+  countAuditFilters,
   EMPTY_AUDIT_FILTERS,
   parseAuditFilters,
   type AuditFilters,
@@ -41,21 +42,6 @@ type TypedFilter = "actorId" | "resourceId" | "from" | "to";
 
 /** A filter set Apply refused, and why. */
 type Refusal = Extract<ParsedAuditFilters, { ok: false }>;
-
-/**
- * How many of `filters` narrow the listing: the operations, as one, the
- * outcome, and each typed field that is set.
- */
-function countSet(filters: AuditFilters): number {
-  return [
-    filters.operations.length > 0,
-    filters.outcome !== "ANY",
-    filters.actorId !== "",
-    filters.resourceId !== "",
-    filters.from !== "",
-    filters.to !== "",
-  ].filter(Boolean).length;
-}
 
 /**
  * The panel's form, mounted each time the panel opens, so it starts from the
@@ -188,7 +174,7 @@ export function AuditFilterPopover({
   onApply: (filters: AuditFilters, query: AuditQuery) => void;
 }) {
   return (
-    <FilterPopover className="w-xl max-w-screen" setCount={countSet(applied)}>
+    <FilterPopover className="w-xl max-w-screen" setCount={countAuditFilters(applied)}>
       {(close) => (
         <AuditFilterForm
           applied={applied}

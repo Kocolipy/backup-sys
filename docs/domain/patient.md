@@ -203,7 +203,7 @@ NRIC", searched only on submit (Enter or the Search button).
 - **Results**, under the heading "Search Results": a table of Patient Name (the
   official name only), NRIC (in full), Gender (a badge, Male blue and Female pink), Date of Birth and Last
   Visit (`dd MMM yyyy`, a missing Last visit `—`), five to a page with the
-  numbered pager and "Showing x to y of N patients" — shown whenever there is a
+  numbered pager and "Showing x to y of N records" — shown whenever there is a
   match, on a single page too. Each row keeps the Patient's id, never shown.
 - **Selecting a result** puts the row's Patient, by that id, into the tab's
   **EHR context** and goes to Home, whose Patient card and top bar show them.
@@ -222,9 +222,10 @@ NRIC", searched only on submit (Enter or the Search button).
   until Apply; Reset clears the filter and applies none.
 - **The filter narrows the search submitted.** It keeps across a new search.
   Any change of filter reads the results from their first page.
-- **No matches** shows "No patients match your search", with no table and no
-  range. **The source failing** shows "Unable to search for patients. Please try
-  again." on the page's error line, and a Retry button that reads the same page
+- **No matches** shows "No records match your search.", with no table and no
+  range; "Searching records…" is said while a search is read. **The source
+  failing** shows "Unable to search for patients. Please try again." on the
+  page's error line, and a Retry button that reads the same page
   of the same search again.
 - **The search lives on the page alone.** No query, name, NRIC or filter
   reaches the URL or the browser history; leaving the page forgets them.

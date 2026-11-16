@@ -2,8 +2,8 @@
  * The filtered, sorted history listing every history page renders for the
  * patient in context: the FFI, NUMC, ARMC and Medication Histories. Shared by
  * those pages, so it sits beside them in `src/pages/`; each page hands it its
- * read, its Filter panel, its copy and its table, and nothing here names a
- * history's column.
+ * read, its Filter panel, its failure copy and its table, and nothing here
+ * names a history's column or its rows.
  */
 
 import { type ComponentType, type ReactNode, useState } from "react";
@@ -15,18 +15,10 @@ import { PagedListing } from "@/pages/paged-listing";
 import { type PagedDeclaration, usePagedRead } from "@/pages/paged-read";
 import type { ColumnSorting } from "@/pages/sort-heading";
 
-/** The copy a history shows, all of it the page's own. */
+/** The copy a history names itself by; what it says of its rows is the shared listing's. */
 interface FilteredHistoryCopy {
-  /** The empty line with no filter applied: the patient has none. */
-  empty: string;
-  /** The empty line with a filter applied: none matches. */
-  emptyFiltered: string;
   /** The error line's copy for a read that failed. */
   failure: string;
-  /** The line shown while the first read is in flight. */
-  loading: string;
-  /** What the rows are, lower-case and plural, as the pager's position line names them. */
-  noun: string;
   /** The pager's accessible name. */
   pagerLabel: string;
 }
@@ -53,9 +45,9 @@ interface HistoryTableProps<R, C extends string> {
  * page, the filters combined with AND and with the sort. Both live here
  * alone: neither reaches the URL, and a new patient in context, a new
  * history, starts with neither — `noFilters` and no sort. With a filter
- * applied, as `countFilters` counts them, an empty history says
- * `emptyFiltered`, that none matches, rather than `empty`, that the patient
- * has none.
+ * applied, as `countFilters` counts them, the listing is narrowed by
+ * filters, so an empty history says no records match the filters rather
+ * than that none is found.
  */
 export function FilteredHistory<R, F, C extends string>({
   copy,
@@ -99,13 +91,9 @@ export function FilteredHistory<R, F, C extends string>({
         <FilterPopover applied={filters} onApply={setFilters} />
       </div>
       <PagedListing
-        copy={{
-          empty: countFilters(filters) === 0 ? copy.empty : copy.emptyFiltered,
-          loading: copy.loading,
-          noun: copy.noun,
-          pagerLabel: copy.pagerLabel,
-        }}
+        narrowing={countFilters(filters) === 0 ? "none" : "filters"}
         onePage="shown"
+        pagerLabel={copy.pagerLabel}
         read={{ ...reading, view }}
       >
         {({ rows }) => table({ pending, rows, sorting: { onSort: setSort, sort } })}

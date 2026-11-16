@@ -4,16 +4,21 @@ import { describe, expect, it } from "vitest";
 import type { ReadView } from "@/auth/use-gated-read";
 
 import { ListingBody, type StaleRows } from "./listing-body";
+import type { Narrowing } from "./listing-copy";
 
-const LOADING = "Loading widgets…";
-const EMPTY = "No widgets exist.";
-
-function renderBody(view: ReadView<string[]>, staleRows: StaleRows = "keep") {
+function renderBody(
+  view: ReadView<string[]>,
+  staleRows: StaleRows = "keep",
+  {
+    narrowing = "none",
+    pageShown,
+  }: { narrowing?: Narrowing; pageShown?: { startIndex: number } | null } = {},
+) {
   return render(
     <div data-testid="body">
       <ListingBody
-        empty={EMPTY}
-        loading={LOADING}
+        narrowing={narrowing}
+        pageShown={pageShown}
         rows={(widgets) => widgets}
         staleRows={staleRows}
         view={view}
@@ -48,7 +53,13 @@ describe("ListingBody", () => {
   it("tells a screen reader the listing is loading while the first read is in flight", () => {
     renderBody({ kind: "loading" });
 
-    expect(screen.getByRole("status")).toHaveTextContent(/^Loading widgets…$/);
+    expect(screen.getByRole("status")).toHaveTextContent(/^Loading records…$/);
+  });
+
+  it("says the loading copy of how the listing is narrowed", () => {
+    renderBody({ kind: "loading" }, "keep", { narrowing: "patient-search" });
+
+    expect(screen.getByRole("status")).toHaveTextContent(/^Searching records…$/);
   });
 
   it("renders the rows once the read succeeds", () => {
@@ -66,8 +77,7 @@ describe("ListingBody", () => {
     (kind) => {
       render(
         <ListingBody
-          empty={EMPTY}
-          loading={LOADING}
+          narrowing="none"
           rows={(page: { total: number; widgets: string[] }) => page.widgets}
           staleRows="keep"
           view={{ data: { total: 7, widgets: ["anvil"] }, kind }}
@@ -87,7 +97,31 @@ describe("ListingBody", () => {
   it("says the listing is empty when the read succeeds with no rows", () => {
     renderBody({ data: [], kind: "ready" });
 
-    expect(body()).toHaveTextContent(/^No widgets exist\.$/);
+    expect(body()).toHaveTextContent(/^No records found\.$/);
+  });
+
+  it("says the empty copy of how the listing is narrowed", () => {
+    renderBody({ data: [], kind: "ready" }, "keep", { narrowing: "filters" });
+
+    expect(body()).toHaveTextContent(/^No records match the filters\.$/);
+  });
+
+  it("says the listing's own empty copy on an empty first page", () => {
+    renderBody({ data: [], kind: "ready" }, "keep", {
+      narrowing: "search",
+      pageShown: { startIndex: 1 },
+    });
+
+    expect(body()).toHaveTextContent(/^No records match your search\.$/);
+  });
+
+  it("says only that a later page emptied", () => {
+    renderBody({ data: [], kind: "ready" }, "keep", {
+      narrowing: "search",
+      pageShown: { startIndex: 21 },
+    });
+
+    expect(body()).toHaveTextContent(/^This page is now empty\. Use Previous to go back\.$/);
   });
 
   it("shows a decorative icon beside the empty line", () => {
