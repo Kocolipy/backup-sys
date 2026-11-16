@@ -19,28 +19,28 @@ test.describe("Home", () => {
 
     await expect(sidebar(page).getByRole("link")).toHaveText([
       "Search",
-      "Profile",
+      "Demographic",
       "Accounts",
       "Audit logs",
     ]);
   });
 
   // Each page the sidebar links opens under its own title, and the sidebar's
-  // Profile link lands on Home again.
+  // Demographic link lands on the Demographic page again.
   for (const [link, title] of [
     ["Search", "Patient Search"],
     ["Accounts", "Accounts"],
     ["Audit logs", "Audit"],
   ] as const) {
-    test(`returns from ${title} to Home through the sidebar`, async ({ page }) => {
+    test(`returns from ${title} to Demographic through the sidebar`, async ({ page }) => {
       await page.goto("/");
       await sidebar(page).getByRole("link", { name: link, exact: true }).click();
       await expect(page.getByRole("heading", { level: 1 })).toHaveText(title);
 
-      await sidebar(page).getByRole("link", { name: "Profile", exact: true }).click();
+      await sidebar(page).getByRole("link", { name: "Demographic", exact: true }).click();
 
-      await expect(page).toHaveURL("/");
-      await expect(page.getByRole("heading", { level: 1 })).toHaveText("Profile");
+      await expect(page).toHaveURL("/demographic");
+      await expect(page.getByRole("heading", { level: 1 })).toHaveText("Demographic");
     });
   }
 

@@ -96,6 +96,9 @@ export const PATIENT_SEARCH_PATH = "/search";
 /** Home, the landing page of every session without `patient:read`. */
 export const HOME_PATH = "/";
 
+/** The Demographic page, which selecting a Patient on Patient Search opens. */
+export const DEMOGRAPHIC_PATH = "/demographic";
+
 /**
  * Refused attempts that lock an account: the backend's
  * `app.auth.lockout.max-attempts`, read from the same `APP_LOCKOUT_MAX_ATTEMPTS`

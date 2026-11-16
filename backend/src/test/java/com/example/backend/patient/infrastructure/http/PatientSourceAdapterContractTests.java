@@ -15,10 +15,17 @@ import com.example.backend.observability.LogEvent.ErrorCategory;
 import com.example.backend.observability.RedactedFaultException;
 import com.example.backend.patient.PatientSourceStubs;
 import com.example.backend.patient.PatientStoreContract;
+import com.example.backend.paging.domain.PageRequest;
 import com.example.backend.patient.domain.AdministrativeGender;
+import com.example.backend.patient.domain.Demographics;
+import com.example.backend.patient.domain.MilitaryHistory;
+import com.example.backend.patient.domain.NextOfKin;
 import com.example.backend.patient.domain.Patient;
+import com.example.backend.patient.domain.PatientFilter;
 import com.example.backend.patient.domain.PatientId;
+import com.example.backend.patient.domain.PatientMatch;
 import com.example.backend.patient.domain.PatientName;
+import com.example.backend.patient.domain.PatientQuery;
 import com.example.backend.patient.domain.PatientStore;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
@@ -551,6 +558,10 @@ class PatientSourceAdapterContractTests extends PatientStoreContract {
                         "\"birthDate\": \"1963-07\"")),
                         rule("The patient source's Patient's birth date is not to the day",
                                 "birth-date-not-to-the-day")),
+                arguments(probe(joined(NRIC_IDENTIFIER, OFFICIAL_NAME, GENDER, BIRTH_DATE,
+                        military("{\"url\": \"ordDate\", \"valueDate\": \"2020-01\"}"))),
+                        rule("The patient source's Patient's military service date is not to the"
+                                + " day", "service-date-not-to-the-day")),
                 arguments("{\"resourceType\": \"OperationOutcome\"}", anotherResource),
                 arguments("not JSON: T7391046Q", rule("The patient source could not be read",
                         "unreadable")));
@@ -576,6 +587,128 @@ class PatientSourceAdapterContractTests extends PatientStoreContract {
         assertThat(patients().findById(PROBE)).contains(new Patient(PROBE, "T7391046Q",
                 new PatientName("Quah Seow Peng", null, List.of()), AdministrativeGender.FEMALE,
                 LocalDate.of(1963, 7, 29)));
+    }
+
+    /** The military service extension, holding {@code parts}, as a JSON member. */
+    private static String military(String... parts) {
+        return "\"extension\": [{\"url\": \"http://example.org/fhir/StructureDefinition/"
+                + "military-service\", \"extension\": [" + String.join(", ", parts) + "]}]";
+    }
+
+    /** The Demographic details the probe's body with {@code members} besides its own is read with. */
+    private static Demographics demographicsOf(String... members) {
+        answering(PROBE, probe(joined(NRIC_IDENTIFIER, OFFICIAL_NAME, GENDER, BIRTH_DATE,
+                joined(members))));
+        return new PatientSourceAdapter(RestClient.builder(), SOURCE.baseUrl()).findById(PROBE)
+                .orElseThrow().demographics();
+    }
+
+    /** A body with none of the Demographic elements has no Demographic details. */
+    @Test
+    void aBodyWithNoDemographicElementHasNoDemographicDetails() {
+        answering(PROBE, probe(joined(NRIC_IDENTIFIER, OFFICIAL_NAME, GENDER, BIRTH_DATE)));
+
+        assertThat(patients().findById(PROBE).orElseThrow().demographics())
+                .isEqualTo(Demographics.NONE);
+    }
+
+    /** The first phone and the first email are read, past any other system and any with no value. */
+    @Test
+    void theFirstPhoneAndTheFirstEmailAreRead() {
+        Demographics read = demographicsOf("""
+                "telecom": [{"system": "fax", "value": "+65 6000 0000"}, {"system": "phone"},
+                            {"system": "email", "value": "first@example.org"},
+                            {"system": "phone", "value": "+65 6000 0001"},
+                            {"system": "phone", "value": "+65 6000 0002"},
+                            {"system": "email", "value": "second@example.org"}]""");
+
+        assertThat(List.of(read.phone(), read.email()))
+                .containsExactly("+65 6000 0001", "first@example.org");
+    }
+
+    /**
+     * The residential address is the first home address's text, past another use and a home
+     * address with no text, which is never rebuilt from its lines.
+     */
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', nullValues = "none", textBlock = """
+        [{"use": "work", "text": "1 Office Road"}, {"use": "home", "text": "2 Home Road"}] | 2 Home Road
+        [{"use": "home", "line": ["Blk 1"]}, {"use": "home", "text": "2 Home Road"}]      | 2 Home Road
+        [{"use": "work", "text": "1 Office Road"}]                                       | none
+        [{"use": "home", "text": " ", "line": ["Blk 1"]}]                                | none
+        """)
+    void theResidentialAddressIsTheFirstHomeAddressesText(String addresses, String expected) {
+        assertThat(demographicsOf("\"address\": " + addresses).residentialAddress())
+                .isEqualTo(expected);
+    }
+
+    /**
+     * The next of kin is the first contact coded v2-0131 {@code N} with a name text — past a
+     * contact coded otherwise and one with no name text — its relationship the first
+     * relationship text, its phone its first phone.
+     */
+    @Test
+    void theNextOfKinIsTheFirstContactCodedAsOneWithANameText() {
+        Demographics read = demographicsOf("""
+                "contact": [
+                  {"relationship": [{"text": "Employer"}], "name": {"text": "Acme Pte Ltd"}},
+                  {"relationship": [{"coding": [{"system": "http://terminology.hl7.org/CodeSystem/v2-0131",
+                                                 "code": "N"}]}], "name": {"family": "Lee"}},
+                  {"relationship": [{"coding": [{"system": "http://terminology.hl7.org/CodeSystem/v2-0131",
+                                                 "code": "N"}]}, {"text": "Mother"}, {"text": "Guardian"}],
+                   "name": {"text": "Mdm Lee Siew Kuen"},
+                   "telecom": [{"system": "email", "value": "lee@example.org"},
+                               {"system": "phone", "value": "+65 8234 5678"}]}]""");
+
+        assertThat(read.nextOfKin())
+                .isEqualTo(new NextOfKin("Mdm Lee Siew Kuen", "Mother", "+65 8234 5678"));
+    }
+
+    /** A next of kin with no relationship text and no phone is read by their name alone. */
+    @Test
+    void aNextOfKinWithNoRelationshipTextOrPhoneIsReadByTheirNameAlone() {
+        Demographics read = demographicsOf("""
+                "contact": [{"relationship": [{"coding": [{"system": "http://terminology.hl7.org/CodeSystem/v2-0131",
+                                                           "code": "N"}]}],
+                             "name": {"text": "Mdm Lee Siew Kuen"}}]""");
+
+        assertThat(read.nextOfKin()).isEqualTo(new NextOfKin("Mdm Lee Siew Kuen", null, null));
+    }
+
+    /**
+     * The military service is read past another extension: its records in order, a field it
+     * lacks and a sub-extension it does not name left unread, and a date it lacks none.
+     */
+    @Test
+    void theMilitaryHistoryIsReadWithItsRecordsInOrderAndItsDates() {
+        Demographics read = demographicsOf("""
+                "extension": [
+                  {"url": "urn:example:other", "valueString": "x"},
+                  {"url": "http://example.org/fhir/StructureDefinition/military-service",
+                   "extension": [
+                     {"url": "serviceRecord", "extension": [
+                       {"url": "rank", "valueString": "CPT"},
+                       {"url": "a-later-field", "valueString": "x"}]},
+                     {"url": "serviceRecord", "extension": [
+                       {"url": "unit", "valueString": "3 SIR"}]},
+                     {"url": "mrDate", "valueDate": "2030-04-01"}]}]""");
+
+        assertThat(read.militaryHistory()).isEqualTo(new MilitaryHistory(
+                List.of(new MilitaryHistory.ServiceRecord(null, "CPT", null, null, null),
+                        new MilitaryHistory.ServiceRecord(null, null, "3 SIR", null, null)),
+                null, null, LocalDate.of(2030, 4, 1), null));
+    }
+
+    /** A search's match carries no Demographic details: only a read by id copies them. */
+    @Test
+    void aSearchMatchCarriesNoDemographicDetails() {
+        Patient tan = patients().search(new PatientQuery.ByName("tan"), PatientFilter.NONE,
+                new PageRequest(1, 5)).patients().stream()
+                .map(PatientMatch::patient)
+                .filter(patient -> patient.id().equals(TAN))
+                .findFirst().orElseThrow();
+
+        assertThat(tan.demographics()).isEqualTo(Demographics.NONE);
     }
 
     /**

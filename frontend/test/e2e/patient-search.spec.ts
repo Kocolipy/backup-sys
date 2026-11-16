@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import {
-  expectOnHomeInContext,
+  expectOnDemographicInContext,
   resultRows,
   search,
   searchResults,
@@ -14,7 +14,7 @@ import {
  * pages in the mock's own order, filtered by gender, its NRIC search, and its
  * search that matches nothing. Nothing about a search or its filter reaches
  * the URL. Selecting a result puts its Patient into the tab's EHR
- * context, shown on Home's Patient card and the top bar; that signing out and
+ * context, shown on the Demographic page's Patient card and the top bar; that signing out and
  * back in leaves none is `patient-sign-out.spec.ts`'. What the page decides
  * without the backend — a query too short to send, keyboard selection, a
  * second selection, Search after one — is
@@ -103,13 +103,48 @@ test.describe("Patient Search", () => {
     });
   });
 
-  test("puts the Patient of a selected row in context, on Home's Patient card and the top bar", async ({
+  test("puts the Patient of a selected row in context, on the Demographic page's Patient card and the top bar", async ({
     page,
   }) => {
     await search(page, "tan");
 
     await selectResult(page, "Tan Hui Min");
 
-    await expectOnHomeInContext(page, "Tan Hui Min", "S9012345A");
+    await expectOnDemographicInContext(page, "Tan Hui Min", "S9012345A");
+  });
+
+  test("shows a selected Patient's Demographic details, as the patient source holds them", async ({
+    page,
+  }) => {
+    await search(page, "tan");
+    await selectResult(page, "Tan Wei Ming");
+    await expectOnDemographicInContext(page, "Tan Wei Ming", "S1234567A");
+
+    await expect(
+      page.getByRole("region", { name: "Military Overview" }).getByRole("definition"),
+    ).toHaveText([
+      "NSman",
+      "CPT",
+      "3 SIR / Army",
+      "Infantry Officer",
+      "DXO",
+      "ME2",
+      "RSS Supreme / Navy",
+      "Naval Safety Officer",
+      "15 Jan 2018",
+      "14 Jan 2020",
+      "-",
+      "08 Sep 2037",
+    ]);
+    await expect(
+      page.getByRole("region", { name: "Contact Details" }).getByRole("definition"),
+    ).toHaveText([
+      "+65 9123 4567",
+      "tan.hw@email.com",
+      "Blk 123 Bishan Street 12 #10-456, Singapore 570123",
+    ]);
+    await expect(
+      page.getByRole("region", { name: "Next of Kin / Emergency" }).getByRole("definition"),
+    ).toHaveText(["Mdm Lee Siew Kuen", "Mother", "+65 8234 5678"]);
   });
 });

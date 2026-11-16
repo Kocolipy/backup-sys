@@ -127,7 +127,7 @@ straight into `lib/http`) but may never point back up.
 patient in context — goes through `useGatedRead`, handed a declaration, its
 arguments and the page's failure copy. The hook keeps no shared cache, so each
 caller is its own read: a value two parts of the screen show has one reader,
-as the patient in context has (`pages/home/patient-in-context.ts`). It sends nothing without the Permission, resets when
+as the patient in context has (`pages/patient-in-context.ts`). It sends nothing without the Permission, resets when
 the Permission or path changes, and **the newest read wins**: every read it
 sends (on opening, a key change, `reload()`, or a write's `after`) supersedes
 the one in flight, in the view and the page status alike. A `reload()` in the
@@ -258,8 +258,20 @@ two pages share moves up to `src/pages/` itself, and imports no page folder
   parameters, so each listing's `*-api.ts` names its sort by it and sends it
   through it (`lb-api-modules-are-data`), keeping only its own search and
   filter parameters.
-- `home.tsx` — the Patient card.
-- `patient-in-context.ts` / `home-api.ts` — the **one reader of the patient in
+- `home.tsx` — the Patient card. Home is the landing page of a session without
+  `patient:read`, and the sidebar links it for no session.
+- `demographic/demographic.tsx` — the Demographic page, guarded by
+  `patient:read`, which Patient Search opens on selecting a result: the shared
+  Patient card, then the Demographic details.
+- `demographic/demographic-details.tsx` — the Demographic details of the
+  patient in context, rendered from `usePatientInContext()` (and importing
+  `patient-api.ts` for its types alone), and nothing while no patient is
+  loaded: the Military Overview (at least three service record slots, a
+  filled one open and an empty one folded at first, then the service dates as
+  `dd MMM yyyy`), Contact Details and Next of Kin /
+  Emergency. A value the patient has none of shows "-"; every value renders as
+  a plain text node.
+- `patient-in-context.ts` / `patient-api.ts` — the **one reader of the patient in
   context**. `PatientInContextScope`, which the signed-in layout renders once
   inside its page status, reads `GET /api/patient/{id}` through `PATIENT`
   (opting in to `absent`, a `403` reported as failure) for the EHR context's
@@ -267,14 +279,17 @@ two pages share moves up to `src/pages/` itself, and imports no page folder
   none in context it reads nothing. A new id is a new path, so a new first read,
   and a late answer for the id before never lands. A failure is reported to the
   page's error line once, by this read. `usePatientInContext()` hands its view —
-  `none`, or the gated read's — to the top bar and the Patient card, which only
+  `none`, or the gated read's — to the top bar, the Patient card and the
+  Demographic details, which only
   render it, so each patient change sends one request on every page. The read is
   a sibling of the layout's children, never their parent, so a patient coming
-  into context or leaving it never remounts the page. It lives in `pages/home/`
-  because that is the lowest layer both the Shell and the Patient card may
-  import that also holds `PATIENT`: `mb-pages-do-not-import-the-shell` rules out
-  `src/shell/`.
-- `patient-card.tsx` — the Patient card, rendered from `usePatientInContext()`:
+  into context or leaving it never remounts the page. It lives at `src/pages/`
+  itself, a part the pages share, because that is the lowest layer the shell,
+  Home and the Demographic page may all import that also holds `PATIENT`:
+  `mb-pages-do-not-import-the-shell` rules out `src/shell/`, and
+  `mb-pages-do-not-import-another-page` any one page's folder.
+- `patient-card.tsx` — the Patient card, a part Home and the Demographic page
+  share, rendered from `usePatientInContext()`:
   "No patient in context" for none or a `404`, "Loading the patient…", an empty
   card for a failure (its copy is on the error line), or the banner. Every
   field renders as a plain text node; the age is computed from the card's
@@ -482,8 +497,8 @@ the single source.)
 which folds to its icons from its top-right control, is a sheet on a phone,
 and holds Sign out at its foot), the top bar (`shell/top-bar.tsx`:
 the patient in the tab's EHR context by name and NRIC, rendered from the
-layout's one read of them (`PatientInContextScope`), which Home's Patient card
-renders from too, then Notifications, the one link to Settings,
+layout's one read of them (`PatientInContextScope`), which the Patient card
+and the Demographic details render from too, then Notifications, the one link to Settings,
 Help and who is signed in: the username, and beneath it the Groups the session
 was signed in with), the page title (kept for screen readers only on every page the
 sidebar or the top bar reaches, `titleHidden`) and the page's one error line (the page-status

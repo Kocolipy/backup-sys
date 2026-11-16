@@ -170,7 +170,7 @@ limit. A suite that needs a `UserResponse` body — the login's — answers with
 it too, rather than writing the User out again. Likewise every suite that
 answers the Patient card's read takes its patient and request key,
 `TAN_WEI_MING` and `TAN_WEI_MING_READ`, from
-`src/pages/home/patient.testHelpers.ts`. A hook that reports to the page
+`src/pages/patient.testHelpers.ts`. A hook that reports to the page
 status runs inside the real one, `InPageStatus` in
 `src/auth/page-status.testHelpers.tsx`, and the suite reads the line back with
 `shownLine()`.

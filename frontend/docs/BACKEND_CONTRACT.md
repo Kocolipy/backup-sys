@@ -92,7 +92,7 @@ change, when the backend side moves. What the SPA has to honour:
   the status alone classifies it, so the `401` / `403` split holds here as
   everywhere. The Patient card sends it only for a patient in context, so a
   session with none sends no patient read at all. Its declaration (`PATIENT`,
-  `src/pages/home/home-api.ts`) opts in to
+  `src/pages/patient-api.ts`) opts in to
   `absentOnNotFound`, so that `404` is the Patient card's "No patient in
   context" and reports nothing to the page status; every other failure — a
   `400`, a `403` (the card passes `forbiddenAsFailure`) or a `5xx`, the
@@ -199,8 +199,9 @@ change, when the backend side moves. What the SPA has to honour:
   login) and a password Login **clear** it. What is read back from storage is
   held to the grammar again. The EHR context is a subscribable store
   (`useEhrContext`), so the Patient card re-renders when it changes, not only
-  on load. Home's Patient card reads the patient in context through the
-  patient read below, and shows "No patient in context" with none. The read
+  on load. The Patient card, on Home and on the Demographic page, and the
+  Demographic details read the patient in context through the patient read
+  below, and the card shows "No patient in context" with none. The read
   is not bound to the EHR context: `patient:read` reads any id. It is a
   delegatable Permission the backend issues only to a member of a Group that
   carries it and to the Superuser; a session without it is refused the read

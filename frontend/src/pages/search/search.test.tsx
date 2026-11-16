@@ -9,7 +9,7 @@ import {
   TAN_WEI_MING,
   TAN_WEI_MING_READ,
   withPatientInContext,
-} from "@/pages/home/patient.testHelpers";
+} from "@/pages/patient.testHelpers";
 import { renderSignedIn } from "@/shell/signed-in-shell.testHelpers";
 
 /** A Medical Officer: a session holding `patient:read`, which Patient Search requires. */
@@ -547,7 +547,7 @@ describe("Search, selecting a result", () => {
     expect(ehrContext()).toEqual({ patient: "dev-patient-05" });
   });
 
-  it("goes to Home, whose Patient card and top bar name the Patient selected", async () => {
+  it("opens the Demographic page, whose Patient card and top bar name the Patient selected", async () => {
     await renderSearch(SELECTABLE);
     await search("tan");
 
@@ -563,7 +563,7 @@ describe("Search, selecting a result", () => {
       topBar: screen.getByRole("region", { name: "Patient in context" }).textContent,
     }).toEqual({
       card: ["Tan Hui Min", "DD"],
-      title: "Profile",
+      title: "Demographic",
       topBar: "Tan Hui MinS8512345A",
     });
   });
@@ -583,7 +583,7 @@ describe("Search, selecting a result", () => {
       expect({
         context: ehrContext(),
         title: screen.getByRole("heading", { level: 1 }).textContent,
-      }).toEqual({ context: { patient: "dev-patient-05" }, title: "Profile" });
+      }).toEqual({ context: { patient: "dev-patient-05" }, title: "Demographic" });
     },
   );
 

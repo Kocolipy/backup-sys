@@ -7,14 +7,14 @@ import { clearEhrContext } from "@/auth/ehr-context";
 import { bare, deferred, holding, json, type WireAnswer } from "@/auth/session-adapter.testHelpers";
 import type { Clock } from "@/lib/time";
 
-import { PatientCard } from "./patient-card";
+import { PatientCard } from "@/pages/patient-card";
 import {
   withPatientInContext,
   page,
   patientReads,
   TAN_WEI_MING,
   TAN_WEI_MING_READ,
-} from "./patient.testHelpers";
+} from "@/pages/patient.testHelpers";
 import { renderInLayout } from "@/shell/signed-in-shell.testHelpers";
 
 /** An error answer as the backend sends it: one issue, its diagnostics fixed per code. */

@@ -60,7 +60,9 @@ module.exports = {
       comment:
         "The session layer and the *-api.ts request modules hold no markup, so they have no reason to import a stylesheet; style imports belong in component files and the composition root.",
       severity: "error",
-      from: { path: "^src/(auth/|pages/[^/]+/[^/]+-api\\.ts$)" },
+      from: {
+        path: ["^src/auth/", "^src/pages/[^/]+-api\\.ts$", "^src/pages/[^/]+/[^/]+-api\\.ts$"],
+      },
       to: { path: "\\.(css|scss|sass|less)$" },
     },
 
@@ -107,13 +109,13 @@ module.exports = {
     {
       name: "mb-patient-in-context-has-one-reader",
       comment:
-        "patient-in-context.ts is the one reader of the patient in context (docs/ARCHITECTURE.md): it reads PATIENT once per patient change and hands its view to the top bar and the Patient card, which only render it. A second importer of home-api.ts could send that read again on every page. A type-only import, such as patient-card.tsx's PatientSummary, sends nothing.",
+        "patient-in-context.ts is the one reader of the patient in context (docs/ARCHITECTURE.md): it reads PATIENT once per patient change and hands its view to the top bar and the Patient card, which only render it. A second importer of patient-api.ts could send that read again on every page. A type-only import, such as patient-card.tsx's PatientSummary, sends nothing.",
       severity: "error",
       from: {
         path: "^src/",
-        pathNot: ["^src/pages/home/patient-in-context\\.ts$", "\\.(test|spec)\\.[tj]sx?$"],
+        pathNot: ["^src/pages/patient-in-context\\.ts$", "\\.(test|spec)\\.[tj]sx?$"],
       },
-      to: { path: "^src/pages/home/home-api\\.ts$", dependencyTypesNot: ["type-only"] },
+      to: { path: "^src/pages/patient-api\\.ts$", dependencyTypesNot: ["type-only"] },
     },
 
     {
@@ -216,12 +218,12 @@ module.exports = {
     {
       name: "lb-api-modules-are-data",
       comment:
-        "A page's *-api.ts module declares its endpoints as data — path, decoder, Permission — for the gated read and write to send (AGENTS.md). It holds no markup or hooks, so it imports no React, no component, no page component and nothing from the shell.",
+        "A page's *-api.ts module, or one two pages share at src/pages/ (patient-api.ts), declares its endpoints as data — path, decoder, Permission — for the gated read and write to send (AGENTS.md). It holds no markup or hooks, so it imports no React, no component, no page component and nothing from the shell.",
       severity: "error",
-      from: { path: "^src/pages/[^/]+/[^/]+-api\\.ts$" },
+      from: { path: ["^src/pages/[^/]+-api\\.ts$", "^src/pages/[^/]+/[^/]+-api\\.ts$"] },
       to: {
         path: "^(node_modules/(react|react-dom|react-router|react-router-dom)/|src/(components|pages|shell)/)",
-        pathNot: "^src/pages/[^/]+/[^/]+-api\\.ts$",
+        pathNot: ["^src/pages/[^/]+-api\\.ts$", "^src/pages/[^/]+/[^/]+-api\\.ts$"],
       },
     },
 

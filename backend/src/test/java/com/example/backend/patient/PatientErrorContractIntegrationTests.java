@@ -230,8 +230,8 @@ class PatientErrorContractIntegrationTests {
 
     /**
      * A read that succeeds, one refused for a malformed id and one for an unknown id: the stream
-     * names none of the patient's NRIC, name or date of birth, and none of the ids asked for —
-     * the request record names the route template, never the path.
+     * names none of the patient's NRIC, name, date of birth or Demographic details, and none of
+     * the ids asked for — the request record names the route template, never the path.
      */
     @Test
     void noReadPutsThePatientOrTheIdAskedForInTheLog() throws Exception {
@@ -248,6 +248,8 @@ class PatientErrorContractIntegrationTests {
         assertThat(logs.lines())
                 .contains(REQUEST_RECORD)
                 .doesNotContain(NRIC, NAME_TEXT, "Wei Ming", BIRTH_DATE,
+                        "9123 4567", "tan.hw@email.com", "Bishan", "Lee Siew Kuen", "8234 5678",
+                        "Infantry Officer", "2037-09-08",
                         id, unknown, malformed);
     }
 

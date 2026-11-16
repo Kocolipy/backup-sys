@@ -6,7 +6,7 @@ import { useSessionAction } from "@/auth/use-session-action";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
-import { PatientInContextScope } from "@/pages/home/patient-in-context";
+import { PatientInContextScope } from "@/pages/patient-in-context";
 import { NavigationSidebar } from "@/shell/navigation-sidebar";
 import { HOME_PAGE, SIGNED_IN_PAGES } from "@/shell/signed-in-pages";
 import { TopBar } from "@/shell/top-bar";

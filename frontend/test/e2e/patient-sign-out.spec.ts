@@ -2,14 +2,14 @@ import { expect, test } from "@playwright/test";
 
 import {
   FIXTURE_PASSWORD,
-  HOME_PATH,
+  DEMOGRAPHIC_PATH,
   loginAs,
   MEDICAL_OFFICERS,
   PATIENT_SEARCH_PATH,
 } from "./auth.helpers";
 import {
   expectNoPatientInContext,
-  expectOnHomeInContext,
+  expectOnDemographicInContext,
   search,
   selectResult,
   topBarPatient,
@@ -29,13 +29,13 @@ test("leaves no patient in context after signing out and back in", async ({ page
   await loginAs(page, officer, FIXTURE_PASSWORD, PATIENT_SEARCH_PATH);
   await search(page, "tan");
   await selectResult(page, "Tan Hui Min");
-  await expectOnHomeInContext(page, "Tan Hui Min", "S9012345A");
+  await expectOnDemographicInContext(page, "Tan Hui Min", "S9012345A");
 
-  // Signed out from Home, which the next sign-in replays as its return
-  // destination, ahead of the landing page.
+  // Signed out from the Demographic page, which the next sign-in replays as
+  // its return destination, ahead of the landing page.
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
-  await loginAs(page, officer, FIXTURE_PASSWORD, HOME_PATH);
+  await loginAs(page, officer, FIXTURE_PASSWORD, DEMOGRAPHIC_PATH);
 
   await expectNoPatientInContext(page);
   await expect(topBarPatient(page)).toHaveCount(0);

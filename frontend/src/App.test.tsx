@@ -147,6 +147,20 @@ describe("App", () => {
     expect(window.location.pathname).toBe("/");
   });
 
+  it("redirects a User holding no patient:read away from the Demographic page to Home", async () => {
+    renderApp(SIGNED_IN, "/demographic");
+
+    expect(await screen.findByRole("heading", { name: "Profile" })).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/");
+  });
+
+  it("renders the Demographic page for a session holding patient:read", async () => {
+    renderApp({ [ME]: json(MEDICAL_OFFICER) }, "/demographic");
+
+    expect(await screen.findByRole("heading", { name: "Demographic" })).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/demographic");
+  });
+
   it("renders Patient Search for a session holding patient:read", async () => {
     renderApp({ [ME]: json(MEDICAL_OFFICER) }, "/search");
 

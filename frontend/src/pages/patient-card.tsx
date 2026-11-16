@@ -5,8 +5,8 @@ import { type Clock, completedYears, formatCalendarDate, today, systemClock } fr
 
 import { PATIENT_GENDER_LABELS } from "@/lib/patient-gender";
 
-import type { PatientSummary } from "./home-api";
-import { usePatientInContext } from "./patient-in-context";
+import type { PatientSummary } from "@/pages/patient-api";
+import { usePatientInContext } from "@/pages/patient-in-context";
 
 const NOTE_CLASS = "text-sm text-muted-foreground";
 
@@ -57,7 +57,7 @@ function PatientBanner({ clock, patient }: { clock: Clock; patient: PatientSumma
 }
 
 /**
- * Home's Patient card: the patient in context, as a banner headed by their
+ * The Patient card, which Home and the Demographic page share: the patient in context, as a banner headed by their
  * name, or a plain card headed Patient saying "No patient in context" when
  * there is none, and "Your account has no access to patients." for a session
  * without `patient:read`, whether or not a patient is in context. It renders from the signed-in layout's one read of the

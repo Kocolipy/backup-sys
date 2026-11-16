@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { usePatientInContext } from "@/pages/home/patient-in-context";
+import { usePatientInContext } from "@/pages/patient-in-context";
 import { SETTINGS_PAGE } from "@/shell/signed-in-pages";
 
 /**

@@ -10,7 +10,7 @@ import {
   patientReads,
   TAN_WEI_MING,
   TAN_WEI_MING_READ,
-} from "@/pages/home/patient.testHelpers";
+} from "@/pages/patient.testHelpers";
 
 import { renderInLayout, renderSignedIn } from "./signed-in-shell.testHelpers";
 

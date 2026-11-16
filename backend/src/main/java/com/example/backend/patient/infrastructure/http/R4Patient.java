@@ -1,6 +1,9 @@
 package com.example.backend.patient.infrastructure.http;
 
 import com.example.backend.patient.domain.AdministrativeGender;
+import com.example.backend.patient.domain.Demographics;
+import com.example.backend.patient.domain.MilitaryHistory;
+import com.example.backend.patient.domain.NextOfKin;
 import com.example.backend.patient.domain.Patient;
 import com.example.backend.patient.domain.PatientId;
 import com.example.backend.patient.domain.PatientMatch;
@@ -14,32 +17,51 @@ import java.util.Objects;
 
 /**
  * The in-house patient source's FHIR R4 {@code Patient}, as far as the service reads it: the
- * {@code id}, the four elements a Patient is copied from and, in a search's answer, the Last visit
- * extension. Every other element the source sends is never bound.
+ * {@code id}, the four elements a Patient is copied from, in a search's answer the Last visit
+ * extension, and in a read by id the Demographic details. Every other element the source sends
+ * is never bound.
  *
  * <p>R4 and R5 agree on these elements (ADR 0014, "R5 on the wire"), so the mapping is a straight
  * copy: the {@code identifier} under the NRIC NamingSystem, the {@code name} whose {@code use} is
  * {@code official}, the {@code gender} and the {@code birthDate}. The Last visit is the source's
- * own extension ({@link #LAST_VISIT}, ADR 0018), a {@code valueDate} to the day.
+ * own extension ({@link #LAST_VISIT}, ADR 0018), a {@code valueDate} to the day. The Demographic
+ * details are the first {@code phone} and {@code email} in {@code telecom}, the first {@code home}
+ * {@code address}'s text, the first {@code contact} coded v2-0131 {@code N} with a name text, and
+ * the military service extension ({@link #MILITARY_SERVICE}); an element without what its copy
+ * needs is not copied.
  *
  * @param resourceType the resource's type: a search's entry must be a {@code Patient}
  * @param id         the resource's id: the id it was read by, or in a search, a FHIR id of its own
- * @param extension  every extension the source sends; only the Last visit is read
+ * @param extension  every extension the source sends; the Last visit and military service are read
  * @param identifier every identifier the source holds; only the NRIC is copied
  * @param name       every name the source holds; only the official one is copied
+ * @param telecom    every contact point the source holds; the first phone and email are copied
  * @param gender     the administrative gender code
  * @param birthDate  the date of birth, which must be to the day
+ * @param address    every address the source holds; the first home address's text is copied
+ * @param contact    every contact the source holds; the first next of kin is copied
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 record R4Patient(
         String resourceType, String id, List<Extension> extension, List<Identifier> identifier,
-        List<HumanName> name, String gender, String birthDate) {
+        List<HumanName> name, List<ContactPoint> telecom, String gender, String birthDate,
+        List<Address> address, List<Contact> contact) {
 
     /** The official name's {@code use}. */
     private static final String OFFICIAL = "official";
 
     /** The patient source's Last visit extension: the date of the Patient's latest visit. */
     static final String LAST_VISIT = "https://fhir.synapxe.sg/StructureDefinition/last-visit";
+
+    /**
+     * The extension holding a Patient's military service: a placeholder URL until the in-house
+     * source names its own (ADR 0014).
+     */
+    static final String MILITARY_SERVICE =
+            "http://example.org/fhir/StructureDefinition/military-service";
+
+    /** HL7 v2 table 0131, whose code {@code N} marks a contact as the next of kin. */
+    static final String CONTACT_ROLE = "http://terminology.hl7.org/CodeSystem/v2-0131";
 
     /**
      * The match this resource is, in a search's answer: a Patient under its own id, which must be
@@ -62,7 +84,7 @@ record R4Patient(
         } catch (IllegalArgumentException outsideTheGrammar) {
             throw PatientSourceException.failed(Failure.INVALID_ID);
         }
-        return new PatientMatch(toPatient(own), lastVisit());
+        return new PatientMatch(core(own), lastVisit());
     }
 
     /** The Last visit's date, or {@code null} when the source records none. */
@@ -82,12 +104,117 @@ record R4Patient(
     }
 
     /**
-     * The domain's Patient this resource is, read under {@code asked}.
+     * The domain's Patient this resource is, read under {@code asked}, with its Demographic
+     * details.
      *
-     * @throws PatientSourceException when the resource is another patient's, or breaks a rule a
-     *                                Patient must keep, naming which and quoting no value
+     * @throws PatientSourceException when the resource is another patient's, breaks a rule a
+     *                                Patient must keep, or has a military service date not to the
+     *                                day, naming which and quoting no value
      */
     Patient toPatient(PatientId asked) {
+        return core(asked).withDemographics(demographics());
+    }
+
+    /** The Demographic details this resource holds; any the source does not hold are null. */
+    private Demographics demographics() {
+        return new Demographics(contactPointOf(telecom, "phone"), contactPointOf(telecom, "email"),
+                residentialAddress(), nextOfKin(), militaryHistory());
+    }
+
+    /** The value of the first of {@code points} under {@code system} that has one. */
+    private static String contactPointOf(List<ContactPoint> points, String system) {
+        return listed(points).stream()
+                .filter(point -> system.equals(point.system()) && point.value() != null)
+                .map(ContactPoint::value)
+                .findFirst()
+                .orElse(null);
+    }
+
+    /** The first {@code home} address's text, which is never rebuilt from its lines. */
+    private String residentialAddress() {
+        return listed(address).stream()
+                .filter(candidate -> "home".equals(candidate.use()) && present(candidate.text()))
+                .map(Address::text)
+                .findFirst()
+                .orElse(null);
+    }
+
+    /**
+     * The first contact coded as next of kin with a name text: its relationship is the text of
+     * the first of its relationships that has one, its phone its first phone.
+     */
+    private NextOfKin nextOfKin() {
+        return listed(contact).stream()
+                .filter(candidate -> candidate.isNextOfKin() && candidate.name() != null
+                        && present(candidate.name().text()))
+                .findFirst()
+                .map(kin -> new NextOfKin(kin.name().text(),
+                        listed(kin.relationship()).stream().map(CodeableConcept::text)
+                                .filter(R4Patient::present).findFirst().orElse(null),
+                        contactPointOf(kin.telecom(), "phone")))
+                .orElse(null);
+    }
+
+    /**
+     * The military service extension: its service records in order, each field a
+     * {@code valueString}, and its dates, each a {@code valueDate} to the day. A sub-extension it
+     * does not name is not read.
+     */
+    private MilitaryHistory militaryHistory() {
+        Extension military = listed(extension).stream()
+                .filter(candidate -> MILITARY_SERVICE.equals(candidate.url()))
+                .findFirst()
+                .orElse(null);
+        if (military == null) {
+            return null;
+        }
+        List<Extension> parts = listed(military.extension());
+        return new MilitaryHistory(
+                parts.stream().filter(part -> "serviceRecord".equals(part.url()))
+                        .map(R4Patient::serviceRecord).toList(),
+                serviceDate(parts, "enlistmentDate"),
+                serviceDate(parts, "ordDate"),
+                serviceDate(parts, "mrDate"),
+                serviceDate(parts, "rodDate"));
+    }
+
+    private static MilitaryHistory.ServiceRecord serviceRecord(Extension record) {
+        List<Extension> fields = listed(record.extension());
+        return new MilitaryHistory.ServiceRecord(
+                valueString(fields, "serviceType"),
+                valueString(fields, "rank"),
+                valueString(fields, "unit"),
+                valueString(fields, "service"),
+                valueString(fields, "vocation"));
+    }
+
+    private static String valueString(List<Extension> fields, String url) {
+        return fields.stream().filter(field -> url.equals(field.url()))
+                .map(Extension::valueString).filter(R4Patient::present).findFirst().orElse(null);
+    }
+
+    private static LocalDate serviceDate(List<Extension> parts, String url) {
+        Extension date = parts.stream().filter(part -> url.equals(part.url()))
+                .findFirst().orElse(null);
+        if (date == null) {
+            return null;
+        }
+        try {
+            return LocalDate.parse(Objects.requireNonNull(date.valueDate()));
+        } catch (DateTimeParseException | NullPointerException notToTheDay) {
+            throw PatientSourceException.failed(Failure.SERVICE_DATE_NOT_TO_THE_DAY);
+        }
+    }
+
+    private static boolean present(String text) {
+        return text != null && !text.isBlank();
+    }
+
+    /**
+     * The domain's Patient of the five elements this resource is, under {@code asked}, with no
+     * Demographic details: what a search copies.
+     */
+    private Patient core(PatientId asked) {
         if (!asked.value().equals(id)) {
             throw PatientSourceException.failed(Failure.ANOTHER_RESOURCE);
         }
@@ -140,9 +267,46 @@ record R4Patient(
         return elements == null ? List.of() : elements;
     }
 
-    /** An R4 {@code Extension}: only its url and a {@code valueDate} are read. */
+    /**
+     * An R4 {@code Extension}: only its url, a {@code valueDate} or {@code valueString}, and the
+     * extensions nested in it are read.
+     */
     @JsonIgnoreProperties(ignoreUnknown = true)
-    record Extension(String url, String valueDate) {
+    record Extension(String url, String valueDate, String valueString, List<Extension> extension) {
+    }
+
+    /** An R4 {@code ContactPoint}: only its system and value are read. */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    record ContactPoint(String system, String value) {
+    }
+
+    /** An R4 {@code Address}: only its use and text are read. */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    record Address(String use, String text) {
+    }
+
+    /** An R4 {@code Coding}: only its system and code are read. */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    record Coding(String system, String code) {
+    }
+
+    /** An R4 {@code CodeableConcept}: only its codings and text are read. */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    record CodeableConcept(List<Coding> coding, String text) {
+
+        boolean marksNextOfKin() {
+            return listed(coding).stream().anyMatch(coded ->
+                    CONTACT_ROLE.equals(coded.system()) && "N".equals(coded.code()));
+        }
+    }
+
+    /** An R4 {@code Patient.contact}: only its relationships, name and contact points are read. */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    record Contact(List<CodeableConcept> relationship, HumanName name, List<ContactPoint> telecom) {
+
+        boolean isNextOfKin() {
+            return listed(relationship).stream().anyMatch(CodeableConcept::marksNextOfKin);
+        }
     }
 
     /** An R4 {@code Identifier}: only its system and value are read. */

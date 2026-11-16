@@ -425,6 +425,14 @@ never reaches it.
 _Avoid_: patient service, patient API, FHIR server (the EHR's FHIR API is
 another system)
 
+**Demographic page**:
+The page at `/demographic`, linked from the navigation sidebar for a session
+holding `patient:read` and opened by selecting a Patient on the Search page:
+the Patient card, then the patient in context's Demographic details — the
+Military Overview, Contact Details and Next of Kin / Emergency cards. It is not
+Home, which shows the Patient card alone and is linked from no sidebar.
+_Avoid_: Profile (Home's title), patient profile
+
 **Patient card**:
 Home's card showing the EHR context's patient — name, NRIC, gender, date of
 birth and age — or "No patient in context" when the tab holds no EHR context,
@@ -439,7 +447,8 @@ narrowed by gender. The source orders and filters; the service does neither.
 Every search the source answers is audited as `PATIENT_SEARCH`, by its kind,
 whether it used the gender filter and its count, and never its query or the
 filter's value; a read of one Patient
-by id is not. Selecting a result puts that Patient into the EHR context.
+by id is not. Selecting a result puts that Patient into the EHR context and
+opens the Demographic page.
 _Avoid_: patient lookup, patient list, patient query (no search lists every
 Patient)
 
@@ -448,6 +457,28 @@ The date of a Patient's latest visit, as the Patient source records it on the
 Patient (its `last-visit` extension); a Patient may have none. Patient search
 shows it in each row.
 _Avoid_: last seen, last encounter, last admission
+
+**Demographic details**:
+What a read of one Patient by id serves beside their five elements, each only
+when the Patient has it: their phone, email, residential address, Next
+of kin and Military history. A Patient search serves none of them. The
+Demographic page shows them.
+_Avoid_: demographics (the glossary's word for a whole patient record), profile,
+contact info
+
+**Next of kin**:
+The one contact a Patient names to be called for them: the first contact the
+Patient source codes as next of kin (HL7 v2-0131 `N`), with a name, and their
+relationship and phone when known.
+_Avoid_: NOK (outside a label), emergency contact, guardian
+
+**Military history**:
+A Patient's national service, as the Patient source records it: their service
+records in order — each a service type, rank, unit, service and vocation — and
+their enlistment, ORD (Operationally Ready Date), MR and ROD (Run Out Date)
+dates.
+_Avoid_: military service (the name of its wire extension, not of the term),
+service history, NS record
 
 ### Database
 

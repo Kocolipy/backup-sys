@@ -73,7 +73,11 @@ public final class PatientSourceException extends UpstreamFaultException {
                 ErrorCategory.DATA),
         /** A search's Patient whose Last visit is no date to the day. */
         LAST_VISIT_NOT_TO_THE_DAY("last-visit-not-to-the-day",
-                "The patient source's Patient's last visit is not to the day", ErrorCategory.DATA);
+                "The patient source's Patient's last visit is not to the day", ErrorCategory.DATA),
+        /** A Patient read by id whose military service has a date that is no date to the day. */
+        SERVICE_DATE_NOT_TO_THE_DAY("service-date-not-to-the-day",
+                "The patient source's Patient's military service date is not to the day",
+                ErrorCategory.DATA);
 
         /** The call's own failure this is, or {@code null} for a broken domain rule. */
         private final Reason outbound;

@@ -5,8 +5,8 @@ import { clearEhrContext } from "@/auth/ehr-context";
 import { deferred, holding } from "@/auth/session-adapter.testHelpers";
 import { renderInLayout } from "@/shell/signed-in-shell.testHelpers";
 
-import { usePatientInContext } from "./patient-in-context";
-import { TAN_WEI_MING, TAN_WEI_MING_READ, withPatientInContext } from "./patient.testHelpers";
+import { usePatientInContext } from "@/pages/patient-in-context";
+import { TAN_WEI_MING, TAN_WEI_MING_READ, withPatientInContext } from "@/pages/patient.testHelpers";
 
 // What the one read shows, and how often it asks, is held where it is shown:
 // `home.test.tsx` (one read per change, for the card and the top bar both),

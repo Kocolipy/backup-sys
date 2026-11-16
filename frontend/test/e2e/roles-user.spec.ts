@@ -36,10 +36,10 @@ test.describe("baseline User pages", () => {
     await expectSignedInLines(page, ["guest"]);
   });
 
-  test("is offered no Search link, only Profile", async ({ page }) => {
+  test("is offered no sidebar link, Search, Demographic and Home among them", async ({ page }) => {
     await page.goto("/");
 
-    await expect(sidebar(page).getByRole("link")).toHaveText(["Profile"]);
+    await expect(sidebar(page).getByRole("link")).toHaveCount(0);
   });
 
   for (const path of ["/search", "/accounts"]) {

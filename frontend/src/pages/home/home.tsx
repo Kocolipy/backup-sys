@@ -1,4 +1,4 @@
-import { PatientCard } from "./patient-card";
+import { PatientCard } from "@/pages/patient-card";
 
 /**
  * Home, the signed-in page at `/`: open to every signed-in session, and the

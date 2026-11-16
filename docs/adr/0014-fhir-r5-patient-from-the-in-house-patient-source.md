@@ -12,7 +12,8 @@ Date: 2026-10-18
 ## Status
 
 Accepted. `GET /api/patient/{id}` serves a base R5 `Patient` the backend reads
-from the in-house patient source, and Home's Patient card reads it.
+from the in-house patient source, and the Patient card and the Demographic
+page read it.
 
 ## Context
 
@@ -27,7 +28,8 @@ depends on the wire:
    credential and with source failures mapped to `502`. The patient's id is its
    EHR's FHIR id, the id the EHR context holds. Home's
    wire contract remains base R5 with `identifier`, `name`, `gender` and
-   `birthDate`, the `patient:read` gate and the `OperationOutcome` table,
+   `birthDate`, and on a read by id the Demographic details (`extension`,
+   `telecom`, `address`, `contact`), the `patient:read` gate and the `OperationOutcome` table,
    independent of changes behind the adapter.
 
 ## Decision
@@ -41,8 +43,10 @@ SPA types it with `@types/fhir`'s `fhir5`.
   this application is meant to join is written against. Serving R4 now would mean
   a second migration of every client later.
 - For the elements served — `identifier`, `name` (`use`, `text`, `family`,
-  `given`), `gender`, `birthDate` — R4 and R5 are identical: same names,
-  cardinalities, types and value sets. So the R4 source costs nothing: its
+  `given`), `gender`, `birthDate`, and the Demographic details' `extension`,
+  `telecom` (`system`, `value`), `address` (`use`, `text`) and `contact`
+  (`relationship`, `name.text`, `telecom`) — R4 and R5 are identical: same
+  names, cardinalities, types and value sets. So the R4 source costs nothing: its
   adapter maps an R4 `Patient` to this one as a **straight copy** of those
   elements. An element that does differ between the versions is that adapter's
   mapping to write, once, behind the domain's `PatientStore`, and no client sees
@@ -67,9 +71,15 @@ own: no table, no grant on one, no seeded fixtures.
   id, sent unchanged: there is no mapping between ids.
 - **A straight copy.** The adapter binds the R4 JSON to plain records with
   Jackson and copies the identifier under the NRIC NamingSystem, the name whose
-  `use` is `official`, `gender` and `birthDate` into the domain's Patient; every
-  other element is never bound, and the runtime classpath stays
-  FHIR-library-free.
+  `use` is `official`, `gender` and `birthDate` into the domain's Patient, and
+  on a read by id its Demographic details (`/docs/domain/patient.md`, "The
+  in-house patient source"); every other element is never bound, and the
+  runtime classpath stays FHIR-library-free.
+- **The military service extension's URL is a placeholder.**
+  `http://example.org/fhir/StructureDefinition/military-service` stands in until
+  the in-house source names its own: the source's contract for it is this
+  service's assumption, and a change of URL is the adapter's and the SPA's to
+  follow.
 - **Only a `404` is no patient.** It stays the `404` the SPA reads as "No
   patient in context". Every other answer — another status, a redirect, no
   answer within the timeouts, a `200` that is not a Patient the service can hold
