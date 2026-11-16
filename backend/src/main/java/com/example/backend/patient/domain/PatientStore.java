@@ -17,10 +17,8 @@ public interface PatientStore {
     Optional<Patient> findById(PatientId id);
 
     /**
-     * The page {@code page} of the Patients {@code query} matches and {@code filter} narrows, in
-     * the order {@code sort} names, as the source matches, filters, orders and pages them: ties
-     * broken by id, a Patient with no Last visit last in both directions (ADR 0018).
+     * The page {@code page} of the Patients {@code query} matches and {@code filter} narrows, as
+     * the source matches, filters and pages them, in the source's own stable order (ADR 0018).
      */
-    PatientMatches search(PatientQuery query, PatientFilter filter, PatientSort sort,
-            PageRequest page);
+    PatientMatches search(PatientQuery query, PatientFilter filter, PageRequest page);
 }

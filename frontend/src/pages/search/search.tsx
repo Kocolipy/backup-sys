@@ -19,7 +19,7 @@ import { formatCalendarDateTwoDigitDay } from "@/lib/time";
 import { PATIENT_GENDER_LABELS, type PatientGender } from "@/lib/patient-gender";
 import { PagedListing } from "@/pages/paged-listing";
 import { usePagedRead } from "@/pages/paged-read";
-import { type ColumnSorting, PlainHeading, SortHeading } from "@/pages/sort-heading";
+import { PlainHeading } from "@/pages/sort-heading";
 
 import { PatientFilterPopover } from "./patient-filter-popover";
 import {
@@ -29,12 +29,7 @@ import {
   PATIENT_SEARCH_PAGE_SIZE,
   type PatientFilters,
   type PatientMatch,
-  type PatientSort,
-  type PatientSortColumn,
 } from "./search-api";
-
-/** How the results are sorted, by the page that holds the sort. */
-type ResultsSorting = ColumnSorting<PatientSortColumn>;
 
 /** Each gender badge's tint: Male blue, Female pink, any other the plain badge. */
 const GENDER_BADGE_TINTS: Readonly<Record<PatientGender, string | undefined>> = {
@@ -46,10 +41,10 @@ const GENDER_BADGE_TINTS: Readonly<Record<PatientGender, string | undefined>> = 
 
 /**
  * The matching Patients, one row each: the official name, the full NRIC, the
- * gender as a badge (Male blue, Female pink) and both dates as `dd MMM yyyy`, a missing Last visit
- * shown as `—`. Date of Birth and Last Visit sort, one at a time; the name,
- * NRIC and gender do not. Each row is keyed by the Patient's id, which is kept
- * and never shown.
+ * gender as a badge (Male blue, Female pink) and both dates as `dd MMM yyyy`,
+ * a missing Last visit shown as `—`, in the patient source's own order: no
+ * column sorts. Each row is keyed by the Patient's id, which is kept and never
+ * shown.
  *
  * Selecting a row puts its Patient into the tab's EHR context, replacing any
  * patient there with no confirmation, and goes to Home. A click anywhere on the
@@ -58,13 +53,7 @@ const GENDER_BADGE_TINTS: Readonly<Record<PatientGender, string | undefined>> = 
  * selected again leaves the context as it was, so the signed-in layout reads
  * them no second time. No row marks the patient in context.
  */
-function ResultsTable({
-  patients,
-  sorting,
-}: {
-  patients: readonly PatientMatch[];
-  sorting: ResultsSorting;
-}) {
+function ResultsTable({ patients }: { patients: readonly PatientMatch[] }) {
   const navigate = useNavigate();
   const select = (patient: PatientMatch) => {
     setEhrContext({ patient: patient.id });
@@ -78,8 +67,8 @@ function ResultsTable({
           <PlainHeading>Patient Name</PlainHeading>
           <PlainHeading>NRIC</PlainHeading>
           <PlainHeading>Gender</PlainHeading>
-          <SortHeading by="birthDate" label="Date of Birth" sorting={sorting} />
-          <SortHeading by="lastVisit" label="Last Visit" sorting={sorting} />
+          <PlainHeading>Date of Birth</PlainHeading>
+          <PlainHeading>Last Visit</PlainHeading>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -111,23 +100,15 @@ function ResultsTable({
 
 /**
  * One submitted search's results, read from its first page on mounting and
- * again from its first page whenever its filters or sort change: the table,
+ * again from its first page whenever its filter changes: the table,
  * the "Showing x to y of N patients" range with the numbered pager whenever
  * there is a match, or "No patients match your search". A failed read is
  * reported on the page's one error line, which the signed-in layout owns, and
  * offers Retry, which reads the same page of the same search again.
  */
-function SearchResults({
-  filters,
-  query,
-  sorting,
-}: {
-  filters: PatientFilters;
-  query: string;
-  sorting: ResultsSorting;
-}) {
+function SearchResults({ filters, query }: { filters: PatientFilters; query: string }) {
   const reading = usePagedRead(PATIENT_SEARCH, {
-    args: [query, filters, sorting.sort],
+    args: [query, filters],
     failureMessage: "Unable to search for patients. Please try again.",
     pageSize: PATIENT_SEARCH_PAGE_SIZE,
   });
@@ -148,7 +129,7 @@ function SearchResults({
         read={reading}
         readAgain={false}
       >
-        {({ rows }) => <ResultsTable patients={rows} sorting={sorting} />}
+        {({ rows }) => <ResultsTable patients={rows} />}
       </PagedListing>
       {failed ? (
         <Button
@@ -179,12 +160,11 @@ interface Submitted {
  * a name search, which needs at least three characters; a shorter query is
  * refused beside the box and nothing is read, and the results last read stay.
  *
- * The results sort by Date of Birth or Last Visit, newest Last visit first by
- * default, and the Filter panel narrows them by gender and by a date range for
- * each date. Both narrow or order the search submitted, and keep across a new
- * one. A change of either reads the results from their first page.
+ * The results come in the patient source's own order, and the Filter panel
+ * narrows them by gender. The filter narrows the search submitted, and keeps
+ * across a new one. A change of it reads the results from their first page.
  *
- * The search, its filters and its sort live on the page alone: none of them,
+ * The search and its filter live on the page alone: neither of them,
  * no name or NRIC, reaches the URL or the browser history, so leaving the page
  * forgets them. Before the first search the page reads nothing and shows only
  * the box: the Search Results card, its Filter button with it, appears with the
@@ -195,7 +175,6 @@ export function Search() {
   const [submitted, setSubmitted] = useState<Submitted | null>(null);
   const [refusal, setRefusal] = useState<string | null>(null);
   const [filters, setFilters] = useState<PatientFilters>(NO_PATIENT_FILTERS);
-  const [sort, setSort] = useState<PatientSort | null>(null);
   const refusalId = useId();
 
   const submit = () => {
@@ -248,12 +227,7 @@ export function Search() {
             <PatientFilterPopover applied={filters} onApply={setFilters} />
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
-            <SearchResults
-              filters={filters}
-              key={submitted.generation}
-              query={submitted.query}
-              sorting={{ onSort: setSort, sort }}
-            />
+            <SearchResults filters={filters} key={submitted.generation} query={submitted.query} />
           </CardContent>
         </Card>
       )}

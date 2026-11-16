@@ -107,10 +107,9 @@ change, when the backend side moves. What the SPA has to honour:
   sits outside `/api/patient`, so it answers `application/json` and every
   refusal or fault the application API's `ApiError`, as any other read: `400`
   for a query the SPA would not send (under 3 characters, and no full NRIC) or
-  a filter it would not send (a from-date after its to-date, a date or gender
-  or sort it does not offer), and `502` for the patient source failing, which
-  the Search page reports with a Retry. Its query, filters and sort travel only
-  in that request's query string — the query through `encodeURIComponent` —
+  a gender it does not offer, and `502` for the patient source failing, which
+  the Search page reports with a Retry. Its query and filter travel only in
+  that request's query string — the query through `encodeURIComponent` —
   never in the page's URL.
 - **A request body is JSON, and says so.** The backend reads a request body
   through its JSON converter only, so a body sent without

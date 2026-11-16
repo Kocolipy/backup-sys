@@ -622,26 +622,20 @@ paths:
   /api/patient-search:
     get:
       tags: [Patient]
-      summary: Search the Patients by name or by NRIC, filtered and sorted, a page at a time
+      summary: Search the Patients by name or by NRIC, filtered by gender, a page at a time
       description: |
-        The Patients `q` matches and the filters narrow, one page at a time, in
-        the order `sortBy` and `sortOrder` name, as the in-house patient source
-        matches, filters, orders, pages and counts them (ADR 0018): the service
-        passes the search, its filters and its sort through and filters, sorts
-        and pages nothing of its own, holds nothing and caches nothing (ADR
-        0014). Newest Last visit first when no `sortBy` is given; ties are
-        broken by id, and a Patient with no Last visit comes last in either
-        direction.
+        The Patients `q` matches and `gender` narrows, one page at a time, as
+        the in-house patient source matches, filters, orders, pages and counts
+        them (ADR 0018): the service passes the search and its filter through
+        and filters, orders and pages nothing of its own, holds nothing and
+        caches nothing (ADR 0014). No sort is sent: the matches come in the
+        source's own order, which is stable, so the pages of one search are
+        consistent.
 
-        **Filters** narrow the search `q` asks for, combined with AND, each
-        optional: `gender`, and a range for the date of birth
-        (`birthDateFrom`, `birthDateTo`) and for the Last visit
-        (`lastVisitFrom`, `lastVisitTo`), each end a calendar date, inclusive.
-        A Patient whose gender is `other` or `unknown` is found only with no
-        `gender`, and a Patient with no Last visit only with no Last visit
-        range. They reach the source as `gender`, `birthdate=ge…`,
-        `birthdate=le…`, `last-visit=ge…` and `last-visit=le…`, and the sort
-        as `_sort=±birthdate|±last-visit,_id`.
+        **The filter**, `gender`, is optional and narrows the search `q` asks
+        for. A Patient whose gender is `other` or `unknown` is found only with
+        no `gender`. It reaches the source as `gender`. Any other query
+        parameter is ignored.
 
         `q`, trimmed, is one of two searches. A full NRIC — a prefix letter
         `S`, `T`, `F`, `G` or `M`, seven digits and a letter, in either case —
@@ -665,11 +659,10 @@ paths:
         the signed-in User as actor, resource type `Patient` and no resource,
         how many Patients the page held as `resultCount`, and as `filterShape`
         the query's kind — `NRIC` or `NAME` — then each filter it used, its
-        value `?` (`NAME and gender eq ? and birthDate ge ?`). Never the query,
-        a name, an NRIC or a filter's value; the sort is not recorded. A search
-        refused with `400`, or that the source failed, records nothing. The
-        request's own log record names the route template, never the query
-        string.
+        value `?` (`NAME and gender eq ?`). Never the query, a name, an NRIC or
+        the filter's value. A search refused with `400`, or that the source
+        failed, records nothing. The request's own log record names the route
+        template, never the query string.
       operationId: searchPatients
       security:
         - sessionCookie: [patient:read]
@@ -691,64 +684,6 @@ paths:
           schema:
             type: string
             enum: [male, female]
-        - name: birthDateFrom
-          in: query
-          required: false
-          description: |
-            Only Patients born on or after this day. Sent as `birthdate=ge…`.
-          schema:
-            type: string
-            format: date
-            example: "1980-01-01"
-        - name: birthDateTo
-          in: query
-          required: false
-          description: |
-            Only Patients born on or before this day; not before
-            `birthDateFrom`. Sent as `birthdate=le…`.
-          schema:
-            type: string
-            format: date
-            example: "1999-12-31"
-        - name: lastVisitFrom
-          in: query
-          required: false
-          description: |
-            Only Patients whose Last visit is on or after this day. Sent as
-            `last-visit=ge…`.
-          schema:
-            type: string
-            format: date
-            example: "2026-08-01"
-        - name: lastVisitTo
-          in: query
-          required: false
-          description: |
-            Only Patients whose Last visit is on or before this day; not before
-            `lastVisitFrom`. Sent as `last-visit=le…`.
-          schema:
-            type: string
-            format: date
-            example: "2026-10-31"
-        - name: sortBy
-          in: query
-          required: false
-          description: |
-            The one column to sort by: `birthDate` (the source's `birthdate`) or
-            `lastVisit` (its `last-visit`). With none, newest Last visit first,
-            whatever `sortOrder` says.
-          schema:
-            type: string
-            enum: [birthDate, lastVisit]
-        - name: sortOrder
-          in: query
-          required: false
-          description: |
-            The direction `sortBy` sorts in; `ascending` when `sortBy` is given
-            alone. Descending is sent with a leading `-`.
-          schema:
-            type: string
-            enum: [ascending, descending]
         - name: startIndex
           in: query
           required: false
@@ -778,10 +713,8 @@ paths:
         "400":
           description: |
             `q` is missing, or is a name search under 3 characters once trimmed;
-            `gender` is neither `male` nor `female`; `sortBy` is neither
-            `birthDate` nor `lastVisit`, or `sortOrder` neither `ascending` nor
-            `descending`; a date is no calendar date `YYYY-MM-DD`; a from-date
-            is after its to-date; or `startIndex` or `count` is not an integer.
+            `gender` is neither `male` nor `female`; or `startIndex` or `count`
+            is not an integer.
             Refused before the patient source is called, recording nothing, with
             the generic `invalid-request` `ApiError`, which quotes nothing of the
             request.
@@ -4206,9 +4139,9 @@ components:
           description: |
             A bulk read's filter with every literal replaced by `?`
             (`userName eq ?`); for a `PATIENT_SEARCH`, the query's kind, `NRIC` or
-            `NAME`, then each filter it used in a fixed order — `gender eq ?`,
-            `birthDate ge ?`, `birthDate le ?`, `lastVisit ge ?`, `lastVisit le ?`
-            — joined by `and`; `null` when it had none or is not a bulk read.
+            `NAME`, then `and gender eq ?` when it used the gender filter
+            (`NAME and gender eq ?`); a row is answered with the shape it was
+            stored with; `null` when it had none or is not a bulk read.
         permissions:
           type: array
           items:

@@ -434,11 +434,11 @@ its EHR context names no patient, or the Patient source holds none under its id.
 Finding Patients by a name, of at least three characters, or by a full NRIC,
 typed into the Search page's one box — a page only a session holding
 `patient:read` opens or is linked to: the Patient source's own search, passed
-through and read five to a page, newest Last visit first unless sorted by Date
-of Birth or Last visit, and narrowed by gender and by a date range for each.
-The source sorts and filters; the service does neither. Every search the
-source answers is audited as `PATIENT_SEARCH`, by its kind, the filters it used
-and its count, and never its query or a filter's value; a read of one Patient
+through and read five to a page, in the source's own stable order, and
+narrowed by gender. The source orders and filters; the service does neither.
+Every search the source answers is audited as `PATIENT_SEARCH`, by its kind,
+whether it used the gender filter and its count, and never its query or the
+filter's value; a read of one Patient
 by id is not. Selecting a result puts that Patient into the EHR context.
 _Avoid_: patient lookup, patient list, patient query (no search lists every
 Patient)
@@ -446,7 +446,7 @@ Patient)
 **Last visit**:
 The date of a Patient's latest visit, as the Patient source records it on the
 Patient (its `last-visit` extension); a Patient may have none. Patient search
-orders by it, newest first.
+shows it in each row.
 _Avoid_: last seen, last encounter, last admission
 
 ### Database

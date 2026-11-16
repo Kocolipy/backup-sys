@@ -12,17 +12,13 @@ import com.example.backend.observability.LogEvent.ErrorCategory;
 import com.example.backend.paging.domain.PageRequest;
 import com.example.backend.patient.PatientSourceStubs;
 import com.example.backend.patient.domain.AdministrativeGender;
-import com.example.backend.patient.domain.DateRange;
 import com.example.backend.patient.domain.PatientFilter;
 import com.example.backend.patient.domain.PatientQuery;
-import com.example.backend.patient.domain.PatientSort;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import com.github.tomakehurst.wiremock.verification.LoggedRequest;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.time.Duration;
-import java.time.LocalDate;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -34,10 +30,11 @@ import org.springframework.web.client.RestClient;
 
 /**
  * A Patient search as the HTTP adapter makes it (ADR 0018), against the patient source's mock in
- * process: the one call it sends — the source's own search, sorted, paged and counted there — and
- * what a failure of that call is. What the canned searches answer is {@code PatientStoreContract}'s;
- * each Patient's own rules are the read by id's ({@code PatientSourceAdapterContractTests}), which
- * a search's Patient is held to through one wiring case here.
+ * process: the one call it sends — the source's own search, paged and counted there, in its own
+ * order — and what a failure of that call is. What the canned searches answer is
+ * {@code PatientStoreContract}'s; each Patient's own rules are the read by id's
+ * ({@code PatientSourceAdapterContractTests}), which a search's Patient is held to through one
+ * wiring case here.
  */
 class PatientSourceSearchAdapterTests {
 
@@ -82,8 +79,8 @@ class PatientSourceSearchAdapterTests {
     }
 
     private static Fault faultSearching(PatientSourceAdapter adapter) {
-        PatientSourceException fault = (PatientSourceException) catchThrowable(() ->
-                adapter.search(new PatientQuery.ByName(PROBE_NAME), PatientFilter.NONE, PatientSort.DEFAULT, SECOND_PAGE_OF_FIVE));
+        PatientSourceException fault = (PatientSourceException) catchThrowable(() -> adapter.search(
+                new PatientQuery.ByName(PROBE_NAME), PatientFilter.NONE, SECOND_PAGE_OF_FIVE));
         return new Fault(fault.getMessage(), fault.reason(), fault.category());
     }
 
@@ -99,16 +96,16 @@ class PatientSourceSearchAdapterTests {
     // ---- the call ------------------------------------------------------------------------
 
     /**
-     * A name search is the source's {@code name:contains}, sorted newest Last visit first with ties
-     * by id, from the page's zero-based offset, for the page's count, with an accurate total.
+     * A name search is the source's {@code name:contains}, from the page's zero-based offset, for
+     * the page's count, with an accurate total, and no {@code _sort}: the source's own order.
      */
     @Test
-    void aNameSearchAsksTheSourceToMatchSortPageAndCountIt() {
-        adapter().search(new PatientQuery.ByName("Tan Hui"), PatientFilter.NONE, PatientSort.DEFAULT, SECOND_PAGE_OF_FIVE);
+    void aNameSearchAsksTheSourceToMatchPageAndCountIt() {
+        adapter().search(
+                new PatientQuery.ByName("Tan Hui"), PatientFilter.NONE, SECOND_PAGE_OF_FIVE);
 
         assertThat(sentQuery()).isEqualTo(Map.of(
                 "name:contains", "Tan Hui",
-                "_sort", "-last-visit,_id",
                 "_offset", "5",
                 "_count", "5",
                 "_total", "accurate"));
@@ -117,11 +114,11 @@ class PatientSourceSearchAdapterTests {
     /** An NRIC search is the identifier under the NRIC NamingSystem, exactly. */
     @Test
     void anNricSearchAsksTheSourceForTheIdentifierUnderTheNricSystem() {
-        adapter().search(new PatientQuery.ByNric("S9212345A"), PatientFilter.NONE, PatientSort.DEFAULT, new PageRequest(1, 5));
+        adapter().search(
+                new PatientQuery.ByNric("S9212345A"), PatientFilter.NONE, new PageRequest(1, 5));
 
         assertThat(sentQuery()).isEqualTo(Map.of(
                 "identifier", "https://fhir.synapxe.sg/NamingSystem/nric|S9212345A",
-                "_sort", "-last-visit,_id",
                 "_offset", "0",
                 "_count", "5",
                 "_total", "accurate"));
@@ -136,83 +133,33 @@ class PatientSourceSearchAdapterTests {
         return query;
     }
 
-    private static void searchingTan(PatientFilter filter, PatientSort sort) {
-        adapter().search(new PatientQuery.ByName("tan"), filter, sort, new PageRequest(1, 5));
-    }
-
-    /**
-     * Each sort is the source's {@code _sort} on its own search parameter — {@code birthdate} or
-     * {@code last-visit}, descending with a leading {@code -} — its ties still broken by id.
-     */
-    @ParameterizedTest
-    @CsvSource({
-        "BIRTH_DATE, ASCENDING, 'birthdate,_id'",
-        "BIRTH_DATE, DESCENDING, '-birthdate,_id'",
-        "LAST_VISIT, ASCENDING, 'last-visit,_id'",
-        "LAST_VISIT, DESCENDING, '-last-visit,_id'"})
-    void aSortIsTheSourcesOwnOnItsSearchParameter(PatientSort.Field field,
-            PatientSort.Order order, String sorted) {
-        searchingTan(PatientFilter.NONE, new PatientSort(field, order));
-
-        assertThat(sentQuery()).containsEntry("_sort", sorted);
+    private static void searchingTan(PatientFilter filter) {
+        adapter().search(new PatientQuery.ByName("tan"), filter, new PageRequest(1, 5));
     }
 
     /** A gender filter is the source's {@code gender}, by its FHIR code. */
     @ParameterizedTest
     @CsvSource({"MALE, male", "FEMALE, female"})
     void aGenderFilterIsTheSourcesGender(AdministrativeGender gender, String code) {
-        searchingTan(new PatientFilter(gender, DateRange.ANY, DateRange.ANY), PatientSort.DEFAULT);
+        searchingTan(new PatientFilter(gender));
 
         assertThat(sentQueryValues()).isEqualTo(Map.of(
                 "name:contains", List.of("tan"),
                 "gender", List.of(code),
-                "_sort", List.of("-last-visit,_id"),
                 "_offset", List.of("0"),
                 "_count", List.of("5"),
                 "_total", List.of("accurate")));
     }
 
-    /**
-     * A date range is its search parameter once for each end it has — {@code ge} the from-date and
-     * {@code le} the to-date, both inclusive — for the date of birth {@code birthdate} and for the
-     * Last visit {@code last-visit}.
-     */
-    @ParameterizedTest
-    @CsvSource(nullValues = "-", delimiter = '|', value = {
-        "1980-01-01 | 1989-12-31 | ge1980-01-01,le1989-12-31",
-        "1980-01-01 | -          | ge1980-01-01",
-        "-          | 1989-12-31 | le1989-12-31"})
-    void aDateRangeIsItsSearchParameterForEachEnd(LocalDate from, LocalDate to, String sent) {
-        List<String> ends = List.of(sent.split(","));
-        searchingTan(new PatientFilter(null, new DateRange(from, to), DateRange.ANY),
-                PatientSort.DEFAULT);
-        Map<String, List<String>> births = sentQueryValues();
-        SOURCE.resetRequests();
-        searchingTan(new PatientFilter(null, DateRange.ANY, new DateRange(from, to)),
-                PatientSort.DEFAULT);
-        Map<String, List<String>> visits = sentQueryValues();
-
-        assertThat(Arrays.asList(births.get("birthdate"), births.containsKey("last-visit"),
-                visits.get("last-visit"), visits.containsKey("birthdate")))
-                .containsExactly(ends, false, ends, false);
-    }
-
-    /** Every filter at once, on an NRIC search as on a name search, each sent as its own. */
+    /** A gender filter narrows an NRIC search as it does a name search. */
     @Test
-    void everyFilterNarrowsTheSearchAtOnce() {
+    void aGenderFilterNarrowsAnNricSearch() {
         adapter().search(new PatientQuery.ByNric("S9212345A"),
-                new PatientFilter(AdministrativeGender.FEMALE,
-                        new DateRange(LocalDate.of(1990, 1, 1), LocalDate.of(1999, 12, 31)),
-                        new DateRange(LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31))),
-                new PatientSort(PatientSort.Field.BIRTH_DATE, PatientSort.Order.DESCENDING),
-                new PageRequest(1, 5));
+                new PatientFilter(AdministrativeGender.FEMALE), new PageRequest(1, 5));
 
         assertThat(sentQueryValues()).isEqualTo(Map.of(
                 "identifier", List.of("https://fhir.synapxe.sg/NamingSystem/nric|S9212345A"),
                 "gender", List.of("female"),
-                "birthdate", List.of("ge1990-01-01", "le1999-12-31"),
-                "last-visit", List.of("ge2026-07-01", "le2026-07-31"),
-                "_sort", List.of("-birthdate,_id"),
                 "_offset", List.of("0"),
                 "_count", List.of("5"),
                 "_total", List.of("accurate")));
@@ -221,7 +168,7 @@ class PatientSourceSearchAdapterTests {
     /** As a read by id, a search presents nothing to the source, and asks for FHIR JSON. */
     @Test
     void aSearchPresentsNoCredentialAndAsksForFhirJson() {
-        adapter().search(new PatientQuery.ByName("tan"), PatientFilter.NONE, PatientSort.DEFAULT, new PageRequest(1, 5));
+        adapter().search(new PatientQuery.ByName("tan"), PatientFilter.NONE, new PageRequest(1, 5));
 
         LoggedRequest sent = SOURCE.findAll(getRequestedFor(urlPathEqualTo(PROBE_SEARCH)))
                 .getFirst();
@@ -233,7 +180,8 @@ class PatientSourceSearchAdapterTests {
     /** A search needs a query: none is refused before anything is sent. */
     @Test
     void aSearchWithNoQueryIsRefusedBeforeTheSourceIsCalled() {
-        Throwable refused = catchThrowable(() -> adapter().search(null, PatientFilter.NONE, PatientSort.DEFAULT, new PageRequest(1, 5)));
+        Throwable refused = catchThrowable(() -> adapter().search(
+                null, PatientFilter.NONE, new PageRequest(1, 5)));
 
         assertThat(refused).isInstanceOf(NullPointerException.class);
         SOURCE.verify(0, getRequestedFor(urlPathEqualTo(PROBE_SEARCH)));
@@ -244,8 +192,8 @@ class PatientSourceSearchAdapterTests {
     void everySearchIsACallToTheSource() {
         PatientSourceAdapter adapter = adapter();
 
-        adapter.search(new PatientQuery.ByName("tan"), PatientFilter.NONE, PatientSort.DEFAULT, new PageRequest(1, 5));
-        adapter.search(new PatientQuery.ByName("tan"), PatientFilter.NONE, PatientSort.DEFAULT, new PageRequest(1, 5));
+        adapter.search(new PatientQuery.ByName("tan"), PatientFilter.NONE, new PageRequest(1, 5));
+        adapter.search(new PatientQuery.ByName("tan"), PatientFilter.NONE, new PageRequest(1, 5));
 
         SOURCE.verify(2, getRequestedFor(urlPathEqualTo(PROBE_SEARCH)));
     }
@@ -255,7 +203,8 @@ class PatientSourceSearchAdapterTests {
     void aMatchIsReadWithItsLastVisit() {
         answering(WELL_FORMED);
 
-        assertThat(adapter().search(new PatientQuery.ByName(PROBE_NAME), PatientFilter.NONE, PatientSort.DEFAULT, SECOND_PAGE_OF_FIVE)
+        assertThat(adapter().search(
+                new PatientQuery.ByName(PROBE_NAME), PatientFilter.NONE, SECOND_PAGE_OF_FIVE)
                 .patients().getFirst().lastVisit()).hasToString("2026-01-02");
     }
 
@@ -267,14 +216,14 @@ class PatientSourceSearchAdapterTests {
         answering(WELL_FORMED.replace("\"extension\": [", "\"extension\": [" + another));
         PatientSourceAdapter adapter = adapter();
         String firstLastVisit = String.valueOf(adapter.search(
-                new PatientQuery.ByName(PROBE_NAME), PatientFilter.NONE, PatientSort.DEFAULT, SECOND_PAGE_OF_FIVE)
+                new PatientQuery.ByName(PROBE_NAME), PatientFilter.NONE, SECOND_PAGE_OF_FIVE)
                 .patients().getFirst().lastVisit());
         answering(WELL_FORMED.replace(
                 "https://fhir.synapxe.sg/StructureDefinition/last-visit",
                 "https://fhir.synapxe.sg/StructureDefinition/other"));
 
         assertThat(List.of(firstLastVisit, String.valueOf(adapter.search(
-                new PatientQuery.ByName(PROBE_NAME), PatientFilter.NONE, PatientSort.DEFAULT, SECOND_PAGE_OF_FIVE)
+                new PatientQuery.ByName(PROBE_NAME), PatientFilter.NONE, SECOND_PAGE_OF_FIVE)
                 .patients().getFirst().lastVisit())))
                 .containsExactly("2026-01-02", "null");
     }
@@ -362,8 +311,8 @@ class PatientSourceSearchAdapterTests {
     void aFailedSearchSaysNothingOfTheQueryOrTheAnswer() {
         answering(oneMatch("", "\"id\": \"probe-Q7xKd2.v9\",", "2026-01-02"));
 
-        Throwable fault = catchThrowable(() ->
-                adapter().search(new PatientQuery.ByName(PROBE_NAME), PatientFilter.NONE, PatientSort.DEFAULT, SECOND_PAGE_OF_FIVE));
+        Throwable fault = catchThrowable(() -> adapter().search(
+                new PatientQuery.ByName(PROBE_NAME), PatientFilter.NONE, SECOND_PAGE_OF_FIVE));
 
         StringWriter printed = new StringWriter();
         fault.printStackTrace(new PrintWriter(printed));

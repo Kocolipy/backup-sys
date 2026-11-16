@@ -9,7 +9,6 @@ import com.example.backend.paging.domain.PageRequest;
 import com.example.backend.patient.domain.PatientFilter;
 import com.example.backend.patient.domain.PatientMatches;
 import com.example.backend.patient.domain.PatientQuery;
-import com.example.backend.patient.domain.PatientSort;
 import com.example.backend.patient.domain.PatientStore;
 import java.util.EnumSet;
 import java.util.Set;
@@ -17,16 +16,16 @@ import org.springframework.stereotype.Service;
 
 /**
  * A Patient search (/docs/domain/patient.md, "Patient search"; ADR 0018): the patient source's own
- * search, passed through — the service matches, filters, sorts and pages nothing itself, and holds
+ * search, passed through — the service matches, filters, orders and pages nothing itself, and holds
  * and caches nothing — and one {@code PATIENT_SEARCH} audit row for every search the source
  * answered.
  *
  * <p>The row names the signed-in User who searched, how many Patients the answered page held,
- * whether the query was an NRIC or a name, and which filters narrowed it, and nothing of the query
- * or the filters' values. It is appended after the source answered, fail-closed (ADR 0004): a
- * search that cannot be recorded is not answered, and one the source failed read nothing, so it
- * records nothing. No transaction of the caller's: the read is a call to the source, and the
- * append opens its own.
+ * whether the query was an NRIC or a name, and whether the gender filter narrowed it, and nothing
+ * of the query or the filter's value. It is appended after the source answered, fail-closed
+ * (ADR 0004): a search that cannot be recorded is not answered, and one the source failed read
+ * nothing, so it records nothing. No transaction of the caller's: the read is a call to the
+ * source, and the append opens its own.
  */
 @Service
 public class PatientSearchService {
@@ -44,12 +43,11 @@ public class PatientSearchService {
     }
 
     /**
-     * The page {@code page} of the Patients {@code query} matches and {@code filter} narrows, in
-     * the order {@code sort} names, as the source answered it.
+     * The page {@code page} of the Patients {@code query} matches and {@code filter} narrows, as
+     * the source answered it.
      */
-    public PatientMatches search(PatientQuery query, PatientFilter filter, PatientSort sort,
-            PageRequest page) {
-        PatientMatches matches = patients.search(query, filter, sort, page);
+    public PatientMatches search(PatientQuery query, PatientFilter filter, PageRequest page) {
+        PatientMatches matches = patients.search(query, filter, page);
         audit.append(new Audited.PatientsSearched(actors.signedInUser().orElse(null),
                 kindOf(query), used(filter), matches.patients().size()));
         return matches;
@@ -62,23 +60,11 @@ public class PatientSearchService {
         };
     }
 
-    /** Which filters {@code filter} narrows by: each set end of a range, and the gender. */
+    /** Which filters {@code filter} narrows by: the gender, when it names one. */
     private static Set<AuditPatientSearchFilter> used(PatientFilter filter) {
         Set<AuditPatientSearchFilter> used = EnumSet.noneOf(AuditPatientSearchFilter.class);
         if (filter.gender() != null) {
             used.add(AuditPatientSearchFilter.GENDER);
-        }
-        if (filter.birthDate().from() != null) {
-            used.add(AuditPatientSearchFilter.BIRTH_DATE_FROM);
-        }
-        if (filter.birthDate().to() != null) {
-            used.add(AuditPatientSearchFilter.BIRTH_DATE_TO);
-        }
-        if (filter.lastVisit().from() != null) {
-            used.add(AuditPatientSearchFilter.LAST_VISIT_FROM);
-        }
-        if (filter.lastVisit().to() != null) {
-            used.add(AuditPatientSearchFilter.LAST_VISIT_TO);
         }
         return used;
     }

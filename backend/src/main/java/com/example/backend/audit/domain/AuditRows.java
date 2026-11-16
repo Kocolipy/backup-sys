@@ -259,8 +259,8 @@ final class AuditRows {
     /**
      * A Patient search: a bulk read of the patient source, by the signed-in User, with no subject,
      * carrying how many Patients it answered and, as its filter shape, its query's kind followed
-     * by each filter it used in their declared order — {@code NAME and gender eq ? and birthDate
-     * ge ?} — the one thing about the query and its filters recorded.
+     * by each filter it used in their declared order — {@code NAME and gender eq ?} — the one
+     * thing about the query and its filters recorded.
      */
     static AuditEvent patientSearch(Audited.Stamp stamp, UUID actorId, AuditPatientQueryKind kind,
             Set<AuditPatientSearchFilter> filters, int resultCount) {
