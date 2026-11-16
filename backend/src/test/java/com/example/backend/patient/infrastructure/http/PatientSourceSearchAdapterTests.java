@@ -26,7 +26,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
-import org.springframework.web.client.RestClient;
 
 /**
  * A Patient search as the HTTP adapter makes it (ADR 0018), against the patient source's mock in
@@ -67,7 +66,7 @@ class PatientSourceSearchAdapterTests {
             oneMatch("\"total\": 1,", "\"id\": \"probe-Q7xKd2.v9\",", "2026-01-02");
 
     private static PatientSourceAdapter adapter() {
-        return new PatientSourceAdapter(RestClient.builder(), SOURCE.baseUrl());
+        return PatientSourceAdapters.at(SOURCE.baseUrl());
     }
 
     private static void answering(String body) {
@@ -252,8 +251,7 @@ class PatientSourceSearchAdapterTests {
     void aSearchUnansweredWithinTheReadTimeoutTimesOut() {
         SOURCE.stubFor(get(urlPathEqualTo(PROBE_SEARCH)).atPriority(1)
                 .willReturn(okJson(WELL_FORMED).withFixedDelay(1000)));
-        PatientSourceAdapter impatient = new PatientSourceAdapter(RestClient.builder(),
-                SOURCE.baseUrl(), Duration.ofSeconds(2), Duration.ofMillis(100));
+        PatientSourceAdapter impatient = PatientSourceAdapters.at(SOURCE.baseUrl(), Duration.ofSeconds(2), Duration.ofMillis(100));
 
         assertThat(faultSearching(impatient)).isEqualTo(new Fault(
                 "The patient source did not answer in time", "timed-out", ErrorCategory.NETWORK));

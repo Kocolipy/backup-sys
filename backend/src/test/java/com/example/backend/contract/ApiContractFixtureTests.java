@@ -411,12 +411,15 @@ class ApiContractFixtureTests {
     // ---- /api/patient-numc/{patientId} --------------------------------------------------
 
     private static void patientNumc(List<Fixture> all) {
-        add(all, "patient NUMC History: a page of NUMC Records, sorted and filtered, a patient"
-                + " with none, an unknown patient, a malformed id, a filter or sort it cannot"
-                + " take, a failing source, and the refusals", t -> {
+        add(all, "patient NUMC History: a page of NUMC Records, sorted and filtered, one with"
+                + " fields missing, invalid and outside their closed sets, a patient with none,"
+                + " an unknown patient, a malformed id, a filter or sort it cannot take, a"
+                + " failing source, and the refusals", t -> {
             // patient:read is a Group's to confer, as for an FFI History. The histories are the
             // patient source's mock's (PatientSourceStubs): Tan Wei Ming has four NUMC Records,
-            // Tan Hui Min seven, Siti Nurhaliza binte Ahmad none.
+            // Tan Hui Min seven, Tan Boon Huat four shown as received (ADR 0020) — fields
+            // missing and invalid, codes outside their closed sets, ids outside FHIR's grammar
+            // and none — and Siti Nurhaliza binte Ahmad none.
             Cookie user = t.medicalOfficer(t.logIn(ADMIN, ADMIN_PASSWORD));
             Cookie inNoGroup = t.settle(t.provision(true));
             Cookie confined = t.logIn(t.provision(true), CONNECTOR_PASSWORD);
@@ -426,6 +429,7 @@ class ApiContractFixtureTests {
                     200);
             t.expect(t.get("/api/patient-numc/dev-patient-05?count=5"
                     + "&type=submariner&type=hyperbaric-chamber").cookie(user), 200);
+            t.expect(t.get("/api/patient-numc/dev-patient-10?count=5").cookie(user), 200);
             t.expect(t.get("/api/patient-numc/erXuFYUfucBZaryVksYEcMg3?count=5").cookie(user),
                     200);
             t.expect(t.get("/api/patient-numc/not-a-uuid").cookie(user), 404);

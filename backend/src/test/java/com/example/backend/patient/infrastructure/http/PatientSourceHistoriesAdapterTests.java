@@ -35,7 +35,6 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
-import org.springframework.web.client.RestClient;
 
 /**
  * Every patient history as the HTTP adapter reads it (ADR 0019, D5), held to the rules they share
@@ -178,7 +177,7 @@ class PatientSourceHistoriesAdapterTests {
     }
 
     private static PatientSourceAdapter adapter() {
-        return new PatientSourceAdapter(RestClient.builder(), SOURCE.baseUrl());
+        return PatientSourceAdapters.at(SOURCE.baseUrl());
     }
 
     private static void answering(History history, String body) {
@@ -262,8 +261,7 @@ class PatientSourceHistoriesAdapterTests {
     void aReadUnansweredWithinTheReadTimeoutTimesOut(History history) {
         SOURCE.stubFor(get(urlPathEqualTo(history.path(PROBE_PATIENT))).atPriority(1)
                 .willReturn(okJson(EMPTY_PAGE).withFixedDelay(1000)));
-        PatientSourceAdapter impatient = new PatientSourceAdapter(RestClient.builder(),
-                SOURCE.baseUrl(), Duration.ofSeconds(2), Duration.ofMillis(100));
+        PatientSourceAdapter impatient = PatientSourceAdapters.at(SOURCE.baseUrl(), Duration.ofSeconds(2), Duration.ofMillis(100));
 
         assertThat(faultReading(history, impatient, PROBE_PATIENT)).isEqualTo(new Fault(
                 "The patient source did not answer in time", "timed-out", ErrorCategory.NETWORK));

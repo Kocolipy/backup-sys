@@ -970,6 +970,69 @@ describe("the SPA's response shapes", () => {
     ["a value of type null", { type: "null" }, (value) => value === null],
   ];
 
+  /** The value of a Group's `limited` each sample holds, `schema` its schema. */
+  async function sampledLimits(schema, doc = document()) {
+    const s = spa();
+    const seen = [];
+    schemas(doc).GroupSummary.properties.limited = schema;
+    schemas(doc).GroupSummary.required.push("limited");
+    s.modules[
+      "src/pages/accounts/accounts-api.ts"
+    ].SET_GROUP_PERMISSIONS.decode = json(
+      objectOf("GroupSummary", {
+        limited: is("anything", (value) => (seen.push(value), true)),
+      }),
+    );
+    const { findings } = await holdContract(s, doc);
+    return { findings, seen };
+  }
+
+  // A patient-source field shown as received (ADR 0020): a known code of a
+  // closed set, any other string, or null for one missing or invalid.
+  it("samples an anyOf by its first branch in every property, and by its last when only the required are", async () => {
+    const doc = document();
+    schemas(doc).NumcType = { type: "string", enum: ["submariner", "diving"] };
+
+    assert.deepEqual(
+      await sampledLimits(
+        {
+          anyOf: [ref("NumcType"), { type: "string" }, { type: "null" }],
+        },
+        doc,
+      ),
+      { findings: [], seen: ["submariner", null] },
+    );
+  });
+
+  it("samples an anyOf whose last branch is no null as that branch, when only the required are", async () => {
+    assert.deepEqual(
+      await sampledLimits({
+        anyOf: [
+          { type: "string", enum: ["fit"] },
+          { type: "string", minLength: 7 },
+        ],
+      }),
+      { findings: [], seen: ["fit", "samplex"] },
+    );
+  });
+
+  it("refuses an anyOf with no branch to sample", async () => {
+    assert.deepEqual((await sampledLimits({ anyOf: [] })).findings, [
+      "SET_GROUP_PERMISSIONS (src/pages/accounts/accounts-api.ts) cannot be held to PUT /api/admin/groups/{id}/permissions 200 application/json: the sampler does not implement an anyOf with no branch (at #/components/schemas/GroupSummary/properties/limited)",
+    ]);
+  });
+
+  // The array the backend sends of each row's fields whose format was wrong.
+  it("samples an array of field names as one name, in both samples", async () => {
+    assert.deepEqual(
+      await sampledLimits({
+        type: "array",
+        items: { type: "string", enum: ["id", "type"] },
+      }),
+      { findings: [], seen: [["id"], ["id"]] },
+    );
+  });
+
   for (const [name, schema, accepts] of honoured) {
     it(`builds samples a decoder reading ${name} accepts`, async () => {
       const [s, doc] = [spa(), document()];

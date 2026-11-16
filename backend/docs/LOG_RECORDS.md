@@ -43,6 +43,7 @@ their written copy. Why each rule is what it is lives in
 | `HTTP_REQUEST`                   | — (ADR 0003)           | `http.request`                            |
 | `HTTP_REQUEST_REFUSAL`           | — (ADR 0003)           | `http.request.refusal`                    |
 | `HTTP_REQUEST_FAULT`             | — (ADR 0003)           | `http.request.fault`                      |
+| `PATIENT_SOURCE_INVALID_FIELDS`  | — (ADR 0003)           | `patient_source.invalid_fields`           |
 | `APPLICATION_STARTUP`            | `application-startup`  | —                                         |
 | `APPLICATION_SHUTDOWN`           | `application-shutdown` | —                                         |
 
@@ -54,7 +55,7 @@ is one of ADR 0003's exceptions ("Operations with no event.action").
 | Shape             | Level     | Sets                                                                                                         |
 | ----------------- | --------- | ------------------------------------------------------------------------------------------------------------ |
 | `success`         | `INFO`    | `event.outcome` `success` (an overload adds `event.duration_ms`)                                             |
-| `successAtWarn`   | `WARN`    | the same, for the dormancy lockout                                                                           |
+| `successAtWarn`   | `WARN`    | the same, for the dormancy lockout and the patient source's invalid fields                                   |
 | `refused`         | `WARN`    | `event.outcome` `failure`; the caller adds `event.reason` where one is told                                  |
 | `error`           | `ERROR`   | the error fields (below), `event.outcome` `failure`                                                          |
 | `jobScheduled`    | `INFO`    | `batch.job.name`, `app.job.description`, `trigger.cron.*`                                                    |
@@ -69,15 +70,15 @@ classification (`http.request.refusal`).
 
 ## Error records
 
-| Record                                             | `error.code` | `error.category`                                       | cause attached                            |
-| -------------------------------------------------- | ------------ | ------------------------------------------------------ | ----------------------------------------- |
-| scheduled job failed                               | `500`        | `database` / `cert/auth` (mapping) / `application`     | whole                                     |
-| SCIM 5xx refusal (advice, and `ScimErrorDocument`) | the status   | `application`                                          | the refusal (advice); none (filter)       |
-| SCIM unmapped integrity violation                  | `500`        | `database`                                             | redacted copy                             |
-| audit append failed                                | `500`        | `database`                                             | none, `app.error.cause_omitted`           |
-| request record, 5xx no handler recorded            | the status   | `application`                                          | none                                      |
-| request record, FHIR-path 4xx the handler answered | the status   | `data`                                                 | none                                      |
-| app-wide handler, unexpected exception             | the status   | the mapping for a database failure, else `application` | whole; redacted for a data-access failure |
+| Record                                             | `error.code` | `error.category`                                        | cause attached                            |
+| -------------------------------------------------- | ------------ | ------------------------------------------------------- | ----------------------------------------- |
+| scheduled job failed                               | `500`        | `database` / `cert/auth` (mapping) / `application`      | whole                                     |
+| SCIM 5xx refusal (advice, and `ScimErrorDocument`) | the status   | `application`                                           | the refusal (advice); none (filter)       |
+| SCIM unmapped integrity violation                  | `500`        | `database`                                              | redacted copy                             |
+| audit append failed                                | `500`        | `database`                                              | none, `app.error.cause_omitted`           |
+| request record, 5xx no handler recorded            | the status   | `application`                                           | none                                      |
+| request record, FHIR-path 4xx the handler answered | the status   | `data`                                                  | none                                      |
+| app-wide handler, unexpected exception             | the status   | the mapping for a database failure, else `application`  | whole; redacted for a data-access failure |
 | app-wide handler, upstream fault (`502`)           | `502`        | the fault's: `network`, `server`, `cert/auth` or `data` | whole, its own cause redacted             |
 
 ## Records
@@ -226,7 +227,8 @@ page, which quoted the path.
   `no-birth-date`, `birth-date-not-to-the-day`, `another-resource`), or the
   rule a page of a Patient search or of a history broke, each history's under
   a reason naming it (`/docs/domain/patient.md`, "Logging", and "Failures" in
-  each history's file in `/docs/domain/`) — and its `error.category` is the
+  each history's file in `/docs/domain/`); a history shown as received, the
+  NUMC History, breaks only the searchset's rules (ADR 0020) — and its `error.category` is the
   fault's own, as ADR 0014's table has it for an outbound call: `network` and
   `server` with no follow-up, `cert/auth` and `data` with one.
 - A `4xx` that Spring MVC maps (validation, an unreadable body, an unbindable
@@ -238,6 +240,20 @@ page, which quoted the path.
   `data` classification, with no follow-up, on the request record instead.
 - The body is `ApiError`: `status`, `code` (`invalid-request`, `request-refused`,
   `server-error`) and a fixed `detail`, with no member taken from the request.
+
+### The patient source's invalid fields
+
+A read that shows the patient source's data as received — the NUMC History —
+answers a field in the wrong format as `null`, shown as "Error" (ADR 0020), and
+writes one `WARN` `patient_source.invalid_fields` (`successAtWarn`,
+`event.category` `network`, `event.type` `info`) for the whole response that
+held any, beside the request's own record. It carries
+`app.patient_source.read`, the read (`numc`), and
+`app.patient_source.invalid_fields`, the path of each such field in the
+source's answer, in its order (`entry[1].issueDate`) — never a value, a
+record's id or the patient. A response with none writes nothing. The
+`patient_source.invalid_fields` counter counts each such field, tagged `read`
+and `field`.
 
 ### Scheduled jobs
 

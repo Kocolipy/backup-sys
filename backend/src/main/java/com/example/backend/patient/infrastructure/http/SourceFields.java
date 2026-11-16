@@ -7,12 +7,14 @@ import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
 
 /**
- * How an entry of a history the patient source pages — an FFI, a NUMC Record, an ARMC Board, a
- * Medication Record — reads its flat fields: a closed set's code, a calendar date, required or
- * optional, a date-time with its offset, and text an entry must have, each failure named by the
- * history's own {@link Failure}, quoting no value. A date is required unless its history says
- * otherwise: an ARMC Board's End Date is the one optional date. Optional free text needs no
- * reading: it is the source's string, or {@code null} when the source sent none.
+ * How an entry of a history the patient source pages and the service reads strictly — an FFI, an
+ * ARMC Board, a Medication Record — reads its flat fields: a closed set's code, a calendar date,
+ * required or optional, a date-time with its offset, and text an entry must have, each failure
+ * named by the history's own {@link Failure}, quoting no value. A date is required unless its
+ * history says otherwise: an ARMC Board's End Date is the one optional date. Optional free text
+ * needs no reading: it is the source's string, or {@code null} when the source sent none. A
+ * history shown as received (ADR 0020), the NUMC History, reads its fields by
+ * {@link ReceivedFields} instead.
  */
 final class SourceFields {
 

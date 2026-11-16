@@ -12,9 +12,11 @@
 
 import type { ReadDeclaration } from "@/auth/declarations";
 import { codeParameters } from "@/lib/code-parameters";
-import { calendarDate, jsonDecoder, readObject } from "@/lib/decode";
+import { jsonDecoder, readObject } from "@/lib/decode";
 import { pageDecoder, pagedPath, type Page, type PageAt } from "@/lib/paging";
 import { sortParameters, type ColumnSort } from "@/lib/sorting";
+import type { SourceField } from "@/lib/source-field";
+import { isCalendarDate } from "@/lib/time";
 import {
   countHistoryDates,
   type DateColumnOf,
@@ -25,10 +27,13 @@ import {
 } from "@/pages/history-api";
 
 // A NUMC Record's two closed sets, each as the API carries it, by its codes,
-// in the order the Filter panel lists them. Each is exported for the SPA–API
-// contract check (`/scripts/spa-contract/`), which holds it to its enum in
-// `/backend/docs/openapi.yaml` from outside this app's import graph. The NUMC
-// Outcome is a set of its own, apart from an FFI's Outcome.
+// in the order the Filter panel lists them and its labels and badges name
+// them. Each is exported for the SPA–API contract check
+// (`/scripts/spa-contract/`), which holds it to its enum in
+// `/backend/docs/openapi.yaml` from outside this app's import graph. A record
+// may carry a code outside its set, shown as it came (ADR 0020); only the
+// Filter panel is limited to these. The NUMC Outcome is a set of its own,
+// apart from an FFI's Outcome.
 
 /** A NUMC Record's NUMC Type: the underwater duty. */
 export const NUMC_TYPES = ["hyperbaric-chamber", "submariner", "diving"] as const;
@@ -55,42 +60,48 @@ export const NUMC_OUTCOME_LABELS: Readonly<Record<NumcOutcome, string>> = {
 };
 
 /**
- * One NUMC Record of a patient's NUMC History, as the backend answers it: its
- * id, which the page keeps but never shows, each closed set's code, and its
- * Issue Date and Expiry Date, each `YYYY-MM-DD`. It has no Status.
+ * One NUMC Record of a patient's NUMC History, shown as the patient source
+ * sent it (ADR 0020): each element present, missing or in the wrong format —
+ * its id, which the page keys its row by but never shows, each closed set's
+ * code, known to the set or not, and its Issue Date and Expiry Date, each
+ * `YYYY-MM-DD`. It has no Status.
  */
 export interface NumcRecord {
-  id: string;
-  type: NumcType;
-  outcome: NumcOutcome;
-  issueDate: string;
-  expiryDate: string;
+  id: SourceField<string>;
+  type: SourceField<string>;
+  outcome: SourceField<string>;
+  issueDate: SourceField<string>;
+  expiryDate: SourceField<string>;
 }
 
+/** Every field the backend sends of a NUMC Record: its elements, and which were invalid. */
 const NUMC_RECORD_FIELDS = [
   "id",
   "type",
   "outcome",
   "issueDate",
   "expiryDate",
-] as const satisfies readonly (keyof NumcRecord)[];
+  "invalid",
+] as const satisfies readonly (keyof NumcRecord | "invalid")[];
 
 /** The page size the NUMC page asks for, and its pager moves by. */
 export const NUMC_HISTORY_PAGE_SIZE = 5;
 
 /**
- * A NUMC Record, read strictly: every element is required, each code must be
- * one of its set's, each date a calendar date, and a field the record does not
- * have is refused rather than dropped.
+ * A NUMC Record, its shape read strictly — every field there, and a field the
+ * record does not have refused rather than dropped — and each element's value
+ * leniently, by the lenient field decoder: a code is any string, a date a
+ * calendar date or invalid, and nothing an element holds refuses the record.
  */
 export const decodeNumcRecord = (value: unknown): NumcRecord => {
   const record = readObject(value, "NumcRecord");
+  const fields = record.sourceFields();
   const decoded: NumcRecord = {
-    id: record.string("id"),
-    type: record.oneOf("type", NUMC_TYPES),
-    outcome: record.oneOf("outcome", NUMC_OUTCOMES),
-    issueDate: calendarDate(record.string("issueDate"), "NumcRecord.issueDate"),
-    expiryDate: calendarDate(record.string("expiryDate"), "NumcRecord.expiryDate"),
+    id: fields.read("id"),
+    type: fields.read("type"),
+    outcome: fields.read("outcome"),
+    issueDate: fields.read("issueDate", isCalendarDate),
+    expiryDate: fields.read("expiryDate", isCalendarDate),
   };
   record.onlyFields(NUMC_RECORD_FIELDS);
   return decoded;

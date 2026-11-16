@@ -12,12 +12,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
-import org.junit.jupiter.params.provider.ValueSource;
 
 /**
- * A NUMC Record as the domain holds it (/docs/domain/numc.md): every element required, its id in
- * FHIR's id grammar, printed by its id alone; and a page of NUMC History counting no fewer than
- * none. How a closed set's member is found by its code is {@code SourceCodeTests}'.
+ * A NUMC Record as the domain holds it (/docs/domain/numc.md; ADR 0020): each element as the
+ * patient source sent it — present, missing or invalid — none refused, naming the elements whose
+ * format was wrong, printed by its id alone; and a page of NUMC History counting no fewer than
+ * none. How a field is classified as it is read is {@code ReceivedFieldsTests}'.
  */
 class NumcRecordTests {
 
@@ -26,8 +26,9 @@ class NumcRecordTests {
     private static final LocalDate EXPIRES = LocalDate.of(2025, 1, 9);
 
     private static NumcRecord submariner(String id) {
-        return new NumcRecord(id, NumcType.SUBMARINER, NumcOutcome.WAIVER_REJECTED, ISSUED,
-                EXPIRES);
+        return new NumcRecord(SourceField.present(id), SourceField.present("submariner"),
+                SourceField.present("waiver-rejected"), SourceField.present(ISSUED),
+                SourceField.present(EXPIRES));
     }
 
     @Test
@@ -36,51 +37,91 @@ class NumcRecordTests {
 
         assertThat(Arrays.<Object>asList(record.id(), record.type(), record.outcome(),
                 record.issueDate(), record.expiryDate()))
-                .containsExactly("numc-tan-wei-ming-2", NumcType.SUBMARINER,
-                        NumcOutcome.WAIVER_REJECTED, ISSUED, EXPIRES);
+                .containsExactly(SourceField.present("numc-tan-wei-ming-2"),
+                        SourceField.present("submariner"), SourceField.present("waiver-rejected"),
+                        SourceField.present(ISSUED), SourceField.present(EXPIRES));
     }
 
-    /** An id outside FHIR's grammar is refused, quoting none of it. */
-    @ParameterizedTest
-    @ValueSource(strings = {"", "numc tan", "numc/tan", "numc_tan",
-        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"})
-    void anIdOutsideTheGrammarIsRefused(String id) {
-        assertThatThrownBy(() -> submariner(id))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("A NUMC Record's id must match the FHIR id grammar");
-    }
-
+    /**
+     * The source is the truth: a record whose every element is missing or invalid, whose id is
+     * outside FHIR's grammar, whose code is no member of its closed set or which expires before it
+     * is issued, is a record all the same.
+     */
     @Test
-    void aRecordWithNoIdIsRefused() {
-        assertThatThrownBy(() -> submariner(null)).isInstanceOf(IllegalArgumentException.class);
+    void noRecordIsRefusedForWhatItHolds() {
+        NumcRecord record = new NumcRecord(SourceField.present("numc tan/1"),
+                SourceField.present("ippt"), SourceField.missing(), SourceField.invalid(),
+                SourceField.present(ISSUED.minusYears(1)));
+
+        assertThat(Arrays.<Object>asList(record.id(), record.type(), record.outcome(),
+                record.issueDate(), record.expiryDate()))
+                .containsExactly(SourceField.present("numc tan/1"), SourceField.present("ippt"),
+                        SourceField.missing(), SourceField.invalid(),
+                        SourceField.present(LocalDate.of(2023, 1, 10)));
     }
 
-    /** Every element is required: each one left out is refused, naming it. */
+    /** Each element is held as some field, even one the source never sent: none is {@code null}. */
     static Stream<Arguments> eachElementLeftOut() {
-        Object[] whole = {NumcType.DIVING, NumcOutcome.FIT, ISSUED, EXPIRES};
-        String[] names = {"type", "outcome", "issueDate", "expiryDate"};
+        String[] names = {"id", "type", "outcome", "issueDate", "expiryDate"};
         List<Arguments> cases = new ArrayList<>();
-        for (int element = 0; element < whole.length; element++) {
-            Object[] elements = whole.clone();
-            elements[element] = null;
-            cases.add(Arguments.of(names[element], elements));
+        for (int element = 0; element < names.length; element++) {
+            SourceField<?>[] fields = {SourceField.missing(), SourceField.missing(),
+                SourceField.missing(), SourceField.missing(), SourceField.missing()};
+            fields[element] = null;
+            cases.add(Arguments.of(names[element], fields));
         }
         return cases.stream();
     }
 
     @ParameterizedTest
     @MethodSource("eachElementLeftOut")
-    void aRecordMissingAnElementIsRefused(String element, Object[] elements) {
-        assertThatThrownBy(() -> new NumcRecord("numc-1", (NumcType) elements[0],
-                (NumcOutcome) elements[1], (LocalDate) elements[2], (LocalDate) elements[3]))
+    @SuppressWarnings("unchecked")
+    void aRecordHoldsEachElementAsAField(String element, SourceField<?>[] fields) {
+        assertThatThrownBy(() -> new NumcRecord((SourceField<String>) fields[0],
+                (SourceField<String>) fields[1], (SourceField<String>) fields[2],
+                (SourceField<LocalDate>) fields[3], (SourceField<LocalDate>) fields[4]))
                 .isInstanceOf(NullPointerException.class)
                 .hasMessage(element);
+    }
+
+    /** A record names the elements whose format was wrong, as the API spells them, in its order. */
+    @Test
+    void aRecordNamesItsInvalidElementsInItsOrder() {
+        NumcRecord record = new NumcRecord(SourceField.invalid(), SourceField.present("diving"),
+                SourceField.invalid(), SourceField.missing(), SourceField.invalid());
+
+        assertThat(record.invalid()).containsExactly("id", "outcome", "expiryDate");
+    }
+
+    @Test
+    void aRecordWithTheTypeOrTheIssueDateInvalidNamesIt() {
+        NumcRecord record = new NumcRecord(SourceField.missing(), SourceField.invalid(),
+                SourceField.missing(), SourceField.invalid(), SourceField.missing());
+
+        assertThat(record.invalid()).containsExactly("type", "issueDate");
+    }
+
+    @Test
+    void aRecordMissingElementsButNoneInvalidNamesNone() {
+        NumcRecord record = new NumcRecord(SourceField.missing(), SourceField.missing(),
+                SourceField.missing(), SourceField.missing(), SourceField.missing());
+
+        assertThat(record.invalid()).isEmpty();
     }
 
     /** A NUMC Record is the patient's Restricted data: printed, it names its id alone. */
     @Test
     void aRecordPrintsItsIdAlone() {
         assertThat(submariner("numc-tan-wei-ming-2")).hasToString("NumcRecord[numc-tan-wei-ming-2]");
+    }
+
+    @Test
+    void aRecordWithNoIdPrintsNoneOfItsElements() {
+        NumcRecord record = new NumcRecord(SourceField.invalid(), SourceField.present("diving"),
+                SourceField.present("fit"), SourceField.present(ISSUED),
+                SourceField.present(EXPIRES));
+
+        assertThat(record).hasToString("NumcRecord[no id]");
     }
 
     @Test

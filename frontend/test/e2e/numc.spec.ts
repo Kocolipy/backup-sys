@@ -9,11 +9,12 @@ import { sidebar } from "./shell.helpers";
  * Patient Search, then NUMC opened from the sidebar. Tan Wei Ming has exactly
  * four NUMC Records, sorted by each date both ways, Tan Hui Min seven over two
  * pages, filtered by each multi-select, each date range, two filters combined
- * and one matching nothing, and Siti Nurhaliza binte Ahmad none
- * (`/docs/domain/numc.md`, "The patient source's NUMC fixtures"). What the
- * page decides without the backend — the labels, the badges, a loading
- * patient, each filter's parameters, an inverted range, no patient in context
- * and a failure — is `numc.test.tsx`'s; the backend's real `502`
+ * and one matching nothing, Tan Boon Huat four shown as received, and Siti
+ * Nurhaliza binte Ahmad none (`/docs/domain/numc.md`, "The patient source's
+ * NUMC fixtures"). What the page decides without the backend — the labels,
+ * the badges, "—", "Error" and a raw code, a loading patient, each filter's
+ * parameters, an inverted range, no patient in context and a failure — is
+ * `numc.test.tsx`'s; the backend's real `502`
  * reaching a history page is `medication.spec.ts`', that a session without
  * `patient:read` is offered no NUMC link `roles-user.spec.ts`', and that it is
  * routed to Home `App.test.tsx`'s.
@@ -74,6 +75,30 @@ test.describe("NUMC", () => {
       "Hyperbaric Chamber DutiesUNFIT17 Apr 202316 Apr 2024",
       "Diving DutiesWAIVER GRANTED05 Dec 202204 Dec 2023",
     ]);
+  });
+
+  // The patient source is the truth (ADR 0020): Tan Boon Huat's records hold
+  // an outcome left out, a date of the wrong JSON type and one not to the
+  // day, codes outside both closed sets, and a record with no id whose fields
+  // are empty, blank or null.
+  test('shows Tan Boon Huat\'s NUMC Records as received: "—", "Error" and raw codes in one table', async ({
+    page,
+  }) => {
+    await page.goto("/search");
+    await search(page, "tan");
+    await page.getByRole("button", { name: "Page 2" }).click();
+    await selectResult(page, "Tan Boon Huat");
+    await expectOnHomeInContext(page, "Tan Boon Huat", "S5512345A");
+
+    await openNumc(page);
+
+    await expect(numcRows(page)).toHaveText([
+      "Diving Duties—16 Mar 202215 Mar 2023",
+      "Submariner DutiesFITErrorError",
+      "parachutingrequest-waiver16 Mar 202015 Mar 2021",
+      "Hyperbaric Chamber Duties———",
+    ]);
+    await expect(page.getByText("Showing 1 to 4 of 4 NUMC records")).toBeVisible();
   });
 
   test("says No NUMC records for a patient with none", async ({ page }) => {

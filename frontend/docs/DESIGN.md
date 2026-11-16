@@ -104,6 +104,10 @@ four soft pairs under "Colours", or `muted` — and never from a raw colour:
 - `muted` — a state set aside, neither good nor bad: an FFI's Inactive, NUMC's
   WAIVER REJECTED, a PENDING Dispense Status.
 
+A code outside its closed set, shown as received (ADR 0020), is on the neutral
+`outline` badge, its raw code as its text (`byCode`, `src/lib/source-field.ts`):
+a code the page cannot name has no meaning to colour.
+
 `src/pages/status-badge.tsx` maps an audit event's outcome and a User's status
 to its label and variant. Each history page maps the closed sets it shows as
 badges to their variants beside the table that shows them (`ffi/ffi.tsx`,

@@ -1,3 +1,5 @@
+import type { ComponentProps } from "react";
+
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -8,6 +10,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { byCode, orElse, shown } from "@/lib/source-field";
 import { formatCalendarDateTwoDigitDay } from "@/lib/time";
 import { FilteredHistory } from "@/pages/filtered-history";
 import { ForPatientInContext } from "@/pages/for-patient-in-context";
@@ -26,11 +29,14 @@ import {
   type NumcSortColumn,
 } from "./numc-api";
 
+/** A badge's look, as the Badge takes it. */
+type BadgeVariant = NonNullable<ComponentProps<typeof Badge>["variant"]>;
+
 /**
  * Each NUMC Outcome's badge: FIT green, UNFIT red, WAIVER GRANTED blue and
- * WAIVER REJECTED muted.
+ * WAIVER REJECTED muted. A code outside the set is on a neutral one.
  */
-const OUTCOME_BADGES: Readonly<Record<NumcOutcome, "success" | "danger" | "info" | "muted">> = {
+const OUTCOME_BADGES: Readonly<Record<NumcOutcome, BadgeVariant>> = {
   fit: "success",
   unfit: "danger",
   "waiver-granted": "info",
@@ -38,12 +44,15 @@ const OUTCOME_BADGES: Readonly<Record<NumcOutcome, "success" | "danger" | "info"
 };
 
 /**
- * The page's NUMC Records, one row each, in the order read: the NUMC Type by
- * its label, the NUMC Outcome as a badge, and both dates as `dd MMM yyyy`.
- * Issue Date and Expiry Date sort, one at a time, held still while a read is
- * `pending`; the Type and the Outcome do not. Read-only, with no row action;
- * each row is keyed by the record's id, which is never shown. Nothing here
- * works out whether a record has expired.
+ * The page's NUMC Records, one row each, in the order read, shown as the
+ * patient source sent them (ADR 0020): the NUMC Type by its label, the NUMC
+ * Outcome as a badge, and both dates as `dd MMM yyyy`; a code outside its
+ * closed set as it came, the Outcome's on a neutral badge; a missing element
+ * as "—" and one in the wrong format as "Error" (`shown`). Issue Date and
+ * Expiry Date sort, one at a time, held still while a read is `pending`; the
+ * Type and the Outcome do not. Read-only, with no row action; each row is
+ * keyed by the record's id, which is never shown, or its place without one.
+ * Nothing here works out whether a record has expired.
  */
 function NumcTable({
   pending,
@@ -66,19 +75,23 @@ function NumcTable({
         </TableRow>
       </TableHeader>
       <TableBody>
-        {records.map((record) => (
-          <TableRow key={record.id}>
-            <TableCell>{NUMC_TYPE_LABELS[record.type]}</TableCell>
+        {records.map((record, place) => (
+          <TableRow key={orElse(record.id, place)}>
             <TableCell>
-              <Badge variant={OUTCOME_BADGES[record.outcome]}>
-                {NUMC_OUTCOME_LABELS[record.outcome]}
-              </Badge>
+              {shown(record.type, (code) => byCode(NUMC_TYPE_LABELS, code, code))}
+            </TableCell>
+            <TableCell>
+              {shown(record.outcome, (code) => (
+                <Badge variant={byCode(OUTCOME_BADGES, code, "outline")}>
+                  {byCode(NUMC_OUTCOME_LABELS, code, code)}
+                </Badge>
+              ))}
             </TableCell>
             <TableCell className="tabular-nums">
-              {formatCalendarDateTwoDigitDay(record.issueDate)}
+              {shown(record.issueDate, formatCalendarDateTwoDigitDay)}
             </TableCell>
             <TableCell className="tabular-nums">
-              {formatCalendarDateTwoDigitDay(record.expiryDate)}
+              {shown(record.expiryDate, formatCalendarDateTwoDigitDay)}
             </TableCell>
           </TableRow>
         ))}

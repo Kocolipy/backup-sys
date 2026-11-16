@@ -1,7 +1,7 @@
 ---
 type: Contract
 title: SPA–API contract check
-description: What make verify-contract holds the SPA to against backend/docs/openapi.yaml — the closed sets it decodes strictly, every request declaration's Permission or Superuser requirement, the query parameters each sends and the shape of each response it decodes — how it finds the declarations and samples the responses, and when it refuses to pass.
+description: What make verify-contract holds the SPA to against backend/docs/openapi.yaml — the closed sets it mirrors, every request declaration's Permission or Superuser requirement, the query parameters each sends and the shape of each response it decodes — how it finds the declarations and samples the responses, and when it refuses to pass.
 tags: [contract, openapi, spa, verification]
 ---
 
@@ -52,6 +52,11 @@ set-equal to the one before it. The document's enums are named under
   (`equal`) or only to hold every documented value (`covers`, for a set the SPA
   also decodes another response with: `PERMISSIONS` against the delegatable
   enum). A new closed set joins both lists.
+- **A set shown as received** (ADR 0020) stays `equal`. A NUMC Record's code
+  may be any string — the document's row field is `anyOf` the set's enum, any
+  string and `null` — but the set is what a filter's codes are checked
+  against and what the Filter panel offers, so the SPA's copy and the enum hold
+  the same known codes, and the check compares the enum, not the row field.
 
 ## The request declarations
 
@@ -110,8 +115,15 @@ body's schema and runs the declaration's own `decode` over each, as a
 Both take an enum's first member; one item of an array, or `minItems`; an
 integer of `minimum` (else 1), within `maximum`; and for a string the sample of
 its `format` — `date`, `date-time` with an offset, `uuid` — padded to
-`minLength` and cut to `maxLength`. Nested objects and arrays are sampled the
-same way. A sample the decoder refuses is a finding, naming the sample, the
+`minLength` and cut to `maxLength`. An `anyOf` is sampled by one branch: its
+first in `every-property`, its last in `required-only`. Nested objects and
+arrays are sampled the same way.
+
+So a row shown as received (ADR 0020) — each patient-source field nullable, a
+closed-set field `anyOf` its enum, any string and `null`, and `invalid` an array
+of field names — is sampled with every field set, each code a known one and
+`invalid` naming the row's first field, and with every field `null`: the
+decoder must read both without refusing the row. A sample the decoder refuses is a finding, naming the sample, the
 operation and the decoder's own error, which names the field; the first refusal
 per declaration is reported.
 
@@ -134,7 +146,8 @@ The check refuses to sample rather than sample wrongly:
 **What it is not:** a proof that every body the schema allows decodes. It is a
 sample check: two bodies per response, each value one the sampler picks. A
 decoder that refuses an enum member other than the first, a second array item, a
-particular string, or a combination of values the schema allows — such as one
+particular string, an `anyOf` branch between its first and its last — a code
+outside its closed set among them — or a combination of values the schema allows — such as one
 field `null` exactly when another is `false` — is not caught here; the SPA's own
 unit tests and E2E hold those. The samples set booleans `true` where every
 nullable is set and `false` where every nullable is `null`, so a rule pairing

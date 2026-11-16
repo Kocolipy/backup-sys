@@ -94,15 +94,43 @@ class PatientNumcControllerTests {
                   "startIndex": 1,
                   "records": [
                     {"id": "numc-tan-wei-ming-1", "type": "hyperbaric-chamber", "outcome": "fit",
-                     "issueDate": "2023-10-14", "expiryDate": "2024-10-13"},
+                     "issueDate": "2023-10-14", "expiryDate": "2024-10-13", "invalid": []},
                     {"id": "numc-tan-wei-ming-2", "type": "submariner",
                      "outcome": "waiver-rejected",
-                     "issueDate": "2024-01-10", "expiryDate": "2025-01-09"},
+                     "issueDate": "2024-01-10", "expiryDate": "2025-01-09", "invalid": []},
                     {"id": "numc-tan-wei-ming-3", "type": "diving", "outcome": "waiver-granted",
-                     "issueDate": "2023-11-22", "expiryDate": "2024-11-21"},
+                     "issueDate": "2023-11-22", "expiryDate": "2024-11-21", "invalid": []},
                     {"id": "numc-tan-wei-ming-4", "type": "hyperbaric-chamber",
                      "outcome": "unfit",
-                     "issueDate": "2023-08-05", "expiryDate": "2024-08-04"}
+                     "issueDate": "2023-08-05", "expiryDate": "2024-08-04", "invalid": []}
+                  ]
+                }"""));
+    }
+
+    /**
+     * Tan Boon Huat's four NUMC Records, as received (ADR 0020): a field missing or invalid is
+     * {@code null}, each invalid one named in its row's {@code invalid}, and a code outside its
+     * closed set or an id outside FHIR's grammar as the source sent it.
+     */
+    @Test
+    void aRecordsMissingAndInvalidFieldsAreNullTheInvalidOnesNamed() throws Exception {
+        MockHttpServletResponse response = reading(records("dev-patient-10"));
+
+        assertThat(body(response)).isEqualTo(json.readTree("""
+                {
+                  "totalResults": 4,
+                  "startIndex": 1,
+                  "records": [
+                    {"id": "numc-tan-boon-huat-1", "type": "diving", "outcome": null,
+                     "issueDate": "2022-03-16", "expiryDate": "2023-03-15", "invalid": []},
+                    {"id": "numc-tan-boon-huat-2", "type": "submariner", "outcome": "fit",
+                     "issueDate": null, "expiryDate": null,
+                     "invalid": ["issueDate", "expiryDate"]},
+                    {"id": "numc tan boon huat 3", "type": "parachuting",
+                     "outcome": "request-waiver",
+                     "issueDate": "2020-03-16", "expiryDate": "2021-03-15", "invalid": []},
+                    {"id": null, "type": "hyperbaric-chamber", "outcome": null,
+                     "issueDate": null, "expiryDate": null, "invalid": []}
                   ]
                 }"""));
     }
@@ -270,7 +298,7 @@ class PatientNumcControllerTests {
     @Test
     void aRowPrintsItsRecordsIdAlone() {
         assertThat(new NumcHistoryPage.Row("numc-tan-wei-ming-1", "hyperbaric-chamber", "fit",
-                "2023-10-14", "2024-10-13"))
+                "2023-10-14", "2024-10-13", List.of("outcome")))
                 .hasToString("Row[id=numc-tan-wei-ming-1]");
     }
 }

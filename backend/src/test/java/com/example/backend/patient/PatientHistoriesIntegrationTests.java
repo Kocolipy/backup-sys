@@ -134,12 +134,6 @@ class PatientHistoriesIntegrationTests {
             fault-numc-unexpected-status,                unexpected-status,                     data
             fault-numc-not-a-searchset,                  not-a-searchset,                       data
             fault-numc-no-total,                         no-total,                              data
-            fault-numc-no-id,                            numc-no-id,                            data
-            fault-numc-invalid-id,                       numc-invalid-id,                       data
-            fault-numc-no-outcome,                       no-numc-outcome,                       data
-            fault-numc-unknown-type,                     unknown-numc-type,                     data
-            fault-numc-unknown-outcome,                  unknown-numc-outcome,                  data
-            fault-numc-expiry-date-not-to-the-day,       numc-expiry-date-not-to-the-day,       data
             fault-armc-unreachable,                      unreachable,                           network
             fault-armc-slow,                             timed-out,                             network
             fault-armc-server-error,                     server-error,                          server
@@ -304,6 +298,38 @@ class PatientHistoriesIntegrationTests {
         List<String> quoted = new ArrayList<>(history.filteredValues());
         quoted.addAll(history.sortedValues());
         assertThat(logs.lines()).doesNotContain(quoted.toArray(String[]::new));
+    }
+
+    /**
+     * A NUMC History holding fields in the wrong format is answered, as received (ADR 0020), and
+     * writes exactly one {@code WARN} beside the request's record, naming each such field by its
+     * path in the source's answer, and no {@code ERROR}; nothing in the stream names the patient
+     * or anything the records hold.
+     */
+    @Test
+    void aNumcHistoryWithInvalidFieldsIsAnsweredAndWarnsOnceNamingTheirPaths() throws Exception {
+        HttpClient session = signedIn();
+        logs.reset();
+
+        HttpResponse<String> response = send(session, HttpRequest.newBuilder(URI.create(
+                "http://localhost:" + port + "/api/patient-numc/dev-patient-10?count=5")));
+        logs.awaitRequestRecords(1);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(logs.records())
+                .filteredOn(record -> List.of("WARN", "ERROR")
+                        .contains(record.at("/log/level").asText()))
+                .filteredOn(record -> !"http.request".equals(record.at("/app/event/action")
+                        .asText()))
+                .singleElement()
+                .satisfies(warning -> assertThat(List.of(warning.at("/log/level").asText(),
+                        warning.at("/app/event/action").asText(),
+                        warning.at("/app/patient_source/read").asText(),
+                        warning.at("/app/patient_source/invalid_fields").toString()))
+                        .containsExactly("WARN", "patient_source.invalid_fields", "numc",
+                                "[\"entry[1].issueDate\",\"entry[1].expiryDate\"]"));
+        assertThat(logs.lines()).doesNotContain("dev-patient-10", "numc-tan-boon-huat",
+                "numc tan boon huat", "20210316", "2022-03", "parachuting", "request-waiver");
     }
 
     /** The table of fault stubs holds every fault stub the stub files serve, of every history. */

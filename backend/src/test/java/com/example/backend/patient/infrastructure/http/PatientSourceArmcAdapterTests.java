@@ -33,7 +33,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
-import org.springframework.web.client.RestClient;
 
 /**
  * A patient's ARMC History as the HTTP adapter reads it (ADR 0019, D6), against the patient
@@ -91,7 +90,7 @@ class PatientSourceArmcAdapterTests {
     }
 
     private static PatientSourceAdapter adapter() {
-        return new PatientSourceAdapter(RestClient.builder(), SOURCE.baseUrl());
+        return PatientSourceAdapters.at(SOURCE.baseUrl());
     }
 
     private static void answering(String body) {

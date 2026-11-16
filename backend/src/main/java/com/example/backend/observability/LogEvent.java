@@ -589,6 +589,9 @@ public final class LogEvent {
                 onSchedule("Audit retention job scheduled")),
         AUDIT_APPEND(null, "audit.append",
                 onError("Audit event could not be appended; the request was not altered")),
+        PATIENT_SOURCE_INVALID_FIELDS(null, "patient_source.invalid_fields",
+                onSuccess("Patient source answered fields in the wrong format, each shown as"
+                        + " Error")),
         HTTP_REQUEST(null, "http.request"),
         HTTP_REQUEST_REFUSAL(null, "http.request.refusal",
                 onRefusal("Request refused")),

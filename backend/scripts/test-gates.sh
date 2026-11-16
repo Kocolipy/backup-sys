@@ -126,6 +126,7 @@ FAST_GATE=(
   com/example/backend/observability/EcsErrorFieldsCustomizerTests
   com/example/backend/observability/EcsTimestampCustomizerTests
   com/example/backend/observability/FeatureLogFieldsTests
+  com/example/backend/observability/InvalidSourceFieldsTests
   com/example/backend/observability/LogContextTests
   com/example/backend/observability/LogEventTests
   com/example/backend/observability/LogFileTests
@@ -171,6 +172,7 @@ FAST_GATE=(
   com/example/backend/patient/domain/PatientTests
   com/example/backend/patient/domain/SortOrderTests
   com/example/backend/patient/domain/SourceCodeTests
+  com/example/backend/patient/domain/SourceFieldTests
   com/example/backend/patient/infrastructure/http/PatientSourceAdapterContractTests
   com/example/backend/patient/infrastructure/http/PatientSourceArmcAdapterTests
   com/example/backend/patient/infrastructure/http/PatientSourceFfiAdapterTests
@@ -178,6 +180,7 @@ FAST_GATE=(
   com/example/backend/patient/infrastructure/http/PatientSourceMedicationAdapterTests
   com/example/backend/patient/infrastructure/http/PatientSourceNumcAdapterTests
   com/example/backend/patient/infrastructure/http/PatientSourceSearchAdapterTests
+  com/example/backend/patient/infrastructure/http/ReceivedFieldsTests
   com/example/backend/patient/infrastructure/http/SourceQueryTests
   com/example/backend/scheduling/InMemoryScheduledJobLockContractTests
   com/example/backend/scheduling/application/ScheduledJobRunServiceTests

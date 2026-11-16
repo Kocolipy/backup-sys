@@ -1,6 +1,6 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { clearEhrContext } from "@/auth/ehr-context";
 import { bare, deferred, holding, json, type Answers } from "@/auth/session-adapter.testHelpers";
@@ -18,10 +18,17 @@ const CLINICIAN = holding(["patient:read"]);
 const FIRST_PAGE = "GET /api/patient-numc/eq081-VQEgP8drUUqCWzHfw3?startIndex=1&count=5";
 const SECOND_PAGE = "GET /api/patient-numc/eq081-VQEgP8drUUqCWzHfw3?startIndex=6&count=5";
 
-/** One NUMC Record as the backend sends it, its elements given by `fields` over a Diving Duties one's. */
-const record = (id: string, fields: Record<string, string> = {}) => ({
+/**
+ * One NUMC Record as the backend sends it, its elements given by `fields`
+ * over a Diving Duties one's, none invalid unless `fields` names some.
+ */
+const record = (
+  id: string | null,
+  fields: Record<string, string | null | readonly string[]> = {},
+) => ({
   expiryDate: "2024-11-21",
   id,
+  invalid: [],
   issueDate: "2023-11-22",
   outcome: "fit",
   type: "diving",
@@ -218,6 +225,83 @@ describe("NUMC", () => {
 
     expect(await screen.findByText("No patient in context")).toBeInTheDocument();
     expect(numcReads(requests())).toEqual([]);
+  });
+
+  // The patient source is the truth (ADR 0020): its data is shown as received.
+  it('shows a missing element as "—", the rest of the row as any other', async () => {
+    await renderNumc(
+      page(
+        [record("numc-1", { outcome: null }), record("numc-2", { expiryDate: null, type: null })],
+        1,
+        2,
+      ),
+    );
+    await screen.findByRole("table", { name: "NUMC History" });
+
+    expect(rows()).toEqual([
+      ["Diving Duties", "—", "22 Nov 2023", "21 Nov 2024"],
+      ["—", "FIT", "22 Nov 2023", "—"],
+    ]);
+  });
+
+  it('shows an element in the wrong format as "Error", the rest of the row as any other', async () => {
+    await renderNumc(
+      page(
+        [
+          record("numc-1", { invalid: ["issueDate"], issueDate: null }),
+          record("numc-2", { invalid: ["type", "outcome"], outcome: null, type: null }),
+        ],
+        1,
+        2,
+      ),
+    );
+    await screen.findByRole("table", { name: "NUMC History" });
+
+    expect(rows()).toEqual([
+      ["Diving Duties", "FIT", "Error", "21 Nov 2024"],
+      ["Error", "Error", "22 Nov 2023", "21 Nov 2024"],
+    ]);
+  });
+
+  it("shows a code outside its closed set as it came, the Outcome on a neutral badge", async () => {
+    await renderNumc(
+      page([record("numc-1", { outcome: "request-waiver", type: "parachuting" })], 1, 1),
+    );
+    await screen.findByRole("table", { name: "NUMC History" });
+
+    expect({ badges: outcomeBadges(), rows: rows() }).toEqual({
+      badges: ["request-waiver outline"],
+      rows: [["parachuting", "request-waiver", "22 Nov 2023", "21 Nov 2024"]],
+    });
+  });
+
+  // A code spelling an Object member is no member of a closed set.
+  it("shows a code that names an Object member as it came", async () => {
+    await renderNumc(page([record("numc-1", { outcome: "toString", type: "constructor" })], 1, 1));
+    await screen.findByRole("table", { name: "NUMC History" });
+
+    expect({ badges: outcomeBadges(), rows: rows() }).toEqual({
+      badges: ["toString outline"],
+      rows: [["constructor", "toString", "22 Nov 2023", "21 Nov 2024"]],
+    });
+  });
+
+  it("keys a row with no id by its place, as React needs each row keyed", async () => {
+    const warned = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    await renderNumc(
+      page(
+        [record(null), record(null, { invalid: ["id"] }), record("numc-3", { outcome: "unfit" })],
+        1,
+        3,
+      ),
+    );
+    await screen.findByRole("table", { name: "NUMC History" });
+
+    expect({
+      keyWarnings: warned.mock.calls.filter((call) => String(call[0]).includes("key")),
+      rows: rows().length,
+    }).toEqual({ keyWarnings: [], rows: 3 });
+    warned.mockRestore();
   });
 
   it("says it couldn't load NUMC records when the source fails, offering Try again", async () => {

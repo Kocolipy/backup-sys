@@ -258,6 +258,23 @@ class OpenApiContractTests {
                 .containsExactly("$: matches 2 oneOf branches, not exactly 1");
     }
 
+    /**
+     * {@code anyOf}: one matching branch is enough, two too — so a known code of a closed set, or
+     * any other string, or {@code null}, is "a known code or any string" (ADR 0020).
+     */
+    @Test
+    void any_of_requires_at_least_one_matching_branch() throws Exception {
+        JsonNode schema = JSON.readTree("""
+                {"anyOf":[{"type":"string","enum":["fit","unfit"]},
+                          {"type":"string"},
+                          {"type":"null"}]}""");
+
+        assertThat(List.of("\"fit\"", "\"request-waiver\"", "null")).allSatisfy(value ->
+                assertThat(CONTRACT.validate(schema, JSON.readTree(value), "$")).isEmpty());
+        assertThat(CONTRACT.validate(schema, JSON.readTree("7"), "$"))
+                .containsExactly("$: matches none of its 3 anyOf branches");
+    }
+
     /** A closed set the code defines and the enum the document gives it, checked in both directions. */
     private static final String LOCK_CAUSE =
             "#/components/schemas/AccountSummary/properties/lockCause";

@@ -458,6 +458,13 @@ paths:
         with `_sort=issue-date,_id` are his Hyperbaric Chamber Duties UNFIT and
         FIT, Diving Duties and Submariner Duties records, in that order.
 
+        **Shown as received** (ADR 0020): the backend refuses no NUMC Record
+        for what its fields hold. A field left out, `null`, empty or blank is
+        shown missing; one of another JSON type, or a date that is no calendar
+        date, is shown "Error"; a code outside its set, or an id outside FHIR's
+        id grammar, is shown as it came. Tan Boon Huat (`dev-patient-10`) has
+        four such records. Only the page itself can fail the read.
+
         **FHIR-shaped paging only, not FHIR-conformant**: the answer borrows a
         searchset `Bundle`'s shape and FHIR's search-parameter syntax, and its
         entries are a custom `NUMC` object no FHIR version defines (ADR 0019,
@@ -468,20 +475,14 @@ paths:
         **Fault ids (mock only).** Beside the fixtures' histories, the mock
         serves one failure of this read per patient id, none a fixture's:
 
-        | Id                                      | Answers                                                         |
-        | --------------------------------------- | --------------------------------------------------------------- |
-        | `fault-numc-unreachable`                | the connection reset, no answer                                 |
-        | `fault-numc-slow`                       | `200` page after 7 seconds, past the read timeout               |
-        | `fault-numc-server-error`               | `503`                                                           |
-        | `fault-numc-unexpected-status`          | `400`                                                           |
-        | `fault-numc-not-a-searchset`            | `200` Bundle of `type: collection`                              |
-        | `fault-numc-no-total`                   | `200` searchset with no `total`                                 |
-        | `fault-numc-no-id`                      | `200` page whose NUMC Record has no `id`                        |
-        | `fault-numc-invalid-id`                 | `200` page whose NUMC Record's `id` is outside FHIR's id grammar |
-        | `fault-numc-no-outcome`                 | `200` page whose NUMC Record has no `outcome`                   |
-        | `fault-numc-unknown-type`               | `200` page whose NUMC Record's `type` is no code of its set     |
-        | `fault-numc-unknown-outcome`            | `200` page whose NUMC Record's `outcome` is an FFI Outcome's    |
-        | `fault-numc-expiry-date-not-to-the-day` | `200` page whose NUMC Record's `expiryDate` is a month          |
+        | Id                             | Answers                                           |
+        | ------------------------------ | ------------------------------------------------- |
+        | `fault-numc-unreachable`       | the connection reset, no answer                   |
+        | `fault-numc-slow`              | `200` page after 7 seconds, past the read timeout |
+        | `fault-numc-server-error`      | `503`                                             |
+        | `fault-numc-unexpected-status` | `400`                                             |
+        | `fault-numc-not-a-searchset`   | `200` Bundle of `type: collection`                |
+        | `fault-numc-no-total`          | `200` searchset with no `total`                   |
       parameters:
         - name: id
           in: path
@@ -1294,36 +1295,38 @@ components:
     Numc:
       description: |
         One NUMC Record, a custom object no FHIR version defines, of flat
-        fields. Every field is required, and each rule below is one the
-        backend holds: a record breaking any is the source failing, the
-        backend's `502`. It has no Status. A field it does not read is ignored.
+        fields, shown as received (ADR 0020). Only its `resourceType` is
+        required: an entry of another resource is the source failing, the
+        backend's `502`. Each other field is expected in the form its
+        description names, but none is required and no value of one fails the
+        read: a field left out, `null`, empty or blank is shown missing, and
+        one of another JSON type, or a date that is no calendar date, is shown
+        "Error". It has no Status. A field it does not read is ignored.
       type: object
-      required: [resourceType, id, type, outcome, issueDate, expiryDate]
+      required: [resourceType]
       properties:
         resourceType:
           const: NUMC
         id:
-          description: The NUMC Record's own id, in FHIR's id grammar.
-          type: string
-          pattern: '^[A-Za-z0-9\-.]{1,64}$'
+          description: |
+            The NUMC Record's own id, a string; never checked, so one outside
+            FHIR's id grammar is kept.
         type:
-          description: The NUMC Type, the underwater duty, by its code.
-          type: string
-          enum: [hyperbaric-chamber, submariner, diving]
+          description: |
+            The NUMC Type, the underwater duty, by its code — a string, one of
+            `hyperbaric-chamber`, `submariner` and `diving`; another is shown
+            as it came.
         outcome:
           description: |
-            The NUMC Outcome, by its code: a set of its own, so an FFI's
-            `request-waiver` is outside it.
-          type: string
-          enum: [fit, unfit, waiver-granted, waiver-rejected]
+            The NUMC Outcome, by its code — a string, one of `fit`, `unfit`,
+            `waiver-granted` and `waiver-rejected`, a set of its own; another,
+            an FFI's `request-waiver` among them, is shown as it came.
         issueDate:
-          description: To the day.
-          type: string
-          format: date
+          description: A calendar date, `YYYY-MM-DD`, to the day.
         expiryDate:
-          description: To the day. The backend derives nothing from it.
-          type: string
-          format: date
+          description: |
+            A calendar date, `YYYY-MM-DD`, to the day. The backend derives
+            nothing from it, and checks it against nothing.
 
     ArmcSearchset:
       description: |

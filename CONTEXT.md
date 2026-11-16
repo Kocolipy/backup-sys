@@ -425,6 +425,17 @@ mocked by WireMock for local runs and E2E. The SPA never reaches it.
 _Avoid_: patient service, patient API, FHIR server (the EHR's FHIR API is
 another system)
 
+**Shown as received**:
+How a read shows the Patient source's data, the source being the truth (ADR
+0020): no record or response is refused for what a field holds. A field is
+present, shown as its value; missing — no key, `null`, or a blank string —
+shown as "—"; or invalid — the wrong JSON type, or a string that is no date or
+date-time of its kind — shown as "Error". A code outside its closed set is
+shown as the raw code. Only a failure of the call or of the page's structure
+fails the read. The NUMC History is read so.
+_Avoid_: validated, sanitised, lenient (the reading is lenient; what the
+clinician sees is the data as received)
+
 **Patient card**:
 Home's card showing the EHR context's patient — name, NRIC, gender, date of
 birth and age — or "No patient in context" when the tab holds no EHR context,
@@ -517,13 +528,14 @@ _Avoid_: expired, valid
 
 ### NUMC
 
-Rules: [numc](docs/domain/numc.md). Decided in ADR 0019 (D5).
+Rules: [numc](docs/domain/numc.md). Decided in ADR 0019 (D5) and ADR 0020.
 
 **NUMC Record**:
 One record of whether a patient was found fit for one underwater duty, as the
 Patient source holds it for the Navy Underwater Medicine Centre (NUMC): its
-NUMC Type, NUMC Outcome, Issue Date and Expiry Date, every one required. It has
-no Status. Read from the Patient source on every read, never held, and not
+NUMC Type, NUMC Outcome, Issue Date and Expiry Date, each shown as received —
+missing or invalid included, and a code outside its closed set shown raw. It
+has no Status. Read from the Patient source on every read, never held, and not
 audited.
 _Avoid_: NUMC Assessment, dive medical, underwater fitness record
 
@@ -535,7 +547,8 @@ _Avoid_: NUMC list, NUMC log
 
 **NUMC Type**:
 The underwater duty a NUMC Record is for, one of a closed set: Hyperbaric
-Chamber Duties, Submariner Duties, Diving Duties.
+Chamber Duties, Submariner Duties, Diving Duties. A code outside it is shown
+as it came.
 
 **NUMC Outcome**:
 What a NUMC Record found, one of FIT, UNFIT, WAIVER GRANTED and WAIVER

@@ -7,7 +7,7 @@
 // ./main.mjs does the loading; ./check.test.mjs pins this.
 
 /**
- * Each closed set the SPA decodes strictly, the module that exports it, and
+ * Each closed set the SPA mirrors, the module that exports it, and
  * the enums in the document it mirrors. `equal` holds the two sets to each
  * other in both directions; `covers` only requires the SPA's set to hold every
  * value of the document's, for a set the SPA also decodes another response with.
@@ -376,6 +376,7 @@ function queryMismatches(doc, { label }, path, served, held) {
  */
 const SAMPLED_KEYWORDS = new Set([
   "$ref",
+  "anyOf",
   "type",
   "enum",
   "format",
@@ -440,6 +441,7 @@ function sampleOf(doc, schema, full, at) {
   if (typeof schema.$ref === "string") {
     return sampleOf(doc, resolve(doc, schema.$ref), full, schema.$ref);
   }
+  if (schema.anyOf !== undefined) return anyOfSample(doc, schema, full, at);
   const types = [schema.type ?? []].flat();
   const nullable = types.includes("null") || schema.enum?.includes(null);
   if (nullable && !full) return null;
@@ -475,6 +477,21 @@ function unsampleable(reason, at) {
 /** Refuses to sample the schema at `at`, naming `what` it uses that the sampler does not implement. */
 function unimplemented(what, at) {
   unsampleable(`the sampler does not implement ${what}`, at);
+}
+
+/**
+ * An `anyOf`, sampled by one branch: its first in the `full` sample, its last
+ * in the other. A patient-source field shown as received is documented as its
+ * known codes, then any string, then `null` (ADR 0020), so the samples hold a
+ * known code and `null`; another string is the SPA's own tests' to hold.
+ */
+function anyOfSample(doc, schema, full, at) {
+  const branches = schema.anyOf;
+  if (!Array.isArray(branches) || branches.length === 0) {
+    return unimplemented("an anyOf with no branch", at);
+  }
+  const branch = full ? 0 : branches.length - 1;
+  return sampleOf(doc, branches[branch], full, `${at}/anyOf/${branch}`);
 }
 
 function objectSample(doc, schema, full, at) {

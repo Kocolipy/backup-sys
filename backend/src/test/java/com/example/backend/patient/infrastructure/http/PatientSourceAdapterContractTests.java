@@ -23,6 +23,8 @@ import com.example.backend.patient.domain.PatientStore;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import com.github.tomakehurst.wiremock.verification.LoggedRequest;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -79,11 +81,11 @@ class PatientSourceAdapterContractTests extends PatientStoreContract {
 
     @Override
     protected PatientStore patients() {
-        return new PatientSourceAdapter(RestClient.builder(), SOURCE.baseUrl());
+        return PatientSourceAdapters.at(SOURCE.baseUrl());
     }
 
     private static PatientSourceAdapter at(String baseUrl) {
-        return new PatientSourceAdapter(RestClient.builder(), baseUrl);
+        return PatientSourceAdapters.at(baseUrl);
     }
 
     private static void answering(PatientId id, String body) {
@@ -198,6 +200,7 @@ class PatientSourceAdapterContractTests extends PatientStoreContract {
 
         new ApplicationContextRunner()
                 .withBean(RestClient.Builder.class, RestClient::builder)
+                .withBean(MeterRegistry.class, SimpleMeterRegistry::new)
                 .withUserConfiguration(PatientSourceAdapter.class)
                 .withPropertyValues("app.patient-source.base-url=" + SOURCE.baseUrl(),
                         "app.patient-source.read-timeout=100ms")
@@ -230,6 +233,7 @@ class PatientSourceAdapterContractTests extends PatientStoreContract {
     void theServiceDoesNotStartWithoutTheBaseUrl() {
         ApplicationContextRunner contexts = new ApplicationContextRunner()
                 .withBean(RestClient.Builder.class, RestClient::builder)
+                .withBean(MeterRegistry.class, SimpleMeterRegistry::new)
                 .withUserConfiguration(PatientSourceAdapter.class);
 
         contexts.run(context -> assertThat(context).hasFailed());
@@ -294,8 +298,7 @@ class PatientSourceAdapterContractTests extends PatientStoreContract {
      */
     @Test
     void theSlowFaultStubTimesOut() {
-        PatientSourceAdapter impatient = new PatientSourceAdapter(RestClient.builder(),
-                SOURCE.baseUrl(), Duration.ofSeconds(2), Duration.ofMillis(300));
+        PatientSourceAdapter impatient = PatientSourceAdapters.at(SOURCE.baseUrl(), Duration.ofSeconds(2), Duration.ofMillis(300));
 
         assertThat(faultReading(impatient, new PatientId("fault-slow"))).isEqualTo(new Fault(
                 "The patient source did not answer in time", "timed-out", ErrorCategory.NETWORK));
@@ -310,8 +313,7 @@ class PatientSourceAdapterContractTests extends PatientStoreContract {
     void anAnswerSlowerThanTheReadTimeoutIsNotWaitedFor() {
         SOURCE.stubFor(get(urlPathEqualTo("/Patient/" + PROBE)).willReturn(
                 okJson(PROBE_BODY.formatted("1963-07-29")).withFixedDelay(1000)));
-        PatientSourceAdapter impatient = new PatientSourceAdapter(RestClient.builder(),
-                SOURCE.baseUrl(), Duration.ofSeconds(2), Duration.ofMillis(100));
+        PatientSourceAdapter impatient = PatientSourceAdapters.at(SOURCE.baseUrl(), Duration.ofSeconds(2), Duration.ofMillis(100));
 
         assertThat(faultReading(impatient, PROBE)).isEqualTo(new Fault(
                 "The patient source did not answer in time", "timed-out", ErrorCategory.NETWORK));
@@ -334,8 +336,7 @@ class PatientSourceAdapterContractTests extends PatientStoreContract {
      */
     @Test
     void theDribbledBodyFaultStubTimesOut() {
-        PatientSourceAdapter impatient = new PatientSourceAdapter(RestClient.builder(),
-                SOURCE.baseUrl(), Duration.ofSeconds(2), Duration.ofMillis(300));
+        PatientSourceAdapter impatient = PatientSourceAdapters.at(SOURCE.baseUrl(), Duration.ofSeconds(2), Duration.ofMillis(300));
 
         assertThat(faultReading(impatient, new PatientId("fault-slow-body"))).isEqualTo(new Fault(
                 "The patient source did not answer in time", "timed-out", ErrorCategory.NETWORK));
@@ -396,9 +397,7 @@ class PatientSourceAdapterContractTests extends PatientStoreContract {
         try (ServerSocket source = new ServerSocket(0, 1, InetAddress.getLoopbackAddress());
                 Socket first = queued(source);
                 Socket second = queued(source)) {
-            PatientSourceAdapter adapter = new PatientSourceAdapter(RestClient.builder(),
-                    "http://127.0.0.1:" + source.getLocalPort(), Duration.ofMillis(200),
-                    Duration.ofSeconds(30));
+            PatientSourceAdapter adapter = PatientSourceAdapters.at("http://127.0.0.1:" + source.getLocalPort(), Duration.ofMillis(200), Duration.ofSeconds(30));
 
             assertThat(faultReading(adapter, PROBE)).isEqualTo(new Fault(
                     "The patient source did not answer in time", "timed-out",
@@ -630,8 +629,7 @@ class PatientSourceAdapterContractTests extends PatientStoreContract {
 
     @Test
     void aTimedOutFaultKeepsTheFailuresTypeAsItsRedactedCause() {
-        PatientSourceAdapter impatient = new PatientSourceAdapter(RestClient.builder(),
-                SOURCE.baseUrl(), Duration.ofSeconds(2), Duration.ofMillis(300));
+        PatientSourceAdapter impatient = PatientSourceAdapters.at(SOURCE.baseUrl(), Duration.ofSeconds(2), Duration.ofMillis(300));
 
         Throwable fault = catchThrowable(() -> impatient.findById(new PatientId("fault-slow")));
 

@@ -196,6 +196,65 @@ describe("decodeArray", () => {
   });
 });
 
+// The lenient field decoder (ADR 0020): only a field's value is lenient; the
+// row's keys and its `invalid` are read as strictly as any other field.
+describe("readObject(…).sourceFields", () => {
+  const ROW = { code: "fit", day: "2024-02-29", gone: null, broken: null, invalid: ["broken"] };
+  const fields = (row: object = ROW) => readObject(row, "Row").sourceFields();
+  const isDay = (text: string) => text === "2024-02-29";
+
+  it("reads a string as present, as it came", () => {
+    expect(fields().read("code")).toStrictEqual({ state: "present", value: "fit" });
+  });
+
+  it("reads a string the field's kind accepts as present", () => {
+    expect(fields().read("day", isDay)).toStrictEqual({ state: "present", value: "2024-02-29" });
+  });
+
+  it("reads null as missing when the row does not name the field invalid", () => {
+    expect(fields().read("gone")).toStrictEqual({ state: "missing" });
+  });
+
+  it("reads a field the row names invalid as invalid", () => {
+    expect(fields().read("broken")).toStrictEqual({ state: "invalid" });
+  });
+
+  it("reads a field the row names invalid as invalid, whatever it holds", () => {
+    expect(fields({ ...ROW, invalid: ["code"] }).read("code")).toStrictEqual({ state: "invalid" });
+  });
+
+  it.each([
+    ["a number", 7],
+    ["a boolean", true],
+    ["an object", { code: "fit" }],
+    ["an array", ["fit"]],
+  ])("reads %s as invalid rather than refusing the row", (_, held) => {
+    expect(fields({ ...ROW, code: held }).read("code")).toStrictEqual({ state: "invalid" });
+  });
+
+  it("reads a string the field's kind refuses as invalid", () => {
+    expect(fields({ ...ROW, day: "2024-02-30" }).read("day", isDay)).toStrictEqual({
+      state: "invalid",
+    });
+  });
+
+  it("refuses a row without the field, which the backend always sends", () => {
+    expect(refusal(() => fields().read("absent"))).toBe("Row.absent is not a string or null");
+  });
+
+  it.each([
+    ["no invalid", { code: "fit" }, "Row.invalid is not an array"],
+    [
+      "an invalid that is no array",
+      { code: "fit", invalid: "code" },
+      "Row.invalid is not an array",
+    ],
+    ["an invalid naming no string", { code: "fit", invalid: [7] }, "Row.invalid is not strings"],
+  ])("refuses a row with %s", (_, row, message) => {
+    expect(refusal(() => fields(row))).toBe(message);
+  });
+});
+
 // Which strings are calendar dates is `isCalendarDate`'s (time.test.ts).
 describe("calendarDate", () => {
   it("reads a calendar date as it is", () => {

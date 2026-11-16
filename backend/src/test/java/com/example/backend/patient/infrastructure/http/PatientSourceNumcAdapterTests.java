@@ -7,6 +7,10 @@ import static com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import com.example.backend.audit.CapturedLog;
+import com.example.backend.observability.LogEvent;
 import com.example.backend.observability.LogEvent.ErrorCategory;
 import com.example.backend.paging.domain.PageRequest;
 import com.example.backend.patient.PatientSourceStubs;
@@ -15,11 +19,16 @@ import com.example.backend.patient.domain.HistorySort;
 import com.example.backend.patient.domain.NumcFilter;
 import com.example.backend.patient.domain.NumcHistory;
 import com.example.backend.patient.domain.NumcOutcome;
+import com.example.backend.patient.domain.NumcRecord;
 import com.example.backend.patient.domain.NumcType;
 import com.example.backend.patient.domain.PatientId;
 import com.example.backend.patient.domain.SortOrder;
+import com.example.backend.patient.domain.SourceField;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import com.github.tomakehurst.wiremock.verification.LoggedRequest;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.List;
@@ -31,18 +40,19 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
-import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.web.client.RestClient;
 
 /**
- * A patient's NUMC History as the HTTP adapter reads it (ADR 0019, D5), against the patient
- * source's mock in process: the one call it sends — the page, counted by the source, with each
- * filter and the sort as the source's own search parameters — and what a failure of that call
- * is, each NUMC Record's under a reason naming NUMC. What the mock's NUMC Histories hold is
- * {@code PatientStoreContract}'s. What every history shares — the page's call, the statuses that
- * are no page, the timeout, the fault stubs they have in common — is
+ * A patient's NUMC History as the HTTP adapter reads it (ADR 0019, D5; ADR 0020), against the
+ * patient source's mock in process: the one call it sends — the page, counted by the source, with
+ * each filter and the sort as the source's own search parameters — and each NUMC Record read as
+ * received, each element present, missing or invalid and none refused, a response holding invalid
+ * elements reported once in the log and counted by element. What the mock's NUMC Histories hold
+ * is {@code PatientStoreContract}'s, and how one field is classified {@code ReceivedFieldsTests}'.
+ * What every history shares — the page's call, the statuses that are no page, the timeout, the
+ * fault stubs they have in common, an entry that is another resource — is
  * {@code PatientSourceHistoriesAdapterTests}'.
  */
 class PatientSourceNumcAdapterTests {
@@ -57,16 +67,25 @@ class PatientSourceNumcAdapterTests {
 
     private static final String PROBE_PATH = "/Patient/" + PROBE_PATIENT + "/numc";
 
-    /** One NUMC Record as the source answers it, every field there and well-formed. */
+    /** One NUMC Record as the source answers it, every field there and well-formed, as JSON. */
     private static final Map<String, String> WELL_FORMED = Map.of(
-            "resourceType", "NUMC",
-            "id", "probe-numc-W5q1",
-            "type", "submariner",
-            "outcome", "waiver-granted",
-            "issueDate", "2017-02-13",
-            "expiryDate", "2018-02-12");
+            "resourceType", "\"NUMC\"",
+            "id", "\"probe-numc-W5q1\"",
+            "type", "\"submariner\"",
+            "outcome", "\"waiver-granted\"",
+            "issueDate", "\"2017-02-13\"",
+            "expiryDate", "\"2018-02-12\"");
 
-    /** {@link #WELL_FORMED} with {@code field} set to {@code value}, or left out for {@code null}. */
+    /** {@link #WELL_FORMED} as the domain reads it. */
+    private static final NumcRecord READ = new NumcRecord(SourceField.present("probe-numc-W5q1"),
+            SourceField.present("submariner"), SourceField.present("waiver-granted"),
+            SourceField.present(LocalDate.of(2017, 2, 13)),
+            SourceField.present(LocalDate.of(2018, 2, 12)));
+
+    /**
+     * {@link #WELL_FORMED} with {@code field} set to the JSON {@code value}, or left out for
+     * {@code null}.
+     */
     private static String record(String field, String value) {
         Map<String, String> fields = new TreeMap<>(WELL_FORMED);
         if (value == null) {
@@ -76,7 +95,7 @@ class PatientSourceNumcAdapterTests {
         }
         StringBuilder json = new StringBuilder("{");
         fields.forEach((name, member) -> json.append(json.length() > 1 ? ", " : "")
-                .append('"').append(name).append("\": \"").append(member).append('"'));
+                .append('"').append(name).append("\": ").append(member));
         return json.append('}').toString();
     }
 
@@ -89,7 +108,11 @@ class PatientSourceNumcAdapterTests {
     }
 
     private static PatientSourceAdapter adapter() {
-        return new PatientSourceAdapter(RestClient.builder(), SOURCE.baseUrl());
+        return adapter(new SimpleMeterRegistry());
+    }
+
+    private static PatientSourceAdapter adapter(MeterRegistry meters) {
+        return new PatientSourceAdapter(RestClient.builder(), SOURCE.baseUrl(), meters);
     }
 
     private static void answering(String body) {
@@ -100,24 +123,22 @@ class PatientSourceNumcAdapterTests {
     private record Fault(String message, String reason, ErrorCategory category) {
     }
 
-    private static Fault faultReading(PatientSourceAdapter adapter, String patient) {
-        PatientSourceException fault = (PatientSourceException) catchThrowable(() ->
-                unfiltered(adapter, patient));
-        return new Fault(fault.getMessage(), fault.reason(), fault.category());
-    }
-
     private static Fault faultReading(PatientSourceAdapter adapter) {
-        return faultReading(adapter, PROBE_PATIENT);
-    }
-
-    private static Fault data(String message, String reason) {
-        return new Fault(message, reason, ErrorCategory.DATA);
+        PatientSourceException fault = (PatientSourceException) catchThrowable(() ->
+                unfiltered(adapter, PROBE_PATIENT));
+        return new Fault(fault.getMessage(), fault.reason(), fault.category());
     }
 
     /** The second page of five of {@code patient}'s NUMC History, unfiltered, in the source's order. */
     private static Optional<NumcHistory> unfiltered(PatientSourceAdapter adapter, String patient) {
         return adapter.findNumcHistory(new PatientId(patient), NumcFilter.NONE,
                 HistorySort.SOURCE_ORDER, SECOND_PAGE_OF_FIVE);
+    }
+
+    /** The probe patient's one NUMC Record, the source answering a page of {@code record} alone. */
+    private static NumcRecord readingOne(String record) {
+        answering(page(record));
+        return unfiltered(adapter(), PROBE_PATIENT).orElseThrow().records().getFirst();
     }
 
     // ---- the call ------------------------------------------------------------------------
@@ -230,97 +251,200 @@ class PatientSourceNumcAdapterTests {
                 Map.entry("_total", List.of("accurate"))));
     }
 
+    // ---- each record as received --------------------------------------------------------
+
+    @Test
+    void aWellFormedRecordIsReadWithEveryElementPresent() {
+        assertThat(readingOne(record("id", "\"probe-numc-W5q1\""))).isEqualTo(READ);
+    }
+
+    /**
+     * An element the source left out, sent {@code null}, or sent empty or blank is missing, and
+     * the rest of the record is read as it came.
+     */
+    @ParameterizedTest
+    @CsvSource(nullValues = "-", delimiter = '|', textBlock = """
+        id         | -
+        type       | null
+        outcome    | '""'
+        issueDate  | '"  "'
+        expiryDate | -
+        """)
+    void anElementLeftOutOrBlankIsMissing(String field, String value) {
+        assertThat(readingOne(record(field, value))).isEqualTo(with(field,
+                SourceField.missing()));
+    }
+
+    /**
+     * An element of the wrong JSON type — a number is not coerced into a string — or a date that
+     * is no calendar date is invalid, and the rest of the record is read as it came.
+     */
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', textBlock = """
+        id         | 7
+        type       | {"code": "submariner"}
+        outcome    | ["waiver-granted"]
+        issueDate  | 20170213
+        issueDate  | "2017-02"
+        expiryDate | "2018-02-30"
+        expiryDate | true
+        """)
+    void anElementOfTheWrongFormatIsInvalid(String field, String value) {
+        assertThat(readingOne(record(field, value))).isEqualTo(with(field,
+                SourceField.invalid()));
+    }
+
+    /**
+     * A code outside its closed set is kept as the source sent it: one in another case, a label in
+     * place of the code, or another set's code — an FFI Outcome's.
+     */
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', textBlock = """
+        type    | Submariner Duties
+        type    | SUBMARINER
+        type    | ippt
+        outcome | WAIVER GRANTED
+        outcome | request-waiver
+        """)
+    void aCodeOutsideItsClosedSetIsKeptAsItCame(String field, String code) {
+        assertThat(readingOne(record(field, "\"" + code + "\"")))
+                .isEqualTo(with(field, SourceField.present(code)));
+    }
+
+    /** A record's id is not checked: one outside FHIR's id grammar is kept as it came. */
+    @ParameterizedTest
+    @ValueSource(strings = {"numc tan/1", "numc_1",
+        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"})
+    void anIdIsKeptAsItCame(String id) {
+        assertThat(readingOne(record("id", "\"" + id + "\"")).id())
+                .isEqualTo(SourceField.present(id));
+    }
+
+    /** Nothing of a date's meaning is checked: an Expiry Date before the Issue Date is kept. */
+    @Test
+    void aRecordExpiringBeforeItIsIssuedIsKept() {
+        assertThat(readingOne(record("expiryDate", "\"2016-01-01\"")).expiryDate())
+                .isEqualTo(SourceField.present(LocalDate.of(2016, 1, 1)));
+    }
+
+    /** {@link #READ} with its {@code field} read as {@code read}. */
+    @SuppressWarnings("unchecked")
+    private static NumcRecord with(String field, SourceField<?> read) {
+        return new NumcRecord(
+                field.equals("id") ? (SourceField<String>) read : READ.id(),
+                field.equals("type") ? (SourceField<String>) read : READ.type(),
+                field.equals("outcome") ? (SourceField<String>) read : READ.outcome(),
+                field.equals("issueDate") ? (SourceField<LocalDate>) read : READ.issueDate(),
+                field.equals("expiryDate") ? (SourceField<LocalDate>) read : READ.expiryDate());
+    }
+
+    // ---- invalid elements, reported -----------------------------------------------------
+
+    /** Three records, the second well-formed: the first's outcome and the third's dates invalid. */
+    private static final String TWO_RECORDS_WITH_INVALID_ELEMENTS = page(
+            record("outcome", "7"),
+            record("id", "\"probe-numc-W5q2\""),
+            record("issueDate", "\"2017-13-01\"").replace("\"2018-02-12\"", "20180212"));
+
+    /** The WARN records reporting a response's invalid fields. */
+    private static List<ILoggingEvent> invalidFieldRecords(CapturedLog captured) {
+        return captured.withAction(Level.WARN, LogEvent.LOCAL_ACTION,
+                "patient_source.invalid_fields");
+    }
+
+    /**
+     * A response holding invalid elements is one WARN, naming the read and each invalid field by
+     * its path in the response — never its value, nor the patient.
+     */
+    @Test
+    void aResponseHoldingInvalidElementsIsOneWarnNamingTheirPaths() {
+        answering(TWO_RECORDS_WITH_INVALID_ELEMENTS);
+
+        try (CapturedLog captured = CapturedLog.attach()) {
+            unfiltered(adapter(), PROBE_PATIENT);
+
+            assertThat(invalidFieldRecords(captured)).singleElement()
+                    .satisfies(warning -> assertThat(CapturedLog.fields(warning))
+                            .containsEntry("app.patient_source.read", "numc")
+                            .containsEntry("app.patient_source.invalid_fields", List.of(
+                                    "entry[0].outcome", "entry[2].issueDate",
+                                    "entry[2].expiryDate")));
+        }
+    }
+
+    @Test
+    void theWarnQuotesNoValueOfTheResponseNorThePatient() {
+        answering(TWO_RECORDS_WITH_INVALID_ELEMENTS);
+
+        try (CapturedLog captured = CapturedLog.attach()) {
+            unfiltered(adapter(), PROBE_PATIENT);
+
+            ILoggingEvent warning = invalidFieldRecords(captured).getFirst();
+            assertThat(warning.getFormattedMessage() + " " + CapturedLog.fields(warning))
+                    .doesNotContain(PROBE_PATIENT, "probe-numc", "2017", "2018", "20180212",
+                            "submariner", "waiver-granted");
+        }
+    }
+
+    /** A response whose elements are each present or missing reports nothing. */
+    @Test
+    void aResponseWithNoInvalidElementIsNotReported() {
+        answering(page(record("outcome", null), record("type", "\"\"")));
+        MeterRegistry meters = new SimpleMeterRegistry();
+
+        try (CapturedLog captured = CapturedLog.attach()) {
+            unfiltered(adapter(meters), PROBE_PATIENT);
+
+            assertThat(List.of(invalidFieldRecords(captured),
+                    meters.find("patient_source.invalid_fields").counters()))
+                    .containsExactly(List.of(), List.of());
+        }
+    }
+
+    /** Each invalid element counts once, tagged by the read and the element. */
+    @Test
+    void eachInvalidElementCountsOnceByTheReadAndTheElement() {
+        answering(TWO_RECORDS_WITH_INVALID_ELEMENTS);
+        MeterRegistry meters = new SimpleMeterRegistry();
+        PatientSourceAdapter adapter = adapter(meters);
+
+        unfiltered(adapter, PROBE_PATIENT);
+        unfiltered(adapter, PROBE_PATIENT);
+
+        Map<String, Double> counted = new TreeMap<>();
+        for (Counter counter : meters.find("patient_source.invalid_fields").counters()) {
+            counted.put(counter.getId().getTag("read") + " " + counter.getId().getTag("field"),
+                    counter.count());
+        }
+        assertThat(counted).isEqualTo(Map.of(
+                "numc outcome", 2.0,
+                "numc issueDate", 2.0,
+                "numc expiryDate", 2.0));
+    }
+
     // ---- a failure of the source ---------------------------------------------------------
 
     /**
-     * Each fault stub of a NUMC History that is its own, by the failure it serves: the stubs every history serves
-     * are {@code PatientSourceHistoriesAdapterTests}'.
+     * A resource that is no object is no record the read can hold: the response is unreadable,
+     * whatever its other entries hold.
      */
-    static Stream<Arguments> faultStubs() {
-        return Stream.of(
-                Arguments.of("fault-numc-no-id",
-                        data("The patient source's NUMC Record has no id", "numc-no-id")),
-                Arguments.of("fault-numc-invalid-id", data(
-                        "The patient source's NUMC Record's id is not a FHIR id",
-                        "numc-invalid-id")),
-                Arguments.of("fault-numc-no-outcome", data(
-                        "The patient source's NUMC Record has no outcome", "no-numc-outcome")),
-                Arguments.of("fault-numc-unknown-type", data(
-                        "The patient source's NUMC Record's type is not a NUMC Type",
-                        "unknown-numc-type")),
-                Arguments.of("fault-numc-unknown-outcome", data(
-                        "The patient source's NUMC Record's outcome is not a NUMC Outcome",
-                        "unknown-numc-outcome")),
-                Arguments.of("fault-numc-expiry-date-not-to-the-day", data(
-                        "The patient source's NUMC Record's expiry date is not to the day",
-                        "numc-expiry-date-not-to-the-day")));
-    }
-
     @ParameterizedTest
-    @MethodSource("faultStubs")
-    void eachFaultStubIsTheFaultItServes(String patient, Fault expected) {
-        assertThat(faultReading(adapter(), patient)).isEqualTo(expected);
+    @ValueSource(strings = {"\"NUMC\"", "7", "[]"})
+    void aResourceThatIsNoObjectIsAFault(String resource) {
+        answering("""
+                {"resourceType": "Bundle", "type": "searchset", "total": 2,
+                 "entry": [{"resource": %s}, {"resource": %s}]}"""
+                .formatted(record("id", "\"probe-numc-W5q1\""), resource));
+
+        assertThat(faultReading(adapter())).isEqualTo(new Fault(
+                "The patient source could not be read", "unreadable", ErrorCategory.DATA));
     }
 
-    /** The cases above, the shared stubs and the slow one are every NUMC fault stub the files hold. */
+    /** The stubs every history serves and the slow one are every NUMC fault stub the files hold. */
     @Test
-    void everyNumcFaultStubIsReadAbove() {
-        Stream<String> covered = Stream.concat(
-                PatientSourceHistoriesAdapterTests.sharedFaultStubs("numc").stream(),
-                faultStubs().map(arguments -> (String) arguments.get()[0]));
-
+    void everyNumcFaultStubIsOneEveryHistoryServes() {
         assertThat(PatientSourceStubs.numcFaults()).extracting(PatientSourceStubs.FaultStub::id)
-                .containsExactlyInAnyOrderElementsOf(covered.toList());
+                .containsExactlyInAnyOrderElementsOf(
+                        PatientSourceHistoriesAdapterTests.sharedFaultStubs("numc"));
     }
-
-    /** Every element is required: a record missing any one is a fault naming it, and NUMC. */
-    @ParameterizedTest
-    @CsvSource(delimiter = '|', textBlock = """
-        id         | numc-no-id          | The patient source's NUMC Record has no id
-        type       | no-numc-type        | The patient source's NUMC Record has no type
-        outcome    | no-numc-outcome     | The patient source's NUMC Record has no outcome
-        issueDate  | no-numc-issue-date  | The patient source's NUMC Record has no issue date
-        expiryDate | no-numc-expiry-date | The patient source's NUMC Record has no expiry date
-        """)
-    void aRecordMissingAnElementIsAFault(String field, String reason, String message) {
-        answering(page(record(field, null)));
-
-        assertThat(faultReading(adapter())).isEqualTo(data(message, reason));
-    }
-
-    /**
-     * A code outside its closed set is a fault naming the set: a code is matched exactly, so one
-     * in another case, a label in place of the code, or another set's code — an FFI Outcome's —
-     * is outside it too.
-     */
-    @ParameterizedTest
-    @CsvSource(delimiter = '|', textBlock = """
-        type    | Submariner Duties | unknown-numc-type    | The patient source's NUMC Record's type is not a NUMC Type
-        type    | SUBMARINER        | unknown-numc-type    | The patient source's NUMC Record's type is not a NUMC Type
-        type    | ippt              | unknown-numc-type    | The patient source's NUMC Record's type is not a NUMC Type
-        outcome | WAIVER GRANTED    | unknown-numc-outcome | The patient source's NUMC Record's outcome is not a NUMC Outcome
-        outcome | waiver_granted    | unknown-numc-outcome | The patient source's NUMC Record's outcome is not a NUMC Outcome
-        outcome | request-waiver    | unknown-numc-outcome | The patient source's NUMC Record's outcome is not a NUMC Outcome
-        """)
-    void aCodeOutsideItsClosedSetIsAFault(String field, String code, String reason,
-            String message) {
-        answering(page(record(field, code)));
-
-        assertThat(faultReading(adapter())).isEqualTo(data(message, reason));
-    }
-
-    /** Each date must be a calendar date to the day: a month, a time or no day the calendar has is a fault. */
-    @ParameterizedTest
-    @CsvSource(delimiter = '|', textBlock = """
-        issueDate  | 2017-02             | numc-issue-date-not-to-the-day  | The patient source's NUMC Record's issue date is not to the day
-        issueDate  | 2017-02-13T00:00:00 | numc-issue-date-not-to-the-day  | The patient source's NUMC Record's issue date is not to the day
-        expiryDate | 2018                | numc-expiry-date-not-to-the-day | The patient source's NUMC Record's expiry date is not to the day
-        expiryDate | 2018-02-30          | numc-expiry-date-not-to-the-day | The patient source's NUMC Record's expiry date is not to the day
-        """)
-    void aDateNotToTheDayIsAFault(String field, String date, String reason, String message) {
-        answering(page(record(field, date)));
-
-        assertThat(faultReading(adapter())).isEqualTo(data(message, reason));
-    }
-
 }

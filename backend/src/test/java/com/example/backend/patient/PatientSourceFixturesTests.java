@@ -625,11 +625,12 @@ class PatientSourceFixturesTests {
     }
 
     /**
-     * Two fixtures have NUMC Records, each page its own stub — Tan Wei Ming's one page of four and
-     * Tan Hui Min's two of seven — and a fallback answers every fixture's other read with none.
+     * Three fixtures have NUMC Records, each page its own stub — Tan Wei Ming's one page of four,
+     * Tan Hui Min's two of seven and Tan Boon Huat's one of four, shown as received — and a
+     * fallback answers every fixture's other read with none.
      */
     @Test
-    void twoFixturesHaveANumcHistoryAndTheFallbackServesEveryFixture() {
+    void threeFixturesHaveANumcHistoryAndTheFallbackServesEveryFixture() {
         List<String> exact = PatientSourceStubs.numcHistories().stream()
                 .filter(stub -> inTheSourcesOrder(stub, NUMC_FILTER_PARAMETERS))
                 .map(stub -> stub.path() + " " + stub.query().at("/_offset/equalTo").asString()
@@ -643,10 +644,11 @@ class PatientSourceFixturesTests {
         assertThat(exact).containsExactlyInAnyOrder(
                 "/Patient/eq081-VQEgP8drUUqCWzHfw3/numc 0 of 4",
                 "/Patient/dev-patient-05/numc 0 of 7",
-                "/Patient/dev-patient-05/numc 5 of 7");
+                "/Patient/dev-patient-05/numc 5 of 7",
+                "/Patient/dev-patient-10/numc 0 of 4");
         assertThat(fixtureIds()).allSatisfy(id ->
                 assertThat("/Patient/" + id + "/numc").matches(fallback));
-        assertThat("/Patient/fault-numc-no-id/numc").doesNotMatch(fallback);
+        assertThat("/Patient/fault-numc-no-total/numc").doesNotMatch(fallback);
     }
 
     /**
@@ -658,7 +660,7 @@ class PatientSourceFixturesTests {
     @Test
     void everyCannedNumcReadPinsItsPageItsSortAndEveryFilterItUsesOrNot() {
         assertThat(PatientSourceStubs.numcHistories()).filteredOn(PatientSourceFixturesTests::canned)
-                .hasSize(13)
+                .hasSize(14)
                 .allSatisfy(stub -> assertThat(List.of(
                         stub.query().at("/_count/equalTo").asString(),
                         stub.query().at("/_offset/equalTo").isString(),
@@ -676,7 +678,8 @@ class PatientSourceFixturesTests {
         assertThat(PatientSourceStubs.numcHistories())
                 .allSatisfy(stub -> assertThat(resourcesOf(stub)).hasSizeLessThanOrEqualTo(5));
         assertThat(List.of(recordsOf("eq081-VQEgP8drUUqCWzHfw3").size(),
-                recordsOf("dev-patient-05").size())).containsExactly(4, 7);
+                recordsOf("dev-patient-05").size(), recordsOf("dev-patient-10").size()))
+                .containsExactly(4, 7, 4);
     }
 
     /** Every code of both closed sets a NUMC Record has, as the two sets spell them on the wire. */
@@ -699,22 +702,61 @@ class PatientSourceFixturesTests {
                 .containsAll(codes));
     }
 
-    /** Every NUMC Record any stub answers is a {@code NUMC} of exactly its four elements and its id. */
+    /** The patient whose NUMC History is shown as received: the one whose records are malformed. */
+    private static final String AS_RECEIVED = "/Patient/dev-patient-10/numc";
+
+    /** Every NUMC History stub but Tan Boon Huat's, whose every record is well-formed. */
+    private static Stream<PatientSourceStubs.HistoryStub> wellFormedNumcHistories() {
+        return PatientSourceStubs.numcHistories().stream()
+                .filter(stub -> !stub.path().equals(AS_RECEIVED));
+    }
+
+    /**
+     * Every NUMC Record any stub answers is a {@code NUMC} of its four elements and its id alone,
+     * and every one but Tan Boon Huat's has every one of them.
+     */
     @Test
     void everyNumcRecordHoldsItsFourElementsAndItsIdAlone() {
+        Set<String> elements = Set.of("resourceType", "id", "type", "outcome", "issueDate",
+                "expiryDate");
         assertThat(PatientSourceStubs.numcHistories().stream()
                 .flatMap(stub -> resourcesOf(stub).stream()))
                 .isNotEmpty()
-                .allSatisfy(record -> assertThat(List.of(record.get("resourceType").asString(),
-                        record.propertyNames()))
-                        .containsExactly("NUMC", Set.of("resourceType", "id", "type", "outcome",
-                                "issueDate", "expiryDate")));
+                .allSatisfy(record -> assertThat(record.get("resourceType").asString())
+                        .isEqualTo("NUMC"))
+                .allSatisfy(record -> assertThat(elements).containsAll(record.propertyNames()));
+        assertThat(wellFormedNumcHistories().flatMap(stub -> resourcesOf(stub).stream()))
+                .allSatisfy(record -> assertThat(record.propertyNames())
+                        .containsExactlyInAnyOrderElementsOf(elements));
     }
 
-    /** Every NUMC Record's id is in FHIR's id grammar and no other record's, an FFI's included. */
+    /**
+     * Tan Boon Huat's four NUMC Records are the patient source's data as received (ADR 0020): an
+     * element left out, {@code null}, empty and blank, a date of the wrong JSON type and one not to
+     * the day, a code outside each closed set — another set's among them — and an id outside
+     * FHIR's grammar and none at all, written out record by record.
+     */
+    @Test
+    void tanBoonHuatsNumcHistoryHoldsMissingMalformedAndUnknownElements() {
+        assertThat(recordsOf("dev-patient-10")).extracting(JsonNode::toString).containsExactly(
+                "{\"resourceType\":\"NUMC\",\"id\":\"numc-tan-boon-huat-1\",\"type\":\"diving\","
+                        + "\"issueDate\":\"2022-03-16\",\"expiryDate\":\"2023-03-15\"}",
+                "{\"resourceType\":\"NUMC\",\"id\":\"numc-tan-boon-huat-2\",\"type\":\"submariner\","
+                        + "\"outcome\":\"fit\",\"issueDate\":20210316,\"expiryDate\":\"2022-03\"}",
+                "{\"resourceType\":\"NUMC\",\"id\":\"numc tan boon huat 3\","
+                        + "\"type\":\"parachuting\",\"outcome\":\"request-waiver\","
+                        + "\"issueDate\":\"2020-03-16\",\"expiryDate\":\"2021-03-15\"}",
+                "{\"resourceType\":\"NUMC\",\"type\":\"hyperbaric-chamber\",\"outcome\":\"\","
+                        + "\"issueDate\":\"  \",\"expiryDate\":null}");
+    }
+
+    /**
+     * Every NUMC Record's id but Tan Boon Huat's is in FHIR's id grammar and no other record's, an
+     * FFI's included.
+     */
     @Test
     void everyNumcRecordIdIsAFhirIdOfItsOwn() {
-        List<String> ids = PatientSourceStubs.numcHistories().stream()
+        List<String> ids = wellFormedNumcHistories()
                 .filter(stub -> inTheSourcesOrder(stub, NUMC_FILTER_PARAMETERS))
                 .flatMap(stub -> resourcesOf(stub).stream())
                 .map(record -> record.get("id").asString())
@@ -808,7 +850,9 @@ class PatientSourceFixturesTests {
 
     /**
      * The NUMC fault stubs, each by the failure it serves under a well-formed patient id no
-     * fixture uses, so it never shadows a fixture's history and the read reaches the source.
+     * fixture uses, so it never shadows a fixture's history and the read reaches the source: a
+     * failure of the call or of the searchset alone, since no NUMC Record fails a read
+     * (ADR 0020).
      */
     @Test
     void theNumcFaultStubsServeEachFailureUnderAPatientIdOfItsOwn() {
@@ -819,9 +863,7 @@ class PatientSourceFixturesTests {
                         .isNotIn(fixtureIds()))
                 .extracting(PatientSourceStubs.FaultStub::fault)
                 .containsExactlyInAnyOrder("unreachable", "slow", "server-error",
-                        "unexpected-status", "not-a-searchset", "no-total", "no-id",
-                        "invalid-id", "no-outcome", "unknown-type", "unknown-outcome",
-                        "expiry-date-not-to-the-day");
+                        "unexpected-status", "not-a-searchset", "no-total");
     }
 
     // ---- the ARMC Histories -----------------------------------------------------------------
@@ -976,6 +1018,7 @@ class PatientSourceFixturesTests {
                         .flatMap(stub -> resourcesOf(stub).stream()),
                 PatientSourceStubs.numcHistories().stream()
                         .flatMap(stub -> resourcesOf(stub).stream()))
+                .filter(record -> record.has("id"))
                 .map(record -> record.get("id").asString());
 
         assertThat(ids).hasSize(9).doesNotHaveDuplicates()
@@ -1259,6 +1302,7 @@ class PatientSourceFixturesTests {
                         PatientSourceStubs.numcHistories(), PatientSourceStubs.armcHistories())
                 .flatMap(List::stream)
                 .flatMap(stub -> resourcesOf(stub).stream())
+                .filter(record -> record.has("id"))
                 .map(record -> record.get("id").asString());
 
         assertThat(ids).hasSize(10).doesNotHaveDuplicates()

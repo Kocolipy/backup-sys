@@ -67,14 +67,17 @@ nothing in the service or the SPA works out "expired".
 **D2. The source's page is a FHIR-shaped but non-conformant Bundle.** The
 contract is ours to define. The source answers a FHIR-R4-shaped `searchset`
 `Bundle` — `total`, `entry[].resource` — whose resources are a custom
-`"resourceType": "FFI"` object of flat fields, every one required. It borrows
+`"resourceType": "FFI"` object of flat fields, every one required, but in a
+history shown as received, the NUMC History, whose fields are each present,
+missing or in the wrong format and none refused (ADR 0020). It borrows
 FHIR's paging (`_offset`, `_count`, `_total=accurate`) so that one piece reads
 every page the source answers, a Patient search's and each history's
 (`SourceSearchset`: the page's parameters, the `total`, the `entry`, an entry's
 `id` rules), and it is documented as **not FHIR-conformant**: no FHIR validator
 is run over it and no FHIR client should read it as FHIR. The closed sets
 travel as codes, each a Java enum, an enum of `openapi.yaml` and an SPA set
-held set-equal; the SPA names each code with its label. Paging is ADR 0017's
+held set-equal; the SPA names each code with its label. A NUMC Record's code
+outside its set is shown as the raw code (ADR 0020, D2). Paging is ADR 0017's
 `startIndex` and `count`, read by `PageParameter` and `PageRequest`, with ADR
 0018's D3 departure: the page is the source's to read, `count=0` and a page
 past the end included, and `totalResults` is the source's `total`. Our answer
@@ -108,16 +111,21 @@ own filter type (`FfiFilter`, `NumcFilter`, `ArmcFilter`, `MedicationFilter`)
 holds its filters, and its domain file's "Sort and filters" lists them.
 
 **Each rule a record breaks is logged under a reason naming its history**
-(`numc-no-id`, `armc-end-before-start`, `unknown-dispensary`, …), so a fault
+(`armc-no-id`, `armc-end-before-start`, `unknown-dispensary`, …), so a fault
 record says which history broke; a failure of the call or of the searchset
-itself is the one every paged read shares.
+itself is the one every paged read shares. A NUMC Record breaks no rule: its
+history fails only by its call or its searchset (ADR 0020, D3).
 
 **D5. NUMC Records are read on the FFI History's terms** (`findNumcHistory`,
 `GET {base}/Patient/{id}/numc`, `"resourceType": "NUMC"`). What differs:
 
+- **It is shown as received** (ADR 0020): each element present, missing or in
+  the wrong format — "—" and "Error" in its cell — and none refused, its id
+  never checked, a code outside its closed set shown raw, and a response
+  holding fields in the wrong format one `WARN` naming their paths.
 - **Its sets are its own.** The NUMC Outcome is not the FFI Outcome: the two
   share codes by chance, not by meaning, so an FFI's `request-waiver` is no
-  NUMC Outcome, as a record's code or as a filter's.
+  NUMC Outcome as a filter's code — a `400` — and is shown raw as a record's.
 - **It has no Status**, and nothing works out "expired" from its Expiry Date.
 
 **D6. ARMC Boards are read on the FFI History's terms** (`findArmcHistory`,
@@ -166,11 +174,15 @@ itself is the one every paged read shares.
 - **A real source must answer this contract**, or the adapter changes with it.
   It must filter, sort, page, count accurately, keep its own stable order,
   break a sort's ties the same way on every page and send every required
-  element, each date-time with its offset; a source that cannot is no history
-  source until its adapter changes.
-- **A new code in any closed set is a contract change.** The source sending a
-  code the service does not know is a `502`, not a row shown with a blank cell,
-  until the enum, the document and the SPA set gain it together.
+  element of a history read strictly, each date-time with its offset; a source
+  that cannot is no history source until its adapter changes. A history shown
+  as received, the NUMC History, needs only the searchset (ADR 0020).
+- **A new code in a closed set of a history read strictly is a contract
+  change.** The source sending an FFI, ARMC or Medication code the service does
+  not know is a `502`, until the enum, the document and the SPA set gain it
+  together. A NUMC code outside its set is no `502` and no blank cell: it is
+  shown as the raw code (ADR 0020, D2), and only its filter needs the set to
+  gain it.
 - **No trail records who read whose histories.** A deployment whose policy
   requires every read of patient data to be recorded must revisit D3 together
   with the unaudited read by id (`/docs/domain/patient.md`).

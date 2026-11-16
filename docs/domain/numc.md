@@ -1,7 +1,7 @@
 ---
 type: Domain Rules
 title: NUMC
-description: A patient's NUMC History — the in-house patient source's own NUMC Records, read through it at GET {base}/Patient/{id}/numc on the FFI History's terms, the four elements and the two closed sets carried as codes, the sort and filters the source applies and their refusals, the source's paging, the failures and their NUMC log reasons, the logging rules, no caching, no auditing, the NUMC page with its sort headings, Filter panel and states, and the mock's NUMC fixtures, sort and filter stubs and fault stubs.
+description: A patient's NUMC History — the in-house patient source's own NUMC Records, read through it at GET {base}/Patient/{id}/numc on the FFI History's terms and shown as received, the four elements and the two closed sets carried as codes, a field missing, in the wrong format or outside its set, the sort and filters the source applies and their refusals, the source's paging, the failures, the logging rules and the invalid-fields WARN and counter, no caching, no auditing, the NUMC page with its sort headings, Filter panel and states, and the mock's NUMC fixtures, sort and filter stubs and fault stubs.
 tags: [patient, numc]
 ---
 
@@ -21,14 +21,16 @@ It is read on the same terms as an FFI History (ADR 0019, D5): what the
 client and timeouts, its failures, its logging, caching and auditing holds here
 too, and this file says only where a NUMC History differs — the endpoint, the
 four elements, the two closed sets and the filters on them — and what is its
-own. The wire contract is
+own, above all that it is **shown as received** (ADR 0020): no NUMC Record
+fails the read for what its fields hold. The wire contract is
 `backend/docs/openapi.yaml`. The SPA never reaches the source:
 SPA → `GET /api/patient-numc/{patientId}` → backend →
 `GET {base}/Patient/{id}/numc`.
 
 ## The elements
 
-Every NUMC Record has every element; none is optional.
+A NUMC Record has four elements, each read as the patient source sent it
+([Shown as received](#shown-as-received)).
 
 | Element      | On the wire (both sides)   | Shown as                                                                                                                                             |
 | ------------ | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -37,26 +39,47 @@ Every NUMC Record has every element; none is optional.
 | Issue Date   | `issueDate`, `YYYY-MM-DD`  | `14 Oct 2023`                                                                                                                                        |
 | Expiry Date  | `expiryDate`, `YYYY-MM-DD` | `14 Oct 2023`                                                                                                                                        |
 
-Each NUMC Record also carries its own `id` at the source, in FHIR's id grammar,
-which the page keys its row by and never shows.
+Each NUMC Record also carries its own `id` at the source, never checked, which
+the page keys its row by and never shows; a row with none is keyed by its
+place.
 
 **A NUMC Record has no Status.** Nothing in the SPA or the backend works out
 "expired" from its Expiry Date: a record past it is shown as any other.
 
 ### The closed sets
 
-The NUMC Type and the NUMC Outcome are closed sets, carried and matched as an
-FFI's are ([ffi](ffi.md), "The closed sets"): each value travels as its code,
-from the source and to the SPA, matched exactly, and the SPA alone names it with
-its label. A code the service does not know is a failure of the source, never a
-row with a blank cell. Each set is one Java enum (`NumcType`, `NumcOutcome`,
-codes through `SourceCode`), one enum in `backend/docs/openapi.yaml` and one SPA
-set (`src/pages/numc/numc-api.ts`), held set-equal by `VocabularyContractTests`
-and by `make verify-contract` (`/scripts/spa-contract/README.md`).
+The NUMC Type and the NUMC Outcome are closed sets, carried as an FFI's are
+([ffi](ffi.md), "The closed sets"): each value travels as its code, from the
+source and to the SPA, and the SPA alone names a known code with its label. **A
+code outside its set is shown as the raw code**, its Outcome on a neutral badge
+(ADR 0020, D2) — never a failure of the source, and never a blank cell. The sets
+check what the service is asked: a filter's code is matched exactly, and the
+Filter panel offers only the known codes ([Sort and filters](#sort-and-filters)).
+Each set is one Java enum (`NumcType`, `NumcOutcome`, codes through
+`SourceCode`), one enum in `backend/docs/openapi.yaml` and one SPA set
+(`src/pages/numc/numc-api.ts`), held set-equal by `VocabularyContractTests` and
+by `make verify-contract` (`/scripts/spa-contract/README.md`).
 
 **The NUMC Outcome is a set of its own**, apart from an FFI's Outcome: `fit` and
-`unfit` are codes of both, but an FFI's `request-waiver` is no NUMC Outcome, and
-a NUMC Record carrying it is a failure of the source.
+`unfit` are codes of both, but an FFI's `request-waiver` is no NUMC Outcome — a
+`400` as a filter's code, and shown raw as a record's.
+
+### Shown as received
+
+The patient source is the truth (ADR 0020): nothing refuses a NUMC Record, or the
+response, for what a field holds. Each field — the four elements and the `id` —
+is one of three things, read by the adapter from the raw JSON it arrived as
+(`ReceivedFields`, so a number is never coerced into a string):
+
+| The source sent                                                                                               | The field is | Our API                              | The page shows |
+| ------------------------------------------------------------------------------------------------------------- | ------------ | ------------------------------------ | -------------- |
+| No key, `null`, `""`, or only whitespace                                                                      | missing      | `null`                               | "—"            |
+| A number, a boolean, an object or an array; a date that is no calendar date `YYYY-MM-DD`                      | invalid      | `null`, named in the row's `invalid` | "Error"        |
+| Any other string, as it came: a code outside its set, an id outside FHIR's grammar, any date the calendar has | present      | the value                            | the value      |
+
+**No semantic or range check is made**: a date in the future, or an Expiry Date
+before its Issue Date, is shown as received. The domain's `NumcRecord` holds each
+element as a `SourceField` and refuses none.
 
 ## The source contract
 
@@ -77,8 +100,9 @@ only — not FHIR-conformant:
   (`startIndex - 1`) and `_count`; `totalResults` is the source's `total`, and
   the source is asked even for `count=0` or a page past the end (ADR 0018, D3).
   The SPA asks for 5. `SourceSearchset` reads it, as it reads an FFI History's.
-- **Only a `404` is no patient**, our API's `404` too. Every other answer is a
-  failure of the source, our `502` ([Failures](#failures)).
+- **Only a `404` is no patient**, our API's `404` too. Every other status, and a
+  `200` that is no searchset of NUMC Records, is a failure of the source, our
+  `502` ([Failures](#failures)); what a record's fields hold never is.
 - **No caching.** No NUMC Record is kept in Redis or in memory: every read, of
   the same page too, is a call to the source.
 
@@ -121,15 +145,19 @@ D4).
   other way, a code outside its closed set — a label, another case, a Java
   constant's name, or another set's code, an FFI's `request-waiver` among
   them — a date that is no calendar date, and a from-date after its to-date
-  are each `400`, before the source is called.
+  are each `400`, before the source is called. A record may carry a code no
+  filter can name ([Shown as received](#shown-as-received)).
 
 ## Our API
 
 `GET /api/patient-numc/{patientId}?startIndex=…&count=…`, with any filters and
 sort, outside the `/api/patient` FHIR namespace: plain JSON, `{totalResults,
-startIndex, records: [{id, type, outcome, issueDate, expiryDate}]}`, each code
-as the source sent it and both dates `YYYY-MM-DD`. `totalResults` counts the
-NUMC Records the filters select. Errors are the application API's `ApiError`:
+startIndex, records: [{id, type, outcome, issueDate, expiryDate, invalid}]}`,
+each code as the source sent it, known to its set or not, and both dates
+`YYYY-MM-DD`. Every field is always there: one missing or in the wrong format is
+`null`, and `invalid` names, in the row's order, those whose format was wrong —
+a `null` it does not name is missing. `totalResults` counts the NUMC Records the
+filters select. Errors are the application API's `ApiError`:
 
 | Case                                                                                                                                                       | Status |
 | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
@@ -146,24 +174,21 @@ audited as an `ACCESS_DENIED` and logged as every authorization refusal is.
 ## Failures
 
 Each of these is a failure of the source, our `502`, and its one fault record's
-`event.reason`. A failure of the call or of the searchset is the one every paged
-read of the source shares; **every rule a NUMC Record breaks has a reason naming
-NUMC**, so a log line says which history broke.
+`event.reason`: a failure of the call or of the searchset, the one every paged
+read of the source shares. **No NUMC Record is a failure**, whatever its fields
+hold ([Shown as received](#shown-as-received)), so no reason names NUMC.
 
-| Failure                                                     | `event.reason`                                                                 | `error.category` |
-| ----------------------------------------------------------- | ------------------------------------------------------------------------------ | ---------------- |
-| No connection, or one refused, reset or dropped             | `unreachable`                                                                  | `network`        |
-| No connection within 2 seconds, or no whole answer within 5 | `timed-out`                                                                    | `network`        |
-| A `5xx`                                                     | `server-error`                                                                 | `server`         |
-| Any other status but a `200` or a `404`                     | `unexpected-status`                                                            | `data`           |
-| A body that arrived whole and is not JSON or not the shape  | `unreadable`                                                                   | `data`           |
-| A `200` that is no searchset `Bundle`                       | `not-a-searchset`                                                              | `data`           |
-| A searchset with no `total`, or a negative one              | `no-total`                                                                     | `data`           |
-| An entry with no resource, or one that is no `NUMC`         | `another-resource`                                                             | `data`           |
-| An entry with no `id`, or one outside FHIR's id grammar     | `numc-no-id`, `numc-invalid-id`                                                | `data`           |
-| A record missing an element — every element is required     | `no-numc-type`, `no-numc-outcome`, `no-numc-issue-date`, `no-numc-expiry-date` | `data`           |
-| A code outside its closed set                               | `unknown-numc-type`, `unknown-numc-outcome`                                    | `data`           |
-| A date not to the day                                       | `numc-issue-date-not-to-the-day`, `numc-expiry-date-not-to-the-day`            | `data`           |
+| Failure                                                     | `event.reason`      | `error.category` |
+| ----------------------------------------------------------- | ------------------- | ---------------- |
+| No connection, or one refused, reset or dropped             | `unreachable`       | `network`        |
+| No connection within 2 seconds, or no whole answer within 5 | `timed-out`         | `network`        |
+| A `5xx`                                                     | `server-error`      | `server`         |
+| Any other status but a `200` or a `404`                     | `unexpected-status` | `data`           |
+| A body that arrived whole and is not JSON or not the shape  | `unreadable`        | `data`           |
+| A `200` that is no searchset `Bundle`                       | `not-a-searchset`   | `data`           |
+| A searchset with no `total`, or a negative one              | `no-total`          | `data`           |
+| An entry with no resource, or one that is no `NUMC`         | `another-resource`  | `data`           |
+| An entry whose resource is no object                        | `unreadable`        | `data`           |
 
 The adapter raises each as a `PatientSourceException`, which the app-wide
 handler answers `502` with the generic `server-error` `ApiError`, as for an FFI
@@ -175,12 +200,21 @@ As an FFI History's ([ffi](ffi.md), "Logging"): each failure of the source is
 exactly one `ERROR`, the `502`'s `http.request.fault` record naming its reason;
 neither the log nor the exception's message names the patient id or anything of
 the source's body — not a record's id, code or date, nor an error answer's body;
-and a read adds no record of its own, the request record naming the route
-template (`/api/patient-numc/{patientId}`), never the id.
+and the request record names the route template
+(`/api/patient-numc/{patientId}`), never the id.
+
+**A response holding fields in the wrong format is one `WARN`** beside the
+request record, `patient_source.invalid_fields` (`observability.InvalidSourceFields`,
+ADR 0020): its `app.patient_source.read` is `numc`, and its
+`app.patient_source.invalid_fields` lists each such field by its path in the
+source's answer, the entry counted from zero — `entry[3].issueDate` — never its
+value, a record's id or the patient. The `patient_source.invalid_fields` counter
+counts each such field, tagged `read=numc` and `field`. A response with none, a
+field missing included, writes and counts nothing.
 `PatientHistoriesIntegrationTests` holds each NUMC fault stub's read to exactly one
-`ERROR` naming its failure under its category, and the stream, for those reads
-and for successful ones, to naming neither the patient id nor any record's id or
-dates.
+`ERROR` naming its failure under its category, Tan Boon Huat's read to exactly one
+`WARN` naming its invalid fields' paths, and the stream, for those reads and for
+successful ones, to naming neither the patient id nor any record's id or dates.
 
 ## Not audited
 
@@ -203,7 +237,9 @@ a session without it is offered no link and is routed to its landing page.
   read-only, five NUMC Records a page, with no row action.
 - **The table**: Type, Outcome, Issue Date, Expiry Date — the NUMC Type by its
   label, the NUMC Outcome as its badge ([the elements](#the-elements)), both
-  dates `dd MMM yyyy`.
+  dates `dd MMM yyyy`; a code outside its set as it came, the Outcome's on a
+  neutral badge; a missing element "—" and one in the wrong format "Error", the
+  rest of the row as any other ([Shown as received](#shown-as-received)).
 - **The shared paged listing**: the numbered pager and "Showing x to y of N
   NUMC records", named on a single page too, the page shown held while the next
   loads.
@@ -260,6 +296,21 @@ tests read the same stub files (`PatientSourceStubs`).
 - **Tan Hui Min** (`dev-patient-05`) has seven NUMC Records over two pages of
   five (`numc-tan-hui-min-page-1`, `-page-2`), between them every code of both
   closed sets.
+- **Tan Boon Huat** (`dev-patient-10`) has four NUMC Records, on one page,
+  shown as received (`numc-tan-boon-huat`): a Diving Duties record with no
+  outcome; a Submariner Duties FIT one whose Issue Date is a number and whose
+  Expiry Date is a month, not a day; one whose id is outside FHIR's grammar and
+  whose codes are outside both sets, `parachuting` and an FFI's
+  `request-waiver`; and a Hyperbaric Chamber Duties one with no id, an empty
+  outcome, a blank Issue Date and a `null` Expiry Date:
+
+  | NUMC Type                 | NUMC Outcome   | Issue Date  | Expiry Date |
+  | ------------------------- | -------------- | ----------- | ----------- |
+  | Diving Duties             | —              | 16 Mar 2022 | 15 Mar 2023 |
+  | Submariner Duties         | FIT            | Error       | Error       |
+  | parachuting               | request-waiver | 16 Mar 2020 | 15 Mar 2021 |
+  | Hyperbaric Chamber Duties | —              | —           | —           |
+
 - **Every other fixture** has none — Siti Nurhaliza binte Ahmad
   (`erXuFYUfucBZaryVksYEcMg3`) is the one the tests read — answered by
   `numc-fallback`, which also answers any page, filter or sort of a fixture's
@@ -270,7 +321,7 @@ Each canned page is matched on the whole query the backend sends — `_count=5`,
 `_offset`, `_total=accurate`, the `_sort`, and each filter pinned to its exact
 values or, where the read uses none, to absent — so a filtered or sorted read
 never falls to an unfiltered page. Each fixture is selectable on Patient Search
-(the name search `tan` finds both Tans).
+(the name search `tan` finds the three Tans, Tan Boon Huat on its second page).
 
 **Sort and filter stubs.** Beside the pages in the source's order:
 
@@ -295,13 +346,14 @@ Records its filters select from the history in the source's order, in the order
 its sort names, ties by id, and the stubs to covering each direction of each
 date, every filter, filters combined and a filter matching none.
 
-**Fault stubs.** Beside them, each failure above has a stub of its own under a
-well-formed patient id no fixture uses, `fault-numc-<failure>`, marked with
-`metadata.fault`: `unreachable` (the connection reset), `slow` (the answer after
-7 seconds), `server-error` (`503`), `unexpected-status` (`400`),
-`not-a-searchset`, `no-total`, `no-id`, `invalid-id`, `no-outcome` (a record
-missing an element), `unknown-type` and `unknown-outcome` (a code outside each
-set, the second an FFI's `request-waiver`) and `expiry-date-not-to-the-day`. A
-fault stub is no fixture. `PatientSourceFixturesTests` holds the fixtures to
-these rules, `PatientStoreContract` holds what each history reads, written out,
-and `PatientSourceNumcAdapterTests` each fault stub's failure.
+**Fault stubs.** Beside them, each failure above that the mock can serve has a
+stub of its own under a well-formed patient id no fixture uses,
+`fault-numc-<failure>`, marked with `metadata.fault`: `unreachable` (the
+connection reset), `slow` (the answer after 7 seconds), `server-error` (`503`),
+`unexpected-status` (`400`), `not-a-searchset` and `no-total` — the failures
+every history shares. A NUMC Record's data is no fault: what its fields may
+hold is Tan Boon Huat's page. A fault stub is no fixture.
+`PatientSourceFixturesTests` holds the fixtures to these rules, Tan Boon Huat's
+written out, `PatientStoreContract` holds what each history reads, written out,
+`PatientSourceHistoriesAdapterTests` each fault stub's failure, and
+`PatientSourceNumcAdapterTests` how each field is read.

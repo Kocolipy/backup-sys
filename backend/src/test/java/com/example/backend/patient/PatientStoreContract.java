@@ -38,6 +38,7 @@ import com.example.backend.patient.domain.PatientFilter;
 import com.example.backend.patient.domain.PatientQuery;
 import com.example.backend.patient.domain.PatientStore;
 import com.example.backend.patient.domain.SortOrder;
+import com.example.backend.patient.domain.SourceField;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
@@ -352,8 +353,10 @@ public abstract class PatientStoreContract {
 
     private static NumcRecord numc(String id, NumcType type, NumcOutcome outcome,
             String issueDate, String expiryDate) {
-        return new NumcRecord(id, type, outcome, LocalDate.parse(issueDate),
-                LocalDate.parse(expiryDate));
+        return new NumcRecord(SourceField.present(id), SourceField.present(type.code()),
+                SourceField.present(outcome.code()),
+                SourceField.present(LocalDate.parse(issueDate)),
+                SourceField.present(LocalDate.parse(expiryDate)));
     }
 
     /** The page {@code page} of {@code patient}'s NUMC History, unfiltered, in the source's order. */
@@ -404,11 +407,38 @@ public abstract class PatientStoreContract {
                                 "2022-12-05", "2023-12-04"))));
     }
 
+    /**
+     * Tan Boon Huat's four NUMC Records, read as received (ADR 0020): an outcome left out, a date
+     * of the wrong JSON type and one not to the day, codes outside both closed sets kept as they
+     * came, an id outside FHIR's grammar kept, and a record with no id whose outcome is empty, its
+     * Issue Date blank and its Expiry Date {@code null}.
+     */
+    @Test
+    void tan_boon_huats_numc_history_is_read_as_received() {
+        assertThat(numcHistory("dev-patient-10", FIRST_FIVE))
+                .contains(new NumcHistory(4, List.of(
+                        new NumcRecord(SourceField.present("numc-tan-boon-huat-1"),
+                                SourceField.present("diving"), SourceField.missing(),
+                                SourceField.present(LocalDate.of(2022, 3, 16)),
+                                SourceField.present(LocalDate.of(2023, 3, 15))),
+                        new NumcRecord(SourceField.present("numc-tan-boon-huat-2"),
+                                SourceField.present("submariner"), SourceField.present("fit"),
+                                SourceField.invalid(), SourceField.invalid()),
+                        new NumcRecord(SourceField.present("numc tan boon huat 3"),
+                                SourceField.present("parachuting"),
+                                SourceField.present("request-waiver"),
+                                SourceField.present(LocalDate.of(2020, 3, 16)),
+                                SourceField.present(LocalDate.of(2021, 3, 15))),
+                        new NumcRecord(SourceField.missing(),
+                                SourceField.present("hyperbaric-chamber"), SourceField.missing(),
+                                SourceField.missing(), SourceField.missing()))));
+    }
+
     /** The ids of a NUMC History's page, in its order, beside its total. */
     private static List<Object> idsAndTotal(Optional<NumcHistory> history) {
         NumcHistory read = history.orElseThrow();
         return List.of(read.totalResults(),
-                read.records().stream().map(NumcRecord::id).toList());
+                read.records().stream().map(record -> record.id().value()).toList());
     }
 
     /** Each canned sort of Tan Wei Ming's NUMC History: the sort, then the ids in its order. */

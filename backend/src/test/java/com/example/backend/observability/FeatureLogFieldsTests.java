@@ -42,6 +42,12 @@ class FeatureLogFieldsTests {
     }
 
     @Test
+    void thePatientSourcesFieldsKeepTheirSpellings() {
+        assertThat(List.of(InvalidSourceFields.READ, InvalidSourceFields.INVALID_FIELDS))
+                .containsExactly("app.patient_source.read", "app.patient_source.invalid_fields");
+    }
+
+    @Test
     void scimsFieldKeepsItsSpelling() {
         assertThat(ScimLogFields.SCIM_RESOURCE_TYPE).isEqualTo("scim.resource.type");
     }

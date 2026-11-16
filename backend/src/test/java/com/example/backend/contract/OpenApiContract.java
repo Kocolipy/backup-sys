@@ -43,7 +43,8 @@ import tools.jackson.databind.json.JsonMapper;
  *
  * <p>The schema check implements the subset of JSON Schema this document uses — {@code $ref},
  * {@code type} (single or a list), {@code properties}, {@code required},
- * {@code additionalProperties}, {@code items}, {@code enum}, {@code minItems}, {@code maxItems},
+ * {@code additionalProperties}, {@code items}, {@code enum}, {@code oneOf}, {@code anyOf},
+ * {@code minItems}, {@code maxItems},
  * {@code minLength}, {@code maxLength}, {@code minimum}, {@code maximum}, {@code pattern}, and the
  * {@code uuid} and {@code date-time} formats. {@link #unsupportedKeywords} names any other keyword
  * the document starts using, so the subset cannot silently fall behind the document.
@@ -53,6 +54,7 @@ public final class OpenApiContract {
     /** The keywords {@link #validate} understands, plus annotations that constrain nothing. */
     static final Set<String> UNDERSTOOD_SCHEMA_KEYWORDS = Set.of(
             "$ref", "type", "properties", "required", "additionalProperties", "items", "enum", "oneOf",
+            "anyOf",
             "minItems", "maxItems", "minLength", "maxLength", "minimum", "maximum", "pattern",
             "format", "readOnly", "writeOnly", "description", "example", "examples", "default");
 
@@ -254,6 +256,10 @@ public final class OpenApiContract {
         if (oneOf != null) {
             validateOneOf(oneOf, value, at, out);
         }
+        JsonNode anyOf = schema.get("anyOf");
+        if (anyOf != null) {
+            validateAnyOf(anyOf, value, at, out);
+        }
         JsonNode type = schema.get("type");
         if (type != null && !typeMatches(type, value)) {
             out.add(at + ": expected type " + type + " but was " + value.getNodeType());
@@ -290,6 +296,18 @@ public final class OpenApiContract {
         if (matched != 1) {
             out.add(at + ": matches " + matched + " oneOf branches, not exactly 1");
         }
+    }
+
+    /** {@code anyOf}: the value conforms to at least one branch, as JSON Schema defines it. */
+    private void validateAnyOf(JsonNode branches, JsonNode value, String at, List<String> out) {
+        for (JsonNode branch : branches) {
+            List<String> departures = new ArrayList<>();
+            validateInto(branch, value, at, departures);
+            if (departures.isEmpty()) {
+                return;
+            }
+        }
+        out.add(at + ": matches none of its " + branches.size() + " anyOf branches");
     }
 
     private static boolean typeMatches(JsonNode type, JsonNode value) {
