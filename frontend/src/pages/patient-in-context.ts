@@ -31,6 +31,7 @@ import {
   memo,
   useContext,
   useLayoutEffect,
+  useMemo,
   useState,
   type ReactNode,
 } from "react";
@@ -43,18 +44,35 @@ import { firstReadView, type ReadView, useGatedRead } from "@/auth/use-gated-rea
 import { PATIENT, type PatientSummary } from "./patient-api";
 
 /**
+ * The patient in context as read: what the Patient read says of them, and
+ * `id`, the id they were asked for — the EHR context's — which their
+ * Medication, FFI, NUMC and ARMC Histories are read by, never an id the
+ * Patient itself carries.
+ */
+export interface PatientInContext extends PatientSummary {
+  id: string;
+}
+
+/**
  * What the read of the patient in context has to show: `none` with no patient
  * in context, so nothing was asked, or the gated read's own view of the patient
  * there. Never `stale`: a new patient is a new first read, and the same patient
  * is never re-read.
  */
-export type PatientInContextView = { kind: "none" } | ReadView<PatientSummary, true>;
+export type PatientInContextView = { kind: "none" } | ReadView<PatientInContext, true>;
 
 /** The gated read's view, and the patient it is the view of. */
 interface Read {
   patientId: string;
-  view: ReadView<PatientSummary, true>;
+  view: ReadView<PatientInContext, true>;
 }
+
+/** `view` of the patient read by `id`, each patient it holds known by that id. */
+const readBy = (
+  view: ReadView<PatientSummary, true>,
+  id: string,
+): ReadView<PatientInContext, true> =>
+  "data" in view ? { ...view, data: { ...view.data, id } } : view;
 
 const NONE: PatientInContextView = { kind: "none" };
 
@@ -78,7 +96,8 @@ const ReadPatient = memo(function ReadPatient({
     failureMessage: "Couldn't load patient",
     forbiddenAsFailure: true,
   });
-  useLayoutEffect(() => onRead({ patientId, view }), [onRead, patientId, view]);
+  const read = useMemo(() => ({ patientId, view: readBy(view, patientId) }), [patientId, view]);
+  useLayoutEffect(() => onRead(read), [onRead, read]);
   return null;
 });
 

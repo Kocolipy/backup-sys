@@ -63,13 +63,13 @@ import org.springframework.web.client.RestClient;
  * FHIR id, sent unchanged.
  *
  * <ul>
- *   <li><b>Found</b>: the {@code 200}'s R4 {@code Patient}, copied into the domain's
- *       ({@link R4Patient}).
+ *   <li><b>Found</b>: the {@code 200}'s R4 {@code Patient} under the id asked for, copied into
+ *       the domain's as received ({@link R4Patient}, ADR 0020).
  *   <li><b>Not found</b>: a {@code 404} is no patient under the id, the ordinary answer the SPA
  *       reads as "No patient in context".
  *   <li><b>Anything else</b> — another status, no answer within the timeouts, a connection lost
- *       before the answer was in, the body's included, a body that is not a Patient the service
- *       can hold — is a {@link PatientSourceException}, a fault answered
+ *       before the answer was in, the body's included, a body that is not a Patient under the id
+ *       asked for — is a {@link PatientSourceException}, a fault answered
  *       {@code 502}, naming the failure or the broken rule, whose message and cause carry neither
  *       the id nor anything of the body.
  * </ul>
@@ -78,9 +78,10 @@ import org.springframework.web.client.RestClient;
  * built from Spring Boot's {@link RestClient.Builder}, so each call is observed as every client's
  * is ({@code http.client.requests}, under the URI template, never the id), on the JDK client with
  * redirects off and the timeouts below: a fixed connect timeout, and a read timeout a deployment
- * may set ({@code APP_PATIENT_SOURCE_READ_TIMEOUT}). Nothing here logs: an FFI, a NUMC or an ARMC
- * History, shown as received (ADR 0020), hands the paths of the fields its answer held in the
- * wrong format to {@link InvalidSourceFields}, which reports them.
+ * may set ({@code APP_PATIENT_SOURCE_READ_TIMEOUT}). Nothing here logs: a Patient read by id, a
+ * Patient search's Last visits, and an FFI, a NUMC and an ARMC History, shown as received
+ * (ADR 0020), hand the paths of the fields their answer held in the wrong format to
+ * {@link InvalidSourceFields}, which reports them.
  */
 @Component
 class PatientSourceAdapter implements PatientStore {
@@ -197,14 +198,28 @@ class PatientSourceAdapter implements PatientStore {
                 .build();
     }
 
+    /**
+     * {@code GET {base}/Patient/{id}}: the Patient under {@code id}, read as received (ADR 0020).
+     * A {@code 404} is no patient under the id; the one other good answer is a {@code 200}
+     * Patient under exactly this id, and anything else is a fault — a Patient under another id
+     * among them, since every read of this patient is made by the id asked for. What its NRIC,
+     * official name's text, gender and birth date hold never is: the answer's invalid fields are
+     * reported, each by its path in the answer.
+     */
     @Override
     public Optional<Patient> findById(PatientId id) {
         return called(() -> source.get()
                 .uri("/Patient/{id}", id.value())
                 .accept(FHIR_JSON)
-                .exchange((request, response) -> found(response)
-                        ? Optional.of(response.bodyTo(R4Patient.class).toPatient(id))
-                        : Optional.<Patient>empty()));
+                .exchange((request, response) -> {
+                    if (!found(response)) {
+                        return Optional.<Patient>empty();
+                    }
+                    R4Patient answer = response.bodyTo(R4Patient.class);
+                    Patient patient = answer.toPatient(id);
+                    invalidFields.report(SourceRead.PATIENT, answer.invalidFields(patient));
+                    return Optional.of(patient);
+                }));
     }
 
     /**
@@ -213,7 +228,9 @@ class PatientSourceAdapter implements PatientStore {
      * {@code count} of them, with an accurate total — and no {@code _sort}: the source's own
      * order is stable, so its pages are consistent. Its one answer is a {@code 200} searchset
      * Bundle; anything else — a {@code 404} included — is a fault, as is a Bundle with no total
-     * or holding a Patient with no id. The query's text and the filter's value are URI
+     * or holding a Patient with no id. What a match's Last visit holds never is: it is read as
+     * received (ADR 0020), and each invalid one is reported by its path in the answer,
+     * {@code entry[2].extension[0].valueDate}. The query's text and the filter's value are URI
      * variables, never part of the template, so the call is observed under the template alone:
      * whether the gender filter was asked for, and none of the values.
      */
@@ -240,9 +257,21 @@ class PatientSourceAdapter implements PatientStore {
                     if (!response.getStatusCode().isSameCodeAs(HttpStatus.OK)) {
                         throw PatientSourceException.answered(response.getStatusCode().value());
                     }
-                    SourceSearchset.Page<PatientMatch> matches =
-                            response.bodyTo(PATIENTS).page(R4Patient::toMatch);
-                    return new PatientMatches(matches.total(), matches.entries());
+                    SourceSearchset.Page<R4Patient> answers =
+                            response.bodyTo(PATIENTS).page(Function.identity());
+                    List<PatientMatch> matches = new ArrayList<>();
+                    List<InvalidSourceFields.Field> invalid = new ArrayList<>();
+                    for (int entry = 0; entry < answers.entries().size(); entry++) {
+                        R4Patient answer = answers.entries().get(entry);
+                        PatientMatch match = answer.toMatch();
+                        matches.add(match);
+                        for (InvalidSourceFields.Field field : answer.invalidFields(match)) {
+                            invalid.add(new InvalidSourceFields.Field(
+                                    "entry[" + entry + "]." + field.path(), field.name()));
+                        }
+                    }
+                    invalidFields.report(SourceRead.SEARCH, invalid);
+                    return new PatientMatches(answers.total(), matches);
                 }));
     }
 

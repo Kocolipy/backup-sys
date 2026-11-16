@@ -61,11 +61,12 @@ public final class PatientSourceStubs {
 
     /**
      * Every fixture the stub files serve: the R4 {@code Patient} body of each {@code 200} stub
-     * that is no fault stub.
+     * that is no fault stub and no received stub ({@link #received()}).
      */
     public static List<JsonNode> fixtures() {
         return stubs()
                 .filter(stub -> stub.at(FAULT).isMissingNode())
+                .filter(stub -> stub.at(RECEIVED).isMissingNode())
                 .filter(stub -> stub.at("/response/status").asInt() == 200)
                 .map(stub -> stub.at("/response/jsonBody"))
                 .filter(body -> "Patient".equals(body.at("/resourceType").asString("")))
@@ -107,11 +108,34 @@ public final class PatientSourceStubs {
     }
 
     /**
+     * Every received stub: a stub whose {@code metadata.received} names what of a Patient's
+     * elements it holds missing or in the wrong format — a {@code 200} Patient a read by id shows
+     * as received (ADR 0020), not a failure — under a well-formed id no fixture uses. It is no
+     * fixture: it matches no search, which reads its Patients strictly.
+     */
+    public static List<ReceivedStub> received() {
+        return stubs()
+                .filter(stub -> !stub.at(RECEIVED).isMissingNode())
+                .map(stub -> new ReceivedStub(stub.at(RECEIVED).asString(),
+                        stub.at("/request/urlPath").asString().substring("/Patient/".length()),
+                        stub.at("/response")))
+                .toList();
+    }
+
+    /**
+     * One received stub.
+     *
+     * @param received what it holds missing or in the wrong format, its {@code metadata.received}
+     * @param id       the patient id it answers under
+     * @param response the answer it gives, a {@code 200} Patient
+     */
+    public record ReceivedStub(String received, String id, JsonNode response) {
+    }
+
+    /**
      * Every fault stub of a read by id: a stub whose {@code metadata.fault} names the failure it
-     * serves — a delay
-     * past the read timeout, a body dribbled out past it, a {@code 5xx}, or a Patient breaking
-     * one domain rule — under a
-     * well-formed id no fixture uses.
+     * serves — a delay past the read timeout, a body dribbled out past it, or a {@code 5xx} —
+     * under a well-formed id no fixture uses.
      */
     public static List<FaultStub> faults() {
         return faultStubs("").stream()
@@ -333,6 +357,8 @@ public final class PatientSourceStubs {
     }
 
     private static final String FAULT = "/metadata/fault";
+
+    private static final String RECEIVED = "/metadata/received";
 
     private static Stream<JsonNode> stubs() {
         try (Stream<Path> files = Files.list(ROOT.resolve("mappings"))) {

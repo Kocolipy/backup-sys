@@ -167,6 +167,35 @@ class PatientControllerTests {
                 }"""));
     }
 
+    /**
+     * A Patient whose four elements the source sent in the wrong format is served as received
+     * (ADR 0020): each left out — the NRIC's identifier by its system alone, the official name by
+     * its use and parts — and named by an invalid-field extension, by its path here.
+     */
+    @Test
+    void aPatientWithElementsInTheWrongFormatIsServedNamingEach() throws Exception {
+        MockHttpServletResponse response = read("received-wrong-format");
+
+        assertThat(response.getStatus()).isEqualTo(200);
+        assertThat(body(response)).isEqualTo(json.readTree("""
+                {
+                  "resourceType": "Patient",
+                  "id": "received-wrong-format",
+                  "extension": [
+                    {"url": "http://example.org/fhir/StructureDefinition/invalid-field",
+                     "valueString": "identifier[0].value"},
+                    {"url": "http://example.org/fhir/StructureDefinition/invalid-field",
+                     "valueString": "name[0].text"},
+                    {"url": "http://example.org/fhir/StructureDefinition/invalid-field",
+                     "valueString": "gender"},
+                    {"url": "http://example.org/fhir/StructureDefinition/invalid-field",
+                     "valueString": "birthDate"}
+                  ],
+                  "identifier": [{"system": "https://fhir.synapxe.sg/NamingSystem/nric"}],
+                  "name": [{"use": "official", "family": "Wong", "given": ["Mei Fong"]}]
+                }"""));
+    }
+
     /** A Patient with no Demographic details is served as its five elements alone. */
     @Test
     void aPatientWithNoDemographicDetailsIsServedAsItsFiveElementsAlone() throws Exception {

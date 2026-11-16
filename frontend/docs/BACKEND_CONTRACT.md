@@ -97,7 +97,17 @@ change, when the backend side moves. What the SPA has to honour:
   context" and reports nothing to the page status; every other failure — a
   `400`, a `403` (the card passes `forbiddenAsFailure`) or a `5xx`, the
   `502` of the patient source failing among them — is the card's failed
-  state, "Couldn't load patient". The `{id}` is the patient's
+  state, "Couldn't load patient"; so is a `200` body that is no Patient. A
+  Patient under another id than the one asked for is the backend's `502`, so
+  the SPA reads the patient's histories by the EHR context's id, never by one a
+  Patient carries, which its decoder does not read. The Patient's NRIC,
+  official name's `text`, `gender` and `birthDate` are shown as received (ADR
+  0020): its shape — the arrays and objects the elements sit in — is decoded
+  strictly, but each of those four values by the lenient field decoder's rule
+  (`receivedValue`): an element the backend left out is missing, "—"; one an
+  `invalid-field` extension names by its path (`name[0].text`) is "Error"; and
+  a gender outside the four codes is shown as it came, so none of them fails
+  the read. The `{id}` is the patient's
   EHR's FHIR id: an id outside FHIR's id grammar, `[A-Za-z0-9\-.]{1,64}`
   (over 64 characters, markup, a line break, an empty segment, an encoded
   slash such as `a%2F%2Fb`), is the `400`;
@@ -110,7 +120,11 @@ change, when the backend side moves. What the SPA has to honour:
   a gender it does not offer, and `502` for the patient source failing, which
   the Search page reports with a Retry. Its query and filter travel only in
   that request's query string — the query through `encodeURIComponent` —
-  never in the page's URL.
+  never in the page's URL. Each match's five elements are decoded strictly;
+  its `lastVisit` is shown as received (ADR 0020), read by the lenient field
+  decoder against the row's `invalid`: `null` is "—", `null` named in
+  `invalid` is "Error", and so is a value that is no calendar date, so a
+  Last visit never fails the read.
 - **A patient's FFI History answers plain JSON, not FHIR.**
   `GET /api/patient-ffi/{patientId}` sits outside `/api/patient` too, so it
   answers `application/json` and every refusal or fault the application API's

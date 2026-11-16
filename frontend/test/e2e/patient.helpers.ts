@@ -56,6 +56,21 @@ export const selectResult = (page: Page, name: string) =>
     .nth(1)
     .click();
 
+/**
+ * Opens Home with the Patient `patientId` in the tab's EHR context. A Patient
+ * shown as received matches no Patient search, so it is put there as the
+ * Search page would put it: in the tab's `sessionStorage`, under the key and in
+ * the shape `src/auth/ehr-context.ts` keeps it in.
+ */
+export async function openHomeWithPatientInContext(page: Page, patientId: string) {
+  await page.goto("/");
+  await page.evaluate(
+    (patient) => window.sessionStorage.setItem("ehr-context", JSON.stringify({ patient })),
+    patientId,
+  );
+  await page.reload();
+}
+
 /** The top bar's patient in context. */
 export const topBarPatient = (page: Page) =>
   page.getByRole("region", { name: "Patient in context" });

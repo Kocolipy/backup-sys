@@ -7,6 +7,7 @@ import { clearEhrContext } from "@/auth/ehr-context";
 import { bare, deferred, holding, json, type WireAnswer } from "@/auth/session-adapter.testHelpers";
 import type { Clock } from "@/lib/time";
 
+import { INVALID_FIELD_EXTENSION } from "@/pages/patient-api";
 import { PatientCard } from "@/pages/patient-card";
 import {
   withPatientInContext,
@@ -23,6 +24,9 @@ const outcome = (code: OperationOutcome["issue"][number]["code"]) =>
     issue: [{ code, diagnostics: "A fixed sentence.", severity: "error" }],
     resourceType: "OperationOutcome",
   }) satisfies OperationOutcome;
+
+/** The extension naming `element` as received in the wrong format. */
+const invalidField = (element: string) => ({ url: INVALID_FIELD_EXTENSION, valueString: element });
 
 /** A clock stopped at `instant`. */
 const at =
@@ -193,6 +197,80 @@ describe("PatientCard with a patient in context", () => {
     await page().findByText("Tan Wei Ming");
 
     expect(fields().Gender).toBe(label);
+  });
+
+  it("shows a gender outside the four codes as the code it came as", async () => {
+    await renderCard(json({ ...TAN_WEI_MING, gender: "M" }));
+    await page().findByText("Tan Wei Ming");
+
+    expect(fields().Gender).toBe("M");
+  });
+
+  // Shown as received (ADR 0020): each field is its value, "—" when the
+  // backend left it out, and "Error" when an invalid-field extension names it,
+  // each independently of the others; Age follows the date of birth.
+  it.each([
+    ["the NRIC", { identifier: undefined }, { NRIC: "—" }],
+    ["the gender", { gender: undefined }, { Gender: "—" }],
+    ["the date of birth", { birthDate: undefined }, { Age: "—", "Date of birth": "—" }],
+  ])("shows %s as — when missing, and the rest as they came", async (_, change, shown) => {
+    await renderCard(json({ ...TAN_WEI_MING, ...change }));
+    await page().findByText("Tan Wei Ming");
+
+    expect(fields()).toEqual({
+      Age: "41",
+      "Date of birth": "12 Mar 1985",
+      Gender: "Male",
+      NRIC: "S1234567A",
+      ...shown,
+    });
+  });
+
+  it.each([
+    [
+      "the NRIC",
+      "identifier[0].value",
+      { identifier: [{ system: "https://fhir.synapxe.sg/NamingSystem/nric" }] },
+      { NRIC: "Error" },
+    ],
+    ["the gender", "gender", { gender: undefined }, { Gender: "Error" }],
+    [
+      "the date of birth",
+      "birthDate",
+      { birthDate: undefined },
+      { Age: "Error", "Date of birth": "Error" },
+    ],
+  ])(
+    "shows %s as Error when its format was wrong, and the rest as they came",
+    async (_, element, change, shown) => {
+      await renderCard(json({ ...TAN_WEI_MING, ...change, extension: [invalidField(element)] }));
+      await page().findByText("Tan Wei Ming");
+
+      expect(fields()).toEqual({
+        Age: "41",
+        "Date of birth": "12 Mar 1985",
+        Gender: "Male",
+        NRIC: "S1234567A",
+        ...shown,
+      });
+    },
+  );
+
+  it.each([
+    ["—, when the Patient has no name", { name: undefined }, "—"],
+    [
+      "Error, when its format was wrong",
+      { extension: [invalidField("name[0].text")], name: [{ use: "official" }] },
+      "Error",
+    ],
+  ])("is headed by %s, its other fields as they came", async (_, change, heading) => {
+    await renderCard(json({ ...TAN_WEI_MING, ...change }));
+
+    const banner = await screen.findByRole("region", { name: "Patient" });
+    expect([within(banner).getByRole("heading").textContent, fields().NRIC]).toEqual([
+      heading,
+      "S1234567A",
+    ]);
   });
 
   it("shows markup in a field as the text it is, never as markup", async () => {

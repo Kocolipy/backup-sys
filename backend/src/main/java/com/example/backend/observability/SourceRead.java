@@ -14,7 +14,13 @@ public enum SourceRead {
     NUMC("numc"),
 
     /** A patient's ARMC History. */
-    ARMC("armc");
+    ARMC("armc"),
+
+    /** A Patient read by id. */
+    PATIENT("patient"),
+
+    /** A Patient search, whose matches' Last visits are shown as received. */
+    SEARCH("search");
 
     private final String tag;
 

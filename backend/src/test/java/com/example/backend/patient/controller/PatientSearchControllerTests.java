@@ -90,7 +90,8 @@ class PatientSearchControllerTests {
     /**
      * The name search's second page, exactly: the source's two matches in its order, each its id,
      * official name, NRIC, gender, birth date and Last visit — the Patient with none as
-     * {@code null} — beside the total the source counted and where the page starts.
+     * {@code null} — and no field invalid, beside the total the source counted and where the
+     * page starts.
      */
     @Test
     void aSearchIsAnsweredAsOnePageOfMatchesInTheSourcesOrder() throws Exception {
@@ -104,9 +105,11 @@ class PatientSearchControllerTests {
                   "startIndex": 6,
                   "patients": [
                     {"id": "dev-patient-09", "name": "Kavitha Tanabalan", "nric": "S9512345A",
-                     "gender": "female", "birthDate": "1995-09-09", "lastVisit": "2026-05-07"},
+                     "gender": "female", "birthDate": "1995-09-09", "lastVisit": "2026-05-07",
+                     "invalid": []},
                     {"id": "dev-patient-10", "name": "Tan Boon Huat", "nric": "S5512345A",
-                     "gender": "male", "birthDate": "1955-01-23", "lastVisit": null}
+                     "gender": "male", "birthDate": "1955-01-23", "lastVisit": null,
+                     "invalid": []}
                   ]
                 }"""));
     }
@@ -115,7 +118,8 @@ class PatientSearchControllerTests {
     @Test
     void aRowPrintsItsPatientsIdAlone() {
         assertThat(new PatientSearchPage.Row("dev-patient-05", "Tan Hui Min", "S9012345A",
-                "female", "1990-02-04", "2026-11-02")).hasToString("Row[id=dev-patient-05]");
+                "female", "1990-02-04", "2026-11-02", List.of()))
+                .hasToString("Row[id=dev-patient-05]");
     }
 
     /** A full NRIC in lower case is still an NRIC search, for the NRIC in upper case. */
@@ -125,7 +129,20 @@ class PatientSearchControllerTests {
                 .isEqualTo(json.readTree("""
                         [{"id": "erXuFYUfucBZaryVksYEcMg3", "name": "Siti Nurhaliza binte Ahmad",
                           "nric": "S9212345A", "gender": "female", "birthDate": "1992-08-21",
-                          "lastVisit": "2026-07-11"}]"""));
+                          "lastVisit": "2026-07-11", "invalid": []}]"""));
+    }
+
+    /**
+     * A Last visit not to the day is shown as received (ADR 0020): {@code null}, named in the
+     * row's {@code invalid}, and the search is answered.
+     */
+    @Test
+    void aLastVisitNotToTheDayIsAnsweredNullAndNamedInvalid() throws Exception {
+        assertThat(body(searching(search("S9912345B"))).at("/patients"))
+                .isEqualTo(json.readTree("""
+                        [{"id": "dev-patient-12", "name": "Rajesh Kumar", "nric": "S9912345B",
+                          "gender": "male", "birthDate": "1999-05-28", "lastVisit": null,
+                          "invalid": ["lastVisit"]}]"""));
     }
 
     @Test

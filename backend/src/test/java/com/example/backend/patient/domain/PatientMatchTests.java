@@ -9,8 +9,8 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 /**
- * A Patient search's match, and the page of them: a match holds its Patient, its Last visit
- * optional, and prints by id alone; a page holds no negative total and a list no caller can
+ * A Patient search's match, and the page of them: a match holds its Patient and its Last visit as
+ * received, names the Last visit when its format was wrong, and prints by id alone; a page holds no negative total and a list no caller can
  * change under it.
  */
 class PatientMatchTests {
@@ -19,21 +19,35 @@ class PatientMatchTests {
             "S9012345A", new PatientName("Tan Hui Min", "Tan", List.of("Hui", "Min")),
             AdministrativeGender.FEMALE, LocalDate.of(1990, 2, 4));
 
-    @Test
-    void aMatchMayHaveNoLastVisit() {
-        assertThat(new PatientMatch(TAN_HUI_MIN, null).lastVisit()).isNull();
-    }
+    private static final SourceField<LocalDate> VISITED =
+            SourceField.present(LocalDate.of(2026, 11, 2));
 
     @Test
     void aMatchHoldsAPatient() {
-        assertThatThrownBy(() -> new PatientMatch(null, LocalDate.of(2026, 11, 2)))
+        assertThatThrownBy(() -> new PatientMatch(null, VISITED))
                 .isInstanceOf(NullPointerException.class).hasMessage("patient");
+    }
+
+    /** A match with no Last visit holds it as missing, never as no field at all. */
+    @Test
+    void aMatchHoldsItsLastVisitAsReceived() {
+        assertThatThrownBy(() -> new PatientMatch(TAN_HUI_MIN, null))
+                .isInstanceOf(NullPointerException.class).hasMessage("lastVisit");
+    }
+
+    /** A match names its Last visit invalid when its format was wrong, and nothing otherwise. */
+    @Test
+    void aMatchNamesAnInvalidLastVisit() {
+        assertThat(List.of(new PatientMatch(TAN_HUI_MIN, SourceField.invalid()).invalid(),
+                new PatientMatch(TAN_HUI_MIN, SourceField.missing()).invalid(),
+                new PatientMatch(TAN_HUI_MIN, VISITED).invalid()))
+                .containsExactly(List.of("lastVisit"), List.of(), List.of());
     }
 
     /** Printed, a match names its Patient by id alone: no NRIC, name or date of birth. */
     @Test
     void aMatchPrintsItsPatientsIdAlone() {
-        assertThat(new PatientMatch(TAN_HUI_MIN, LocalDate.of(2026, 11, 2)))
+        assertThat(new PatientMatch(TAN_HUI_MIN, VISITED))
                 .hasToString("PatientMatch[Patient[id=dev-patient-05]]");
     }
 
@@ -52,7 +66,7 @@ class PatientMatchTests {
     @Test
     void aPagesMatchesAreItsOwnCopy() {
         List<PatientMatch> matches = new ArrayList<>(
-                List.of(new PatientMatch(TAN_HUI_MIN, null)));
+                List.of(new PatientMatch(TAN_HUI_MIN, SourceField.missing())));
         PatientMatches page = new PatientMatches(1, matches);
 
         matches.clear();
