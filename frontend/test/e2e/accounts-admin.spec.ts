@@ -229,7 +229,7 @@ test.describe("ADMIN accounts page", () => {
 
         // Revoke from the page: the token leaves the section at once.
         await section.getByRole("button", { name: /^Revoke token/ }).click();
-        await expect(section.getByText("No active tokens.")).toBeVisible();
+        await expect(section.getByText("No records found.", { exact: true })).toBeVisible();
         await expect(section.getByRole("rowheader")).toHaveCount(0);
         expect((await newClient.get("/scim/v2/Users?count=1")).status()).toBe(401);
       } finally {
@@ -357,16 +357,16 @@ test("pages a connector's active tokens five at a time, and a revoked one leaves
     const section = page.getByRole("region", { name: `Connector ${name}` });
     const pager = section.getByRole("navigation", { name: `Pages of the tokens of ${name}` });
     const rows = section.getByRole("rowheader");
-    await expect(pager.getByText("Showing 1 to 5 of 7 tokens")).toBeVisible();
+    await expect(pager.getByText("Showing 1 to 5 of 7 records")).toBeVisible();
     await expect(rows).toHaveCount(5);
 
     await pager.getByRole("button", { name: "Next" }).click();
-    await expect(pager.getByText("Showing 6 to 7 of 7 tokens")).toBeVisible();
+    await expect(pager.getByText("Showing 6 to 7 of 7 records")).toBeVisible();
     await expect(rows).toHaveCount(2);
 
     const revoked = await rows.first().textContent();
     await section.getByRole("button", { name: `Revoke token ${revoked}` }).click();
-    await expect(pager.getByText("Showing 6 to 6 of 6 tokens")).toBeVisible();
+    await expect(pager.getByText("Showing 6 to 6 of 6 records")).toBeVisible();
     await expect(rows).toHaveCount(1);
     await expect(section.getByRole("rowheader", { name: revoked! })).toHaveCount(0);
   } finally {

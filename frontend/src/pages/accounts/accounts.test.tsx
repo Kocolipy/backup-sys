@@ -86,6 +86,13 @@ const renderAccounts = (answers: Answers, session: StartingSession = EVERY_PERMI
   });
 
 const usersTable = () => screen.getByRole("table", { name: "Users" });
+/** The Users or Groups card, found by its search box, so what it says is read apart from the other's. */
+const card = (title: "Users" | "Groups") =>
+  within(
+    screen
+      .getByRole("search", { name: `${title} search` })
+      .closest<HTMLElement>('[data-slot="card"]')!,
+  );
 const groupsTable = () => screen.getByRole("table", { name: "Groups" });
 
 /** A table's rows, without its headings — whose sortable ones are buttons that act on no row. */
@@ -485,8 +492,8 @@ describe("Accounts", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       /^Unable to load the users\. Please try again\.$/,
     );
-    expect(screen.queryByText("No users are provisioned.")).not.toBeInTheDocument();
-    expect(screen.queryByText("Loading users…")).not.toBeInTheDocument();
+    expect(card("Users").queryByText("No records found.")).not.toBeInTheDocument();
+    expect(card("Users").queryByText("Loading records…")).not.toBeInTheDocument();
   });
 
   it("reports a failed Groups read", async () => {
@@ -495,8 +502,8 @@ describe("Accounts", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       /^Unable to load the groups\. Please try again\.$/,
     );
-    expect(screen.queryByText("No groups are provisioned.")).not.toBeInTheDocument();
-    expect(screen.queryByText("Loading groups…")).not.toBeInTheDocument();
+    expect(card("Groups").queryByText("No records found.")).not.toBeInTheDocument();
+    expect(card("Groups").queryByText("Loading records…")).not.toBeInTheDocument();
   });
 
   // Against a backend whose Users body has drifted from the contract. The
@@ -520,15 +527,19 @@ describe("Accounts", () => {
   it("says so when no User or Group is provisioned", async () => {
     await renderAccounts({});
 
-    expect(await screen.findByText("No users are provisioned.")).toBeInTheDocument();
-    expect(await screen.findByText("No groups are provisioned.")).toBeInTheDocument();
+    expect(await card("Users").findByTestId("listing-empty")).toHaveTextContent(
+      /^No records found\.$/,
+    );
+    expect(await card("Groups").findByTestId("listing-empty")).toHaveTextContent(
+      /^No records found\.$/,
+    );
   });
 
   it("says each listing is loading until its read answers", async () => {
     await renderAccounts({ [GROUPS]: deferred().answer, [USERS]: deferred().answer });
 
-    expect(screen.getByText(/^Loading users…$/)).toBeInTheDocument();
-    expect(screen.getByText(/^Loading groups…$/)).toBeInTheDocument();
+    expect(card("Users").getByText(/^Loading records…$/)).toBeInTheDocument();
+    expect(card("Groups").getByText(/^Loading records…$/)).toBeInTheDocument();
   });
 });
 
@@ -607,7 +618,7 @@ describe("the Users and Groups projections, a page at a time", () => {
       [pageOf("accounts", 1)]: usersPage(usersFrom(1, 20), 25),
       [pageOf("accounts", 21)]: usersPage(usersFrom(21, 5), 25, 21),
     });
-    expect(await screen.findByText("Showing 1 to 20 of 25 users")).toBeInTheDocument();
+    expect(await screen.findByText("Showing 1 to 20 of 25 records")).toBeInTheDocument();
 
     await userEvent.click(
       within(screen.getByRole("navigation", { name: "Users pages" })).getByRole("button", {
@@ -615,7 +626,7 @@ describe("the Users and Groups projections, a page at a time", () => {
       }),
     );
 
-    expect(await screen.findByText("Showing 21 to 25 of 25 users")).toBeInTheDocument();
+    expect(await screen.findByText("Showing 21 to 25 of 25 records")).toBeInTheDocument();
     expect(rowHeaders(usersTable())).toEqual([
       "user-21",
       "user-22",
@@ -631,7 +642,7 @@ describe("the Users and Groups projections, a page at a time", () => {
       [pageOf("groups", 1)]: groupsPage(groupsFrom(1, 20), 21),
       [pageOf("groups", 21)]: groupsPage(groupsFrom(21, 1), 21, 21),
     });
-    expect(await screen.findByText("Showing 1 to 20 of 21 groups")).toBeInTheDocument();
+    expect(await screen.findByText("Showing 1 to 20 of 21 records")).toBeInTheDocument();
 
     await userEvent.click(
       within(screen.getByRole("navigation", { name: "Groups pages" })).getByRole("button", {
@@ -639,7 +650,7 @@ describe("the Users and Groups projections, a page at a time", () => {
       }),
     );
 
-    expect(await screen.findByText("Showing 21 to 21 of 21 groups")).toBeInTheDocument();
+    expect(await screen.findByText("Showing 21 to 21 of 21 records")).toBeInTheDocument();
     expect(rowHeaders(groupsTable())).toEqual(["group-21"]);
   });
 
@@ -652,7 +663,7 @@ describe("the Users and Groups projections, a page at a time", () => {
       ]),
     });
     await userEvent.click(await screen.findByRole("button", { name: "Next" }));
-    await screen.findByText("Showing 21 to 25 of 25 users");
+    await screen.findByText("Showing 21 to 25 of 25 records");
 
     await searchFor("users", "  grace hopper ");
 
@@ -678,7 +689,7 @@ describe("the Users and Groups projections, a page at a time", () => {
       ],
     });
     await searchFor("users", "user");
-    await screen.findByText("Showing 1 to 20 of 25 users");
+    await screen.findByText("Showing 1 to 20 of 25 records");
 
     await searchFor("users", "user");
 
@@ -730,15 +741,22 @@ describe("the Users and Groups projections, a page at a time", () => {
       [pageOf("accounts", 1, "zz")]: usersPage([]),
       [pageOf("groups", 1, "zz")]: groupsPage([]),
     });
-    expect(await screen.findByText("No users are provisioned.")).toBeInTheDocument();
-    expect(await screen.findByText("No groups are provisioned.")).toBeInTheDocument();
+    expect(await card("Users").findByTestId("listing-empty")).toHaveTextContent(
+      /^No records found\.$/,
+    );
+    expect(await card("Groups").findByTestId("listing-empty")).toHaveTextContent(
+      /^No records found\.$/,
+    );
 
     await searchFor("users", "zz");
     await searchFor("groups", "zz");
 
-    expect(await screen.findByText('No users match "zz".')).toBeInTheDocument();
-    expect(await screen.findByText('No groups match "zz".')).toBeInTheDocument();
-    expect(screen.queryByText(/are provisioned/)).toBeNull();
+    expect(await card("Users").findByText("No records match your search.")).toHaveTextContent(
+      /^No records match your search\.$/,
+    );
+    expect(await card("Groups").findByText("No records match your search.")).toHaveTextContent(
+      /^No records match your search\.$/,
+    );
     expect(screen.queryByRole("navigation", { name: /pages$/ })).toBeNull();
   });
 
@@ -755,7 +773,7 @@ describe("the Users and Groups projections, a page at a time", () => {
 
     expect(await row("grace").findByText("Not locked")).toBeInTheDocument();
     expect(row("grace").getByText("Required")).toBeInTheDocument();
-    expect(screen.getByText("Showing 21 to 23 of 23 users")).toBeInTheDocument();
+    expect(screen.getByText("Showing 21 to 23 of 23 records")).toBeInTheDocument();
     expect(rowHeaders(usersTable())).toEqual(["user-21", "user-22", "grace"]);
     expect(
       requests()
@@ -838,7 +856,7 @@ describe("the Users and Groups projections, a page at a time", () => {
 
     expect(await row("Auditors", groupsTable()).findByText("audit:read")).toBeInTheDocument();
     expect(rowHeaders(groupsTable())).toEqual(["group-21", "Auditors"]);
-    expect(screen.getByText("Showing 21 to 22 of 22 groups")).toBeInTheDocument();
+    expect(screen.getByText("Showing 21 to 22 of 22 records")).toBeInTheDocument();
   });
 
   // Try again, which reads the page shown again for its own arguments, is the
@@ -868,21 +886,19 @@ describe("the Users and Groups projections, sorted", () => {
         [pageOf(path, 1, "an", [by, "ascending"])]: page(20),
       });
       await searchFor(title === "Users" ? "users" : "groups", "an");
-      await screen.findByText(`Showing 1 to 20 of 25 ${title.toLowerCase()}`);
+      await screen.findByText(`Showing 1 to 20 of 25 records`);
       await userEvent.click(
         within(screen.getByRole("navigation", { name: `${title} pages` })).getByRole("button", {
           name: "Next",
         }),
       );
-      await screen.findByText(`Showing 21 to 25 of 25 ${title.toLowerCase()}`);
+      await screen.findByText(`Showing 21 to 25 of 25 records`);
 
       await userEvent.click(
         within(columnHeader(table, heading)).getByRole("button", { name: heading }),
       );
 
-      expect(
-        await screen.findByText(`Showing 1 to 20 of 25 ${title.toLowerCase()}`),
-      ).toBeInTheDocument();
+      expect(await screen.findByText(`Showing 1 to 20 of 25 records`)).toBeInTheDocument();
       expect(
         requests()
           .filter((request) => request.path.startsWith(`/api/admin/${path}?`))
@@ -1084,13 +1100,19 @@ describe("a Group's members", () => {
     });
     await userEvent.click(await screen.findByRole("button", { name: "Members of Engineering" }));
     expect(
-      await within(membersRegion()).findByText("Showing 1 to 20 of 25 members"),
+      await within(membersRegion()).findByText("Showing 1 to 20 of 25 records"),
     ).toBeInTheDocument();
 
-    await userEvent.click(within(membersRegion()).getByRole("button", { name: "Next" }));
+    await userEvent.click(
+      within(
+        within(membersRegion()).getByRole("navigation", {
+          name: "Pages of the members of Engineering",
+        }),
+      ).getByRole("button", { name: "Next" }),
+    );
 
     expect(
-      await within(membersRegion()).findByText("Showing 21 to 25 of 25 members"),
+      await within(membersRegion()).findByText("Showing 21 to 25 of 25 records"),
     ).toBeInTheDocument();
     expect(memberLines()).toEqual([
       "member-21",
@@ -1126,9 +1148,7 @@ describe("a Group's members", () => {
 
     await userEvent.click(await screen.findByRole("button", { name: "Members of Engineering" }));
 
-    expect(
-      await within(membersRegion()).findByText(/^Engineering has no members\.$/),
-    ).toBeInTheDocument();
+    expect(await within(membersRegion()).findByText(/^No records found\.$/)).toBeInTheDocument();
     expect(within(membersRegion()).queryByRole("list")).toBeNull();
     expect(within(membersRegion()).queryByText(/^Members \d/)).toBeNull();
   });
@@ -1142,7 +1162,7 @@ describe("a Group's members", () => {
       "Unable to load the members of Engineering. Please try again.",
     );
     expect(within(membersRegion()).queryByRole("list")).toBeNull();
-    expect(within(membersRegion()).queryByText("Engineering has no members.")).toBeNull();
+    expect(within(membersRegion()).queryByText("No records found.")).toBeNull();
   });
 
   it("are shown loading while the first page is read", async () => {
@@ -1151,7 +1171,7 @@ describe("a Group's members", () => {
 
     await userEvent.click(await screen.findByRole("button", { name: "Members of Engineering" }));
 
-    expect(within(membersRegion()).getByText("Loading members…")).toBeInTheDocument();
+    expect(within(membersRegion()).getByText("Loading records…")).toBeInTheDocument();
     await page.settle(memberPage(1, 1, [member(1)]));
     expect(await within(membersRegion()).findByText("member-01")).toBeInTheDocument();
   });

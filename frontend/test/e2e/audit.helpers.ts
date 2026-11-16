@@ -4,7 +4,7 @@ import { expect, type Locator, type Page } from "@playwright/test";
 const AUDIT_EVENTS_PATH = "/api/admin/audit-events";
 
 /** What the listing says, to screen readers, while a read is in flight. */
-const AUDIT_LOADING = "Loading audit events…";
+const AUDIT_LOADING = "Loading records…";
 
 /** The Audit page's listing. */
 export const eventsTable = (page: Page) => page.getByRole("table", { name: "Audit events" });

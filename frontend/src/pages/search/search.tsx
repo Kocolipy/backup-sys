@@ -104,8 +104,9 @@ function ResultsTable({ patients }: { patients: readonly PatientMatch[] }) {
 /**
  * One submitted search's results, read from its first page on mounting and
  * again from its first page whenever its filter changes: the table,
- * the "Showing x to y of N patients" range with the numbered pager whenever
- * there is a match, or "No patients match your search". A failed read is
+ * the "Showing x to y of N records" range with the numbered pager whenever
+ * there is a match, or "No records match your search."; "Searching
+ * records…" while it is read. A failed read is
  * reported on the page's one error line, which the signed-in layout owns, and
  * offers Retry, which reads the same page of the same search again.
  */
@@ -122,13 +123,9 @@ function SearchResults({ filters, query }: { filters: PatientFilters; query: str
   return (
     <>
       <PagedListing
-        copy={{
-          empty: "No patients match your search",
-          loading: "Searching for patients…",
-          noun: "patients",
-          pagerLabel: "Search result pages",
-        }}
+        narrowing="patient-search"
         onePage="shown"
+        pagerLabel="Search result pages"
         read={reading}
         readAgain={false}
       >

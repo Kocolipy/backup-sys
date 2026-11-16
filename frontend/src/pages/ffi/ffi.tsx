@@ -110,22 +110,15 @@ function FfiTable({
 
 /**
  * The FFI History of the patient `patientId`, five FFIs a page, through the
- * shared filtered history ({@link FilteredHistory}): "Showing x to y of N
- * FFIs", "Couldn't load FFIs" for a failed read, and "No FFIs", or with a
- * filter applied "No FFIs match the filters", for an empty one. It sorts by
- * Issue Date or Expiry Date, and the Filter panel narrows it on every column.
+ * shared filtered history ({@link FilteredHistory}), its rows named records
+ * as every paged table's are, and "Couldn't load FFIs" for a failed read. It
+ * sorts by Issue Date or Expiry Date, and the Filter panel narrows it on
+ * every column.
  */
 function FfiHistory({ patientId }: { patientId: string }) {
   return (
     <FilteredHistory
-      copy={{
-        empty: "No FFIs",
-        emptyFiltered: "No FFIs match the filters",
-        failure: "Couldn't load FFIs",
-        loading: "Loading FFIs…",
-        noun: "FFIs",
-        pagerLabel: "FFI History pages",
-      }}
+      copy={{ failure: "Couldn't load FFIs", pagerLabel: "FFI History pages" }}
       countFilters={countFfiFilters}
       declaration={FFI_HISTORY}
       filterPopover={FfiFilterPopover}
@@ -141,7 +134,7 @@ function FfiHistory({ patientId }: { patientId: string }) {
 
 /**
  * FFI: the FFI History of the patient in context, read from the patient
- * source, and "Loading FFIs…" while the patient is read
+ * source, and "Loading records…" while the patient is read
  * ({@link ForPatientInContext}). A new patient in context is a new history,
  * read from its first page.
  */
@@ -149,7 +142,7 @@ export function Ffis() {
   return (
     <Card>
       <CardContent className="flex flex-col gap-4">
-        <ForPatientInContext history={FfiHistory} loading="Loading FFIs…" />
+        <ForPatientInContext history={FfiHistory} />
       </CardContent>
     </Card>
   );

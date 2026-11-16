@@ -57,18 +57,18 @@ test.describe("FFI", () => {
       "Dental FFIFIT22 Nov 202321 Nov 2024CARMOHendon Camp MCActive",
       "Vocational FFIUNFIT05 Aug 202304 Aug 2024CAMOMandai Hill Camp MCInactive",
     ]);
-    await expect(page.getByText("Showing 1 to 4 of 4 FFIs")).toBeVisible();
+    await expect(page.getByText("Showing 1 to 4 of 4 records")).toBeVisible();
   });
 
   test("pages Tan Hui Min's seven FFIs to the second page", async ({ page }) => {
     await selectPatient(page, "tan", "Tan Hui Min", "S9012345A");
     await openFfi(page);
-    await expect(page.getByText("Showing 1 to 5 of 7 FFIs")).toBeVisible();
+    await expect(page.getByText("Showing 1 to 5 of 7 records")).toBeVisible();
     await expect(ffiRows(page)).toHaveCount(5);
 
     await page.getByRole("button", { name: "Page 2" }).click();
 
-    await expect(page.getByText("Showing 6 to 7 of 7 FFIs")).toBeVisible();
+    await expect(page.getByText("Showing 6 to 7 of 7 records")).toBeVisible();
     await expect(ffiRows(page)).toHaveText([
       "Vocational FFIREQUEST WAIVER17 Apr 202316 Apr 2024CNMOKranji Camp MCInactive",
       "IPPT FFIUNFIT05 Dec 202204 Dec 2023CAMOKhatib Camp MCInactive",
@@ -97,15 +97,15 @@ test.describe("FFI", () => {
       "swimmingwaiver-granted16 Mar 202015 Mar 2021hq-medctengah-air-baseexpired",
       "Vocational FFI—————Inactive",
     ]);
-    await expect(page.getByText("Showing 1 to 4 of 4 FFIs")).toBeVisible();
+    await expect(page.getByText("Showing 1 to 4 of 4 records")).toBeVisible();
   });
 
-  test("says No FFIs for a patient with none", async ({ page }) => {
+  test("says no records are found for a patient with none", async ({ page }) => {
     await selectPatient(page, "s9212345a", "Siti Nurhaliza binte Ahmad", "S9212345A");
 
     await openFfi(page);
 
-    await expect(page.getByText("No FFIs")).toBeVisible();
+    await expect(page.getByText("No records found.", { exact: true })).toBeVisible();
     await expect(page.getByRole("table", { name: "FFI History" })).toHaveCount(0);
   });
 
@@ -163,7 +163,7 @@ test.describe("FFI", () => {
       await selectPatient(page, "tan", "Tan Hui Min", "S9012345A");
       await openFfi(page);
       await page.getByRole("button", { name: "Page 2" }).click();
-      await expect(page.getByText("Showing 6 to 7 of 7 FFIs")).toBeVisible();
+      await expect(page.getByText("Showing 6 to 7 of 7 records")).toBeVisible();
       await filterButton(page).click();
     }
 
@@ -193,7 +193,7 @@ test.describe("FFI", () => {
       await page.keyboard.press("Escape");
       await apply(page);
 
-      await expect(page.getByText("Showing 1 to 4 of 4 FFIs")).toBeVisible();
+      await expect(page.getByText("Showing 1 to 4 of 4 records")).toBeVisible();
       await expect(ffiRows(page)).toHaveText(rowsOf(3, 5, 6, 7));
       await expect(filterButton(page)).toHaveAccessibleName("Filter, 1 set");
       await expect(page).toHaveURL("/ffi");
@@ -225,10 +225,10 @@ test.describe("FFI", () => {
       await dateField(page, "Issue Date", "From").fill("2023-01-01");
       await apply(page);
 
-      await expect(page.getByText("Showing 1 to 5 of 6 FFIs")).toBeVisible();
+      await expect(page.getByText("Showing 1 to 5 of 6 records")).toBeVisible();
       await expect(ffiRows(page)).toHaveText(rowsOf(1, 2, 3, 4, 5));
       await page.getByRole("button", { name: "Page 2" }).click();
-      await expect(page.getByText("Showing 6 to 6 of 6 FFIs")).toBeVisible();
+      await expect(page.getByText("Showing 6 to 6 of 6 records")).toBeVisible();
       await expect(ffiRows(page)).toHaveText(rowsOf(6));
     });
 
@@ -238,17 +238,17 @@ test.describe("FFI", () => {
       await panel(page).getByRole("radio", { exact: true, name: "Active" }).click();
       await apply(page);
 
-      await expect(page.getByText("Showing 1 to 3 of 3 FFIs")).toBeVisible();
+      await expect(page.getByText("Showing 1 to 3 of 3 records")).toBeVisible();
       await expect(ffiRows(page)).toHaveText(rowsOf(1, 3, 4));
     });
 
-    test("says No FFIs match the filters for a filter matching none", async ({ page }) => {
+    test("says no records match the filters for a filter matching none", async ({ page }) => {
       await filterTanHuiMin(page);
 
       await dateField(page, "Expiry Date", "To").fill("2022-12-31");
       await apply(page);
 
-      await expect(page.getByText("No FFIs match the filters", { exact: true })).toBeVisible();
+      await expect(page.getByText("No records match the filters.", { exact: true })).toBeVisible();
       await expect(page.getByRole("table", { name: "FFI History" })).toHaveCount(0);
     });
   });

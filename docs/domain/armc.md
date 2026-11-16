@@ -250,7 +250,7 @@ is: a session without it is offered no link and is routed to its landing page.
 - **It reads the patient in context** as the FFI page does, from the signed-in
   layout's one reader of it ([patient](patient.md), "The patient in context"),
   through the same shared wrapper: it reads that patient's ARMC History once the
-  patient is read, says "Loading ARMC records…" while the patient or the first
+  patient is read, says "Loading records…" while the patient or the first
   page is read, and a failed read of the patient leaves it empty. It is
   read-only, five ARMC Boards a page, with no row action.
 - **The table**: Board Type, Outcome, Start Date, End Date, Medical Officer #1,
@@ -261,7 +261,7 @@ is: a session without it is offered no link and is routed to its landing page.
   Date of a board still open among them — and one in the wrong format "Error",
   the rest of the row as any other ([Shown as received](#shown-as-received)).
 - **The shared paged listing**: the numbered pager and "Showing x to y of N
-  ARMC records", named on a single page too, the page shown held while the next
+  records", named on a single page too, the page shown held while the next
   loads.
 - **Sort.** As on the FFI and NUMC pages ([ffi](ffi.md), "The FFI page"): only
   the Start Date and End Date headings sort, one at a time, each the shared
@@ -293,9 +293,9 @@ is: a session without it is offered no link and is routed to its landing page.
   patient under its id (its `404`, our `404`) — shows "No patient in context",
   as the FFI, NUMC and Medication pages do, and reads no ARMC Boards or
   reports nothing.
-- **A patient with no ARMC Boards** — a `200` with `total: 0` — shows "No ARMC
-  records". A filter matching none of a patient's ARMC Boards shows "No ARMC
-  records match the filters".
+- **A patient with no ARMC Boards** — a `200` with `total: 0` — shows "No
+  records found." A filter matching none of a patient's ARMC Boards shows "No
+  records match the filters."
 - **The source failing** shows "Couldn't load ARMC records" on the page's error
   line, and Try again, which reads the same page again.
 

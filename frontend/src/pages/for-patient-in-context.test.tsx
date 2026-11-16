@@ -22,7 +22,7 @@ const renderWrapper = (
   session: Parameters<typeof renderInLayout>[2] = CLINICIAN,
 ) =>
   renderInLayout(
-    [{ element: <ForPatientInContext history={History} loading="Loading visits…" />, path: "/" }],
+    [{ element: <ForPatientInContext history={History} />, path: "/" }],
     "/",
     session,
     answers,
@@ -64,13 +64,13 @@ describe("ForPatientInContext", () => {
     }).toEqual({ history: null, note: expect.anything() as unknown });
   });
 
-  it("says its loading copy while the patient in context is read", async () => {
+  it("says it is loading records while the patient in context is read", async () => {
     const patient = deferred();
     withPatientInContext(TAN_WEI_MING.id);
     await renderWrapper({ [TAN_WEI_MING_READ]: patient.answer });
 
     expect(screen.getByRole("main").querySelector("[role=status]")).toHaveTextContent(
-      /^Loading visits…$/,
+      /^Loading records…$/,
     );
     await patient.settle(json(TAN_WEI_MING));
   });

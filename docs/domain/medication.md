@@ -249,8 +249,8 @@ a session without it is offered no link and is routed to its landing page.
 - **It reads the patient in context** as the FFI page does, from the signed-in
   layout's one reader of it ([patient](patient.md), "The patient in context"),
   through the same shared wrapper: it reads that patient's Medication History
-  once the patient is read, says "Loading medication records…" while the
-  patient or the first page is read, and a failed read of the patient leaves
+  once the patient is read, says "Loading records…" while the patient or the
+  first page is read, and a failed read of the patient leaves
   it empty. It is read-only, five Medication Records a page, with no row
   action.
 - **The table**: Medication, Dosage, Route, Frequency, Step, Quantity, Dispense
@@ -263,8 +263,8 @@ a session without it is offered no link and is routed to its landing page.
   cell keeps to one line and the table scrolls sideways inside the card rather
   than squeezing its columns.
 - **The shared paged listing**: the numbered pager and "Showing x to y of N
-  medication records", named on a single page too, the page shown held while
-  the next loads.
+  records", named on a single page too, the page shown held while the next
+  loads.
 - **Sort.** As on the other history pages ([ffi](ffi.md), "The FFI page"):
   only the Start Date and End Date headings sort, one at a time, each the
   shared sortable column heading stating its direction with `aria-sort`, by
@@ -298,8 +298,8 @@ a session without it is offered no link and is routed to its landing page.
   as the other history pages do, and reads no Medication Records or reports
   nothing.
 - **A patient with no Medication Records** — a `200` with `total: 0` — shows
-  "No medication records". A filter matching none of a patient's Medication
-  Records shows "No medication records match the filters".
+  "No records found." A filter matching none of a patient's Medication
+  Records shows "No records match the filters."
 - **The source failing** shows "Couldn't load medication records" on the page's
   error line, and Try again, which reads the same page again.
 

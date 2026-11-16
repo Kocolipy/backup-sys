@@ -59,18 +59,18 @@ test.describe("NUMC", () => {
       "Diving DutiesWAIVER GRANTED22 Nov 202321 Nov 2024",
       "Hyperbaric Chamber DutiesUNFIT05 Aug 202304 Aug 2024",
     ]);
-    await expect(page.getByText("Showing 1 to 4 of 4 NUMC records")).toBeVisible();
+    await expect(page.getByText("Showing 1 to 4 of 4 records")).toBeVisible();
   });
 
   test("pages Tan Hui Min's seven NUMC Records to the second page", async ({ page }) => {
     await selectPatient(page, "tan", "Tan Hui Min", "S9012345A");
     await openNumc(page);
-    await expect(page.getByText("Showing 1 to 5 of 7 NUMC records")).toBeVisible();
+    await expect(page.getByText("Showing 1 to 5 of 7 records")).toBeVisible();
     await expect(numcRows(page)).toHaveCount(5);
 
     await page.getByRole("button", { name: "Page 2" }).click();
 
-    await expect(page.getByText("Showing 6 to 7 of 7 NUMC records")).toBeVisible();
+    await expect(page.getByText("Showing 6 to 7 of 7 records")).toBeVisible();
     await expect(numcRows(page)).toHaveText([
       "Hyperbaric Chamber DutiesUNFIT17 Apr 202316 Apr 2024",
       "Diving DutiesWAIVER GRANTED05 Dec 202204 Dec 2023",
@@ -98,15 +98,15 @@ test.describe("NUMC", () => {
       "parachutingrequest-waiver16 Mar 202015 Mar 2021",
       "Hyperbaric Chamber Duties———",
     ]);
-    await expect(page.getByText("Showing 1 to 4 of 4 NUMC records")).toBeVisible();
+    await expect(page.getByText("Showing 1 to 4 of 4 records")).toBeVisible();
   });
 
-  test("says No NUMC records for a patient with none", async ({ page }) => {
+  test("says no records are found for a patient with none", async ({ page }) => {
     await selectPatient(page, "s9212345a", "Siti Nurhaliza binte Ahmad", "S9212345A");
 
     await openNumc(page);
 
-    await expect(page.getByText("No NUMC records")).toBeVisible();
+    await expect(page.getByText("No records found.", { exact: true })).toBeVisible();
     await expect(page.getByRole("table", { name: "NUMC History" })).toHaveCount(0);
   });
 
@@ -182,7 +182,7 @@ test.describe("NUMC", () => {
       await selectPatient(page, "tan", "Tan Hui Min", "S9012345A");
       await openNumc(page);
       await page.getByRole("button", { name: "Page 2" }).click();
-      await expect(page.getByText("Showing 6 to 7 of 7 NUMC records")).toBeVisible();
+      await expect(page.getByText("Showing 6 to 7 of 7 records")).toBeVisible();
       await filterButton(page).click();
     }
 
@@ -204,7 +204,7 @@ test.describe("NUMC", () => {
       await pick(page, "Type", "Hyperbaric Chamber Duties", "Submariner Duties");
       await apply(page);
 
-      await expect(page.getByText("Showing 1 to 4 of 4 NUMC records")).toBeVisible();
+      await expect(page.getByText("Showing 1 to 4 of 4 records")).toBeVisible();
       await expect(numcRows(page)).toHaveText(rowsOf(2, 3, 5, 6));
       await expect(filterButton(page)).toHaveAccessibleName("Filter, 1 set");
       await expect(page).toHaveURL("/numc");
@@ -216,7 +216,7 @@ test.describe("NUMC", () => {
       await pick(page, "Outcome", "WAIVER GRANTED", "WAIVER REJECTED");
       await apply(page);
 
-      await expect(page.getByText("Showing 1 to 3 of 3 NUMC records")).toBeVisible();
+      await expect(page.getByText("Showing 1 to 3 of 3 records")).toBeVisible();
       await expect(numcRows(page)).toHaveText(rowsOf(3, 4, 7));
       await expect(filterButton(page)).toHaveAccessibleName("Filter, 1 set");
     });
@@ -228,7 +228,7 @@ test.describe("NUMC", () => {
       await dateField(page, "Issue Date", "To").fill("2024-12-31");
       await apply(page);
 
-      await expect(page.getByText("Showing 1 to 3 of 3 NUMC records")).toBeVisible();
+      await expect(page.getByText("Showing 1 to 3 of 3 records")).toBeVisible();
       await expect(numcRows(page)).toHaveText(rowsOf(2, 3, 4));
       await expect(filterButton(page)).toHaveAccessibleName("Filter, 2 set");
     });
@@ -239,7 +239,7 @@ test.describe("NUMC", () => {
       await dateField(page, "Expiry Date", "To").fill("2024-12-31");
       await apply(page);
 
-      await expect(page.getByText("Showing 1 to 3 of 3 NUMC records")).toBeVisible();
+      await expect(page.getByText("Showing 1 to 3 of 3 records")).toBeVisible();
       await expect(numcRows(page)).toHaveText(rowsOf(5, 6, 7));
     });
 
@@ -250,7 +250,7 @@ test.describe("NUMC", () => {
       await dateField(page, "Issue Date", "From").fill("2024-01-01");
       await apply(page);
 
-      await expect(page.getByText("Showing 1 to 2 of 2 NUMC records")).toBeVisible();
+      await expect(page.getByText("Showing 1 to 2 of 2 records")).toBeVisible();
       await expect(numcRows(page)).toHaveText(rowsOf(1, 4));
       await expect(filterButton(page)).toHaveAccessibleName("Filter, 2 set");
     });
@@ -259,25 +259,23 @@ test.describe("NUMC", () => {
       await filterTanHuiMin(page);
       await pick(page, "Outcome", "WAIVER GRANTED", "WAIVER REJECTED");
       await apply(page);
-      await expect(page.getByText("Showing 1 to 3 of 3 NUMC records")).toBeVisible();
+      await expect(page.getByText("Showing 1 to 3 of 3 records")).toBeVisible();
 
       await filterButton(page).click();
       await panel(page).getByRole("button", { name: "Reset" }).click();
 
-      await expect(page.getByText("Showing 1 to 5 of 7 NUMC records")).toBeVisible();
+      await expect(page.getByText("Showing 1 to 5 of 7 records")).toBeVisible();
       await expect(numcRows(page)).toHaveText(rowsOf(1, 2, 3, 4, 5));
       await expect(filterButton(page)).toHaveAccessibleName("Filter");
     });
 
-    test("says No NUMC records match the filters for a filter matching none", async ({ page }) => {
+    test("says no records match the filters for a filter matching none", async ({ page }) => {
       await filterTanHuiMin(page);
 
       await dateField(page, "Expiry Date", "To").fill("2022-12-31");
       await apply(page);
 
-      await expect(
-        page.getByText("No NUMC records match the filters", { exact: true }),
-      ).toBeVisible();
+      await expect(page.getByText("No records match the filters.", { exact: true })).toBeVisible();
       await expect(page.getByRole("table", { name: "NUMC History" })).toHaveCount(0);
     });
   });

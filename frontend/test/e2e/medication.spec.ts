@@ -62,7 +62,7 @@ test.describe("Medication", () => {
       "Paracetamol500 mgPOQDS—20 tabletsDISPENSED3 days13 Oct 2026 14:3015 Oct 2026 14:30Khatib Camp MCDr Rajesh Kumar",
       "Amoxicillin300 mgPOTDS—20 tabletsUNCOLLECTED3 days22 Apr 2025 10:0024 Apr 2025 10:00Kranji Camp MCDr Nur Aisyah binte Rahman",
     ]);
-    await expect(page.getByText("Showing 1 to 5 of 6 medication records")).toBeVisible();
+    await expect(page.getByText("Showing 1 to 5 of 6 records")).toBeVisible();
   });
 
   test("pages Tan Wei Ming's six Medication Records to the second page", async ({ page }) => {
@@ -72,7 +72,7 @@ test.describe("Medication", () => {
 
     await page.getByRole("button", { name: "Page 2" }).click();
 
-    await expect(page.getByText("Showing 6 to 6 of 6 medication records")).toBeVisible();
+    await expect(page.getByText("Showing 6 to 6 of 6 records")).toBeVisible();
     await expect(medicationRows(page)).toHaveText([
       "Prednisolone30 mgPOOM114 tabletsDISPENSED7 days02 Dec 2024 09:1509 Dec 2024 09:15Hendon Camp MCDr Chen Mei Ling",
     ]);
@@ -100,12 +100,12 @@ test.describe("Medication", () => {
     ).toEqual(["success", "danger", "muted", "success"]);
   });
 
-  test("says No medication records for a patient with none", async ({ page }) => {
+  test("says no records are found for a patient with none", async ({ page }) => {
     await selectPatient(page, "s9212345a", "Siti Nurhaliza binte Ahmad", "S9212345A");
 
     await openMedication(page);
 
-    await expect(page.getByText("No medication records")).toBeVisible();
+    await expect(page.getByText("No records found.", { exact: true })).toBeVisible();
     await expect(page.getByRole("table", { name: "Medication History" })).toHaveCount(0);
   });
 
@@ -162,11 +162,11 @@ test.describe("Medication", () => {
       await selectPatient(page, "tan", "Tan Wei Ming", "S1234567A");
       await openMedication(page);
       await page.getByRole("button", { name: "Page 2" }).click();
-      await expect(page.getByText("Showing 6 to 6 of 6 medication records")).toBeVisible();
+      await expect(page.getByText("Showing 6 to 6 of 6 records")).toBeVisible();
 
       await sortBy(page, "Start Date");
       await expect(header(page, "Start Date")).toHaveAttribute("aria-sort", "ascending");
-      await expect(page.getByText("Showing 1 to 5 of 6 medication records")).toBeVisible();
+      await expect(page.getByText("Showing 1 to 5 of 6 records")).toBeVisible();
       await expect(medicationRows(page)).toHaveText(rowsOf(6, 5, 4, 1, 3));
 
       await sortBy(page, "Start Date");
@@ -209,7 +209,7 @@ test.describe("Medication", () => {
     async function filterTanHuiMin(page: Page) {
       await selectPatient(page, "tan", "Tan Hui Min", "S9012345A");
       await openMedication(page);
-      await expect(page.getByText("Showing 1 to 4 of 4 medication records")).toBeVisible();
+      await expect(page.getByText("Showing 1 to 4 of 4 records")).toBeVisible();
       await filterButton(page).click();
     }
 
@@ -222,14 +222,11 @@ test.describe("Medication", () => {
     /** Tan Hui Min's Medication Records `numbers`, one-based in the source's order. */
     const rowsOf = (...numbers: number[]) => numbers.map((n) => TAN_HUI_MIN_ROWS[n - 1]);
 
-    for (const [labels, rows] of [
-      [["PENDING"], [3]],
-      [["DISPENSED"], [1, 4]],
-      [["UNCOLLECTED"], [2]],
-      [
-        ["PENDING", "UNCOLLECTED"],
-        [2, 3],
-      ],
+    for (const [labels, rows, range] of [
+      [["PENDING"], [3], "Showing 1 to 1 of 1 record"],
+      [["DISPENSED"], [1, 4], "Showing 1 to 2 of 2 records"],
+      [["UNCOLLECTED"], [2], "Showing 1 to 1 of 1 record"],
+      [["PENDING", "UNCOLLECTED"], [2, 3], "Showing 1 to 2 of 2 records"],
     ] as const) {
       test(`filters by the Dispense Status ${labels.join(" or ")}, reading its stubbed rows`, async ({
         page,
@@ -239,9 +236,7 @@ test.describe("Medication", () => {
         await pickStatuses(page, ...labels);
         await apply(page);
 
-        await expect(
-          page.getByText(`Showing 1 to ${rows.length} of ${rows.length} medication records`),
-        ).toBeVisible();
+        await expect(page.getByText(range, { exact: true })).toBeVisible();
         await expect(medicationRows(page)).toHaveText(rowsOf(...rows));
         await expect(filterButton(page)).toHaveAccessibleName("Filter, 1 set");
         await expect(page).toHaveURL("/medication");
@@ -258,7 +253,7 @@ test.describe("Medication", () => {
       await dateField(page, "Start Date", "To").fill("2025-07-14T16:20");
       await apply(page);
 
-      await expect(page.getByText("Showing 1 to 3 of 3 medication records")).toBeVisible();
+      await expect(page.getByText("Showing 1 to 3 of 3 records")).toBeVisible();
       await expect(medicationRows(page)).toHaveText(rowsOf(2, 3, 4));
       await expect(filterButton(page)).toHaveAccessibleName("Filter, 1 set");
     });
@@ -273,7 +268,7 @@ test.describe("Medication", () => {
       await dateField(page, "Start Date", "From").fill("2026-03-01T10:00");
       await apply(page);
 
-      await expect(page.getByText("Showing 1 to 1 of 1 medication records")).toBeVisible();
+      await expect(page.getByText("Showing 1 to 1 of 1 record")).toBeVisible();
       await expect(medicationRows(page)).toHaveText(rowsOf(1));
     });
 
@@ -284,7 +279,7 @@ test.describe("Medication", () => {
       await dateField(page, "End Date", "To").fill("2025-12-31T23:59");
       await apply(page);
 
-      await expect(page.getByText("Showing 1 to 2 of 2 medication records")).toBeVisible();
+      await expect(page.getByText("Showing 1 to 2 of 2 records")).toBeVisible();
       await expect(medicationRows(page)).toHaveText(rowsOf(2, 3));
       await expect(filterButton(page)).toHaveAccessibleName("Filter, 2 set");
     });
@@ -296,7 +291,7 @@ test.describe("Medication", () => {
       await dateField(page, "Start Date", "From").fill("2025-01-01T00:00");
       await apply(page);
 
-      await expect(page.getByText("Showing 1 to 1 of 1 medication records")).toBeVisible();
+      await expect(page.getByText("Showing 1 to 1 of 1 record")).toBeVisible();
       await expect(medicationRows(page)).toHaveText(rowsOf(1));
       await expect(filterButton(page)).toHaveAccessibleName("Filter, 2 set");
     });
@@ -305,27 +300,23 @@ test.describe("Medication", () => {
       await filterTanHuiMin(page);
       await pickStatuses(page, "PENDING", "UNCOLLECTED");
       await apply(page);
-      await expect(page.getByText("Showing 1 to 2 of 2 medication records")).toBeVisible();
+      await expect(page.getByText("Showing 1 to 2 of 2 records")).toBeVisible();
 
       await filterButton(page).click();
       await panel(page).getByRole("button", { name: "Reset" }).click();
 
-      await expect(page.getByText("Showing 1 to 4 of 4 medication records")).toBeVisible();
+      await expect(page.getByText("Showing 1 to 4 of 4 records")).toBeVisible();
       await expect(medicationRows(page)).toHaveText(rowsOf(1, 2, 3, 4));
       await expect(filterButton(page)).toHaveAccessibleName("Filter");
     });
 
-    test("says No medication records match the filters for a filter matching none", async ({
-      page,
-    }) => {
+    test("says no records match the filters for a filter matching none", async ({ page }) => {
       await filterTanHuiMin(page);
 
       await dateField(page, "End Date", "To").fill("2023-12-31T23:59");
       await apply(page);
 
-      await expect(
-        page.getByText("No medication records match the filters", { exact: true }),
-      ).toBeVisible();
+      await expect(page.getByText("No records match the filters.", { exact: true })).toBeVisible();
       await expect(page.getByRole("table", { name: "Medication History" })).toHaveCount(0);
     });
   });

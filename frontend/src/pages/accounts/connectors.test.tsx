@@ -220,7 +220,7 @@ describe("Connectors", () => {
 
     await tokenRow("t0000001");
     const pager = section("Okta").getByRole("navigation", { name: "Pages of the tokens of Okta" });
-    expect(within(pager).getByText("Showing 1 to 5 of 7 tokens")).toBeInTheDocument();
+    expect(within(pager).getByText("Showing 1 to 5 of 7 records")).toBeInTheDocument();
     await user.click(within(pager).getByRole("button", { name: "Next" }));
 
     await tokenRow("t0000006");
@@ -229,7 +229,7 @@ describe("Connectors", () => {
         .getAllByRole("rowheader")
         .map((header) => header.textContent),
     ).toEqual(["t0000006", "t0000007"]);
-    expect(section("Okta").getByText("Showing 6 to 7 of 7 tokens")).toBeInTheDocument();
+    expect(section("Okta").getByText("Showing 6 to 7 of 7 records")).toBeInTheDocument();
   });
 
   // A token carrying a Permission no token may hold fails the section's read on
@@ -258,7 +258,7 @@ describe("Connectors", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       /^Unable to load the tokens of Okta\. Please try again\.$/,
     );
-    expect(section("Okta").queryByText("No active tokens.")).not.toBeInTheDocument();
+    expect(section("Okta").queryByText("No records found.")).not.toBeInTheDocument();
   });
 
   it("creates a connector and re-reads the listing", async () => {
@@ -269,7 +269,7 @@ describe("Connectors", () => {
     });
     const user = userEvent.setup();
 
-    expect(await screen.findByText("No connectors exist.")).toBeInTheDocument();
+    expect(await screen.findByText("No records found.")).toBeInTheDocument();
     await user.type(screen.getByLabelText("New connector name"), "  Okta  ");
     await user.click(screen.getByRole("button", { name: "Create connector" }));
 
@@ -279,7 +279,7 @@ describe("Connectors", () => {
       path: "/api/admin/connectors",
     });
     await screen.findByRole("heading", { name: "Okta" });
-    expect(await section("Okta").findByText("No active tokens.")).toBeInTheDocument();
+    expect(await section("Okta").findByText("No records found.")).toBeInTheDocument();
     expect(section("Okta").queryByRole("table")).not.toBeInTheDocument();
     expect(screen.getByLabelText("New connector name")).toHaveValue("");
   });
@@ -288,20 +288,20 @@ describe("Connectors", () => {
     const listing = deferred();
     await renderConnectors({ [LISTING]: listing.answer });
 
-    expect(screen.getByText("Loading connectors…")).toBeInTheDocument();
+    expect(screen.getByText("Loading records…")).toBeInTheDocument();
     await listing.settle(json([]));
-    expect(await screen.findByText("No connectors exist.")).toBeInTheDocument();
-    expect(screen.queryByText("Loading connectors…")).not.toBeInTheDocument();
+    expect(await screen.findByText("No records found.")).toBeInTheDocument();
+    expect(screen.queryByText("Loading records…")).not.toBeInTheDocument();
   });
 
   it("says a section's tokens are loading until its page arrives", async () => {
     const tokens = deferred();
     await renderConnectors({ ...okta(), [TOKENS]: tokens.answer });
 
-    expect(await (await oktaSection()).findByText("Loading tokens…")).toBeInTheDocument();
+    expect(await (await oktaSection()).findByText("Loading records…")).toBeInTheDocument();
     await tokens.settle(tokenPage([token()]));
     await tokenRow("a1b2c3d4");
-    expect(section("Okta").queryByText("Loading tokens…")).not.toBeInTheDocument();
+    expect(section("Okta").queryByText("Loading records…")).not.toBeInTheDocument();
   });
 
   it("reports a failed create naming the connector", async () => {
@@ -398,7 +398,8 @@ describe("Connectors", () => {
 
   it("deletes a connector", async () => {
     const { requests } = await renderConnectors({
-      ...okta(),
+      // Okta holds a token, so the only empty listing is the connectors' own.
+      ...okta([token()]),
       [LISTING]: [json([connector()]), json([])],
       [`DELETE ${connectorAt}`]: bare(204),
     });
@@ -407,7 +408,7 @@ describe("Connectors", () => {
     await deleteOkta(user);
 
     expect(requests()).toContainEqual({ method: "DELETE", path: connectorAt });
-    expect(await screen.findByText("No connectors exist.")).toBeInTheDocument();
+    expect(await screen.findByText("No records found.")).toBeInTheDocument();
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
   });
 
@@ -455,7 +456,7 @@ describe("Connectors", () => {
     });
     const user = userEvent.setup();
 
-    await (await oktaSection()).findByText("No active tokens.");
+    await (await oktaSection()).findByText("No records found.");
     const permissions = within(screen.getByRole("group", { name: "Permissions" }));
     // Chosen out of order: the request lists them in the backend's order regardless.
     await user.click(permissions.getByRole("checkbox", { name: /user:read/ }));
@@ -567,7 +568,7 @@ describe("Connectors", () => {
     await user.click(await screen.findByRole("button", { name: "Revoke token a1b2c3d4" }));
 
     expect(requests()).toContainEqual({ method: "POST", path: `${tokenAt}/revoke` });
-    expect(await section("Okta").findByText("No active tokens.")).toBeInTheDocument();
+    expect(await section("Okta").findByText("No records found.")).toBeInTheDocument();
     expect(section("Okta").queryByRole("rowheader")).not.toBeInTheDocument();
     expect(
       requests().filter((request) => request.path.startsWith(`${connectorAt}/tokens?`)),
@@ -699,8 +700,8 @@ describe("Connectors", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       /^Unable to load the connectors\. Please try again\.$/,
     );
-    expect(screen.queryByText("No connectors exist.")).not.toBeInTheDocument();
-    expect(screen.queryByText("Loading connectors…")).not.toBeInTheDocument();
+    expect(screen.queryByText("No records found.")).not.toBeInTheDocument();
+    expect(screen.queryByText("Loading records…")).not.toBeInTheDocument();
   });
 
   // A connector:read holder who is not the Superuser has no change that re-reads
@@ -723,7 +724,8 @@ describe("Connectors", () => {
 
   it("keeps the connectors on screen when the re-read after a change fails, offering Try again", async () => {
     await renderConnectors({
-      ...okta(),
+      // Okta holds a token, so no listing on screen is empty.
+      ...okta([token()]),
       [LISTING]: [
         json([connector()]),
         bare(503),
@@ -740,7 +742,7 @@ describe("Connectors", () => {
       "Unable to load the connectors. Please try again.",
     );
     expect(screen.getByRole("heading", { name: "Okta" })).toBeInTheDocument();
-    expect(screen.queryByText("No connectors exist.")).not.toBeInTheDocument();
+    expect(screen.queryByText("No records found.")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Try again" }));
 

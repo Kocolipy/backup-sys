@@ -272,7 +272,7 @@ describe("ARMC", () => {
     const answer = deferred();
     await renderArmc(answer.answer);
 
-    expect(await screen.findByRole("status")).toHaveTextContent(/^Loading ARMC records…$/);
+    expect(await screen.findByRole("status")).toHaveTextContent(/^Loading records…$/);
     await answer.settle(page(TWO_BOARDS, 1, 2));
   });
 
@@ -288,7 +288,7 @@ describe("ARMC", () => {
         7,
       ),
     });
-    await screen.findByText("Showing 1 to 5 of 7 ARMC records");
+    await screen.findByText("Showing 1 to 5 of 7 records");
 
     await userEvent.click(
       within(screen.getByRole("navigation", { name: "ARMC History pages" })).getByRole("button", {
@@ -296,17 +296,17 @@ describe("ARMC", () => {
       }),
     );
 
-    expect(await screen.findByText("Showing 6 to 7 of 7 ARMC records")).toBeInTheDocument();
+    expect(await screen.findByText("Showing 6 to 7 of 7 records")).toBeInTheDocument();
     expect({ reads: armcReads(requests()), rows: rows().map((row) => row[4]) }).toEqual({
       reads: [FIRST_PAGE, SECOND_PAGE],
       rows: ["Dr Rajesh Kumar", "Dr Chen Mei Ling"],
     });
   });
 
-  it("says No ARMC records for a patient with none", async () => {
+  it("says no records are found for a patient with none", async () => {
     await renderArmc(page([], 1, 0));
 
-    expect(await screen.findByText("No ARMC records")).toBeInTheDocument();
+    expect(await screen.findByText("No records found.")).toBeInTheDocument();
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
   });
 
@@ -327,7 +327,7 @@ describe("ARMC", () => {
 
     await patient.settle(json(TAN_WEI_MING));
 
-    expect(await screen.findByText("Showing 1 to 2 of 2 ARMC records")).toBeInTheDocument();
+    expect(await screen.findByText("Showing 1 to 2 of 2 records")).toBeInTheDocument();
     expect({ after: armcReads(requests()), before }).toEqual({ after: [FIRST_PAGE], before: [] });
   });
 
@@ -340,7 +340,7 @@ describe("ARMC", () => {
     });
 
     expect(screen.getByRole("main").querySelector("[role=status]")).toHaveTextContent(
-      /^Loading ARMC records…$/,
+      /^Loading records…$/,
     );
     await patient.settle(json(TAN_WEI_MING));
   });
@@ -381,9 +381,9 @@ const sortButton = (name: string) => within(columnHeader(name)).getByRole("butto
 
 /** Moves the history to its second page, and waits for it. */
 async function toSecondPage() {
-  await screen.findByText("Showing 1 to 5 of 7 ARMC records");
+  await screen.findByText("Showing 1 to 5 of 7 records");
   await userEvent.click(screen.getByRole("button", { name: "Page 2" }));
-  await screen.findByText("Showing 6 to 7 of 7 ARMC records");
+  await screen.findByText("Showing 6 to 7 of 7 records");
 }
 
 describe("ARMC, sorted", () => {
@@ -422,7 +422,7 @@ describe("ARMC, sorted", () => {
     await toSecondPage();
 
     await userEvent.click(sortButton(heading));
-    await screen.findByText("Showing 1 to 5 of 7 ARMC records");
+    await screen.findByText("Showing 1 to 5 of 7 records");
 
     expect({
       direction: columnHeader(heading).getAttribute("aria-sort"),
@@ -455,7 +455,7 @@ describe("ARMC, sorted", () => {
   it("holds the page, busy, and both sort headings still while a read is pending", async () => {
     const next = deferred();
     await renderArmc(FIVE_OF_SEVEN, { [SECOND_PAGE]: next.answer });
-    await screen.findByText("Showing 1 to 5 of 7 ARMC records");
+    await screen.findByText("Showing 1 to 5 of 7 records");
 
     await userEvent.click(screen.getByRole("button", { name: "Page 2" }));
 
@@ -557,7 +557,7 @@ describe("ARMC, filtered", () => {
 
       await chooseOutcome(user, label);
       await apply(user);
-      await screen.findByText("Showing 1 to 1 of 1 ARMC records");
+      await screen.findByText("Showing 1 to 1 of 1 record");
 
       expect({
         count: filterTrigger().getAttribute("aria-label"),
@@ -575,11 +575,11 @@ describe("ARMC, filtered", () => {
     await screen.findByRole("table", { name: "ARMC History" });
     await chooseOutcome(user, "UNFIT");
     await apply(user);
-    await screen.findByText("Showing 1 to 1 of 1 ARMC records");
+    await screen.findByText("Showing 1 to 1 of 1 record");
 
     await chooseOutcome(user, "All");
     await apply(user);
-    await screen.findByText("Showing 1 to 2 of 2 ARMC records");
+    await screen.findByText("Showing 1 to 2 of 2 records");
 
     expect({
       count: filterTrigger().getAttribute("aria-label"),
@@ -602,7 +602,7 @@ describe("ARMC, filtered", () => {
     setDate(range, "From", from);
     setDate(range, "To", to);
     await apply(user);
-    await screen.findByText("Showing 1 to 1 of 1 ARMC records");
+    await screen.findByText("Showing 1 to 1 of 1 record");
 
     expect({
       count: filterTrigger().getAttribute("aria-label"),
@@ -628,7 +628,7 @@ describe("ARMC, filtered", () => {
     setDate("Start Date", "From", "2023-01-01");
     setDate("End Date", "To", "2024-12-31");
     await apply(user);
-    await screen.findByText("Showing 1 to 1 of 1 ARMC records");
+    await screen.findByText("Showing 1 to 1 of 1 record");
 
     expect({
       count: filterTrigger().getAttribute("aria-label"),
@@ -677,7 +677,7 @@ describe("ARMC, filtered", () => {
     await screen.findByRole("table", { name: "ARMC History" });
     await chooseOutcome(user, "FIT");
     await apply(user);
-    await screen.findByText("Showing 1 to 1 of 1 ARMC records");
+    await screen.findByText("Showing 1 to 1 of 1 record");
     await chooseOutcome(user, "UNFIT");
     setDate("Start Date", "From", "2023-01-01");
 
@@ -701,11 +701,11 @@ describe("ARMC, filtered", () => {
     await chooseOutcome(user, "UNFIT");
     setDate("End Date", "From", "2023-01-01");
     await apply(user);
-    await screen.findByText("Showing 1 to 1 of 1 ARMC records");
+    await screen.findByText("Showing 1 to 1 of 1 record");
 
     await openFilters(user);
     await user.click(within(filterPanel()).getByRole("button", { name: "Reset" }));
-    await screen.findByText("Showing 1 to 2 of 2 ARMC records");
+    await screen.findByText("Showing 1 to 2 of 2 records");
 
     expect({
       count: filterTrigger().getAttribute("aria-label"),
@@ -713,7 +713,7 @@ describe("ARMC, filtered", () => {
     }).toEqual({ count: "Filter", read: FIRST_PAGE });
   });
 
-  it("says No ARMC records match the filters for a filter matching none, and offers the filters still", async () => {
+  it("says no records match the filters for a filter matching none, and offers the filters still", async () => {
     const user = userEvent.setup();
     await renderArmc(page(TWO_BOARDS, 1, 2), {
       [historyPage(1, "startDateTo=2019-12-31")]: page([], 1, 0),
@@ -725,11 +725,11 @@ describe("ARMC, filtered", () => {
     await apply(user);
 
     expect({
-      empty: (await screen.findByText(/^No ARMC records/)).textContent,
+      empty: (await screen.findByText(/^No records/)).textContent,
       filter: filterTrigger().getAttribute("aria-label"),
       table: screen.queryByRole("table"),
     }).toEqual({
-      empty: "No ARMC records match the filters",
+      empty: "No records match the filters.",
       filter: "Filter, 1 set",
       table: null,
     });

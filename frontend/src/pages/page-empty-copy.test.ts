@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { emptyCopyOf } from "./page-empty-copy";
 
-const LISTING_COPY = "No widgets are provisioned.";
+const LISTING_COPY = "No records found.";
 
 describe("emptyCopyOf", () => {
   it("is the listing's own copy on the first page", () => {

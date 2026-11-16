@@ -60,6 +60,13 @@ in the same change, so the ledger lists live flakes only.
 - **Evidence**: `2026-11-16`, `4d74dc59` with no change; failing `make verify`, then passing `./scripts/verify.sh` (`backend/`), no edit between.
 - **Suspected cause**: the in-process mock answered too slowly. The `502`'s fault record has `event.reason` `timed-out` (`PatientSourceAdapter.search`), and another Maven test run was using the same machine at the time.
 
+### `frontend/test/e2e/change-password.spec.ts` — `the form states the policy, and the browser holds back a too-short password`
+
+- **Command**: `make integration-test`
+- **Failure**: `Test timeout of 120000ms exceeded.` then `Error: browserContext.close: Test ended.`, at the `finally`'s `await context.close();` (`change-password.spec.ts:197`).
+- **Evidence**: `2026-11-17`, `d4539c11` merged with `afba3031`, a change to table copy that touches neither the Change password page nor the shell; failing `make integration-test`, then passing `make integration-test`, no edit between.
+- **Suspected cause**: the test's second browser context never rendering: both failure screenshots show a blank page while the Vite dev server repeatedly logs `[vite] connecting...`. Unknown beyond that.
+
 ### `frontend/test/e2e/patient-search.spec.ts` — `Patient Search › pages a name search to its second page, in the patient source's order`
 
 - **Command**: `make integration-test`

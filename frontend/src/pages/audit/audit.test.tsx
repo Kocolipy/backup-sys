@@ -279,19 +279,34 @@ describe("Audit", () => {
     });
   });
 
-  it("shows an empty-state message when no events match", async () => {
+  it("says no records are found when the unfiltered trail is empty", async () => {
     await renderAudit(everyRead(answerPage([])));
 
-    expect(
-      await screen.findByText("No audit events match the current filters."),
-    ).toBeInTheDocument();
+    expect(await screen.findByTestId("listing-empty")).toHaveTextContent(/^No records found\.$/);
     expect(screen.queryByRole("table", { name: "Audit events" })).not.toBeInTheDocument();
+  });
+
+  it("says no records match the filters when a filter is applied and none matches", async () => {
+    await renderAudit({
+      [at(1)]: answerPage([EVENT_1], { totalResults: 1 }),
+      [`GET ${AUDIT_EVENTS_PATH}?outcome=FAILURE&startIndex=1&count=20`]: answerPage([]),
+    });
+    const user = userEvent.setup();
+    await findTable();
+
+    await openFilters(user);
+    await user.click(outcome("Failure"));
+    await apply(user);
+
+    expect(await screen.findByTestId("listing-empty")).toHaveTextContent(
+      /^No records match the filters\.$/,
+    );
   });
 
   it("says the trail is loading while its first read is in flight", async () => {
     await renderAudit({ [at(1)]: deferred().answer });
 
-    expect(screen.getByRole("status")).toHaveTextContent(/^Loading audit events…$/);
+    expect(screen.getByRole("status")).toHaveTextContent(/^Loading records…$/);
   });
 
   it("reports a failed read with the page's own copy", async () => {
@@ -738,7 +753,7 @@ describe("Audit", () => {
         }),
       );
 
-      await screen.findByText("Showing 2 to 2 of 51 events");
+      await screen.findByText("Showing 2 to 2 of 51 records");
       expect(within(table()).getByText("Users listed")).toBeInTheDocument();
       expect(readPaths(requests).slice(-1)[0]).toBe(`${AUDIT_EVENTS_PATH}?startIndex=2&count=20`);
     });
@@ -931,9 +946,9 @@ describe("Audit filters", () => {
 
       await findTable();
       await user.click(screen.getByRole("button", { name: "Next" }));
-      await screen.findByText("Showing 2 to 2 of 51 events");
+      await screen.findByText("Showing 2 to 2 of 51 records");
       await apply(user);
-      await screen.findByText("Showing 1 to 1 of 51 events");
+      await screen.findByText("Showing 1 to 1 of 51 records");
 
       expect(readPaths(requests)).toEqual([
         `${AUDIT_EVENTS_PATH}?startIndex=1&count=20`,
@@ -1201,10 +1216,10 @@ describe("Audit filters", () => {
 
       await findTable();
       await user.click(screen.getByRole("button", { name: "Next" }));
-      await screen.findByText("Showing 2 to 2 of 51 events");
+      await screen.findByText("Showing 2 to 2 of 51 records");
       await reset(user);
 
-      expect(await screen.findByText("Showing 1 to 1 of 51 events")).toBeInTheDocument();
+      expect(await screen.findByText("Showing 1 to 1 of 51 records")).toBeInTheDocument();
     });
   });
 

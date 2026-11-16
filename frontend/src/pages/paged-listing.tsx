@@ -2,23 +2,11 @@ import { type ReactNode, useLayoutEffect, useRef, useState } from "react";
 
 import type { ReadView } from "@/auth/use-gated-read";
 import { ListingBody, ReadAgain } from "@/pages/listing-body";
-import { emptyCopyOf } from "@/pages/page-empty-copy";
+import { listingCopyOf, type Narrowing } from "@/pages/listing-copy";
 import type { Page } from "@/lib/paging";
 import { cn } from "@/lib/utils";
 import type { PagedRead } from "@/pages/paged-read";
 import { Pager } from "@/pages/pager";
-
-/** The copy a paged listing shows, all of it the page's own. */
-interface PagedListingCopy {
-  /** The line shown while the first read is in flight. */
-  loading: string;
-  /** The line shown when the first page has no rows; a later empty page says it emptied. */
-  empty: string;
-  /** The pager's accessible name. */
-  pagerLabel: string;
-  /** What the rows are, lower-case and plural, as the pager's position line names them: "Showing 1 to 20 of 45 users". */
-  noun: string;
-}
 
 /**
  * The page the latest read answered for the current path, or `null` while
@@ -90,8 +78,10 @@ function useSteadyHeight<R>(page: Page<R> | null, pageSize: number) {
  * - **A page short of rows** — the last of several, or one that emptied —
  *   stands as tall as the last full page did, so the pager beneath it stays
  *   where it was from one page to the next.
- * - **The empty copy** is the listing's own on the first page, and says the
- *   page emptied on a later one ({@link emptyCopyOf}).
+ * - **The copy** — loading, empty and the pager's position line — names the
+ *   rows "records", and is chosen from how the page says the rows are
+ *   narrowed (`narrowing`, {@link listingCopyOf}), never written by the page.
+ *   A later page with no rows says only that it emptied.
  * - **The pager** shows for the page the latest read answered for the current
  *   path, `ready` or `stale` alike, and for nothing else: never while a first
  *   read is in flight, nor once it failed with nothing read. A listing whose
@@ -112,19 +102,23 @@ function useSteadyHeight<R>(page: Page<R> | null, pageSize: number) {
  */
 export function PagedListing<R>({
   children,
-  copy,
   disabled = false,
+  narrowing,
   onePage = "hidden",
+  pagerLabel,
   read: { move, pageSize, reload, view },
   readAgain = true,
 }: {
   /** The rows of the page shown, which has at least one. */
   children: (page: Page<R>) => ReactNode;
-  copy: PagedListingCopy;
   /** Holds the pager and the read-again control still, as while an action answering onto the page is in flight. */
   disabled?: boolean;
+  /** How the rows are narrowed, which decides the loading and empty copy. */
+  narrowing: Narrowing;
   /** Whether a first page holding every row still shows the pager, its range named: {@link Pager}'s `onePage`. */
   onePage?: "hidden" | "shown";
+  /** The pager's accessible name. */
+  pagerLabel: string;
   read: PagedRead<R>;
   /** Whether the listing offers Try again; `false` for a page offering its own read-again control. */
   readAgain?: boolean;
@@ -150,13 +144,13 @@ export function PagedListing<R>({
       >
         {pending ? (
           <span className="sr-only" role="status">
-            {copy.loading}
+            {listingCopyOf(narrowing).loading}
           </span>
         ) : null}
         <div ref={rows}>
           <ListingBody
-            empty={emptyCopyOf(page, copy.empty)}
-            loading={copy.loading}
+            narrowing={narrowing}
+            pageShown={page}
             rows={rowsOf}
             staleRows="hide"
             view={shown}
@@ -170,8 +164,7 @@ export function PagedListing<R>({
         {page === null ? null : (
           <Pager
             disabled={disabled || pending}
-            label={copy.pagerLabel}
-            noun={copy.noun}
+            label={pagerLabel}
             onMove={move}
             onePage={onePage}
             page={page}

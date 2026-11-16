@@ -232,7 +232,7 @@ a session without it is offered no link and is routed to its landing page.
 - **It reads the patient in context** as the FFI page does, from the signed-in
   layout's one reader of it ([patient](patient.md), "The patient in context"),
   through the same shared wrapper: it reads that patient's NUMC History once the
-  patient is read, says "Loading NUMC records…" while the patient or the first
+  patient is read, says "Loading records…" while the patient or the first
   page is read, and a failed read of the patient leaves it empty. It is
   read-only, five NUMC Records a page, with no row action.
 - **The table**: Type, Outcome, Issue Date, Expiry Date — the NUMC Type by its
@@ -241,7 +241,7 @@ a session without it is offered no link and is routed to its landing page.
   neutral badge; a missing element "—" and one in the wrong format "Error", the
   rest of the row as any other ([Shown as received](#shown-as-received)).
 - **The shared paged listing**: the numbered pager and "Showing x to y of N
-  NUMC records", named on a single page too, the page shown held while the next
+  records", named on a single page too, the page shown held while the next
   loads.
 - **Sort.** As on the FFI page ([ffi](ffi.md), "The FFI page"): only the Issue
   Date and Expiry Date headings sort, one at a time, each the shared sortable
@@ -270,9 +270,9 @@ a session without it is offered no link and is routed to its landing page.
 - **No patient in context** — the tab holds none, or the source holds no
   patient under its id (its `404`, our `404`) — shows "No patient in context",
   as the FFI page does, and reads no NUMC Records or reports nothing.
-- **A patient with no NUMC Records** — a `200` with `total: 0` — shows "No NUMC
-  records". A filter matching none of a patient's NUMC Records shows "No NUMC
-  records match the filters".
+- **A patient with no NUMC Records** — a `200` with `total: 0` — shows "No
+  records found." A filter matching none of a patient's NUMC Records shows "No
+  records match the filters."
 - **The source failing** shows "Couldn't load NUMC records" on the page's error
   line, and Try again, which reads the same page again.
 

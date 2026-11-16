@@ -60,9 +60,9 @@ come in normalized `userName` order by default, twenty to a page on the Accounts
 page, with the total beside them and Previous and Next controls. A search box
 narrows them to the Users whose `userName` or display name contains the text,
 ignoring case. Submitting a search reads its first page. A search that matches
-nothing says so ("No users match …"), which is distinct from no User being
-provisioned at all. The search is matched literally and bound as a statement
-parameter, never composed into filter text. Paging follows SCIM's bounds
+nothing says so ("No records match your search."), which is distinct from no
+User being provisioned at all ("No records found."). The search is matched
+literally and bound as a statement parameter, never composed into filter text. Paging follows SCIM's bounds
 (`startIndex` one-based, `count` defaulting to 100 and capped at 200,
 out-of-range values coerced), as the Group member read's does. Each page's
 direct Groups, and so its Superuser flag, come from one membership read for that
@@ -218,7 +218,7 @@ leaves the panel open. Reset clears every control and reads the unfiltered first
 page. An Apply or Reset that reads closes the panel.
 It asks for 20 events at a time and moves through the trail with the pager the
 Accounts page uses, which shows once a read has answered and the events run past
-one page: "Showing 51 to 100 of 120 events", the pages numbered between Previous
+one page: "Showing 51 to 100 of 120 records", the pages numbered between Previous
 and Next, Previous disabled on the first page, Next disabled once no events lie
 past the page shown. Moving keeps the applied filters, and any filter change
 returns to the first page. A later page that comes back empty says so and keeps

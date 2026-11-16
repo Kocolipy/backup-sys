@@ -137,10 +137,10 @@ and decoders — and imports no hook (`lb-api-modules-are-data`).
     `mb-pages-do-not-import-the-shell` rules out `src/shell/`, and
     `mb-pages-do-not-import-another-page` a page folder.
 - `for-patient-in-context.tsx` — the part of a history page the patient in
-  context decides. `ForPatientInContext` is handed the page's history and its
-  loading copy: with none in context, a `404` for the id there, or a session
-  without `patient:read`, `NoPatientInContext` ("No patient in context") and
-  no history; while the patient is read, the loading copy in a `status`; a
+  context decides. `ForPatientInContext` is handed the page's history: with
+  none in context, a `404` for the id there, or a session without
+  `patient:read`, `NoPatientInContext` ("No patient in context") and no
+  history; while the patient is read, "Loading records…" in a `status`; a
   failed read, nothing, its copy on the error line; and once read, the history
   of that patient, by its id, keyed by it. A history whose own read answers
   `absent` renders `NoPatientInContext` too.
@@ -187,14 +187,14 @@ and scrolls sideways in its own container.
 - `filtered-history.tsx` — `FilteredHistory`, the filtered, sorted listing
   every history page renders once the patient in context is read. Each page
   hands it its paged declaration, its page size, its Filter panel, its
-  no-filter value and filter count, its copy and its table. It holds the
-  filters and the sort as component state alone, never the URL, so a new
+  no-filter value and filter count, its failure copy and pager label, and its
+  table. It holds the filters and the sort as component state alone, never the URL, so a new
   patient in context starts with neither; reads through `usePagedRead`, a
   change of either from the first page; and renders the Filter panel above the
   shared `PagedListing`, its range named on a single page too. A `404` is
-  `NoPatientInContext`; with a filter applied, an empty history gives the
-  page's "match the filters" copy; and the table is told while a read is
-  pending, so its sort headings hold still.
+  `NoPatientInContext`; with a filter applied, the listing is narrowed by
+  filters, so an empty history says "No records match the filters."; and the
+  table is told while a read is pending, so its sort headings hold still.
 - `history-api.ts`, `history-filter-popover.tsx` — what the histories share,
   naming no history's column. Each history's `*-api.ts` **declares its date
   columns** (`FFI_DATE_COLUMNS`, …), each a `DateColumn` (`lib/date-range.ts`):
@@ -237,26 +237,32 @@ and scrolls sideways in its own container.
 - `paged-listing.tsx` — the one paged listing, which every paged read renders
   through: the listing body, the pager and "Try again", around the rows the
   page renders as its own table or list. It decides, once, for every page:
-  rows a failed re-read could not confirm are hidden; the empty line comes
-  from `page-empty-copy.ts`; the pager shows for the page the latest read
-  stated for the current path and never while a first read is in flight or
-  after one failed with nothing read; and "Try again" re-reads the current
-  path through the read's `reload`, keeping the page shown. Filters, search
+  rows a failed re-read could not confirm are hidden; the loading and empty
+  copy come from the caller's `narrowing` alone (`listing-copy.ts`); the pager
+  shows for the page the latest read stated for the current path and never
+  while a first read is in flight or after one failed with nothing read; and
+  "Try again" re-reads the current path through the read's `reload`, keeping
+  the page shown. Filters, search
   boxes and toolbars stay the page's.
+- `listing-copy.ts` — what every listing says of its rows, in one place: the
+  loading and empty copy of each `Narrowing` (none, filters, search, or the
+  Search page's `patient-search`) and the pager's count of records. No caller
+  passes copy of its own.
 - `listing-body.tsx` — the one listing body, with the loading, empty and
-  failed states of `DESIGN.md` ("Loading & empty states"). Each caller names
-  its `staleRows` choice: Connectors keeps the last rows, and
-  `paged-listing.tsx` hides them. Its `ReadAgain` is the one "Try again",
+  failed states of `DESIGN.md` ("Loading & empty states"), its copy chosen by
+  the caller's `narrowing`. Each caller names its `staleRows` choice:
+  Connectors keeps the last rows, and `paged-listing.tsx` hides them. Its `ReadAgain` is the one "Try again",
   offered only once the latest read was refused or failed.
 - `pager.tsx`, `pager-move.tsx`, `page-empty-copy.ts` — the one pager, which
-  `paged-listing.tsx` places: the position line, « and » each disabled at its
-  end, a number per page, and nothing while every row sits on the first page
-  unless the listing asks for its range named anyway (`onePage="shown"`).
+  `paged-listing.tsx` places: the position line in records ("Showing 1 to 20
+  of 45 records", "… of 1 record"), « and » each disabled at its end, a
+  number per page, and nothing while every row sits on the first page unless
+  the listing asks for its range named anyway (`onePage="shown"`).
   `PagerMove` is one of its buttons, a `Button` rather than shadcn's
   `PaginationLink`, whose `<a>` would have no `href` because paging is
   component state rather than a URL. `page-empty-copy.ts` chooses the body's
   empty line: a later page says it emptied, where the first gives the
-  listing's own copy.
+  listing's empty copy.
 - `sort-heading.tsx` — the sortable column heading: `aria-sort`, a direction
   icon, and a press that sorts its column ascending first, then toggles
   descending → ascending → …, never returning a sorted column to the listing's

@@ -20,7 +20,7 @@ import { FilteredHistory } from "./filtered-history";
 
 // The filtered history over a history of its own: a patient's widgets, two a
 // page, narrowed by one filter and sorted by one column. What each history
-// page hands it — its read, its Filter panel, its copy, its table's columns —
+// page hands it — its read, its Filter panel, its failure copy, its table's columns —
 // is that page's suite's (ffi.test.tsx, numc.test.tsx, armc.test.tsx,
 // medication.test.tsx); the paged read beneath it is paged-read.test.tsx's.
 
@@ -63,14 +63,7 @@ const renderHistory = (answers: Answers) =>
   renderAsSession(
     <InPageStatus>
       <FilteredHistory
-        copy={{
-          empty: "No widgets",
-          emptyFiltered: "No widgets match the filters",
-          failure: "Couldn't load widgets",
-          loading: "Loading widgets…",
-          noun: "widgets",
-          pagerLabel: "Widget pages",
-        }}
+        copy={{ failure: "Couldn't load widgets", pagerLabel: "Widget pages" }}
         countFilters={(filters: WidgetFilters) => (filters.kind === "" ? 0 : 1)}
         declaration={WIDGET_HISTORY}
         filterPopover={({ applied, onApply }) => (
@@ -111,7 +104,7 @@ describe("FilteredHistory", () => {
       [widgetsAt(1)]: widgetPage(["anvil", "bolt"], 1, 2),
     });
 
-    expect(await screen.findByText("Showing 1 to 2 of 2 widgets")).toBeInTheDocument();
+    expect(await screen.findByText("Showing 1 to 2 of 2 records")).toBeInTheDocument();
     expect(screen.getByTestId("rows")).toHaveTextContent(/^anvil, bolt$/);
     expect(reads(requests())).toEqual([widgetsAt(1)]);
   });
@@ -140,16 +133,16 @@ describe("FilteredHistory", () => {
       [widgetsAt(3, "kind=bolt")]: widgetPage(["bolt"], 3, 3),
       [widgetsAt(1, "kind=bolt&sortBy=made&sortOrder=ascending")]: widgetPage(["bolt"], 1, 1),
     });
-    await screen.findByText("Showing 1 to 2 of 3 widgets");
+    await screen.findByText("Showing 1 to 2 of 3 records");
     await press(/^Page 2$/);
-    await screen.findByText("Showing 3 to 3 of 3 widgets");
+    await screen.findByText("Showing 3 to 3 of 3 records");
 
     await press(/^Bolts only, of all$/);
-    await screen.findByText("Showing 1 to 2 of 3 widgets");
+    await screen.findByText("Showing 1 to 2 of 3 records");
     await press(/^Page 2$/);
-    await screen.findByText("Showing 3 to 3 of 3 widgets");
+    await screen.findByText("Showing 3 to 3 of 3 records");
     await press(/^Sort by made, now unsorted$/);
-    await screen.findByText("Showing 1 to 1 of 1 widgets");
+    await screen.findByText("Showing 1 to 1 of 1 record");
 
     expect({
       filter: screen.getByRole("button", { name: /^Bolts only/ }).textContent,
@@ -168,10 +161,10 @@ describe("FilteredHistory", () => {
     });
   });
 
-  it("says the patient has none with no filter applied", async () => {
+  it("says no records are found with no filter applied", async () => {
     await renderHistory({ [widgetsAt(1)]: widgetPage([], 1, 0) });
 
-    expect((await screen.findByText(/^No widgets/)).textContent).toBe("No widgets");
+    expect((await screen.findByTestId("listing-empty")).textContent).toBe("No records found.");
   });
 
   it("says none matches with a filter applied, and offers the filter still", async () => {
@@ -179,12 +172,12 @@ describe("FilteredHistory", () => {
       [widgetsAt(1)]: FIRST_OF_THREE,
       [widgetsAt(1, "kind=bolt")]: widgetPage([], 1, 0),
     });
-    await screen.findByText("Showing 1 to 2 of 3 widgets");
+    await screen.findByText("Showing 1 to 2 of 3 records");
 
     await press(/^Bolts only, of all$/);
 
-    expect((await screen.findByText(/^No widgets/)).textContent).toBe(
-      "No widgets match the filters",
+    expect((await screen.findByTestId("listing-empty")).textContent).toBe(
+      "No records match the filters.",
     );
     expect(screen.getByRole("button", { name: "Bolts only, of bolt" })).toBeInTheDocument();
   });
@@ -192,13 +185,13 @@ describe("FilteredHistory", () => {
   it("tells its table a read is pending beside the rows shown, and that it is not once it lands", async () => {
     const next = deferred();
     await renderHistory({ [widgetsAt(1)]: FIRST_OF_THREE, [widgetsAt(3)]: next.answer });
-    await screen.findByText("Showing 1 to 2 of 3 widgets");
+    await screen.findByText("Showing 1 to 2 of 3 records");
     const before = screen.getByTestId("rows").getAttribute("data-pending");
 
     await press(/^Page 2$/);
     const during = screen.getByTestId("rows").getAttribute("data-pending");
     await next.settle(widgetPage(["cog"], 3, 3));
-    await screen.findByText("Showing 3 to 3 of 3 widgets");
+    await screen.findByText("Showing 3 to 3 of 3 records");
 
     expect({
       after: screen.getByTestId("rows").getAttribute("data-pending"),
