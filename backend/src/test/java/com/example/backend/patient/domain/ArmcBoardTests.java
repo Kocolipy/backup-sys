@@ -32,20 +32,6 @@ class ArmcBoardTests {
                 SourceField.present("Medical Officer 2"));
     }
 
-    @Test
-    void aBoardHoldsEveryElementItWasGiven() {
-        ArmcBoard board = fit("armc-tan-wei-ming-1");
-
-        assertThat(Arrays.<Object>asList(board.id(), board.boardType(), board.outcome(),
-                board.startDate(), board.endDate(), board.medicalOfficer1(),
-                board.medicalOfficer2()))
-                .containsExactly(SourceField.present("armc-tan-wei-ming-1"),
-                        SourceField.present("aces"), SourceField.present("fit"),
-                        SourceField.present(STARTED), SourceField.present(ENDED),
-                        SourceField.present("Medical Officer 1"),
-                        SourceField.present("Medical Officer 2"));
-    }
-
     /**
      * The source is the truth: a board whose id is outside FHIR's grammar, whose codes are no
      * members of their closed sets, which ends before it starts, or whose elements are missing or

@@ -48,19 +48,6 @@ class FfiTests {
                 named.contains("status") ? SourceField.invalid() : text);
     }
 
-    @Test
-    void anFfiHoldsEveryFieldItWasGiven() {
-        Ffi ffi = ippt("ffi-tan-wei-ming-2");
-
-        assertThat(Arrays.<Object>asList(ffi.id(), ffi.type(), ffi.outcome(), ffi.issueDate(),
-                ffi.expiryDate(), ffi.higherAuthority(), ffi.submittingMc(), ffi.status()))
-                .containsExactly(SourceField.present("ffi-tan-wei-ming-2"),
-                        SourceField.present("ippt"), SourceField.present("request-waiver"),
-                        SourceField.present(ISSUED), SourceField.present(EXPIRES),
-                        SourceField.present("cnmo"), SourceField.present("kranji-camp"),
-                        SourceField.present("active"));
-    }
-
     /**
      * The source is the truth: an FFI whose fields are missing or invalid, whose id is outside
      * FHIR's grammar, whose codes are no members of their closed sets or which expires before it

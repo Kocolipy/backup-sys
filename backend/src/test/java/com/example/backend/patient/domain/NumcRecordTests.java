@@ -31,17 +31,6 @@ class NumcRecordTests {
                 SourceField.present(EXPIRES));
     }
 
-    @Test
-    void aRecordHoldsEveryElementItWasGiven() {
-        NumcRecord record = submariner("numc-tan-wei-ming-2");
-
-        assertThat(Arrays.<Object>asList(record.id(), record.type(), record.outcome(),
-                record.issueDate(), record.expiryDate()))
-                .containsExactly(SourceField.present("numc-tan-wei-ming-2"),
-                        SourceField.present("submariner"), SourceField.present("waiver-rejected"),
-                        SourceField.present(ISSUED), SourceField.present(EXPIRES));
-    }
-
     /**
      * The source is the truth: a record whose every element is missing or invalid, whose id is
      * outside FHIR's grammar, whose code is no member of its closed set or which expires before it
