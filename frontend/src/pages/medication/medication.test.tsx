@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { clearEhrContext } from "@/auth/ehr-context";
 import { bare, deferred, holding, json, type Answers } from "@/auth/session-adapter.testHelpers";
+import { leadingCells, leadingColumn, warnings } from "@/pages/mandatory-elements.testHelpers";
 import { TAN_WEI_MING, TAN_WEI_MING_READ, withPatientInContext } from "@/pages/patient.testHelpers";
 import { renderSignedIn } from "@/shell/signed-in-shell.testHelpers";
 
@@ -97,13 +98,9 @@ const medicationReads = (sent: readonly { method: string; path: string }[]) =>
 
 const table = () => screen.getByRole("table", { name: "Medication History" });
 
-/** Whether the table shows the warnings' leading column. */
-const hasLeadingColumn = () =>
-  within(table()).queryByRole("columnheader", { name: "Missing information" }) !== null;
-
 /** Each body row's data cells, as text: the leading warning cell, where shown, left out. */
 const rows = () => {
-  const leading = hasLeadingColumn() ? 1 : 0;
+  const leading = leadingCells(table());
   return within(table())
     .getAllByRole("row")
     .slice(1)
@@ -117,12 +114,12 @@ const rows = () => {
 
 /** The Dispense Status badge in each body row, by its text and its variant. */
 const statusBadges = () => {
-  const statusCell = hasLeadingColumn() ? 7 : 6;
+  const leading = leadingCells(table());
   return within(table())
     .getAllByRole("row")
     .slice(1)
     .map((row) => {
-      const cell = within(row).getAllByRole("cell")[statusCell]!;
+      const cell = within(row).getAllByRole("cell")[leading + 6]!;
       const badge = cell.querySelector("[data-slot=badge]");
       return `${badge?.textContent} ${badge?.getAttribute("data-variant")}`;
     });
@@ -502,13 +499,6 @@ describe("Medication", () => {
   });
 });
 
-/** The warning icon of each body row, by its accessible name, `null` on a row with none. */
-const warnings = () =>
-  within(table())
-    .getAllByRole("row")
-    .slice(1)
-    .map((row) => within(row).queryByRole("img")?.getAttribute("aria-label") ?? null);
-
 // The Mandatory elements of a Medication Record are its Medication and its
 // Dispense Status (/docs/domain/medication.md): a row missing either, or with
 // either in the wrong format, carries a warning, and is shown in full.
@@ -517,14 +507,14 @@ describe("Medication, a Mandatory element missing", () => {
     await renderMedication(page([record("medication-1", { medication: null })], 1, 1));
     await screen.findByRole("table", { name: "Medication History" });
 
-    expect(warnings()).toEqual(["Critical information missing: Medication"]);
+    expect(warnings(table())).toEqual(["Critical information missing: Medication"]);
   });
 
   it("warns on a row whose Dispense Status is missing, naming its column", async () => {
     await renderMedication(page([record("medication-1", { dispenseStatus: null })], 1, 1));
     await screen.findByRole("table", { name: "Medication History" });
 
-    expect(warnings()).toEqual(["Critical information missing: Dispense Status"]);
+    expect(warnings(table())).toEqual(["Critical information missing: Dispense Status"]);
   });
 
   it("warns once on a row missing both, naming each column in the table's order", async () => {
@@ -533,7 +523,9 @@ describe("Medication, a Mandatory element missing", () => {
     );
     await screen.findByRole("table", { name: "Medication History" });
 
-    expect(warnings()).toEqual(["Critical information missing: Medication, Dispense Status"]);
+    expect(warnings(table())).toEqual([
+      "Critical information missing: Medication, Dispense Status",
+    ]);
   });
 
   it("leaves the leading cell of a row holding both empty, beside a row that warns", async () => {
@@ -550,13 +542,10 @@ describe("Medication, a Mandatory element missing", () => {
     await renderMedication(page([record("medication-1"), record("medication-2")], 1, 2));
     await screen.findByRole("table", { name: "Medication History" });
 
-    expect({
-      firstCells: within(table())
-        .getAllByRole("row")
-        .slice(1)
-        .map((row) => within(row).getAllByRole("cell")[0]!.textContent),
-      heading: within(table()).queryByRole("columnheader", { name: "Missing information" }),
-    }).toEqual({ firstCells: ["Paracetamol", "Paracetamol"], heading: null });
+    expect(leadingColumn(table())).toEqual({
+      firstCells: ["Paracetamol", "Paracetamol"],
+      heading: null,
+    });
   });
 
   it("warns on a row whose Mandatory element is in the wrong format, as on one missing it", async () => {
@@ -572,7 +561,7 @@ describe("Medication, a Mandatory element missing", () => {
     );
     await screen.findByRole("table", { name: "Medication History" });
 
-    expect(warnings()).toEqual([
+    expect(warnings(table())).toEqual([
       "Critical information missing: Medication",
       "Critical information missing: Dispense Status",
     ]);
@@ -583,7 +572,7 @@ describe("Medication, a Mandatory element missing", () => {
     await renderMedication(page([record("medication-1", { dispenseStatus: "on-hold" })], 1, 1));
     await screen.findByRole("table", { name: "Medication History" });
 
-    expect(warnings()).toEqual([null]);
+    expect(warnings(table())).toEqual([null]);
   });
 
   it("does not warn on a row missing, or holding in the wrong format, only other elements", async () => {
@@ -616,7 +605,7 @@ describe("Medication, a Mandatory element missing", () => {
     );
     await screen.findByRole("table", { name: "Medication History" });
 
-    expect(warnings()).toEqual([null, null]);
+    expect(warnings(table())).toEqual([null, null]);
   });
 
   // The layout itself is the browser's; jsdom lays nothing out, so the
