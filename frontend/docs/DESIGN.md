@@ -39,7 +39,8 @@ raw value or a shade of Tailwind's own palette.
 Status badges draw on four **soft status** pairs, each a light fill under dark
 text of the same hue that meets WCAG AA contrast: `success-soft`,
 `warning-soft`, `danger-soft` and `info-soft`, each with its `-foreground`.
-"Badge" below says which status takes which.
+"Badge" below says which status takes which. `warning-soft-foreground` alone
+also colours a table's warning icon ("Table" below).
 
 A Patient's gender badge in Patient Search's results is no status: Male draws
 on `male-soft` and Female on `female-soft`, applied by the page, and any other
@@ -128,6 +129,17 @@ The header row sits on a tinted surface that a hover leaves alone, and a
 heading stands over its column's values, a sortable heading's button included.
 Identifiers — UUIDs, correlation ids, routes — are set in monospace, and
 timestamps in tabular figures, so a column of them aligns.
+
+A history that declares Mandatory elements (ADR 0020, D7) leads its table with
+a narrow warning column, before its first column and present on every page,
+its heading "Missing information" for a screen reader alone
+(`src/pages/mandatory-elements.tsx`). A row whose Mandatory element is missing
+or invalid carries one `TriangleAlert` icon there in `warning-soft-foreground`
+— a state to notice, as the `warning` badge is — and every other row an empty
+cell. The icon is a tab stop with no action, its tooltip, on hover and on
+focus, also its accessible name: "Critical information missing: " and the
+affected columns' headings, in column order. The Medication History is the
+one table with the column.
 
 ### Sidebar
 

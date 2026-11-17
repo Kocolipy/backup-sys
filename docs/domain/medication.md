@@ -1,7 +1,7 @@
 ---
 type: Domain Rules
 title: Medication
-description: A patient's Medication History — the in-house patient source's own Medication Records, read through it at GET {base}/Patient/{id}/medication on the FFI History's terms and shown as received, the twelve elements, the free text shown as the source gives it, the Start Date and End Date as date-times with an offset shown in Singapore time, the Dispense Status and the Dispensary's Medical Centre carried as codes, a field missing, in the wrong format or outside its set, the source's order and paging, the sort by either date-time and the filters on the Dispense Status and a date-time range over either date, the failures, the logging rules and the invalid-fields WARN and counter, no caching, no auditing, the Medication page and its states, and the mock's Medication fixtures, sort and filter stubs and fault stubs.
+description: A patient's Medication History — the in-house patient source's own Medication Records, read through it at GET {base}/Patient/{id}/medication on the FFI History's terms and shown as received, the twelve elements, the free text shown as the source gives it, the Start Date and End Date as date-times with an offset shown in Singapore time, the Dispense Status and the Dispensary's Medical Centre carried as codes, a field missing, in the wrong format or outside its set, the Mandatory elements and the warning on a row missing one, the source's order and paging, the sort by either date-time and the filters on the Dispense Status and a date-time range over either date, the failures, the logging rules and the invalid-fields WARN and counter, no caching, no auditing, the Medication page and its states, and the mock's Medication fixtures, sort and filter stubs and fault stubs.
 tags: [patient, medication]
 ---
 
@@ -106,6 +106,33 @@ string):
 **No semantic or range check is made**: a date-time in the future, or an End
 Date before its Start Date, is shown as received. The domain's
 `MedicationRecord` holds each element as a `SourceField` and refuses none.
+
+### Mandatory elements
+
+A Medication Record's **Mandatory elements** are its **Medication** and its
+**Dispense Status** (ADR 0020, D7). A row whose Mandatory element is missing
+or invalid carries a warning; the record is still shown in full, each such
+cell "—" or "Error", and is never refused. The page decides it from the
+backend's classification alone and reads no value: a Dispense Status outside
+its [closed set](#the-closed-sets) is present and flags nothing, and no other
+element flags a row, missing or invalid.
+
+- **The warning** is a warning-coloured triangle (`TriangleAlert`) in a narrow
+  leading column before the Medication, headed "Missing information" for a
+  screen reader alone. The column is always there; an unflagged row's cell is
+  empty.
+- **One per row.** Its tooltip, which is also its accessible name, is
+  "Critical information missing: " and each affected column's heading, in the
+  table's order, joined by commas —
+  `Critical information missing: Medication, Dispense Status` — for a missing
+  element and one in the wrong format alike.
+- **It only informs.** It is a tab stop, its tooltip opening on hover and on
+  keyboard focus; a press does nothing, and nothing counts, filters or sorts
+  the flagged rows.
+
+The mechanism is shared (`src/pages/mandatory-elements.tsx`), each history
+declaring its own Mandatory elements beside its table; the Medication History
+is the one that declares any.
 
 ## The source contract
 
@@ -280,7 +307,9 @@ a session without it is offered no link and is routed to its landing page.
   first page is read, and a failed read of the patient leaves
   it empty. It is read-only, five Medication Records a page, with no row
   action.
-- **The table**: Medication, Dosage, Route, Frequency, Step, Quantity, Dispense
+- **The table**: a leading column of warnings, one on each row whose
+  [Mandatory element](#mandatory-elements) is missing or invalid, then
+  Medication, Dosage, Route, Frequency, Step, Quantity, Dispense
   Status, Duration, Start Date, End Date, Dispensary, Prescribing Doctor — the
   Medication in bold, the free text as the source gave it, the Dispense Status
   as its badge ([the elements](#the-elements)), both date-times in Singapore
@@ -381,6 +410,9 @@ patients, and the backend's tests read the same stub files
   | Ibuprofen              | 400 mg | PO    | TDS       | —    | 15 tablets | DISPENSED       | 5 days   | Error             | Error             | Kranji Camp MC  | —                  |
   | Error                  | —      | —     | —         | —    | —          | —               | —        | 16 Mar 2020 09:00 | Error             | —               | Dr Chen Mei Ling   |
   | Oral rehydration salts | —      | —     | —         | —    | —          | PENDING         | —        | —                 | —                 | —               | —                  |
+
+  The third, its Medication invalid and its Dispense Status missing, is the
+  one row carrying a warning, naming the Medication and the Dispense Status.
 
 - **Every other fixture** has none — Siti Nurhaliza binte Ahmad
   (`erXuFYUfucBZaryVksYEcMg3`) is the one the tests read — answered by

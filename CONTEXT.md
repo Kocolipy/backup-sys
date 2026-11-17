@@ -436,6 +436,16 @@ fails the read. The FFI, NUMC, ARMC and Medication Histories, a Patient read by
 id and a Patient search's Last visit are read so.
 _Avoid_: validated, sanitised, lenient (the reading is lenient; what the
 clinician sees is the data as received)
+
+**Mandatory element**:
+An element a history declares critical to its record (ADR 0020, D7): a row whose
+Mandatory element is missing or invalid carries a warning naming it, and is
+still shown in full: an element whose absence is flagged on its row, never one
+whose absence rejects the record. A Medication Record's are its Medication and
+its Dispense Status.
+_Avoid_: required element, required field (a required element's absence
+rejects its record, the rule ADR 0020 supersedes), critical field
+
 **Demographic page**:
 The page at `/demographic`, linked from the navigation sidebar for a session
 holding `patient:read` and opened by selecting a Patient on the Search page:
@@ -647,7 +657,8 @@ Step, Quantity, Dispense Status, Duration, Start Date, End Date, Dispensary
 and Prescribing Doctor, each shown as received — missing or invalid included,
 and a code outside its closed set shown raw. Every element but the Dispense
 Status, the dates and the Dispensary is free text, shown as the source gives
-it. Read from the Patient source on every read, never held, and not audited.
+it. Its Medication and its Dispense Status are its Mandatory elements. Read
+from the Patient source on every read, never held, and not audited.
 _Avoid_: prescription record, medication order, drug record
 
 **Medication History**:

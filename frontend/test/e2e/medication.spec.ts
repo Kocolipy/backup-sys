@@ -125,6 +125,20 @@ test.describe("Medication", () => {
       "Oral rehydration salts—————PENDING—————",
     ]);
     await expect(page.getByText("Showing 1 to 4 of 4 records")).toBeVisible();
+    // The third's Medication is in the wrong format and its Dispense Status
+    // missing, the two Mandatory elements of a Medication Record: its row alone
+    // carries a warning.
+    const warning = page
+      .getByRole("table", { name: "Medication History" })
+      .getByRole("img", { name: /^Critical information missing/ });
+    await expect(warning).toHaveCount(1);
+    await expect(medicationRows(page).nth(2).getByRole("img")).toHaveAccessibleName(
+      "Critical information missing: Medication, Dispense Status",
+    );
+    await warning.hover();
+    await expect(page.getByRole("tooltip")).toHaveText(
+      "Critical information missing: Medication, Dispense Status",
+    );
   });
 
   test("says no records are found for a patient with none", async ({ page }) => {
