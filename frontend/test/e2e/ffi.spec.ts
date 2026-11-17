@@ -8,14 +8,16 @@ import { sidebar } from "./shell.helpers";
  * (`backend/patient-source-mock`): the patient in context is selected on
  * Patient Search, then FFI opened from the sidebar. Tan Wei Ming has exactly
  * four FFIs, sorted by each date both ways, Tan Hui Min seven over two pages,
- * filtered by a multi-select, a date range — one spanning two pages, one
- * matching nothing — and the Status, Tan Boon Huat four shown as received, and
- * Siti Nurhaliza binte Ahmad none (`/docs/domain/ffi.md`, "The patient
- * source's FFI fixtures"). What the page decides without the backend — the
- * labels, the badges, "—", "Error" and a raw code, each filter's parameters,
- * an inverted range and a failure — is `ffi.test.tsx`'s, and no
- * patient in context `for-patient-in-context.test.tsx`'s; that a session
- * without `patient:read` is offered no FFI link is `roles-user.spec.ts`'.
+ * filtered by a multi-select, a date range spanning two pages and the Status,
+ * and Tan Boon Huat four shown as received (`/docs/domain/ffi.md`, "The
+ * patient source's FFI fixtures"). What the page decides without the backend —
+ * the labels, the badges, "—", "Error" and a raw code, each filter's
+ * parameters, an inverted range and a failure — is `ffi.test.tsx`'s, and no
+ * patient in context `for-patient-in-context.test.tsx`'s; what every history
+ * page shares — a patient with no records, a filter matching none, Reset and
+ * the backend's real `502` reaching the page — is read once, in
+ * `medication.spec.ts`; that a session without `patient:read` is offered no
+ * FFI link is `roles-user.spec.ts`'.
  *
  * In the `medical-officer` project, replaying the saved `mo1` session. A new
  * page starts with no EHR context: the tab's `sessionStorage` is its own.
@@ -98,15 +100,6 @@ test.describe("FFI", () => {
       "Vocational FFI—————Inactive",
     ]);
     await expect(page.getByText("Showing 1 to 4 of 4 records")).toBeVisible();
-  });
-
-  test("says no records are found for a patient with none", async ({ page }) => {
-    await selectPatient(page, "s9212345a", "Siti Nurhaliza binte Ahmad", "S9212345A");
-
-    await openFfi(page);
-
-    await expect(page.getByText("No records found.", { exact: true })).toBeVisible();
-    await expect(page.getByRole("table", { name: "FFI History" })).toHaveCount(0);
   });
 
   test.describe("sorted", () => {
@@ -240,16 +233,6 @@ test.describe("FFI", () => {
 
       await expect(page.getByText("Showing 1 to 3 of 3 records")).toBeVisible();
       await expect(ffiRows(page)).toHaveText(rowsOf(1, 3, 4));
-    });
-
-    test("says no records match the filters for a filter matching none", async ({ page }) => {
-      await filterTanHuiMin(page);
-
-      await dateField(page, "Expiry Date", "To").fill("2022-12-31");
-      await apply(page);
-
-      await expect(page.getByText("No records match the filters.", { exact: true })).toBeVisible();
-      await expect(page.getByRole("table", { name: "FFI History" })).toHaveCount(0);
     });
   });
 });

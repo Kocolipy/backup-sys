@@ -14,9 +14,11 @@ import { sidebar } from "./shell.helpers";
  * each sort of his and each filter of hers a canned stub of its own ("Sort and
  * filter stubs"). A failing source is the mock's own
  * `fault-medication-server-error`, the page's read sent there in place of the
- * patient's, so the backend's real `502` reaches the page: the one history
- * whose failure is read here, the others' pages reading theirs as this one
- * does (`filtered-history.tsx`). What the page decides without the backend —
+ * patient's, so the backend's real `502` reaches the page. This is the one
+ * history page that reads from the backend what every history page shares —
+ * that failure, a patient with no records, a filter matching none and Reset —
+ * the others' pages reading theirs as this one does (`filtered-history.tsx`).
+ * What the page decides without the backend —
  * the labels, the badges, "—", "Error" and a raw code, a loading patient, no
  * patient in context — is
  * `medication.test.tsx`'s; that a session without `patient:read` is offered no

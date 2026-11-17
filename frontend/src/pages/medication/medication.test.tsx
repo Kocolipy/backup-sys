@@ -452,14 +452,6 @@ describe("Medication", () => {
     }).toEqual({ cells: true, container: true });
   });
 
-  it("says it is loading medication records while the first read is in flight", async () => {
-    const answer = deferred();
-    await renderMedication(answer.answer);
-
-    expect(await screen.findByRole("status")).toHaveTextContent(/^Loading records…$/);
-    await answer.settle(page(FOUR_RECORDS, 1, 4));
-  });
-
   it("reads five a page, and pages to the second through the numbered pager", async () => {
     const fiveOfSix = ["1", "2", "3", "4", "5"].map((n) => record(`medication-${n}`));
     const { requests } = await renderMedication(page(fiveOfSix, 1, 6), {
@@ -481,51 +473,13 @@ describe("Medication", () => {
     });
   });
 
-  it("says no records are found for a patient with none", async () => {
-    await renderMedication(page([], 1, 0));
-
-    expect(await screen.findByText("No records found.")).toBeInTheDocument();
-    expect(screen.queryByRole("table")).not.toBeInTheDocument();
-  });
-
-  // What the patient in context decides — none, a 404, a failed read — is
-  // `ForPatientInContext`'s (for-patient-in-context.test.tsx), and what every
-  // history shares — a history's own 404, the range on a single page, a new
-  // filter or sort read from the first page — `FilteredHistory`'s
+  // What the patient in context decides — none, a 404, a failed read, a read
+  // still loading — is `ForPatientInContext`'s
+  // (for-patient-in-context.test.tsx), and what every history shares — its
+  // loading and empty copy, a history's own 404, the range on a single page, a
+  // new filter or sort read from the first page — `FilteredHistory`'s
   // (filtered-history.test.tsx); held here are the history, the copy, the
   // columns and the filters this page hands them.
-  it("reads the Medication Records only once the patient in context has been read", async () => {
-    const patient = deferred();
-    withPatientInContext(TAN_WEI_MING.id);
-    const { requests } = await renderSignedIn("/medication", CLINICIAN, {
-      [FIRST_PAGE]: page(FOUR_RECORDS, 1, 4),
-      [TAN_WEI_MING_READ]: patient.answer,
-    });
-    const before = medicationReads(requests());
-
-    await patient.settle(json(TAN_WEI_MING));
-
-    expect(await screen.findByText("Showing 1 to 4 of 4 records")).toBeInTheDocument();
-    expect({ after: medicationReads(requests()), before }).toEqual({
-      after: [FIRST_PAGE],
-      before: [],
-    });
-  });
-
-  it("says it is loading medication records while the patient in context is read", async () => {
-    const patient = deferred();
-    withPatientInContext(TAN_WEI_MING.id);
-    await renderSignedIn("/medication", CLINICIAN, {
-      [FIRST_PAGE]: page(FOUR_RECORDS, 1, 4),
-      [TAN_WEI_MING_READ]: patient.answer,
-    });
-
-    expect(screen.getByRole("main").querySelector("[role=status]")).toHaveTextContent(
-      /^Loading records…$/,
-    );
-    await patient.settle(json(TAN_WEI_MING));
-  });
-
   it("says No patient in context with none in context, and reads no Medication Records", async () => {
     const { requests } = await renderSignedIn("/medication", CLINICIAN, {});
 

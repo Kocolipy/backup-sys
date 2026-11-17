@@ -133,11 +133,17 @@ public class ContainerTestConfiguration {
     private static final String JVM_TOKEN = UUID.randomUUID().toString().substring(0, 8);
 
     /**
-     * Every context's patient-source read timeout: well past the in-process mock's answer, which
-     * takes milliseconds, and far short of its slow fault stubs, which wait past the deployed
-     * default. Each case reading a slow stub waits all of it, so it is kept that short.
+     * Every context's patient-source read timeout: far short of the mock's slow fault stubs, which
+     * wait past the deployed default, and each case reading one waits all of it.
+     *
+     * <p><strong>Two seconds is the floor; do not shorten it to save run time.</strong> The
+     * in-process mock usually answers in milliseconds, but its first answers on a machine busy
+     * with another build take hundreds: at {@code 300ms} an ordinary read times out and is
+     * answered {@code 502}, which fails whichever test made it ({@code PagingContractTests} on
+     * {@code GET /api/patient-search}) on one run and not the next. The whole cost of the margin
+     * is the few cases that read a slow fault stub, each waiting the two seconds out.
      */
-    static final String PATIENT_SOURCE_READ_TIMEOUT = "300ms";
+    static final String PATIENT_SOURCE_READ_TIMEOUT = "2s";
 
     /** The owner login: owns each context's database and runs its migrations. */
     public static final String OWNER_LOGIN = "backend_owner";

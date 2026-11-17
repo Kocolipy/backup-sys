@@ -268,14 +268,6 @@ describe("ARMC", () => {
     warned.mockRestore();
   });
 
-  it("says it is loading ARMC records while the first read is in flight", async () => {
-    const answer = deferred();
-    await renderArmc(answer.answer);
-
-    expect(await screen.findByRole("status")).toHaveTextContent(/^Loading records…$/);
-    await answer.settle(page(TWO_BOARDS, 1, 2));
-  });
-
   it("reads five a page, and pages to the second through the numbered pager", async () => {
     const fiveOfSeven = ["1", "2", "3", "4", "5"].map((n) => board(`armc-${n}`));
     const { requests } = await renderArmc(page(fiveOfSeven, 1, 7), {
@@ -303,48 +295,13 @@ describe("ARMC", () => {
     });
   });
 
-  it("says no records are found for a patient with none", async () => {
-    await renderArmc(page([], 1, 0));
-
-    expect(await screen.findByText("No records found.")).toBeInTheDocument();
-    expect(screen.queryByRole("table")).not.toBeInTheDocument();
-  });
-
-  // What the patient in context decides — none, a 404, a failed read — is
-  // `ForPatientInContext`'s (for-patient-in-context.test.tsx), and what every
-  // history shares — a history's own 404, the range on a single page, a new
-  // filter or sort read from the first page — `FilteredHistory`'s
+  // What the patient in context decides — none, a 404, a failed read, a read
+  // still loading — is `ForPatientInContext`'s
+  // (for-patient-in-context.test.tsx), and what every history shares — its
+  // loading and empty copy, a history's own 404, the range on a single page, a
+  // new filter or sort read from the first page — `FilteredHistory`'s
   // (filtered-history.test.tsx); held here are the history, the copy, the
   // columns and the filters this page hands them.
-  it("reads the ARMC Boards only once the patient in context has been read", async () => {
-    const patient = deferred();
-    withPatientInContext(TAN_WEI_MING.id);
-    const { requests } = await renderSignedIn("/armc", CLINICIAN, {
-      [FIRST_PAGE]: page(TWO_BOARDS, 1, 2),
-      [TAN_WEI_MING_READ]: patient.answer,
-    });
-    const before = armcReads(requests());
-
-    await patient.settle(json(TAN_WEI_MING));
-
-    expect(await screen.findByText("Showing 1 to 2 of 2 records")).toBeInTheDocument();
-    expect({ after: armcReads(requests()), before }).toEqual({ after: [FIRST_PAGE], before: [] });
-  });
-
-  it("says it is loading ARMC records while the patient in context is read", async () => {
-    const patient = deferred();
-    withPatientInContext(TAN_WEI_MING.id);
-    await renderSignedIn("/armc", CLINICIAN, {
-      [FIRST_PAGE]: page(TWO_BOARDS, 1, 2),
-      [TAN_WEI_MING_READ]: patient.answer,
-    });
-
-    expect(screen.getByRole("main").querySelector("[role=status]")).toHaveTextContent(
-      /^Loading records…$/,
-    );
-    await patient.settle(json(TAN_WEI_MING));
-  });
-
   it("says No patient in context with none in context, and reads no ARMC Boards", async () => {
     const { requests } = await renderSignedIn("/armc", CLINICIAN, {});
 
@@ -431,25 +388,6 @@ describe("ARMC, sorted", () => {
       direction: "ascending",
       reads: [FIRST_PAGE, SECOND_PAGE, historyPage(1, `sortBy=${by}&sortOrder=ascending`)],
     });
-  });
-
-  it("sorts descending on a second press, from the first page", async () => {
-    const { requests } = await renderArmc(page(TWO_BOARDS, 1, 2), {
-      [historyPage(1, "sortBy=endDate&sortOrder=ascending")]: page(TWO_BOARDS, 1, 2),
-      [historyPage(1, "sortBy=endDate&sortOrder=descending")]: page(TWO_BOARDS, 1, 2),
-    });
-    await screen.findByRole("table", { name: "ARMC History" });
-
-    await userEvent.click(sortButton("End Date"));
-    await waitFor(() => expect(sortButton("End Date")).toBeEnabled());
-    await userEvent.click(sortButton("End Date"));
-
-    await waitFor(() =>
-      expect(armcReads(requests()).slice(-1)[0]).toBe(
-        historyPage(1, "sortBy=endDate&sortOrder=descending"),
-      ),
-    );
-    expect(columnHeader("End Date").getAttribute("aria-sort")).toBe("descending");
   });
 
   it("holds the page, busy, and both sort headings still while a read is pending", async () => {

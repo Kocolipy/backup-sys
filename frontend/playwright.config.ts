@@ -58,8 +58,19 @@ export default defineConfig({
   // per worker is the biggest cost in this suite. CI stays serial.
   workers: process.env.CI ? 1 : 2,
   reporter: "html",
+  // Fifteen seconds is the floor; do not shorten it to save run time. At
+  // Playwright's default five, a page's first load from the dev server, while
+  // every project's workers load theirs, renders its heading too late on one
+  // run and in time on the next. An assertion that holds returns at once, so a
+  // green run waits no longer for it.
+  expect: { timeout: 15_000 },
   use: {
     baseURL: "http://localhost:5173",
+    // A step on a page that never rendered fails at that step, naming it. With
+    // no bound it waits out the test's whole timeout, and the failure reported
+    // is the teardown's.
+    actionTimeout: 30_000,
+    navigationTimeout: 30_000,
     // Kept for every failing test, not only a retried one: a local run retries
     // nothing, and a flake's trace is the evidence its ledger entry needs
     // (/docs/agents/flaky-tests.md).
