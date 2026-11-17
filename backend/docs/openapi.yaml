@@ -512,13 +512,17 @@ paths:
         nothing in the API changes a patient.
 
         **Shown as received** (ADR 0020): the NRIC, the official name's `text`,
-        `gender` and `birthDate` are each the source's value, left out when the
-        source left it out or sent it blank, and left out and named by an
-        `invalid-field` extension when it sent it in the wrong format — the wrong
-        JSON type, or a birth date that is no calendar date. A gender outside the
-        four codes is sent as its code. None of them fails the read. A Patient
-        holding invalid elements logs one `WARN`, `patient_source.invalid_fields`,
-        naming each by its path in the source's answer and never its value, and
+        `gender`, `birthDate` and each Demographic detail — the phone, the email,
+        the residential address, the next of kin's name, relationship and phone,
+        each service record's fields and each service date — are each the
+        source's value, left out when the source left it out or sent it blank,
+        and left out and named by an `invalid-field` extension when it sent it in
+        the wrong format — the wrong JSON type, or a birth date or a service date
+        that is no calendar date. A gender outside the four codes is sent as its
+        code. None of them fails the read, and each is shown independently of
+        the others. A Patient holding invalid elements logs one `WARN`,
+        `patient_source.invalid_fields`, naming each by its path in the source's
+        answer — nested as deep as it was found — and never its value, and
         counts each in `patient_source.invalid_fields`.
 
         Requires `patient:read`, a delegatable Permission a User holds through a
@@ -618,9 +622,9 @@ paths:
             within 2 seconds to connect and 5 to answer, answered a `5xx` or any
             other status but a `200` or a `404`, or answered a Patient under
             another patient's `id` — the histories are read by the id asked
-            for — one with a military service date not to the day, or no
-            Patient at all. What the NRIC, the name, the gender or the birth
-            date hold is never a failure. `code: exception`, `diagnostics` "The
+            for — or no Patient at all. What the NRIC, the name, the gender, the
+            birth date or a Demographic detail hold is never a failure.
+            `code: exception`, `diagnostics` "The
             request could not be completed.", and nothing about the failure.
             The SPA shows it as the Patient card's failed state, never "No
             patient in context".
@@ -4806,15 +4810,17 @@ components:
         (`/docs/domain/patient.md`, "Demographic details").
 
         Shown as received (ADR 0020): the NRIC (`identifier[0].value`),
-        `name[0].text`, `gender` and `birthDate` are each left out when the
-        source left it out or sent it blank, and when it sent it in the wrong
-        format, which an `invalid-field` extension then names by that path: an
-        element left out that no extension names is missing. FHIR JSON has no
-        `null`, and base R5 no element for a value in the wrong format, so the
-        names travel as extensions and the resource stays base R5. The NRIC's
-        identifier is left out when the source holds no NRIC, and is its
-        `system` alone when the NRIC was invalid; `name` is left out when the
-        source holds no official name.
+        `name[0].text`, `gender`, `birthDate` and each Demographic detail are
+        each left out when the source left it out or sent it blank, and when it
+        sent it in the wrong format, which an `invalid-field` extension then
+        names by its path here: an element left out that no extension names is
+        missing. FHIR JSON has no `null`, and base R5 no element for a value in
+        the wrong format, so the names travel as extensions and the resource
+        stays base R5. The NRIC's identifier is left out when the source holds
+        no NRIC, and is its `system` alone when the NRIC was invalid; `name` is
+        left out when the source holds no official name. A phone or an email in
+        the wrong format is its contact point's `system` alone, and a
+        residential address in the wrong format its `use` alone.
       required: [resourceType, id]
       additionalProperties: false
       properties:
@@ -4832,7 +4838,10 @@ components:
             The military service, when the patient has one; then one
             `invalid-field` extension for each element the source sent in the
             wrong format, naming it by its path in this resource, in the order
-            `identifier[0].value`, `name[0].text`, `gender`, `birthDate`.
+            `identifier[0].value`, `name[0].text`, `gender`, `birthDate`, then
+            the Demographic details: the phone, the email, the residential
+            address, the next of kin's name, relationship and phone, each
+            service record's fields in order, then the service dates.
           items:
             anyOf:
               - $ref: "#/components/schemas/FhirMilitaryServiceExtension"
@@ -4841,17 +4850,23 @@ components:
           type: array
           minItems: 1
           maxItems: 2
-          description: The phone, then the email, whichever the patient has.
+          description: |
+            The phone, then the email, whichever the patient has, each its
+            `system` alone when its value was in the wrong format
+            (`telecom[0].value`, `telecom[1].value`).
           items:
             $ref: "#/components/schemas/FhirContactPoint"
         address:
           type: array
           minItems: 1
           maxItems: 1
-          description: Exactly one when present, the residential address as its text.
+          description: |
+            Exactly one when present, the residential address as its text, or
+            its `use` alone when the text was in the wrong format
+            (`address[0].text`).
           items:
             type: object
-            required: [use, text]
+            required: [use]
             additionalProperties: false
             properties:
               use:
@@ -4865,12 +4880,16 @@ components:
           minItems: 1
           maxItems: 1
           description: |
-            Exactly one when present, the next of kin: their relationship coded
-            v2-0131 `N`, then their relationship as text when known; their name
-            as text; their phone when known.
+            Exactly one when the patient has a next of kin: their relationship
+            coded v2-0131 `N`, then their relationship as text when present
+            (`contact[0].relationship[1].text`); their name as text when present
+            (`contact[0].name.text`); their phone when the source sent one, its
+            `system` alone when in the wrong format
+            (`contact[0].telecom[0].value`). A next of kin with no name and no
+            phone is their coding alone.
           items:
             type: object
-            required: [relationship, name]
+            required: [relationship]
             additionalProperties: false
             properties:
               relationship:
@@ -4976,7 +4995,12 @@ components:
       description: |
         A Patient's military service, under a placeholder URL until the
         in-house source names its own. Its sub-extensions are each
-        `serviceRecord`, in order, then whichever of the dates the patient has.
+        `serviceRecord`, in order, then whichever of the dates the patient has
+        present. A service record's field or a date that is missing or in the
+        wrong format is left out, the second named by an `invalid-field`
+        extension by the url it would be served under:
+        `extension[0].extension[1].extension('rank').valueString`,
+        `extension[0].extension('ordDate').valueDate`.
       type: object
       required: [url, extension]
       additionalProperties: false
@@ -4992,8 +5016,9 @@ components:
               - type: object
                 description: |
                   One service record: whichever of `serviceType`, `rank`,
-                  `unit`, `service` and `vocation` it has, in that order.
-                required: [url, extension]
+                  `unit`, `service` and `vocation` it has present, in that
+                  order, and no `extension` when it has none.
+                required: [url]
                 additionalProperties: false
                 properties:
                   url:
@@ -5031,7 +5056,9 @@ components:
         One element of the Patient the patient source sent in the wrong format,
         by its path in the served resource (ADR 0020): the service's own
         extension, under a placeholder URL as the military service's is. Its
-        element is left out of the resource.
+        element's value is left out of the resource. A service record's field
+        is named by the record's place among the military service's
+        sub-extensions and the field's url.
       required: [url, valueString]
       additionalProperties: false
       properties:
@@ -5039,12 +5066,31 @@ components:
           type: string
           enum: ["http://example.org/fhir/StructureDefinition/invalid-field"]
         valueString:
-          type: string
-          enum: ["identifier[0].value", "name[0].text", gender, birthDate]
+          anyOf:
+            - type: string
+              enum:
+                - "identifier[0].value"
+                - "name[0].text"
+                - gender
+                - birthDate
+                - "telecom[0].value"
+                - "telecom[1].value"
+                - "address[0].text"
+                - "contact[0].name.text"
+                - "contact[0].relationship[1].text"
+                - "contact[0].telecom[0].value"
+                - "extension[0].extension('enlistmentDate').valueDate"
+                - "extension[0].extension('ordDate').valueDate"
+                - "extension[0].extension('mrDate').valueDate"
+                - "extension[0].extension('rodDate').valueDate"
+            - type: string
+              pattern: "^extension\\[0\\]\\.extension\\[(0|[1-9][0-9]*)\\]\\.extension\\('(serviceType|rank|unit|service|vocation)'\\)\\.valueString$"
     FhirContactPoint:
       type: object
-      description: A FHIR R5 `ContactPoint`, a phone or an email.
-      required: [system, value]
+      description: |
+        A FHIR R5 `ContactPoint`, a phone or an email: its `system` alone when
+        its value was in the wrong format.
+      required: [system]
       additionalProperties: false
       properties:
         system:

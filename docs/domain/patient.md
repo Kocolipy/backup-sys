@@ -1,7 +1,7 @@
 ---
 type: Domain Rules
 title: Patients
-description: The FHIR R5 Patient the service serves — its element rules, each of its four elements shown as received, the NRIC system, the authoritative name text, derived age, the in-house patient source it is read from and the elements copied, no caching, Patient search and the Last visit shown as received, the data classification, the error contract, the logging rules, the absence of auditing for reads by id and the audit of every search, the follow-ups before real data, the Patient card's patient in context, the Search page, the development fixtures, received stubs, search stubs and fault stubs in the source's mock, and how R5 conformance is proven.
+description: The FHIR R5 Patient the service serves — its element rules, each of its four elements and its Demographic details shown as received, the NRIC system, the authoritative name text, derived age, the in-house patient source it is read from and the elements copied, no caching, Patient search and the Last visit shown as received, the data classification, the error contract, the logging rules, the absence of auditing for reads by id and the audit of every search, the follow-ups before real data, the Patient card's patient in context, the Search page, the development fixtures, received stubs, search stubs and fault stubs in the source's mock, and how R5 conformance is proven.
 tags: [patient, fhir]
 ---
 
@@ -107,20 +107,43 @@ as its code; Age follows the date of birth, "—" or "Error" as it is.
 
 A read by id also serves what the Demographic page shows of the patient, each
 element only when the patient has it, never empty. A search serves none of it.
+Each detail is [shown as received](#shown-as-received), independently of the
+others: present, missing or in the wrong format — the wrong JSON type, or a
+service date that is no calendar date — and none fails the read.
 
 - **`extension`** — the **military service**, under
   `http://example.org/fhir/StructureDefinition/military-service`, a placeholder
-  URL until the in-house source names its own: a `serviceRecord`
-  sub-extension per service record, in the source's order, each holding
-  whichever of `serviceType`, `rank`, `unit`, `service` and `vocation`
-  (`valueString`) it has, then whichever of `enlistmentDate`, `ordDate`,
-  `mrDate` and `rodDate` (`valueDate`, to the day) the patient has.
+  URL until the in-house source names its own, first among the extensions: a
+  `serviceRecord` sub-extension per service record, in the source's order, each
+  holding whichever of `serviceType`, `rank`, `unit`, `service` and `vocation`
+  (`valueString`) it has present, then whichever of `enlistmentDate`,
+  `ordDate`, `mrDate` and `rodDate` (`valueDate`, to the day) the patient has
+  present. A field or a date missing or in the wrong format is left out: base
+  R5 admits no extension with neither a value nor extensions of its own. One in
+  the wrong format is named by the url it would be served under —
+  `extension[0].extension[1].extension('rank').valueString` for the second
+  record's rank, `extension[0].extension('ordDate').valueDate` — since one left
+  out has no place of its own.
 - **`telecom`** — the phone (`system: phone`), then the email
-  (`system: email`).
-- **`address`** — the residential address, `use: home`, as its `text` alone.
+  (`system: email`), each its `system` alone when its value was in the wrong
+  format (`telecom[0].value`, and the email `telecom[1].value` after a phone).
+- **`address`** — the residential address, `use: home`, as its `text` alone,
+  or its `use` alone when the text was in the wrong format (`address[0].text`).
 - **`contact`** — the **next of kin**: a relationship coded v2-0131 `N`
   (`http://terminology.hl7.org/CodeSystem/v2-0131`), then their relationship as
-  text (`Mother`) when known; their name as `text`; their phone when known.
+  text (`Mother`) when present (`contact[0].relationship[1].text`); their name
+  as `text` when present (`contact[0].name.text`); their phone when the source
+  sent one, its `system` alone when in the wrong format
+  (`contact[0].telecom[0].value`). A next of kin with neither a name nor a phone
+  is their coding alone, and a service record with no field present is its url
+  alone: base R5's invariants on a contact and an extension admit neither, the
+  only other ways besides a gender outside the four that a Patient shown as
+  received leaves base R5.
+
+The Demographic page shows each detail as its value, **"—"** when missing, or
+**"Error"** when in the wrong format; a patient with no contact coded as next of
+kin shows "No next of kin recorded", and one with no military service every
+service record slot and date as "—".
 
 ## The in-house patient source
 
@@ -139,26 +162,26 @@ default (`backend/docs/configuration/patient-source.md`).
   response has exactly the shape above. The NRIC's value, the official name's
   `text`, `gender` and `birthDate` are each bound as the raw JSON they arrived as
   — so a number is not coerced into text — and read [as received](#shown-as-received).
-- **The Demographic details copied**, by a read by id alone: the first
-  `telecom` with `system: phone` and a `value`, and the first with
-  `system: email`; the `text` of the first `address` with `use: home` and a
-  text, never rebuilt from its lines; the first `contact` with a relationship
-  coded v2-0131 `N` and a `name.text`, its relationship the first relationship
-  `text`, its phone its first phone; and the military service extension, a
-  sub-extension it does not name left unread. An element without what its copy
-  needs is not copied — but a military service date not to the day is a
-  failure of the source, as a birth date is.
+- **The Demographic details copied**, by a read by id alone, each value bound
+  as the raw JSON it arrived as and read [as received](#shown-as-received): the
+  `value` of the first `telecom` with `system: phone`, and of the first with
+  `system: email`; the `text` of the first `address` with `use: home`, never
+  rebuilt from its lines; the first `contact` with a relationship coded v2-0131
+  `N` — its name's `text`, the first relationship `text` that is not blank, and
+  its first phone's `value`; and the military service extension, each service
+  record's field and each date the first sub-extension under its url, a
+  sub-extension it does not name left unread. A detail with no element to read
+  it from is missing; none is ever a failure of the source.
 - **Only a `404` is no patient**, and stays the `404` below. Every other answer
   is a failure of the source, the `502` below: the source unreachable, no
   answer within 2 seconds to connect and 5 to answer — the whole answer, its
   body included — a connection lost before the answer was in, a `5xx` or any other
-  status, or a `200` the service cannot hold — a body that is no Patient, a
-  Patient under another patient's `id`, or one with a military service date not
-  to the day. **Another patient's id stays a failure**: the Patient is read by
+  status, or a `200` the service cannot hold — a body that is no Patient, or a
+  Patient under another patient's `id`. **Another patient's id stays a failure**: the Patient is read by
   the id the EHR context names, and so are its FFI, NUMC, ARMC and Medication
   Histories, so a Patient under another id is not the patient asked for. What
-  the NRIC, the name, the gender or the birth date hold is
-  [never a failure](#shown-as-received).
+  the NRIC, the name, the gender, the birth date or a Demographic detail hold
+  is [never a failure](#shown-as-received).
 - **No caching.** No Patient is kept in Redis or in memory: every read, of the
   same patient too, is a call to the source.
 - **No grants.** No table holds a Patient, so no database login holds a grant
@@ -387,8 +410,7 @@ adapter every namespace shares. A new FHIR resource served beneath
   connect timeout, or no whole answer within the read timeout: headers late,
   or a body that stalled past it), `server-error`, `unexpected-status`,
   `unreadable` (a body that arrived whole and is not JSON or not a Patient) —
-  or the rule the Patient broke — `another-resource`,
-  `service-date-not-to-the-day` — or, for a search, what its answer or a match
+  or the rule the Patient broke — `another-resource` — or, for a search, what its answer or a match
   lacked — `not-a-searchset`, `no-total`, `no-id`, `invalid-id`, `no-nric`,
   `no-official-name`, `no-name-text`, `no-gender`, `no-birth-date`,
   `birth-date-not-to-the-day` — and whose error message is the fault's fixed
@@ -397,11 +419,17 @@ adapter every namespace shares. A new FHIR resource served beneath
 - **A Patient holding elements in the wrong format is one `WARN`**,
   `patient_source.invalid_fields`, written by `observability.InvalidSourceFields`
   (the module writes no record of its own), its read `patient` and each element
-  by its path in the source's answer — `identifier[1].value`, `name[2].text`,
-  `gender`, `birthDate` — never its value; and each counts once in the
-  `patient_source.invalid_fields` counter, tagged `read=patient` and `field` its
-  path in the served resource (`name[0].text`). A Patient with none writes
-  nothing. `PatientSourceAdapterContractTests` holds the record and the counter.
+  by its path in the source's answer, nested as deep as it was found —
+  `identifier[1].value`, `name[2].text`, `gender`, `birthDate`,
+  `telecom[3].value`, `contact[1].relationship[2].text`,
+  `extension[1].extension[0].extension[2].valueString` — never its value; and
+  each counts once in the `patient_source.invalid_fields` counter, tagged
+  `read=patient` and `field`: one of the four by its path in the served
+  resource (`name[0].text`), a Demographic detail by its name, the same for
+  every Patient and service record — `phone`, `email`, `residentialAddress`,
+  `nextOfKin.name`, `nextOfKin.relationship`, `nextOfKin.phone`,
+  `serviceRecord.<field>` and each date's url (`ordDate`). A Patient with none
+  writes nothing. `PatientSourceAdapterContractTests` holds the record and the counter.
 - **A failure of the patient source names nothing of the patient.** Its
   exception's message is fixed text, naming at most a status or an element, and
   its cause is redacted to its type (`RedactedFaultException`): an HTTP client's
@@ -460,8 +488,11 @@ a test states the day it runs on and the age never depends on the viewer's zone.
 The **Demographic page** (`/demographic`, guarded by `patient:read`, which
 selecting a Patient on the Search page opens) shows the patient in context's
 **Patient card**, then their Demographic details: the Military Overview,
-Contact Details and Next of Kin / Emergency, a detail they have none of shown
-as "—", and nothing beyond the card while no patient is loaded. Home shows the
+Contact Details and Next of Kin / Emergency, each detail
+[as received](#demographic-details) — "—" when missing, "Error" when in the
+wrong format — and nothing beyond the card while no patient is loaded. A
+malformed detail never changes what the Patient card, the top bar or a history
+page shows. Home shows the
 Patient card alone, and the navigation sidebar links it for no session. The
 Patient card shows the patient in context, and only that patient: the
 patient of the tab's **EHR context**, which selecting a Patient on the Search
@@ -509,9 +540,16 @@ reaches a deployed environment. The backend holds no fixture of its own.
   `metadata.received` and under a well-formed id no fixture uses —
   `received-no-nric`, `received-no-official-name`, `received-no-name-text`,
   `received-no-gender` and `received-no-birth-date` each lack that one
-  element, and `received-wrong-format` holds its NRIC, its official name's
+  element, `received-wrong-format` holds its NRIC, its official name's
   text, its gender and its birth date each in the wrong format, its NRIC and
-  official name each second in their lists. A received stub is no fixture: every
+  official name each second in their lists, and `received-demographics` (Lim
+  Kok Leong, `S8800010A`) holds his Demographic details missing and malformed,
+  each apart from the others: a phone that is a number beside a present email,
+  a home address with no `text`, a next of kin with no name text, a relationship
+  text that is a number and a present phone, and a military service past the
+  `last-visit` extension whose one service record has a `rank` that is a number
+  and no `unit`, an `enlistmentDate` to the month, a present `ordDate`, no
+  `mrDate` and a `rodDate` that is a number. A received stub is no fixture: every
   reader of the fixtures leaves it out, and it matches no search, which reads
   its matches strictly. Its NRIC, where it has one as text, is as dummy as a
   fixture's, and the tests hold it to the same check. `PatientStoreContract`
@@ -563,7 +601,7 @@ reaches a deployed environment. The backend holds no fixture of its own.
   `Mother`, a name and a phone), and his military service: two service records
   and his `enlistmentDate`, `ordDate` and `rodDate`, with no `mrDate`. Every
   other fixture carries none, but Siti Nurhaliza's `home` address has no
-  `text`, so none is copied. His copies in the search stubs are the fixture
+  `text`, so her residential address is missing. His copies in the search stubs are the fixture
   itself, though a search serves none of it.
 - **Dummy NRICs.** Every fixture's NRIC has the NRIC shape — a prefix letter,
   seven digits and a check letter — but carries a **deliberately wrong check

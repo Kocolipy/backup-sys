@@ -3,21 +3,20 @@ package com.example.backend.patient.domain;
 import java.util.Objects;
 
 /**
- * The contact a Patient names as their next of kin. Restricted: {@link #toString()} prints none
- * of it.
+ * The contact a Patient names as their next of kin, each detail shown as received (ADR 0020) —
+ * present, missing or in the wrong format. Restricted: {@link #toString()} prints none of it.
  *
- * @param name         the contact's name as written, never blank
- * @param relationship how they are related to the Patient, as written ({@code Mother}), or
- *                     {@code null} when the source says not
- * @param phone        their phone, or {@code null} when the source lists none
+ * @param name         the contact's name as written
+ * @param relationship how they are related to the Patient, as written ({@code Mother})
+ * @param phone        their phone
  */
-public record NextOfKin(String name, String relationship, String phone) {
+public record NextOfKin(SourceField<String> name, SourceField<String> relationship,
+        SourceField<String> phone) {
 
     public NextOfKin {
         Objects.requireNonNull(name, "name");
-        if (name.isBlank()) {
-            throw new IllegalArgumentException("A next of kin's name is required");
-        }
+        Objects.requireNonNull(relationship, "relationship");
+        Objects.requireNonNull(phone, "phone");
     }
 
     @Override

@@ -506,8 +506,8 @@ class PatientSourceAdapterContractTests extends PatientStoreContract {
     /**
      * A {@code 200} whose body is not a Patient the service can hold, each as its fault reports
      * it: another patient's — every read of this patient is made by the id asked for, so an id
-     * differing only by case is another — one with a military service date not to the day, no
-     * Patient at all, and no JSON at all, each reported as {@code data}.
+     * differing only by case is another — no Patient at all, and no JSON at all, each reported as
+     * {@code data}.
      */
     static Stream<Arguments> bodiesTheServiceCannotHold() {
         Fault anotherResource = rule("The patient source answered with another resource",
@@ -517,10 +517,6 @@ class PatientSourceAdapterContractTests extends PatientStoreContract {
                         OFFICIAL_NAME, GENDER, BIRTH_DATE) + "}", anotherResource),
                 arguments("{\"id\": \"PROBE-q7xkd2.v9\", " + joined(NRIC_IDENTIFIER,
                         OFFICIAL_NAME, GENDER, BIRTH_DATE) + "}", anotherResource),
-                arguments(probe(joined(NRIC_IDENTIFIER, OFFICIAL_NAME, GENDER, BIRTH_DATE,
-                        military("{\"url\": \"ordDate\", \"valueDate\": \"2020-01\"}"))),
-                        rule("The patient source's Patient's military service date is not to the"
-                                + " day", "service-date-not-to-the-day")),
                 arguments("{\"resourceType\": \"OperationOutcome\"}", anotherResource),
                 arguments("not JSON: T7391046Q", rule("The patient source could not be read",
                         "unreadable")));
@@ -740,12 +736,6 @@ class PatientSourceAdapterContractTests extends PatientStoreContract {
                 "patient birthDate", 2.0));
     }
 
-    /** The military service extension, holding {@code parts}, as a JSON member. */
-    private static String military(String... parts) {
-        return "\"extension\": [{\"url\": \"http://example.org/fhir/StructureDefinition/"
-                + "military-service\", \"extension\": [" + String.join(", ", parts) + "]}]";
-    }
-
     /** The Demographic details the probe's body with {@code members} besides its own is read with. */
     private static Demographics demographicsOf(String... members) {
         answering(PROBE, probe(joined(NRIC_IDENTIFIER, OFFICIAL_NAME, GENDER, BIRTH_DATE,
@@ -763,56 +753,92 @@ class PatientSourceAdapterContractTests extends PatientStoreContract {
                 .isEqualTo(Demographics.NONE);
     }
 
-    /** The first phone and the first email are read, past any other system and any with no value. */
+    /** The first phone and the first email are read, past any other system and a later one. */
     @Test
     void theFirstPhoneAndTheFirstEmailAreRead() {
         Demographics read = demographicsOf("""
-                "telecom": [{"system": "fax", "value": "+65 6000 0000"}, {"system": "phone"},
+                "telecom": [{"system": "fax", "value": "+65 6000 0000"},
                             {"system": "email", "value": "first@example.org"},
                             {"system": "phone", "value": "+65 6000 0001"},
                             {"system": "phone", "value": "+65 6000 0002"},
                             {"system": "email", "value": "second@example.org"}]""");
 
-        assertThat(List.of(read.phone(), read.email()))
-                .containsExactly("+65 6000 0001", "first@example.org");
+        assertThat(List.of(read.phone(), read.email())).containsExactly(
+                SourceField.present("+65 6000 0001"), SourceField.present("first@example.org"));
     }
 
     /**
-     * The residential address is the first home address's text, past another use and a home
-     * address with no text, which is never rebuilt from its lines.
+     * The first phone's value is read as received: missing when it has none or a blank one — a
+     * later phone's value is never read in its place — and invalid when it is the wrong JSON
+     * type. The email's is read by the same rule.
      */
     @ParameterizedTest
-    @CsvSource(delimiter = '|', nullValues = "none", textBlock = """
-        [{"use": "work", "text": "1 Office Road"}, {"use": "home", "text": "2 Home Road"}] | 2 Home Road
-        [{"use": "home", "line": ["Blk 1"]}, {"use": "home", "text": "2 Home Road"}]      | 2 Home Road
-        [{"use": "work", "text": "1 Office Road"}]                                       | none
-        [{"use": "home", "text": " ", "line": ["Blk 1"]}]                                | none
+    @CsvSource(delimiter = '|', textBlock = """
+        '{"system": "phone"}, {"system": "phone", "value": "+65 6000 0002"}' | MISSING
+        '{"system": "phone", "value": " "}'                                  | MISSING
+        '{"system": "phone", "value": 6560000001}'                           | INVALID
+        '{"system": "phone", "value": ["+65 6000 0001"]}'                    | INVALID
         """)
-    void theResidentialAddressIsTheFirstHomeAddressesText(String addresses, String expected) {
-        assertThat(demographicsOf("\"address\": " + addresses).residentialAddress())
-                .isEqualTo(expected);
+    void aPhoneIsReadAsReceived(String points, SourceField.Received received) {
+        assertThat(demographicsOf("\"telecom\": [" + points + "]").phone())
+                .isEqualTo(new SourceField<>(received, null));
     }
 
     /**
-     * The next of kin is the first contact coded v2-0131 {@code N} with a name text — past a
-     * contact coded otherwise and one with no name text — its relationship the first
-     * relationship text, its phone its first phone.
+     * The residential address is the first home address's text, as received, past another use:
+     * never rebuilt from its lines, missing when it has none or a blank one — a later home
+     * address is never read in its place — and invalid when it is the wrong JSON type.
+     */
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', nullValues = "-", textBlock = """
+        [{"use": "work", "text": "1 Office Road"}, {"use": "home", "text": "2 Home Road"}] | PRESENT | 2 Home Road
+        [{"use": "home", "line": ["Blk 1"]}, {"use": "home", "text": "2 Home Road"}]      | MISSING | -
+        [{"use": "work", "text": "1 Office Road"}]                                       | MISSING | -
+        [{"use": "home", "text": " ", "line": ["Blk 1"]}]                                | MISSING | -
+        [{"use": "home", "text": ["Blk 1", "2 Home Road"]}]                              | INVALID | -
+        """)
+    void theResidentialAddressIsTheFirstHomeAddressesText(String addresses,
+            SourceField.Received received, String text) {
+        assertThat(demographicsOf("\"address\": " + addresses).residentialAddress())
+                .isEqualTo(new SourceField<>(received, text));
+    }
+
+    /**
+     * The next of kin is the first contact coded v2-0131 {@code N} — past a contact coded
+     * otherwise — their relationship the first relationship text, past a blank one, their phone
+     * their first phone.
      */
     @Test
-    void theNextOfKinIsTheFirstContactCodedAsOneWithANameText() {
+    void theNextOfKinIsTheFirstContactCodedAsOne() {
         Demographics read = demographicsOf("""
                 "contact": [
                   {"relationship": [{"text": "Employer"}], "name": {"text": "Acme Pte Ltd"}},
                   {"relationship": [{"coding": [{"system": "http://terminology.hl7.org/CodeSystem/v2-0131",
-                                                 "code": "N"}]}], "name": {"family": "Lee"}},
-                  {"relationship": [{"coding": [{"system": "http://terminology.hl7.org/CodeSystem/v2-0131",
-                                                 "code": "N"}]}, {"text": "Mother"}, {"text": "Guardian"}],
+                                                 "code": "N"}]}, {"text": " "}, {"text": "Mother"},
+                                    {"text": "Guardian"}],
                    "name": {"text": "Mdm Lee Siew Kuen"},
                    "telecom": [{"system": "email", "value": "lee@example.org"},
-                               {"system": "phone", "value": "+65 8234 5678"}]}]""");
+                               {"system": "phone", "value": "+65 8234 5678"}]},
+                  {"relationship": [{"coding": [{"system": "http://terminology.hl7.org/CodeSystem/v2-0131",
+                                                 "code": "N"}]}], "name": {"text": "Mr Lee"}}]""");
 
-        assertThat(read.nextOfKin())
-                .isEqualTo(new NextOfKin("Mdm Lee Siew Kuen", "Mother", "+65 8234 5678"));
+        assertThat(read.nextOfKin()).isEqualTo(new NextOfKin(
+                SourceField.present("Mdm Lee Siew Kuen"), SourceField.present("Mother"),
+                SourceField.present("+65 8234 5678")));
+    }
+
+    /**
+     * A next of kin with no name at all has their name missing, and a relationship text on the
+     * concept that codes them is theirs.
+     */
+    @Test
+    void aNextOfKinWithNoNameIsReadWithTheirNameMissing() {
+        Demographics read = demographicsOf("""
+                "contact": [{"relationship": [{"coding": [{"system": "http://terminology.hl7.org/CodeSystem/v2-0131",
+                                                           "code": "N"}], "text": "Mother"}]}]""");
+
+        assertThat(read.nextOfKin()).isEqualTo(new NextOfKin(SourceField.missing(),
+                SourceField.present("Mother"), SourceField.missing()));
     }
 
     /** A next of kin with no relationship text and no phone is read by their name alone. */
@@ -823,12 +849,50 @@ class PatientSourceAdapterContractTests extends PatientStoreContract {
                                                            "code": "N"}]}],
                              "name": {"text": "Mdm Lee Siew Kuen"}}]""");
 
-        assertThat(read.nextOfKin()).isEqualTo(new NextOfKin("Mdm Lee Siew Kuen", null, null));
+        assertThat(read.nextOfKin()).isEqualTo(new NextOfKin(
+                SourceField.present("Mdm Lee Siew Kuen"), SourceField.missing(),
+                SourceField.missing()));
     }
 
     /**
-     * The military service is read past another extension: its records in order, a field it
-     * lacks and a sub-extension it does not name left unread, and a date it lacks none.
+     * A next of kin is read whatever their details hold, each as received: a name with no text is
+     * missing, and a relationship text and a phone of the wrong JSON type invalid.
+     */
+    @Test
+    void aNextOfKinsDetailsAreEachReadAsReceived() {
+        Demographics read = demographicsOf("""
+                "contact": [{"relationship": [{"coding": [{"system": "http://terminology.hl7.org/CodeSystem/v2-0131",
+                                                           "code": "N"}]}, {"text": ["Mother"]}],
+                             "name": {"family": "Lee"},
+                             "telecom": [{"system": "phone", "value": 82345678}]}]""");
+
+        assertThat(read.nextOfKin()).isEqualTo(new NextOfKin(SourceField.missing(),
+                SourceField.invalid(), SourceField.invalid()));
+    }
+
+    /**
+     * A contact coded otherwise — another code of v2-0131, or {@code N} under another system —
+     * or one with no relationship at all, is no next of kin.
+     */
+    @Test
+    void aContactCodedOtherwiseIsNoNextOfKin() {
+        Demographics read = demographicsOf("""
+                "contact": [{"relationship": [{"coding": [{"system": "http://terminology.hl7.org/CodeSystem/v2-0131",
+                                                           "code": "E"}]}],
+                             "name": {"text": "Acme Pte Ltd"}},
+                            {"relationship": [{"coding": [{"system": "urn:example:roles",
+                                                           "code": "N"}]}],
+                             "name": {"text": "Ms Tan"}},
+                            {"name": {"text": "Mr Lee"}}]""");
+
+        assertThat(read.nextOfKin()).isNull();
+    }
+
+    /**
+     * The military service is read past another extension: its records in order, each field and
+     * each date the first sub-extension under its url, as received — missing when there is none,
+     * invalid when of the wrong JSON type or, for a date, no date to the day — and a
+     * sub-extension it does not name left unread.
      */
     @Test
     void theMilitaryHistoryIsReadWithItsRecordsInOrderAndItsDates() {
@@ -839,15 +903,126 @@ class PatientSourceAdapterContractTests extends PatientStoreContract {
                    "extension": [
                      {"url": "serviceRecord", "extension": [
                        {"url": "rank", "valueString": "CPT"},
+                       {"url": "rank", "valueString": "MAJ"},
                        {"url": "a-later-field", "valueString": "x"}]},
                      {"url": "serviceRecord", "extension": [
-                       {"url": "unit", "valueString": "3 SIR"}]},
-                     {"url": "mrDate", "valueDate": "2030-04-01"}]}]""");
+                       {"url": "unit", "valueString": "3 SIR"},
+                       {"url": "vocation", "valueString": 3}]},
+                     {"url": "mrDate", "valueDate": "2030-04-01"},
+                     {"url": "ordDate", "valueDate": "2020-01"},
+                     {"url": "enlistmentDate", "valueDate": 20180115},
+                     {"url": "enlistmentDate", "valueDate": "2018-01-15"}]}]""");
 
+        SourceField<String> missing = SourceField.missing();
         assertThat(read.militaryHistory()).isEqualTo(new MilitaryHistory(
-                List.of(new MilitaryHistory.ServiceRecord(null, "CPT", null, null, null),
-                        new MilitaryHistory.ServiceRecord(null, null, "3 SIR", null, null)),
-                null, null, LocalDate.of(2030, 4, 1), null));
+                List.of(new MilitaryHistory.ServiceRecord(missing, SourceField.present("CPT"),
+                                missing, missing, missing),
+                        new MilitaryHistory.ServiceRecord(missing, missing,
+                                SourceField.present("3 SIR"), missing, SourceField.invalid())),
+                SourceField.invalid(), SourceField.invalid(),
+                SourceField.present(LocalDate.of(2030, 4, 1)), SourceField.missing()));
+    }
+
+    /** The military service is read when it is the first extension too. */
+    @Test
+    void aMilitaryServiceFirstAmongTheExtensionsIsRead() {
+        Demographics read = demographicsOf(
+                "\"extension\": [{\"url\": \"http://example.org/fhir/StructureDefinition/"
+                        + "military-service\", \"extension\": [{\"url\": \"ordDate\", "
+                        + "\"valueDate\": \"2020-01-14\"}]}]");
+
+        assertThat(read.militaryHistory().ordDate())
+                .isEqualTo(SourceField.present(LocalDate.of(2020, 1, 14)));
+    }
+
+    /**
+     * A Patient each of whose Demographic details is in the wrong format, none first in its list:
+     * the phone and the email past a fax, the home address past a work one, the next of kin past
+     * another contact — their relationship text past a blank one, their phone past an email — and
+     * the military service past another extension, a service record's field past another field
+     * and a date before the records.
+     */
+    private static final String EVERY_DETAIL_INVALID = probe(joined(NRIC_IDENTIFIER,
+            OFFICIAL_NAME, GENDER, BIRTH_DATE, """
+            "telecom": [{"system": "fax", "value": "+65 6000 0000"},
+                        {"system": "phone", "value": 6591234567},
+                        {"system": "email", "value": true}],
+            "address": [{"use": "work", "text": "1 Office Road"},
+                        {"use": "home", "text": ["Blk 123 Bishan Street 12"]}],
+            "contact": [{"relationship": [{"text": "Employer"}], "name": {"text": "Acme Pte Ltd"}},
+                        {"relationship": [{"coding": [{"system": "http://terminology.hl7.org/CodeSystem/v2-0131",
+                                                       "code": "N"}]}, {"text": " "}, {"text": 1}],
+                         "name": {"text": 7},
+                         "telecom": [{"system": "email", "value": "lee@example.org"},
+                                     {"system": "phone", "value": 82345678}]}],
+            "extension": [
+              {"url": "urn:example:other", "valueString": "x"},
+              {"url": "http://example.org/fhir/StructureDefinition/military-service",
+               "extension": [
+                 {"url": "enlistmentDate", "valueDate": "2018"},
+                 {"url": "serviceRecord", "extension": [{"url": "rank", "valueString": "CPT"}]},
+                 {"url": "serviceRecord", "extension": [
+                   {"url": "serviceType", "valueString": "NSF"},
+                   {"url": "unit", "valueString": 5}]}]}]"""));
+
+    /**
+     * A Patient holding invalid Demographic details is one WARN, naming each detail by its path
+     * in the source's answer, nested as deep as it was found.
+     */
+    @Test
+    void aPatientHoldingInvalidDemographicDetailsIsOneWarnNamingTheirPaths() {
+        answering(PROBE, EVERY_DETAIL_INVALID);
+
+        try (CapturedLog captured = CapturedLog.attach()) {
+            patients().findById(PROBE);
+
+            assertThat(invalidFieldRecords(captured)).singleElement()
+                    .satisfies(warning -> assertThat(CapturedLog.fields(warning))
+                            .containsEntry("app.patient_source.read", "patient")
+                            .containsEntry("app.patient_source.invalid_fields", List.of(
+                                    "telecom[1].value", "telecom[2].value", "address[1].text",
+                                    "contact[1].name.text", "contact[1].relationship[2].text",
+                                    "contact[1].telecom[1].value",
+                                    "extension[1].extension[2].extension[1].valueString",
+                                    "extension[1].extension[0].valueDate")));
+        }
+    }
+
+    @Test
+    void theDemographicWarnQuotesNoValueOfTheAnswer() {
+        answering(PROBE, EVERY_DETAIL_INVALID);
+
+        try (CapturedLog captured = CapturedLog.attach()) {
+            patients().findById(PROBE);
+
+            ILoggingEvent warning = invalidFieldRecords(captured).getFirst();
+            assertThat(warning.getFormattedMessage() + " " + CapturedLog.fields(warning))
+                    .doesNotContain("6591234567", "Bishan", "82345678", "2018", "NSF", "CPT");
+        }
+    }
+
+    /** Each invalid Demographic detail counts once a read, tagged by the read and its name. */
+    @Test
+    void eachInvalidDemographicDetailCountsOnceByTheReadAndItsName() {
+        answering(PROBE, EVERY_DETAIL_INVALID);
+        MeterRegistry meters = new SimpleMeterRegistry();
+
+        adapter(meters).findById(PROBE);
+
+        Map<String, Double> counted = new TreeMap<>();
+        for (Counter counter : meters.find("patient_source.invalid_fields").counters()) {
+            counted.put(counter.getId().getTag("read") + " " + counter.getId().getTag("field"),
+                    counter.count());
+        }
+        assertThat(counted).isEqualTo(Map.of(
+                "patient phone", 1.0,
+                "patient email", 1.0,
+                "patient residentialAddress", 1.0,
+                "patient nextOfKin.name", 1.0,
+                "patient nextOfKin.relationship", 1.0,
+                "patient nextOfKin.phone", 1.0,
+                "patient serviceRecord.unit", 1.0,
+                "patient enlistmentDate", 1.0));
     }
 
     /** A search's match carries no Demographic details: only a read by id copies them. */
@@ -865,15 +1040,12 @@ class PatientSourceAdapterContractTests extends PatientStoreContract {
     /**
      * Nothing of a failed read reaches its exception, whose messages a fault record would print:
      * not the id, which a client's message quotes in the URL, and nothing of the body, which a
-     * parser's message quotes — here a military service date not to the day, and a body that is
-     * not JSON.
+     * parser's message quotes — here another patient's Patient, and a body that is not JSON.
      */
     @ParameterizedTest
     @ValueSource(strings = {
-        "{\"id\": \"probe-Q7xKd2.v9\", \"name\": [{\"use\": \"official\", \"text\": \"Quah Seow"
-                + " Peng\"}], \"extension\": [{\"url\": \"http://example.org/fhir/"
-                + "StructureDefinition/military-service\", \"extension\": [{\"url\": \"ordDate\","
-                + " \"valueDate\": \"12/03/1985 T7391046Q Quah Seow Peng\"}]}]}",
+        "{\"id\": \"another-patient\", \"name\": [{\"use\": \"official\", \"text\": \"Quah"
+                + " Seow Peng\"}], \"birthDate\": \"12/03/1985 T7391046Q\"}",
         "{\"id\": \"probe-Q7xKd2.v9\", \"birthDate\": \"\"} T7391046Q Quah Seow Peng\"}"})
     void aFaultsExceptionSaysNothingOfThePatientOrTheBody(String body) {
         answering(PROBE, body);

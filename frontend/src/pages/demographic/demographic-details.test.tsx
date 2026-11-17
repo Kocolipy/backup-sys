@@ -12,6 +12,7 @@ import {
   page,
   TAN_WEI_MING,
   TAN_WEI_MING_BARE,
+  TAN_WEI_MING_MALFORMED,
   TAN_WEI_MING_READ,
   withPatientInContext,
 } from "@/pages/patient.testHelpers";
@@ -186,5 +187,77 @@ describe("DemographicDetails", () => {
     await renderDetails(json({ ...TAN_WEI_MING, telecom }));
 
     expect(await page().findByText("<b>+65 9123 4567</b>")).toBeInTheDocument();
+  });
+
+  it("shows each Contact Detail as received: its value, — when missing, Error when malformed", async () => {
+    await renderDetails(json(TAN_WEI_MING_MALFORMED));
+    await page().findByRole("region", { name: "Contact Details" });
+
+    expect(pairsIn(region("Contact Details"))).toEqual([
+      "Phone: Error",
+      "Email address: lim.kl@email.com",
+      "Residential address: —",
+    ]);
+  });
+
+  it("shows each Next of kin detail as received", async () => {
+    await renderDetails(json(TAN_WEI_MING_MALFORMED));
+    await page().findByRole("region", { name: "Next of Kin / Emergency" });
+
+    expect(pairsIn(region("Next of Kin / Emergency"))).toEqual([
+      "Name: —",
+      "Relationship: Error",
+      "Contact number: +65 8111 2222",
+    ]);
+  });
+
+  it("shows each service record field and service date as received", async () => {
+    await renderDetails(json(TAN_WEI_MING_MALFORMED));
+    const overview = await page().findByRole("region", { name: "Military Overview" });
+
+    expect(pairsIn(overview)).toEqual([
+      "Service Type: NSF",
+      "Rank: Error",
+      "Unit / Service: Army",
+      "Vocation: Signaller",
+      "Enlistment Date: Error",
+      "ORD Date: 01 Mar 2001",
+      "MR Date: —",
+      "ROD Date: Error",
+    ]);
+  });
+
+  it("shows a malformed unit as Error beside its service, and a record holding only a malformed field open", async () => {
+    const extension = [
+      { extension: [{ url: "service", valueString: "Army" }], url: "serviceRecord" },
+      { url: "serviceRecord" },
+    ];
+    await renderDetails(
+      json({
+        ...withMilitaryHistory(extension),
+        extension: [
+          ...withMilitaryHistory(extension).extension,
+          {
+            url: "http://example.org/fhir/StructureDefinition/invalid-field",
+            valueString: "extension[0].extension[0].extension('unit').valueString",
+          },
+          {
+            url: "http://example.org/fhir/StructureDefinition/invalid-field",
+            valueString: "extension[0].extension[1].extension('vocation').valueString",
+          },
+        ],
+      }),
+    );
+    const overview = await page().findByRole("region", { name: "Military Overview" });
+
+    expect([
+      pairsIn(overview).filter((pair) => /^(Unit|Vocation)/.test(pair)),
+      within(overview)
+        .getAllByRole("button")
+        .map((button) => button.getAttribute("aria-expanded")),
+    ]).toEqual([
+      ["Unit / Service: Error / Army", "Vocation: —", "Unit / Service: —", "Vocation: Error"],
+      ["true", "true", "false"],
+    ]);
   });
 });

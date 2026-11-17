@@ -6,7 +6,12 @@ import { bare, deferred, holding, json } from "@/auth/session-adapter.testHelper
 import { renderInLayout } from "@/shell/signed-in-shell.testHelpers";
 
 import { ForPatientInContext } from "./for-patient-in-context";
-import { TAN_WEI_MING, TAN_WEI_MING_READ, withPatientInContext } from "./patient.testHelpers";
+import {
+  TAN_WEI_MING,
+  TAN_WEI_MING_MALFORMED,
+  TAN_WEI_MING_READ,
+  withPatientInContext,
+} from "./patient.testHelpers";
 
 /** A session holding `patient:read`, which the read of the patient in context requires. */
 const CLINICIAN = holding(["patient:read"]);
@@ -89,6 +94,13 @@ describe("ForPatientInContext", () => {
   it("shows the history of the patient in context once they are read, by their id", async () => {
     withPatientInContext(TAN_WEI_MING.id);
     await renderWrapper({ [TAN_WEI_MING_READ]: json(TAN_WEI_MING) });
+
+    expect(await screen.findByText(`History of ${TAN_WEI_MING.id}`)).toBeInTheDocument();
+  });
+
+  it("reads the history of a patient whose Demographic details are missing and malformed", async () => {
+    withPatientInContext(TAN_WEI_MING.id);
+    await renderWrapper({ [TAN_WEI_MING_READ]: json(TAN_WEI_MING_MALFORMED) });
 
     expect(await screen.findByText(`History of ${TAN_WEI_MING.id}`)).toBeInTheDocument();
   });

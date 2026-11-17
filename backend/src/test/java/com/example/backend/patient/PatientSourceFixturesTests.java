@@ -275,7 +275,7 @@ class PatientSourceFixturesTests {
     /** No two stubs, fixture, fault or received, share an NRIC. */
     @Test
     void everyStubNricIsUnique() {
-        assertThat(stubNrics()).hasSize(FIXTURES.size() + 6).doesNotHaveDuplicates();
+        assertThat(stubNrics()).hasSize(FIXTURES.size() + 7).doesNotHaveDuplicates();
     }
 
     @Test
@@ -302,7 +302,8 @@ class PatientSourceFixturesTests {
     /**
      * The received stubs, each by what it holds and the id it serves it under: one Patient per
      * element missing — the NRIC, the official name, its text, the gender and the birth date —
-     * and one whose four are each in the wrong format.
+     * one whose four are each in the wrong format, and one whose Demographic details are missing
+     * and in the wrong format.
      */
     @Test
     void theReceivedStubsServeEachUnderAnIdOfItsOwn() {
@@ -315,7 +316,8 @@ class PatientSourceFixturesTests {
                         tuple("no-name-text", "received-no-name-text"),
                         tuple("no-gender", "received-no-gender"),
                         tuple("no-birth-date", "received-no-birth-date"),
-                        tuple("wrong-format", "received-wrong-format"));
+                        tuple("wrong-format", "received-wrong-format"),
+                        tuple("demographics", "received-demographics"));
     }
 
     /**

@@ -22,9 +22,11 @@ import java.util.stream.Stream;
  *
  * <p>Shown as received (ADR 0020): an element the source left out or sent blank is left out, and
  * so is one it sent in the wrong format, which an {@link #INVALID_FIELD} extension names instead
- * by its path here — {@code name[0].text} — since FHIR JSON has no {@code null} and base R5 no
- * element for a value received in the wrong format. A gender outside the four codes is written
- * as its code.
+ * by its path here — {@code name[0].text}, {@code telecom[0].value} — since FHIR JSON has no
+ * {@code null} and base R5 no element for a value received in the wrong format. The element
+ * holding an invalid value stays where base R5 admits it bare — an identifier, a contact point
+ * and an address keep their system or use — and a gender outside the four codes is written as
+ * its code.
  *
  * @param resourceType always {@code Patient}
  * @param id           the patient's id, its EHR's FHIR id
@@ -35,10 +37,12 @@ import java.util.stream.Stream;
  *                     ({@link Patient#NRIC_SYSTEM}), its system alone when its value was invalid
  * @param name         at most one: the official name, with no text when it had none or an
  *                     invalid one
- * @param telecom      the phone, then the email, each when the Patient has one
+ * @param telecom      the phone, then the email, each when the Patient has one, its system alone
+ *                     when its value was invalid
  * @param gender       the administrative gender code, one of the four or not
  * @param birthDate    the date of birth, {@code YYYY-MM-DD}
- * @param address      the residential address, as a {@code home} address's text
+ * @param address      the residential address, as a {@code home} address's text, its use alone
+ *                     when its text was invalid
  * @param contact      the next of kin, coded v2-0131 {@code N}
  */
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
@@ -83,8 +87,7 @@ public record FhirPatient(
                 ContactPoint.of(details.phone(), details.email()),
                 patient.gender().value(),
                 patient.birthDate().map(LocalDate::toString).value(),
-                Stream.ofNullable(details.residentialAddress())
-                        .map(text -> new Address("home", text)).toList(),
+                Address.home(details.residentialAddress()),
                 Stream.ofNullable(details.nextOfKin()).map(Contact::of).toList());
     }
 
@@ -118,24 +121,37 @@ public record FhirPatient(
         }
     }
 
-    /** A FHIR {@code ContactPoint}: a phone or an email. */
+    /**
+     * A FHIR {@code ContactPoint}: a phone or an email, by its system alone for a value received
+     * in the wrong format.
+     */
+    @JsonInclude(JsonInclude.Include.NON_EMPTY)
     public record ContactPoint(String system, String value) {
 
-        /** The phone, then the email, leaving out whichever is {@code null}. */
-        static List<ContactPoint> of(String phone, String email) {
-            List<ContactPoint> points = new ArrayList<>();
-            if (phone != null) {
-                points.add(new ContactPoint("phone", phone));
-            }
-            if (email != null) {
-                points.add(new ContactPoint("email", email));
-            }
-            return points;
+        /** The phone, then the email, as received, leaving out whichever is missing. */
+        static List<ContactPoint> of(SourceField<String> phone, SourceField<String> email) {
+            return Stream.of(point("phone", phone), point("email", email))
+                    .flatMap(Stream::ofNullable).toList();
+        }
+
+        private static ContactPoint point(String system, SourceField<String> value) {
+            return value.received() == SourceField.Received.MISSING
+                    ? null : new ContactPoint(system, value.value());
         }
     }
 
-    /** A FHIR {@code Address}, as its text alone. */
+    /**
+     * A FHIR {@code Address}, as its text alone, by its use alone for a text received in the
+     * wrong format.
+     */
+    @JsonInclude(JsonInclude.Include.NON_EMPTY)
     public record Address(String use, String text) {
+
+        /** The residential address as received, as a {@code home} address, or none when missing. */
+        static List<Address> home(SourceField<String> text) {
+            return text.received() == SourceField.Received.MISSING
+                    ? List.of() : List.of(new Address("home", text.value()));
+        }
     }
 
     /** A FHIR {@code Coding}. */
@@ -153,7 +169,8 @@ public record FhirPatient(
 
     /**
      * A FHIR {@code Patient.contact}: the next of kin, coded v2-0131 {@code N}, then their
-     * relationship as text, their name and their phone.
+     * relationship as text, their name and their phone, each as received — a relationship text
+     * or a name missing or invalid left out, a phone as the Patient's is.
      */
     @JsonInclude(JsonInclude.Include.NON_EMPTY)
     public record Contact(List<CodeableConcept> relationship, ContactName name,
@@ -162,11 +179,12 @@ public record FhirPatient(
         static Contact of(NextOfKin kin) {
             List<CodeableConcept> relationship = new ArrayList<>();
             relationship.add(new CodeableConcept(List.of(new Coding(CONTACT_ROLE, "N")), null));
-            if (kin.relationship() != null) {
-                relationship.add(new CodeableConcept(null, kin.relationship()));
+            if (kin.relationship().isPresent()) {
+                relationship.add(new CodeableConcept(null, kin.relationship().value()));
             }
-            return new Contact(relationship, new ContactName(kin.name()),
-                    ContactPoint.of(kin.phone(), null));
+            return new Contact(relationship,
+                    kin.name().isPresent() ? new ContactName(kin.name().value()) : null,
+                    ContactPoint.of(kin.phone(), SourceField.missing()));
         }
     }
 
@@ -178,37 +196,31 @@ public record FhirPatient(
     public record Extension(String url, String valueString, String valueDate,
             List<Extension> extension) {
 
-        /** The military service extension: its service records in order, then its dates. */
+        /**
+         * The military service extension: its service records in order, each with the fields it
+         * holds, then the dates it holds, in {@link MilitaryHistory.ServiceRecord.Field}'s and
+         * {@link MilitaryHistory.ServiceDate}'s order. A field or a date missing or invalid is
+         * left out: base R5 admits no extension with neither a value nor extensions of its own.
+         */
         static Extension military(MilitaryHistory service) {
             List<Extension> parts = new ArrayList<>();
             service.serviceRecords().forEach(record -> parts.add(new Extension("serviceRecord",
-                    null, null, Stream.of(
-                            string("serviceType", record.serviceType()),
-                            string("rank", record.rank()),
-                            string("unit", record.unit()),
-                            string("service", record.service()),
-                            string("vocation", record.vocation()))
-                            .flatMap(Stream::ofNullable).toList())));
-            Stream.of(
-                    date("enlistmentDate", service.enlistmentDate()),
-                    date("ordDate", service.ordDate()),
-                    date("mrDate", service.mrDate()),
-                    date("rodDate", service.rodDate()))
-                    .flatMap(Stream::ofNullable).forEach(parts::add);
+                    null, null, Stream.of(MilitaryHistory.ServiceRecord.Field.values())
+                            .filter(field -> record.field(field).isPresent())
+                            .map(field -> new Extension(field.url(),
+                                    record.field(field).value(), null, null))
+                            .toList())));
+            Stream.of(MilitaryHistory.ServiceDate.values())
+                    .filter(date -> service.date(date).isPresent())
+                    .map(date -> new Extension(date.url(), null,
+                            service.date(date).value().toString(), null))
+                    .forEach(parts::add);
             return new Extension(MILITARY_SERVICE, null, null, parts);
         }
 
         /** The extension naming {@code element}, received in the wrong format. */
         static Extension invalidField(String element) {
             return new Extension(INVALID_FIELD, element, null, null);
-        }
-
-        private static Extension string(String url, String value) {
-            return value == null ? null : new Extension(url, value, null, null);
-        }
-
-        private static Extension date(String url, LocalDate value) {
-            return value == null ? null : new Extension(url, null, value.toString(), null);
         }
     }
 }

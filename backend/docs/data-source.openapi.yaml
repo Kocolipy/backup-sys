@@ -98,6 +98,7 @@ paths:
         | `received-no-gender`        | with no `gender`                                                            |
         | `received-no-birth-date`    | with no `birthDate`                                                         |
         | `received-wrong-format`     | whose NRIC, official name's `text`, `gender` and `birthDate` are each of another JSON type or no calendar date |
+        | `received-demographics`     | whose Demographic details are missing and of another JSON type or no calendar date: a phone that is a number, a home address with no `text`, a Next of kin with no name text and a relationship text that is a number, a service record's `rank` that is a number and no `unit`, an `enlistmentDate` to the month, a `rodDate` that is a number and no `mrDate` |
       parameters:
         - name: id
           in: path
@@ -111,20 +112,21 @@ paths:
           description: |
             The Patient under exactly this `id`. A Patient under another id is a
             failure: its histories are read by the id asked for. Its NRIC,
-            official name's `text`, `gender` and `birthDate` are shown as
-            received (ADR 0020): each may be left out or sent in another form,
-            and none fails the read. The `last-visit` extension may be present;
-            a read by id ignores it.
+            official name's `text`, `gender`, `birthDate` and Demographic
+            details are shown as received (ADR 0020): each may be left out or
+            sent in another form, and none fails the read. The `last-visit`
+            extension may be present; a read by id ignores it.
 
-            A read by id also copies the Patient's **Demographic details**, each
-            only when the Patient has it: the first `telecom` of `system: phone`
-            and the first of `system: email` that have a `value`; the `text` of
-            the first `address` of `use: home` that has one; the first `contact`
-            whose relationship is coded v2-0131 `N` and whose `name` has a
-            `text`; and the military-history extension. An element without what
-            its copy needs is skipped, never the source failing, except a
-            military-history date not to the day, which is. Tan Wei Ming's
-            fixture holds all of them; no other fixture holds any.
+            A read by id also copies the Patient's **Demographic details**: the
+            `value` of the first `telecom` of `system: phone` and of the first
+            of `system: email`; the `text` of the first `address` of
+            `use: home`; the first `contact` whose relationship is coded v2-0131
+            `N` — their name's `text`, the first relationship `text` and their
+            first phone's `value`; and the military-history extension. Each is
+            missing when the source sends none and "Error" when it sends one of
+            another JSON type or, for a date, no calendar date. Tan Wei Ming's
+            fixture holds all of them; no other fixture holds any, and
+            `received-demographics` holds them missing and malformed.
           content:
             application/fhir+json:
               schema:
@@ -1015,10 +1017,11 @@ components:
 
         A **read by id** shows the Patient as received (ADR 0020): only its
         `id` must be the one asked for. Its NRIC's `value`, its official name's
-        `text`, its `gender` and its `birthDate` are each expected in the form
-        their descriptions name, but none is required and no value of one fails
-        the read: one left out, `null`, empty or blank is shown missing, and one
-        of another JSON type, or a birth date that is no calendar date, is shown
+        `text`, its `gender`, its `birthDate` and each Demographic detail's
+        value are each expected in the form their descriptions name, but none
+        is required and no value of one fails the read: one left out, `null`,
+        empty or blank is shown missing, and one of another JSON type, or a
+        birth date or a service date that is no calendar date, is shown
         "Error"; a gender outside the four codes is shown as it came.
 
         A **search's match** is held to every rule below: one breaking any is
@@ -1071,24 +1074,24 @@ components:
             hold one.
         telecom:
           description: |
-            Read by id alone: the first phone and the first email that have a
-            `value` are the Patient's; any other is ignored.
+            Read by id alone: the first phone's and the first email's `value`
+            are the Patient's, as received; any other is ignored.
           type: array
           items:
             $ref: "#/components/schemas/ContactPoint"
         address:
           description: |
-            Read by id alone: the first address of `use: home` with a non-blank
-            `text` is the residential address, shown as that text and never
-            rebuilt from its `line`s. An address with no text is skipped.
+            Read by id alone: the `text` of the first address of `use: home` is
+            the residential address, shown as received and never rebuilt from
+            its `line`s.
           type: array
           items:
             $ref: "#/components/schemas/Address"
         contact:
           description: |
             Read by id alone: the first contact with a relationship coded
-            v2-0131 `N` and a `name.text` is the Next of kin. Any other contact,
-            or one with no name text, is skipped.
+            v2-0131 `N` is the Next of kin, whatever their name holds. Any other
+            contact is skipped.
           type: array
           items:
             $ref: "#/components/schemas/Contact"
@@ -1100,7 +1103,7 @@ components:
           description: Only `phone` and `email` are read.
           type: string
         value:
-          type: string
+          description: A string, shown as received.
         use:
           description: Ignored.
           type: string
@@ -1115,8 +1118,7 @@ components:
           description: Only `home` is read.
           type: string
         text:
-          description: The address as written, what the backend shows.
-          type: string
+          description: The address as written, a string, what the backend shows as received.
         type:
           type: string
         line:
@@ -1136,7 +1138,7 @@ components:
           description: |
             A Next of kin carries a concept coded v2-0131 `N`; their
             relationship as shown (`Mother`) is the `text` of the first concept
-            that has one.
+            that has one, as received.
           type: array
           items:
             type: object
@@ -1156,15 +1158,14 @@ components:
                       description: Ignored.
                       type: string
               text:
-                type: string
+                description: A string.
         name:
           type: object
           properties:
             text:
-              description: Required for the contact to be the Next of kin.
-              type: string
+              description: The Next of kin's name, a string, shown as received.
         telecom:
-          description: The first `phone` with a `value` is the Next of kin's contact number.
+          description: The first `phone`'s `value` is the Next of kin's contact number.
           type: array
           items:
             $ref: "#/components/schemas/ContactPoint"
@@ -1241,7 +1242,9 @@ components:
                 description: |
                   One service record: whichever of `serviceType`, `rank`,
                   `unit`, `service` and `vocation` it has, each a
-                  `valueString`. Any other field is ignored.
+                  `valueString` shown as received — a string, and "Error" as
+                  any other JSON type. The first under each url is read; any
+                  other field is ignored.
                 required: [url]
                 properties:
                   url:
@@ -1250,22 +1253,23 @@ components:
                     type: array
                     items:
                       type: object
-                      required: [url, valueString]
+                      required: [url]
                       properties:
                         url:
                           type: string
                         valueString:
-                          type: string
+                          description: A string.
               - type: object
-                description: One of the service's dates, each at most once.
-                required: [url, valueDate]
+                description: One of the service's dates; the first under each url is read.
+                required: [url]
                 properties:
                   url:
                     enum: [enlistmentDate, ordDate, mrDate, rodDate]
                   valueDate:
-                    description: To the day; any other precision is the source failing.
-                    type: string
-                    format: date
+                    description: |
+                      To the day, shown as received: one of another precision
+                      or another JSON type is shown as "Error", never the
+                      source failing.
               - type: object
                 description: A sub-extension under any other `url`, ignored.
                 required: [url]

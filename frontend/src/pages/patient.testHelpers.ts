@@ -88,3 +88,52 @@ export const patientReads = (sent: readonly { method: string; path: string }[]) 
 
 /** The page beneath the top bar, which names the patient in context too. */
 export const page = () => within(screen.getByRole("main"));
+
+/** The extension naming one element of a Patient received in the wrong format, by its path. */
+const invalidField = (path: string) => ({
+  url: "http://example.org/fhir/StructureDefinition/invalid-field",
+  valueString: path,
+});
+
+/**
+ * Tan Wei Ming with the Demographic details of the patient source's mock's
+ * `received-demographics`, as the backend serves them: each missing, in the
+ * wrong format or present, apart from the others — no residential address, a
+ * phone in the wrong format beside a present email, a Next of kin with no name
+ * and a relationship in the wrong format, a service record whose rank is in the
+ * wrong format and which has no unit, an Enlistment Date and a ROD Date in the
+ * wrong format, an ORD Date present and no MR Date.
+ */
+export const TAN_WEI_MING_MALFORMED = {
+  ...TAN_WEI_MING_BARE,
+  contact: [
+    {
+      relationship: [
+        { coding: [{ code: "N", system: "http://terminology.hl7.org/CodeSystem/v2-0131" }] },
+      ],
+      telecom: [{ system: "phone", value: "+65 8111 2222" }],
+    },
+  ],
+  extension: [
+    {
+      extension: [
+        {
+          extension: [
+            { url: "serviceType", valueString: "NSF" },
+            { url: "service", valueString: "Army" },
+            { url: "vocation", valueString: "Signaller" },
+          ],
+          url: "serviceRecord",
+        },
+        { url: "ordDate", valueDate: "2001-03-01" },
+      ],
+      url: "http://example.org/fhir/StructureDefinition/military-service",
+    },
+    invalidField("telecom[0].value"),
+    invalidField("contact[0].relationship[1].text"),
+    invalidField("extension[0].extension[0].extension('rank').valueString"),
+    invalidField("extension[0].extension('enlistmentDate').valueDate"),
+    invalidField("extension[0].extension('rodDate').valueDate"),
+  ],
+  telecom: [{ system: "phone" }, { system: "email", value: "lim.kl@email.com" }],
+} satisfies Patient;

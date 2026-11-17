@@ -101,13 +101,18 @@ change, when the backend side moves. What the SPA has to honour:
   Patient under another id than the one asked for is the backend's `502`, so
   the SPA reads the patient's histories by the EHR context's id, never by one a
   Patient carries, which its decoder does not read. The Patient's NRIC,
-  official name's `text`, `gender` and `birthDate` are shown as received (ADR
-  0020): its shape — the arrays and objects the elements sit in — is decoded
-  strictly, but each of those four values by the lenient field decoder's rule
-  (`receivedValue`): an element the backend left out is missing, "—"; one an
-  `invalid-field` extension names by its path (`name[0].text`) is "Error"; and
-  a gender outside the four codes is shown as it came, so none of them fails
-  the read. The `{id}` is the patient's
+  official name's `text`, `gender`, `birthDate` and each Demographic detail —
+  the phone, the email, the residential address, the Next of kin's name,
+  relationship and phone, each service record's fields and each service date
+  — are shown as received (ADR 0020): its shape — the arrays and objects the
+  elements sit in — is decoded strictly, but each of those values by the
+  lenient field decoder's rule (`receivedValue`): an element the backend left
+  out is missing, "—"; one an `invalid-field` extension names by its path
+  (`name[0].text`, `telecom[0].value`, `contact[0].relationship[1].text`,
+  `extension[0].extension[1].extension('rank').valueString`) or that is not a
+  value of its kind — no string, or a date not to the day — is "Error"; and a
+  gender outside the four codes is shown as it came, so none of them fails
+  the read, and each is read apart from the others. The `{id}` is the patient's
   EHR's FHIR id: an id outside FHIR's id grammar, `[A-Za-z0-9\-.]{1,64}`
   (over 64 characters, markup, a line break, an empty segment, an encoded
   slash such as `a%2F%2Fb`), is the `400`;

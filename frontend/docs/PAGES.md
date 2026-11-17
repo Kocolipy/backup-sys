@@ -111,17 +111,22 @@ and decoders — and imports no hook (`lb-api-modules-are-data`).
   patient in context, rendered from `usePatientInContext()` (importing
   `patient-api.ts` for its types alone), and nothing while no patient is
   loaded: the Military Overview (at least three service record slots, a
-  filled one open and an empty one folded at first, then the service dates
-  as `dd MMM yyyy`), Contact Details and Next of Kin / Emergency. A value the
-  patient has none of shows "—"; every value renders as a plain text node.
+  slot holding any field open and an empty one folded at first, then the
+  service dates as `dd MMM yyyy`), Contact Details and Next of Kin / Emergency,
+  "No next of kin recorded" for a patient with none. Each detail is shown as
+  received through `shown`, independently of the others — its value, "—" when
+  missing, "Error" when invalid — and Unit / Service joins the unit and the
+  service each so shown, one missing left out; every value renders as a plain
+  text node.
 - `patient-in-context.ts`, `patient-api.ts` — the **one reader of the patient
   in context**. `PatientInContextScope`, which the signed-in layout renders
   once inside its page status, reads `GET /api/patient/{id}` through `PATIENT`
   (opting in to `absent`, a `403` reported as failure) for the EHR context's
   patient, decoding the R5 `Patient` (typed by `@types/fhir`'s `fhir5`) down
-  to the fields shown, each a `SourceField` (ADR 0020), and the Demographic
-  details; the patient it hands on carries the id it was asked for — the EHR
-  context's — which the history pages read by, never one the Patient carries.
+  to the fields shown, each a `SourceField` (ADR 0020), the Demographic
+  details' values among them; the patient it hands on carries the id it was
+  asked for — the EHR context's — which the history pages read by, never one
+  the Patient carries.
   With none in context it reads nothing.
   - A new id is a new path, so a new first read, and a late answer for the id
     before never lands. A failure is reported to the page's error line once,

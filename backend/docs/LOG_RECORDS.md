@@ -223,7 +223,7 @@ page, which quoted the path.
   body that stopped arriving: reset or dropped, or stalled past the read
   timeout), `server-error`, `unexpected-status`, `unreadable` (a body that
   arrived whole and could not be read), or the rule a Patient read by id broke
-  (`another-resource`, `service-date-not-to-the-day`), or the rule a page of a
+  (`another-resource`), or the rule a page of a
   Patient search broke — a match's own among them (`no-nric`,
   `no-official-name`, `no-name-text`, `no-gender`, `no-birth-date`,
   `birth-date-not-to-the-day`) (`/docs/domain/patient.md`, "Logging", and
@@ -256,12 +256,17 @@ held any, beside the request's own record. It carries
 `app.patient_source.read`, the read (`ffi`, `numc`, `armc`, `medication`,
 `patient` or `search`), and
 `app.patient_source.invalid_fields`, the path of each such field in the
-source's answer, in its order (`entry[1].issueDate`, a Patient's
-`name[1].text`, a search's `entry[0].extension[0].valueDate`) — never a value,
-a record's id or the patient. A response with none writes nothing. The
+source's answer, in its order and nested as deep as it was found
+(`entry[1].issueDate`, a Patient's `name[1].text` or
+`extension[1].extension[0].extension[2].valueString`, a search's
+`entry[0].extension[0].valueDate`) — never a value, a record's id or the
+patient. A response with none writes nothing. The
 `patient_source.invalid_fields` counter counts each such field, tagged `read`
-and `field`: a record's or a search row's field name (`lastVisit`), or a
-Patient's element by its path in the served resource (`name[0].text`).
+and `field`: a record's or a search row's field name (`lastVisit`), a
+Patient's element by its path in the served resource (`name[0].text`), or a
+Patient's Demographic detail by its name (`phone`, `nextOfKin.relationship`,
+`serviceRecord.rank`, `ordDate`), the same for every Patient and service
+record.
 
 ### Scheduled jobs
 
