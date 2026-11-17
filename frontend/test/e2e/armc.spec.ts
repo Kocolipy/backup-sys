@@ -9,14 +9,14 @@ import { sidebar } from "./shell.helpers";
  * Patient Search, then ARMC opened from the sidebar. Tan Wei Ming has exactly
  * two ARMC Boards, sorted by each date both ways, Tan Hui Min seven over two
  * pages, the first still open, filtered by each Outcome, each date range — an
- * End Date range leaving out the open board — two filters combined and one
- * matching nothing, Tan Boon Huat four shown as received, and Siti Nurhaliza
- * binte Ahmad none (`/docs/domain/armc.md`, "The patient source's ARMC
- * fixtures"). What the page decides without the backend — the labels, the
- * badges, "—", "Error" and a raw code, a loading patient, each filter's
- * parameters, an inverted range, no patient in context and a failure — is
- * `armc.test.tsx`'s; the backend's real `502`
- * reaching a history page is `medication.spec.ts`', that a session without
+ * End Date range leaving out the open board — and two filters combined, and
+ * Tan Boon Huat four shown as received (`/docs/domain/armc.md`, "The patient
+ * source's ARMC fixtures"). What the page decides without the backend — the
+ * labels, the badges, "—", "Error" and a raw code, a loading patient, each
+ * filter's parameters, an inverted range, no patient in context and a
+ * failure — is `armc.test.tsx`'s; what every history page shares — a patient
+ * with no records, a filter matching none, Reset and the backend's real `502`
+ * reaching the page — is read once, in `medication.spec.ts`; that a session without
  * `patient:read` is offered no ARMC link `roles-user.spec.ts`', and that it is
  * routed to Home `App.test.tsx`'s.
  *
@@ -104,15 +104,6 @@ test.describe("ARMC", () => {
       "ACES—————",
     ]);
     await expect(page.getByText("Showing 1 to 4 of 4 records")).toBeVisible();
-  });
-
-  test("says no records are found for a patient with none", async ({ page }) => {
-    await selectPatient(page, "s9212345a", "Siti Nurhaliza binte Ahmad", "S9212345A");
-
-    await openArmc(page);
-
-    await expect(page.getByText("No records found.", { exact: true })).toBeVisible();
-    await expect(page.getByRole("table", { name: "ARMC History" })).toHaveCount(0);
   });
 
   test.describe("sorted", () => {
@@ -256,31 +247,6 @@ test.describe("ARMC", () => {
       await expect(page.getByText("Showing 1 to 3 of 3 records")).toBeVisible();
       await expect(armcRows(page)).toHaveText(rowsOf(1, 3, 4));
       await expect(filterButton(page)).toHaveAccessibleName("Filter, 2 set");
-    });
-
-    test("clears the filters on Reset, reading the whole history from page 1", async ({ page }) => {
-      await filterTanHuiMin(page);
-      await outcome(page, "FIT");
-      await dateField(page, "Start Date", "From").fill("2023-01-01");
-      await apply(page);
-      await expect(page.getByText("Showing 1 to 3 of 3 records")).toBeVisible();
-
-      await filterButton(page).click();
-      await panel(page).getByRole("button", { name: "Reset" }).click();
-
-      await expect(page.getByText("Showing 1 to 5 of 7 records")).toBeVisible();
-      await expect(armcRows(page)).toHaveText(rowsOf(1, 2, 3, 4, 5));
-      await expect(filterButton(page)).toHaveAccessibleName("Filter");
-    });
-
-    test("says no records match the filters for a filter matching none", async ({ page }) => {
-      await filterTanHuiMin(page);
-
-      await dateField(page, "Start Date", "To").fill("2019-12-31");
-      await apply(page);
-
-      await expect(page.getByText("No records match the filters.", { exact: true })).toBeVisible();
-      await expect(page.getByRole("table", { name: "ARMC History" })).toHaveCount(0);
     });
   });
 });

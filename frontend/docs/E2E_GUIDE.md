@@ -93,7 +93,8 @@ API"): there it runs in milliseconds, and Stryker checks it is load-bearing.
   backend, and the pages' unit tests hold their own wiring: `roles-user.spec.ts`
   owns what a session without `patient:read` is offered, `App.test.tsx` each
   route it is turned away from, and `medication.spec.ts` the one history page
-  that reads the backend's real `502`.
+  that reads the backend's real `502`, a patient with no records, a filter
+  matching none and Reset.
 - **Say in the spec's header what it leaves out and which test holds it**, as
   `ffi.spec.ts` does, so the next reader does not add the case back.
 
