@@ -22,11 +22,11 @@ import java.util.stream.Stream;
  *   <li>{@code server}: the source answered {@code 5xx}, {@code server-error};
  *   <li>{@code data}: the source answered with something the service cannot use — another status
  *       ({@code unexpected-status}), a body that is not JSON or not a Patient
- *       ({@code unreadable}), a Patient under another patient's id or with a military service
- *       date not to the day, a search's match breaking one of the domain's rules, or a search's
- *       answer or a history that is no searchset, has no total, or holds an entry of another
- *       resource. An FFI, a NUMC Record, an ARMC Board, a Medication Record, a search match's
- *       Last visit and a Patient read by id's NRIC, name, gender and birth date break no rule:
+ *       ({@code unreadable}), a Patient under another patient's id, a search's match breaking
+ *       one of the domain's rules, or a search's answer or a history that is no searchset, has
+ *       no total, or holds an entry of another resource. An FFI, a NUMC Record, an ARMC Board, a
+ *       Medication Record, a search match's Last visit and a Patient read by id's NRIC, name,
+ *       gender, birth date and Demographic details break no rule:
  *       they are shown as received (ADR 0020), so only their call, their searchset or the
  *       Patient's id fails.
  * </ul>
@@ -79,10 +79,6 @@ public final class PatientSourceException extends UpstreamFaultException {
         NO_ID("no-id", "The patient source's Patient has no id", ErrorCategory.DATA),
         /** A search's Patient whose {@code id} is outside FHIR's id grammar. */
         INVALID_ID("invalid-id", "The patient source's Patient's id is not a FHIR id",
-                ErrorCategory.DATA),
-        /** A Patient read by id whose military service has a date that is no date to the day. */
-        SERVICE_DATE_NOT_TO_THE_DAY("service-date-not-to-the-day",
-                "The patient source's Patient's military service date is not to the day",
                 ErrorCategory.DATA);
 
         /** The call's own failure this is, or {@code null} for a broken domain rule. */

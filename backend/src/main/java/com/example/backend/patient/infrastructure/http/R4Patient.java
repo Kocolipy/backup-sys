@@ -17,7 +17,10 @@ import com.example.backend.patient.infrastructure.http.PatientSourceException.Fa
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -31,17 +34,16 @@ import tools.jackson.databind.JsonNode;
  * {@code official}, the {@code gender} and the {@code birthDate}. The Last visit is the source's
  * own extension ({@link #LAST_VISIT}, ADR 0018), a {@code valueDate} to the day, read as received
  * (ADR 0020): bound as the raw JSON it arrived as, and present, missing or invalid. The
- * Demographic details are the first {@code phone} and {@code email} in {@code telecom}, the first
- * {@code home} {@code address}'s text, the first {@code contact} coded v2-0131 {@code N} with a
- * name text, and the military service extension ({@link #MILITARY_SERVICE}); an element without
- * what its copy needs is not copied.
+ * Demographic details are the value of the first {@code phone} and of the first {@code email} in
+ * {@code telecom}, the first {@code home} {@code address}'s text, the first {@code contact} coded
+ * v2-0131 {@code N}, and the military service extension ({@link #MILITARY_SERVICE}).
  *
- * <p>A read by id copies the four as received (ADR 0020): the NRIC's value, the official name's
- * text, the gender and the birth date are each bound as the raw JSON they arrived as and read by
- * {@link ReceivedFields} — present, missing or invalid — so none fails the read, and only another
- * patient's id does. A search keeps the strict reading ADR 0018 describes for the four: a match
- * missing one, holding one in the wrong format or a gender outside the four codes fails the
- * search. Its Last visit never does.
+ * <p>A read by id copies the four and the Demographic details as received (ADR 0020): the NRIC's
+ * value, the official name's text, the gender, the birth date and each Demographic detail's value
+ * are bound as the raw JSON they arrived as and read by {@link ReceivedFields} — present, missing
+ * or invalid — so none fails the read, and only another patient's id does. A search keeps the
+ * strict reading ADR 0018 describes for the four: a match missing one, holding one in the wrong
+ * format or a gender outside the four codes fails the search. Its Last visit never does.
  *
  * @param resourceType the resource's type: a search's entry must be a {@code Patient}
  * @param id         the resource's id: the id it was read by, or in a search, a FHIR id of its own
@@ -73,6 +75,9 @@ record R4Patient(
     static final String MILITARY_SERVICE =
             "http://example.org/fhir/StructureDefinition/military-service";
 
+    /** The url of a service record's sub-extension, in the military service extension. */
+    private static final String SERVICE_RECORD = "serviceRecord";
+
     /** HL7 v2 table 0131, whose code {@code N} marks a contact as the next of kin. */
     static final String CONTACT_ROLE = "http://terminology.hl7.org/CodeSystem/v2-0131";
 
@@ -91,9 +96,8 @@ record R4Patient(
         }
         PatientId own = new PatientId(
                 SourceSearchset.ownId(id, Failure.NO_ID, Failure.INVALID_ID));
-        int lastVisit = lastVisitIndex();
         return new PatientMatch(core(own),
-                lastVisit < 0 ? SourceField.missing() : day(extension.get(lastVisit).valueDate()));
+                firstOf(extension, withUrl(LAST_VISIT), visit -> day(visit.valueDate())));
     }
 
     /**
@@ -110,115 +114,152 @@ record R4Patient(
 
     /** The place of the first Last visit extension, or -1 when there is none. */
     private int lastVisitIndex() {
-        return indexOf(extension, candidate -> LAST_VISIT.equals(candidate.url()));
+        return indexOf(extension, withUrl(LAST_VISIT));
     }
 
     /**
      * The domain's Patient this resource is, read under {@code asked} as received (ADR 0020),
-     * with its Demographic details: its NRIC, official name's text, gender and birth date each
-     * present, missing or invalid, and none refused for what it holds.
+     * with its Demographic details: its NRIC, official name's text, gender, birth date and each
+     * Demographic detail present, missing or invalid, and none refused for what it holds.
      *
-     * @throws PatientSourceException when the resource is another patient's, or has a military
-     *                                service date not to the day, naming which and quoting no
-     *                                value
+     * @throws PatientSourceException when the resource is another patient's, quoting no value
      */
     Patient toPatient(PatientId asked) {
         return received(asked).withDemographics(demographics());
     }
 
-    /** The Demographic details this resource holds; any the source does not hold are null. */
+    /**
+     * The Demographic details this resource holds, each as received: the first phone's and the
+     * first email's value, the first {@code home} address's text, the next of kin and the
+     * military service. A detail with no element to read it from is missing.
+     */
     private Demographics demographics() {
-        return new Demographics(contactPointOf(telecom, "phone"), contactPointOf(telecom, "email"),
+        return new Demographics(valueOf(telecom, "phone"), valueOf(telecom, "email"),
                 residentialAddress(), nextOfKin(), militaryHistory());
     }
 
-    /** The value of the first of {@code points} under {@code system} that has one. */
-    private static String contactPointOf(List<ContactPoint> points, String system) {
-        return listed(points).stream()
-                .filter(point -> system.equals(point.system()) && point.value() != null)
-                .map(ContactPoint::value)
-                .findFirst()
-                .orElse(null);
+    /** The value of the first of {@code points} under {@code system}, as received. */
+    private static SourceField<String> valueOf(List<ContactPoint> points, String system) {
+        return firstOf(points, inSystem(system), point -> text(point.value()));
     }
 
-    /** The first {@code home} address's text, which is never rebuilt from its lines. */
-    private String residentialAddress() {
-        return listed(address).stream()
-                .filter(candidate -> "home".equals(candidate.use()) && present(candidate.text()))
-                .map(Address::text)
-                .findFirst()
-                .orElse(null);
+    /** The place of the first of {@code points} under {@code system}, or -1 when there is none. */
+    private static int contactPointIndex(List<ContactPoint> points, String system) {
+        return indexOf(points, inSystem(system));
+    }
+
+    private static Predicate<ContactPoint> inSystem(String system) {
+        return point -> system.equals(point.system());
+    }
+
+    /** The first {@code home} address's text, as received, which is never rebuilt from its lines. */
+    private SourceField<String> residentialAddress() {
+        return firstOf(address, R4Patient::isHome, home -> text(home.text()));
+    }
+
+    /** The place of the first {@code home} address, or -1 when there is none. */
+    private int homeAddressIndex() {
+        return indexOf(address, R4Patient::isHome);
+    }
+
+    private static boolean isHome(Address candidate) {
+        return "home".equals(candidate.use());
     }
 
     /**
-     * The first contact coded as next of kin with a name text: its relationship is the text of
-     * the first of its relationships that has one, its phone its first phone.
+     * The first contact coded as next of kin, or {@code null} when there is none: its name's
+     * text, the text of the first of its relationships that has one, and its first phone's value,
+     * each as received.
      */
     private NextOfKin nextOfKin() {
-        return listed(contact).stream()
-                .filter(candidate -> candidate.isNextOfKin() && candidate.name() != null
-                        && present(candidate.name().text()))
-                .findFirst()
-                .map(kin -> new NextOfKin(kin.name().text(),
-                        listed(kin.relationship()).stream().map(CodeableConcept::text)
-                                .filter(R4Patient::present).findFirst().orElse(null),
-                        contactPointOf(kin.telecom(), "phone")))
-                .orElse(null);
+        int kin = nextOfKinIndex();
+        if (kin < 0) {
+            return null;
+        }
+        Contact found = contact.get(kin);
+        return new NextOfKin(
+                found.name() == null ? SourceField.missing() : text(found.name().text()),
+                firstOf(found.relationship(), R4Patient::hasText,
+                        concept -> text(concept.text())),
+                valueOf(found.telecom(), "phone"));
+    }
+
+    /** The place of the first contact coded as next of kin, or -1 when there is none. */
+    private int nextOfKinIndex() {
+        return indexOf(contact, Contact::isNextOfKin);
+    }
+
+    /** The place of the first of {@code kin}'s relationships with a text, or -1 when none has. */
+    private static int relationshipTextIndex(Contact kin) {
+        return indexOf(kin.relationship(), R4Patient::hasText);
+    }
+
+    private static boolean hasText(CodeableConcept concept) {
+        return text(concept.text()).received() != SourceField.Received.MISSING;
     }
 
     /**
-     * The military service extension: its service records in order, each field a
-     * {@code valueString}, and its dates, each a {@code valueDate} to the day. A sub-extension it
-     * does not name is not read.
+     * The military service extension, or {@code null} when there is none: its service records in
+     * order and its dates, each the first sub-extension under its url, as received — a field's
+     * {@code valueString}, a date's {@code valueDate} to the day. A sub-extension it does not
+     * name is not read.
      */
     private MilitaryHistory militaryHistory() {
-        Extension military = listed(extension).stream()
-                .filter(candidate -> MILITARY_SERVICE.equals(candidate.url()))
-                .findFirst()
-                .orElse(null);
-        if (military == null) {
+        int military = militaryIndex();
+        if (military < 0) {
             return null;
         }
-        List<Extension> parts = listed(military.extension());
+        List<Extension> parts = militaryParts();
         return new MilitaryHistory(
-                parts.stream().filter(part -> "serviceRecord".equals(part.url()))
+                parts.stream().filter(R4Patient::isServiceRecord)
                         .map(R4Patient::serviceRecord).toList(),
-                serviceDate(parts, "enlistmentDate"),
-                serviceDate(parts, "ordDate"),
-                serviceDate(parts, "mrDate"),
-                serviceDate(parts, "rodDate"));
+                serviceDate(parts, MilitaryHistory.ServiceDate.ENLISTMENT),
+                serviceDate(parts, MilitaryHistory.ServiceDate.ORD),
+                serviceDate(parts, MilitaryHistory.ServiceDate.MR),
+                serviceDate(parts, MilitaryHistory.ServiceDate.ROD));
+    }
+
+    /** The place of the first military service extension, or -1 when there is none. */
+    private int militaryIndex() {
+        return indexOf(extension, candidate -> MILITARY_SERVICE.equals(candidate.url()));
+    }
+
+    /** The sub-extensions of the military service extension, which there must be. */
+    private List<Extension> militaryParts() {
+        return listed(extension.get(militaryIndex()).extension());
+    }
+
+    private static boolean isServiceRecord(Extension part) {
+        return SERVICE_RECORD.equals(part.url());
     }
 
     private static MilitaryHistory.ServiceRecord serviceRecord(Extension record) {
         List<Extension> fields = listed(record.extension());
         return new MilitaryHistory.ServiceRecord(
-                valueString(fields, "serviceType"),
-                valueString(fields, "rank"),
-                valueString(fields, "unit"),
-                valueString(fields, "service"),
-                valueString(fields, "vocation"));
+                serviceRecordField(fields, MilitaryHistory.ServiceRecord.Field.SERVICE_TYPE),
+                serviceRecordField(fields, MilitaryHistory.ServiceRecord.Field.RANK),
+                serviceRecordField(fields, MilitaryHistory.ServiceRecord.Field.UNIT),
+                serviceRecordField(fields, MilitaryHistory.ServiceRecord.Field.SERVICE),
+                serviceRecordField(fields, MilitaryHistory.ServiceRecord.Field.VOCATION));
     }
 
-    private static String valueString(List<Extension> fields, String url) {
-        return fields.stream().filter(field -> url.equals(field.url()))
-                .map(Extension::valueString).filter(R4Patient::present).findFirst().orElse(null);
+    private static SourceField<String> serviceRecordField(List<Extension> fields,
+            MilitaryHistory.ServiceRecord.Field field) {
+        return firstOf(fields, withUrl(field.url()), part -> text(part.valueString()));
     }
 
-    private static LocalDate serviceDate(List<Extension> parts, String url) {
-        Extension date = parts.stream().filter(part -> url.equals(part.url()))
-                .findFirst().orElse(null);
-        if (date == null) {
-            return null;
-        }
-        SourceField<LocalDate> day = day(date.valueDate());
-        if (!day.isPresent()) {
-            throw PatientSourceException.failed(Failure.SERVICE_DATE_NOT_TO_THE_DAY);
-        }
-        return day.value();
+    private static SourceField<LocalDate> serviceDate(List<Extension> parts,
+            MilitaryHistory.ServiceDate date) {
+        return firstOf(parts, withUrl(date.url()), part -> day(part.valueDate()));
     }
 
-    private static boolean present(String text) {
-        return text != null && !text.isBlank();
+    /** The place of the first of {@code extensions} under {@code url}, or -1 when there is none. */
+    private static int urlIndex(List<Extension> extensions, String url) {
+        return indexOf(extensions, withUrl(url));
+    }
+
+    private static Predicate<Extension> withUrl(String url) {
+        return candidate -> url.equals(candidate.url());
     }
 
     /**
@@ -233,12 +274,11 @@ record R4Patient(
         if (!asked.value().equals(id)) {
             throw PatientSourceException.failed(Failure.ANOTHER_RESOURCE);
         }
-        int nric = nricIndex();
         int official = officialNameIndex();
         HumanName officialName = official < 0 ? null : name.get(official);
         return new Patient(
                 asked,
-                nric < 0 ? SourceField.missing() : text(identifier.get(nric).value()),
+                firstOf(identifier, R4Patient::isNric, nric -> text(nric.value())),
                 officialName == null ? null : new PatientName(text(officialName.text()),
                         officialName.family(), officialName.given()),
                 text(gender),
@@ -248,12 +288,18 @@ record R4Patient(
 
     /**
      * The fields of {@code patient}, read from this resource, whose format was wrong, each by its
-     * path in this answer — {@code identifier[1].value}, {@code name[2].text} — beside the element
-     * of the served {@code Patient} it is ({@link Patient#invalid()}).
+     * path in this answer — {@code identifier[1].value}, {@code name[2].text},
+     * {@code telecom[3].value}, {@code extension[1].extension[0].extension[2].valueString} —
+     * beside the counter's name for it: one of the four by its path in the served
+     * {@code Patient} ({@link Patient.Element#path()}), a Demographic detail by its own
+     * ({@link Demographics.Detail#tag()}).
      */
     List<InvalidSourceFields.Field> invalidFields(Patient patient) {
-        return patient.invalidElements().stream()
-                .map(element -> new InvalidSourceFields.Field(pathOf(element), element.path()))
+        return Stream.concat(
+                patient.invalidElements().stream().map(element ->
+                        new InvalidSourceFields.Field(pathOf(element), element.path())),
+                patient.demographics().invalidDetails().stream().map(detail ->
+                        new InvalidSourceFields.Field(pathOf(detail), detail.tag())))
                 .toList();
     }
 
@@ -268,6 +314,52 @@ record R4Patient(
             case NAME_TEXT -> "name[" + officialNameIndex() + "].text";
             case GENDER, BIRTH_DATE -> element.path();
         };
+    }
+
+    /**
+     * Where in this answer {@code detail} was read from, each place counted from zero: the
+     * contact point, the address, the contact, the relationship and the sub-extensions it was
+     * found in.
+     */
+    private String pathOf(Demographics.Detail detail) {
+        return switch (detail) {
+            case Demographics.Contact contactDetail -> switch (contactDetail) {
+                case PHONE -> "telecom[" + contactPointIndex(telecom, "phone") + "].value";
+                case EMAIL -> "telecom[" + contactPointIndex(telecom, "email") + "].value";
+                case RESIDENTIAL_ADDRESS -> "address[" + homeAddressIndex() + "].text";
+                case NEXT_OF_KIN_NAME -> nextOfKinPath() + ".name.text";
+                case NEXT_OF_KIN_RELATIONSHIP -> nextOfKinPath() + ".relationship["
+                        + relationshipTextIndex(contact.get(nextOfKinIndex())) + "].text";
+                case NEXT_OF_KIN_PHONE -> nextOfKinPath() + ".telecom["
+                        + contactPointIndex(contact.get(nextOfKinIndex()).telecom(), "phone")
+                        + "].value";
+            };
+            case Demographics.ServiceRecordField(int record,
+                    MilitaryHistory.ServiceRecord.Field field) -> {
+                List<Extension> parts = militaryParts();
+                int part = serviceRecordIndex(parts, record);
+                yield militaryPath() + ".extension[" + part + "].extension["
+                        + urlIndex(listed(parts.get(part).extension()), field.url())
+                        + "].valueString";
+            }
+            case Demographics.ServiceDateField(MilitaryHistory.ServiceDate date) ->
+                    militaryPath() + ".extension[" + urlIndex(militaryParts(), date.url())
+                            + "].valueDate";
+        };
+    }
+
+    private String nextOfKinPath() {
+        return "contact[" + nextOfKinIndex() + "]";
+    }
+
+    private String militaryPath() {
+        return "extension[" + militaryIndex() + "]";
+    }
+
+    /** The place among {@code parts} of the service record at {@code record} among the records. */
+    private static int serviceRecordIndex(List<Extension> parts, int record) {
+        return IntStream.range(0, parts.size()).filter(at -> isServiceRecord(parts.get(at)))
+                .skip(record).findFirst().orElseThrow();
     }
 
     /**
@@ -300,12 +392,26 @@ record R4Patient(
 
     /** The place of the first identifier under the NRIC NamingSystem, or -1 when there is none. */
     private int nricIndex() {
-        return indexOf(identifier, candidate -> Patient.NRIC_SYSTEM.equals(candidate.system()));
+        return indexOf(identifier, R4Patient::isNric);
+    }
+
+    private static boolean isNric(Identifier candidate) {
+        return Patient.NRIC_SYSTEM.equals(candidate.system());
     }
 
     /** The place of the first name whose {@code use} is {@code official}, or -1 when there is none. */
     private int officialNameIndex() {
         return indexOf(name, candidate -> OFFICIAL.equals(candidate.use()));
+    }
+
+    /**
+     * The field {@code read} takes, as received, from the first of {@code elements} that
+     * {@code wanted} picks: missing when it picks none.
+     */
+    private static <T, V> SourceField<V> firstOf(List<T> elements, Predicate<T> wanted,
+            Function<T, SourceField<V>> read) {
+        int at = indexOf(elements, wanted);
+        return at < 0 ? SourceField.missing() : read.apply(elements.get(at));
     }
 
     private static <T> int indexOf(List<T> elements, Predicate<T> wanted) {
@@ -323,21 +429,29 @@ record R4Patient(
     }
 
     /**
-     * An R4 {@code Extension}: only its url, a {@code valueDate} — as the raw JSON it arrived as
-     * ({@link ReceivedFields}) — or {@code valueString}, and the extensions nested in it are read.
+     * An R4 {@code Extension}: only its url, a {@code valueDate} or {@code valueString} — each as
+     * the raw JSON it arrived as ({@link ReceivedFields}) — and the extensions nested in it are
+     * read.
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
-    record Extension(String url, JsonNode valueDate, String valueString, List<Extension> extension) {
+    record Extension(String url, JsonNode valueDate, JsonNode valueString,
+            List<Extension> extension) {
     }
 
-    /** An R4 {@code ContactPoint}: only its system and value are read. */
+    /**
+     * An R4 {@code ContactPoint}: only its system and value are read, the value as the raw JSON
+     * it arrived as ({@link ReceivedFields}).
+     */
     @JsonIgnoreProperties(ignoreUnknown = true)
-    record ContactPoint(String system, String value) {
+    record ContactPoint(String system, JsonNode value) {
     }
 
-    /** An R4 {@code Address}: only its use and text are read. */
+    /**
+     * An R4 {@code Address}: only its use and text are read, the text as the raw JSON it arrived
+     * as ({@link ReceivedFields}).
+     */
     @JsonIgnoreProperties(ignoreUnknown = true)
-    record Address(String use, String text) {
+    record Address(String use, JsonNode text) {
     }
 
     /** An R4 {@code Coding}: only its system and code are read. */
@@ -345,9 +459,12 @@ record R4Patient(
     record Coding(String system, String code) {
     }
 
-    /** An R4 {@code CodeableConcept}: only its codings and text are read. */
+    /**
+     * An R4 {@code CodeableConcept}: only its codings and text are read, the text as the raw JSON
+     * it arrived as ({@link ReceivedFields}).
+     */
     @JsonIgnoreProperties(ignoreUnknown = true)
-    record CodeableConcept(List<Coding> coding, String text) {
+    record CodeableConcept(List<Coding> coding, JsonNode text) {
 
         boolean marksNextOfKin() {
             return listed(coding).stream().anyMatch(coded ->
@@ -381,8 +498,11 @@ record R4Patient(
     record HumanName(String use, JsonNode text, String family, List<String> given) {
     }
 
-    /** An R4 {@code HumanName} as a contact's name: only its text is read. */
+    /**
+     * An R4 {@code HumanName} as a contact's name: only its text is read, as the raw JSON it
+     * arrived as ({@link ReceivedFields}).
+     */
     @JsonIgnoreProperties(ignoreUnknown = true)
-    record ContactName(String text) {
+    record ContactName(JsonNode text) {
     }
 }

@@ -8,11 +8,13 @@ import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 /**
- * What a Patient holds — its id, and its NRIC, official name's text, gender and birth date each
- * as received (ADR 0020), none refused for what it holds — which of them it names as invalid, and
+ * What a Patient holds — its id, and its NRIC, official name's text, gender, birth date and
+ * Demographic details each as received (ADR 0020), none refused for what it holds — which of them
+ * it names as invalid, and
  * what it prints as: its id, and none of the Restricted fields a record's generated
  * {@code toString} would print.
  */
@@ -147,29 +149,67 @@ class PatientTests {
     void aPatientWithDemographicDetailsKeepsItsFiveElements() {
         Patient tan = new Patient(ID, SourceField.missing(), NAME, MALE, SourceField.invalid(),
                 Demographics.NONE);
-        Demographics details = new Demographics("+65 9123 4567", null, null, null, null);
+        Demographics details = new Demographics(SourceField.present("+65 9123 4567"),
+                SourceField.missing(), SourceField.missing(), null, null);
 
         assertThat(tan.withDemographics(details)).isEqualTo(new Patient(ID,
                 SourceField.missing(), NAME, MALE, SourceField.invalid(), details));
     }
 
-    @Test
-    void aNextOfKinNeedsAName() {
-        assertThatThrownBy(() -> new NextOfKin(null, "Mother", null))
-                .isInstanceOf(NullPointerException.class).hasMessage("name");
+    /** {@code fields} with the one at {@code at} left {@code null}, the rest missing. */
+    private static SourceField<?>[] missingBut(int count, int at) {
+        SourceField<?>[] fields = new SourceField<?>[count];
+        for (int place = 0; place < count; place++) {
+            fields[place] = place == at ? null : SourceField.missing();
+        }
+        return fields;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T> SourceField<T> field(SourceField<?>[] fields, int at) {
+        return (SourceField<T>) fields[at];
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"", " "})
-    void aNextOfKinsNameCannotBeBlank(String blank) {
-        assertThatThrownBy(() -> new NextOfKin(blank, "Mother", null))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("A next of kin's name is required");
+    @CsvSource({"0, phone", "1, email", "2, residentialAddress"})
+    void demographicsHoldEachContactDetailAsReceived(int at, String name) {
+        SourceField<?>[] fields = missingBut(3, at);
+        assertThatThrownBy(() -> new Demographics(field(fields, 0), field(fields, 1),
+                field(fields, 2), null, null))
+                .isInstanceOf(NullPointerException.class).hasMessage(name);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"0, name", "1, relationship", "2, phone"})
+    void aNextOfKinHoldsEachDetailAsReceived(int at, String name) {
+        SourceField<?>[] fields = missingBut(3, at);
+        assertThatThrownBy(() -> new NextOfKin(field(fields, 0), field(fields, 1),
+                field(fields, 2)))
+                .isInstanceOf(NullPointerException.class).hasMessage(name);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"0, serviceType", "1, rank", "2, unit", "3, service", "4, vocation"})
+    void aServiceRecordHoldsEachFieldAsReceived(int at, String name) {
+        SourceField<?>[] fields = missingBut(5, at);
+        assertThatThrownBy(() -> new MilitaryHistory.ServiceRecord(field(fields, 0),
+                field(fields, 1), field(fields, 2), field(fields, 3), field(fields, 4)))
+                .isInstanceOf(NullPointerException.class).hasMessage(name);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"0, enlistmentDate", "1, ordDate", "2, mrDate", "3, rodDate"})
+    void aMilitaryHistoryHoldsEachDateAsReceived(int at, String name) {
+        SourceField<?>[] fields = missingBut(4, at);
+        assertThatThrownBy(() -> new MilitaryHistory(List.of(), field(fields, 0),
+                field(fields, 1), field(fields, 2), field(fields, 3)))
+                .isInstanceOf(NullPointerException.class).hasMessage(name);
     }
 
     @Test
     void aMilitaryHistoryWithNoRecordListHasAnEmptyOne() {
-        assertThat(new MilitaryHistory(null, null, null, null, null).serviceRecords()).isEmpty();
+        assertThat(new MilitaryHistory(null, SourceField.missing(), SourceField.missing(),
+                SourceField.missing(), SourceField.missing()).serviceRecords()).isEmpty();
     }
 
     /**
@@ -178,18 +218,121 @@ class PatientTests {
      */
     @Test
     void noDemographicDetailPrintsItsValues() {
-        MilitaryHistory.ServiceRecord record =
-                new MilitaryHistory.ServiceRecord("NSman", "CPT", "3 SIR", "Army", "Infantry Officer");
-        MilitaryHistory service = new MilitaryHistory(List.of(record), BORN, BORN, BORN, BORN);
-        NextOfKin kin = new NextOfKin("Mdm Lee Siew Kuen", "Mother", "+65 8234 5678");
-        Demographics details = new Demographics("+65 9123 4567", "tan.hw@email.com",
-                "Blk 123 Bishan Street 12", kin, service);
+        MilitaryHistory.ServiceRecord record = new MilitaryHistory.ServiceRecord(
+                SourceField.present("NSman"), SourceField.present("CPT"),
+                SourceField.present("3 SIR"), SourceField.present("Army"),
+                SourceField.present("Infantry Officer"));
+        MilitaryHistory service = new MilitaryHistory(List.of(record), BIRTH_DATE, BIRTH_DATE,
+                BIRTH_DATE, BIRTH_DATE);
+        NextOfKin kin = new NextOfKin(SourceField.present("Mdm Lee Siew Kuen"),
+                SourceField.present("Mother"), SourceField.present("+65 8234 5678"));
+        Demographics details = new Demographics(SourceField.present("+65 9123 4567"),
+                SourceField.present("tan.hw@email.com"),
+                SourceField.present("Blk 123 Bishan Street 12"), kin, service);
         Patient tan = new Patient(ID, "S1234567A", NAME, AdministrativeGender.MALE, BORN, details);
 
         assertThat(List.of(record, service, kin, details, tan)).extracting(Object::toString)
                 .containsExactly("ServiceRecord[redacted]", "MilitaryHistory[redacted]",
                         "NextOfKin[redacted]", "Demographics[redacted]",
                         "Patient[id=eq081-VQEgP8drUUqCWzHfw3]");
+    }
+
+    // ---- Demographic details in the wrong format ----------------------------------------------
+
+    private static final SourceField<String> MISSING = SourceField.missing();
+    private static final SourceField<String> INVALID = SourceField.invalid();
+    private static final SourceField<LocalDate> INVALID_DAY = SourceField.invalid();
+
+    /** A service record with only {@code rank} and {@code vocation} received, each as given. */
+    private static MilitaryHistory.ServiceRecord recordOf(SourceField<String> rank,
+            SourceField<String> vocation) {
+        return new MilitaryHistory.ServiceRecord(MISSING, rank, MISSING, MISSING, vocation);
+    }
+
+    private static Patient tanWith(Demographics details) {
+        return new Patient(ID, NRIC, NAME, MALE, BIRTH_DATE, details);
+    }
+
+    /**
+     * A Patient names each Demographic detail whose format was wrong after its four elements, by
+     * its path in the R5 Patient served: a contact point, the address and the next of kin by
+     * their place, a service record's field and a service date by the url they are served under.
+     */
+    @Test
+    void aPatientNamesItsInvalidDemographicDetailsByTheirPathInTheResource() {
+        Demographics details = new Demographics(INVALID, INVALID, INVALID,
+                new NextOfKin(INVALID, INVALID, INVALID),
+                new MilitaryHistory(List.of(recordOf(INVALID, SourceField.present("Signaller")),
+                        recordOf(SourceField.present("CPT"), INVALID)),
+                        INVALID_DAY, SourceField.missing(), INVALID_DAY, BIRTH_DATE));
+        Patient invalid = new Patient(ID, NRIC, NAME, MALE, SourceField.invalid(), details);
+
+        assertThat(invalid.invalid()).containsExactly(
+                "birthDate",
+                "telecom[0].value",
+                "telecom[1].value",
+                "address[0].text",
+                "contact[0].name.text",
+                "contact[0].relationship[1].text",
+                "contact[0].telecom[0].value",
+                "extension[0].extension[0].extension('rank').valueString",
+                "extension[0].extension[1].extension('vocation').valueString",
+                "extension[0].extension('enlistmentDate').valueDate",
+                "extension[0].extension('mrDate').valueDate");
+    }
+
+    /** With no phone served, the email is the first contact point. */
+    @Test
+    void anInvalidEmailWithNoPhoneIsTheFirstContactPoint() {
+        assertThat(tanWith(new Demographics(MISSING, INVALID, MISSING, null, null)).invalid())
+                .containsExactly("telecom[0].value");
+    }
+
+    /** A phone received as it should be is served first, so the email follows it. */
+    @Test
+    void anInvalidEmailAfterAPresentPhoneIsTheSecondContactPoint() {
+        assertThat(tanWith(new Demographics(SourceField.present("+65 9123 4567"), INVALID,
+                MISSING, null, null)).invalid()).containsExactly("telecom[1].value");
+    }
+
+    /** A phone received in the wrong format is served by its system, so the email follows it. */
+    @Test
+    void anInvalidEmailAfterAnInvalidPhoneIsTheSecondContactPoint() {
+        assertThat(tanWith(new Demographics(INVALID, INVALID, MISSING, null, null)).invalid())
+                .containsExactly("telecom[0].value", "telecom[1].value");
+    }
+
+    /** A Patient whose Demographic details are each present or missing names none of them. */
+    @Test
+    void aPatientWithNoInvalidDemographicDetailNamesNone() {
+        Demographics details = new Demographics(SourceField.present("+65 9123 4567"), MISSING,
+                MISSING, new NextOfKin(MISSING, SourceField.present("Mother"), MISSING),
+                new MilitaryHistory(List.of(recordOf(MISSING, MISSING)), BIRTH_DATE,
+                        SourceField.missing(), SourceField.missing(), SourceField.missing()));
+
+        assertThat(tanWith(details).invalid()).isEmpty();
+    }
+
+    /**
+     * Each invalid detail's name, as the counter tags it, is the same for every Patient and every
+     * service record.
+     */
+    @Test
+    void eachInvalidDemographicDetailIsTaggedByItsOwnName() {
+        Demographics details = new Demographics(INVALID, INVALID, INVALID,
+                new NextOfKin(INVALID, INVALID, INVALID),
+                new MilitaryHistory(List.of(
+                        new MilitaryHistory.ServiceRecord(INVALID, INVALID, INVALID, INVALID,
+                                INVALID),
+                        recordOf(INVALID, MISSING)),
+                        INVALID_DAY, INVALID_DAY, INVALID_DAY, INVALID_DAY));
+
+        assertThat(details.invalidDetails()).extracting(Demographics.Detail::tag).containsExactly(
+                "phone", "email", "residentialAddress", "nextOfKin.name",
+                "nextOfKin.relationship", "nextOfKin.phone", "serviceRecord.serviceType",
+                "serviceRecord.rank", "serviceRecord.unit", "serviceRecord.service",
+                "serviceRecord.vocation", "serviceRecord.rank", "enlistmentDate", "ordDate",
+                "mrDate", "rodDate");
     }
 
     @ParameterizedTest

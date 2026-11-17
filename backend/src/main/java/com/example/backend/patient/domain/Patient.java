@@ -8,10 +8,10 @@ import java.util.stream.Stream;
 /**
  * A Patient: the person care is about, as the service reads them from the in-house patient
  * source (/docs/domain/patient.md, ADR 0014). Shown as received (ADR 0020): its NRIC, its
- * official name's text, its gender and its date of birth are each a {@link SourceField} —
- * present, missing or in the wrong format — and none is refused for what it holds, a gender
- * outside the four codes included. Its id is the one it was asked for, never the source's to
- * change: a Patient under another id is no Patient of this one.
+ * official name's text, its gender, its date of birth and each of its Demographic details are a
+ * {@link SourceField} — present, missing or in the wrong format — and none is refused for what
+ * it holds, a gender outside the four codes included. Its id is the one it was asked for, never
+ * the source's to change: a Patient under another id is no Patient of this one.
  *
  * <p>Pure domain, with no FHIR wire shape: the web adapter renders it as an R5 {@code Patient}.
  * There is no age here. Age is derived from {@code birthDate} where it is shown, never stored.
@@ -109,11 +109,13 @@ public record Patient(
 
     /**
      * The elements whose format was wrong, by their path in the R5 {@code Patient} the service
-     * serves ({@link Element#path()}), in {@link Element}'s order.
+     * serves: the four in {@link Element}'s order ({@link Element#path()}), then the Demographic
+     * details in {@link Demographics#invalidDetails()}' ({@link Demographics#pathOf}).
      */
     @Override
     public List<String> invalid() {
-        return invalidElements().stream().map(Element::path).toList();
+        return Stream.concat(invalidElements().stream().map(Element::path),
+                demographics.invalidDetails().stream().map(demographics::pathOf)).toList();
     }
 
     @Override

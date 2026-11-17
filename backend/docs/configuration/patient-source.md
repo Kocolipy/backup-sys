@@ -60,9 +60,10 @@ serving `patient-source-mock/mappings` on **`127.0.0.1:8104`**: FHIR R4
 `Patient/{id}` for the development fixtures, for the received stubs — a
 Patient each, shown as received (ADR 0020): `received-no-nric`,
 `received-no-official-name`, `received-no-name-text`, `received-no-gender` and
-`received-no-birth-date` each lack that element, and `received-wrong-format`
+`received-no-birth-date` each lack that element, `received-wrong-format`
 holds its NRIC, its official name's text, its gender and its birth date in the
-wrong format — and for the fault stubs, a `404` for any other well-formed id,
+wrong format, and `received-demographics` holds its Demographic details missing
+and in the wrong format — and for the fault stubs, a `404` for any other well-formed id,
 and the search set below. It has no profile, so `make infra-up` and
 `make integration-test` start it beside SQL Server and Redis, healthy when
 WireMock's `/__admin/health` answers. `.env.example` points the backend at it:

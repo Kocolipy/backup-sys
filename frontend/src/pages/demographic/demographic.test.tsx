@@ -7,6 +7,7 @@ import {
   page,
   patientReads,
   TAN_WEI_MING,
+  TAN_WEI_MING_MALFORMED,
   TAN_WEI_MING_READ,
   withPatientInContext,
 } from "@/pages/patient.testHelpers";
@@ -40,6 +41,31 @@ describe("Demographic", () => {
         "Next of Kin / Emergency",
       ],
       [TAN_WEI_MING_READ],
+    ]);
+  });
+
+  it("shows the Patient card as ever beside Demographic details missing and malformed", async () => {
+    withPatientInContext(TAN_WEI_MING.id);
+
+    await renderSignedIn("/demographic", CLINICIAN, {
+      [TAN_WEI_MING_READ]: json(TAN_WEI_MING_MALFORMED),
+    });
+    await page().findByRole("heading", { name: "Tan Wei Ming" });
+
+    expect([
+      headings(),
+      page().getAllByText("S1234567A").length > 0,
+      page().queryByText("Couldn't load patient"),
+    ]).toEqual([
+      [
+        "Demographic",
+        "Tan Wei Ming",
+        "Military Overview",
+        "Contact Details",
+        "Next of Kin / Emergency",
+      ],
+      true,
+      null,
     ]);
   });
 

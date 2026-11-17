@@ -75,20 +75,47 @@ public abstract class PatientStoreContract {
      * are, so a stub that drifted fails here.
      */
     public static final Demographics TAN_WEI_MINGS_DEMOGRAPHICS = new Demographics(
-            "+65 9123 4567",
-            "tan.hw@email.com",
-            "Blk 123 Bishan Street 12 #10-456, Singapore 570123",
-            new NextOfKin("Mdm Lee Siew Kuen", "Mother", "+65 8234 5678"),
+            SourceField.present("+65 9123 4567"),
+            SourceField.present("tan.hw@email.com"),
+            SourceField.present("Blk 123 Bishan Street 12 #10-456, Singapore 570123"),
+            new NextOfKin(SourceField.present("Mdm Lee Siew Kuen"), SourceField.present("Mother"),
+                    SourceField.present("+65 8234 5678")),
             new MilitaryHistory(
                     List.of(
-                            new MilitaryHistory.ServiceRecord("NSman", "CPT", "3 SIR", "Army",
-                                    "Infantry Officer"),
-                            new MilitaryHistory.ServiceRecord("DXO", "ME2", "RSS Supreme", "Navy",
+                            serviceRecord("NSman", "CPT", "3 SIR", "Army", "Infantry Officer"),
+                            serviceRecord("DXO", "ME2", "RSS Supreme", "Navy",
                                     "Naval Safety Officer")),
-                    LocalDate.of(2018, 1, 15),
-                    LocalDate.of(2020, 1, 14),
-                    null,
-                    LocalDate.of(2037, 9, 8)));
+                    SourceField.present(LocalDate.of(2018, 1, 15)),
+                    SourceField.present(LocalDate.of(2020, 1, 14)),
+                    SourceField.missing(),
+                    SourceField.present(LocalDate.of(2037, 9, 8))));
+
+    /**
+     * The Demographic details of the received stub {@code received-demographics}, each missing,
+     * in the wrong format or present as it holds them, independently of the others.
+     */
+    static final Demographics MISSING_AND_MALFORMED_DEMOGRAPHICS = new Demographics(
+            SourceField.invalid(),
+            SourceField.present("lim.kl@email.com"),
+            SourceField.missing(),
+            new NextOfKin(SourceField.missing(), SourceField.invalid(),
+                    SourceField.present("+65 8111 2222")),
+            new MilitaryHistory(
+                    List.of(new MilitaryHistory.ServiceRecord(SourceField.present("NSF"),
+                            SourceField.invalid(), SourceField.missing(),
+                            SourceField.present("Army"), SourceField.present("Signaller"))),
+                    SourceField.invalid(),
+                    SourceField.present(LocalDate.of(2001, 3, 1)),
+                    SourceField.missing(),
+                    SourceField.invalid()));
+
+    /** A service record whose every field the source sent as it should. */
+    private static MilitaryHistory.ServiceRecord serviceRecord(String serviceType, String rank,
+            String unit, String service, String vocation) {
+        return new MilitaryHistory.ServiceRecord(SourceField.present(serviceType),
+                SourceField.present(rank), SourceField.present(unit),
+                SourceField.present(service), SourceField.present(vocation));
+    }
 
     /** The patient port under test, reading the development fixtures. */
     protected abstract PatientStore patients();
@@ -129,7 +156,8 @@ public abstract class PatientStoreContract {
 
     /**
      * Each received stub's Patient, read as received (ADR 0020): the element it lacks missing,
-     * or each of the four invalid, and the rest as the stub holds them.
+     * each of the four invalid, or its Demographic details missing and malformed, and the rest as
+     * the stub holds them.
      */
     static Stream<Arguments> receivedStubs() {
         SourceField<String> missing = SourceField.missing();
@@ -137,31 +165,37 @@ public abstract class PatientStoreContract {
                 Arguments.of("received-no-nric", missing,
                         new PatientName("Goh Siew Lan", "Goh", List.of("Siew", "Lan")),
                         SourceField.present("female"),
-                        SourceField.present(LocalDate.of(1975, 12, 1))),
+                        SourceField.present(LocalDate.of(1975, 12, 1)), Demographics.NONE),
                 Arguments.of("received-no-official-name", SourceField.present("S8800004A"), null,
                         SourceField.present("male"),
-                        SourceField.present(LocalDate.of(1988, 5, 22))),
+                        SourceField.present(LocalDate.of(1988, 5, 22)), Demographics.NONE),
                 Arguments.of("received-no-name-text", SourceField.present("S8800005A"),
                         new PatientName(missing, "Ong", List.of("Mei", "Ling")),
                         SourceField.present("female"),
-                        SourceField.present(LocalDate.of(1990, 10, 7))),
+                        SourceField.present(LocalDate.of(1990, 10, 7)), Demographics.NONE),
                 Arguments.of("received-no-gender", SourceField.present("S8800006A"),
                         new PatientName("Nur Aisyah binte Hassan", null, List.of()), missing,
-                        SourceField.present(LocalDate.of(1999, 1, 30))),
+                        SourceField.present(LocalDate.of(1999, 1, 30)), Demographics.NONE),
                 Arguments.of("received-no-birth-date", SourceField.present("S8800003A"),
                         new PatientName("Daniel Pereira", "Pereira", List.of("Daniel")),
-                        SourceField.present("male"), SourceField.missing()),
+                        SourceField.present("male"), SourceField.missing(), Demographics.NONE),
                 Arguments.of("received-wrong-format", SourceField.invalid(),
                         new PatientName(SourceField.invalid(), "Wong", List.of("Mei Fong")),
-                        SourceField.invalid(), SourceField.invalid()));
+                        SourceField.invalid(), SourceField.invalid(), Demographics.NONE),
+                Arguments.of("received-demographics", SourceField.present("S8800010A"),
+                        new PatientName("Lim Kok Leong", "Lim", List.of("Kok Leong")),
+                        SourceField.present("male"),
+                        SourceField.present(LocalDate.of(1979, 6, 18)),
+                        MISSING_AND_MALFORMED_DEMOGRAPHICS));
     }
 
     @ParameterizedTest
     @MethodSource("receivedStubs")
     void each_received_stub_is_read_as_received(String id, SourceField<String> nric,
-            PatientName name, SourceField<String> gender, SourceField<LocalDate> birthDate) {
+            PatientName name, SourceField<String> gender, SourceField<LocalDate> birthDate,
+            Demographics demographics) {
         assertThat(patients().findById(new PatientId(id))).contains(new Patient(
-                new PatientId(id), nric, name, gender, birthDate, Demographics.NONE));
+                new PatientId(id), nric, name, gender, birthDate, demographics));
     }
 
     @Test

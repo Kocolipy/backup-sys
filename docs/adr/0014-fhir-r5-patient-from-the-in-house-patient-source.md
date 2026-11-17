@@ -71,8 +71,9 @@ own: no table, no grant on one, no seeded fixtures.
   authorisation**, so the call presents no credential. The id is the EHR's FHIR
   id, sent unchanged: there is no mapping between ids.
 - **A straight copy.** The adapter binds the R4 JSON to plain records with
-  Jackson — the four elements below as the raw JSON they arrived as, so a
-  value of the wrong type is told from one missing (ADR 0020) — and copies the
+  Jackson — the four elements below, and the values of the Demographic
+  details, as the raw JSON they arrived as, so a value of the wrong type is told
+  from one missing (ADR 0020) — and copies the
   identifier under the NRIC NamingSystem, the name whose
   `use` is `official`, `gender` and `birthDate` into the domain's Patient, and
   on a read by id its Demographic details (`/docs/domain/patient.md`, "The
@@ -92,13 +93,23 @@ own: no table, no grant on one, no seeded fixtures.
   distinct from the `500` of a fault on this side. A silent "no patient" for a
   failing source would hide the failure from the clinician and from operations.
 - **A Patient read by id is shown as received** (ADR 0020). Its NRIC, its
-  official name's text, its gender and its birth date are each the source's
-  value, missing or in the wrong format, and none fails the read: a Patient with
-  no NRIC, no official name or one with no text, no gender or a code outside the
-  four, or a birth date missing or not to the day, is served as it came. An
-  element missing or in the wrong format is left out of the R5 `Patient` — FHIR
-  JSON has no `null` — and one in the wrong format is named, by its path in the
-  resource (`name[0].text`), by an extension of the service's own,
+  official name's text, its gender, its birth date and each of its Demographic
+  details — the phone, the email, the residential address, the next of kin's
+  name, relationship and phone, each service record's fields and each military
+  service date — are each the source's value, missing or in the wrong format,
+  independently of the others, and none fails the read: a Patient with no NRIC,
+  no official name or one with no text, no gender or a code outside the four, a
+  birth date missing or not to the day, or any Demographic detail missing or
+  malformed — a service date not to the day among them — is served as it came.
+  An element missing or in the wrong format is left out of the R5 `Patient` —
+  FHIR JSON has no `null` — the element holding it kept where base R5 admits it
+  bare (an identifier's or a contact point's `system`, an address's `use`), and
+  one in the wrong format is named, by its path in the resource
+  (`name[0].text`, `telecom[0].value`,
+  `extension[0].extension[1].extension('rank').valueString`, a service
+  record's field and a service date by the url they would be served under,
+  since one left out has no place of its own), by an extension of the
+  service's own,
   `http://example.org/fhir/StructureDefinition/invalid-field`, a placeholder URL
   as the military service's is. So the names travel in base R5's own extension
   mechanism, and a Patient holding them stays base R5, which the R5 validator
@@ -106,7 +117,10 @@ own: no table, no grant on one, no seeded fixtures.
   history's row carries, is no element of base R5, and would leave a Patient
   shown as received no R5 resource. A gender outside the four codes is served as
   its code, the one way a Patient shown as received leaves base R5's required
-  value set. A Patient search keeps the strict reading (ADR 0018).
+  value set; a next of kin with neither a name nor a phone, or a service record
+  with no field present, is served bare, which base R5's invariants on a
+  contact and an extension do not admit. A Patient search keeps the strict
+  reading (ADR 0018).
 - **Nothing patient-identifying in a failure.** The adapter's exception carries a
   fixed message, naming at most a status or an element, and its cause redacted
   to its type (`observability.RedactedFaultException`): an HTTP client's message

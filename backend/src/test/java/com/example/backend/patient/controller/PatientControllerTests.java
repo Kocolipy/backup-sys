@@ -196,6 +196,59 @@ class PatientControllerTests {
                 }"""));
     }
 
+    /**
+     * A Patient whose Demographic details the source sent missing and in the wrong format is
+     * served as received (ADR 0020): each detail missing or invalid left out — an invalid phone
+     * by its system alone — each invalid one named by an invalid-field extension, by its path
+     * here, and each present one served as it came.
+     */
+    @Test
+    void aPatientWithDemographicDetailsMissingAndInTheWrongFormatIsServedNamingEachInvalidOne()
+            throws Exception {
+        MockHttpServletResponse response = read("received-demographics");
+
+        assertThat(response.getStatus()).isEqualTo(200);
+        assertThat(body(response)).isEqualTo(json.readTree("""
+                {
+                  "resourceType": "Patient",
+                  "id": "received-demographics",
+                  "extension": [
+                    {"url": "http://example.org/fhir/StructureDefinition/military-service",
+                     "extension": [
+                       {"url": "serviceRecord", "extension": [
+                         {"url": "serviceType", "valueString": "NSF"},
+                         {"url": "service", "valueString": "Army"},
+                         {"url": "vocation", "valueString": "Signaller"}]},
+                       {"url": "ordDate", "valueDate": "2001-03-01"}]},
+                    {"url": "http://example.org/fhir/StructureDefinition/invalid-field",
+                     "valueString": "telecom[0].value"},
+                    {"url": "http://example.org/fhir/StructureDefinition/invalid-field",
+                     "valueString": "contact[0].relationship[1].text"},
+                    {"url": "http://example.org/fhir/StructureDefinition/invalid-field",
+                     "valueString": "extension[0].extension[0].extension('rank').valueString"},
+                    {"url": "http://example.org/fhir/StructureDefinition/invalid-field",
+                     "valueString": "extension[0].extension('enlistmentDate').valueDate"},
+                    {"url": "http://example.org/fhir/StructureDefinition/invalid-field",
+                     "valueString": "extension[0].extension('rodDate').valueDate"}
+                  ],
+                  "identifier": [{"system": "https://fhir.synapxe.sg/NamingSystem/nric",
+                                  "value": "S8800010A"}],
+                  "name": [{"use": "official", "text": "Lim Kok Leong", "family": "Lim",
+                            "given": ["Kok Leong"]}],
+                  "telecom": [{"system": "phone"},
+                              {"system": "email", "value": "lim.kl@email.com"}],
+                  "gender": "male",
+                  "birthDate": "1979-06-18",
+                  "contact": [{
+                    "relationship": [
+                      {"coding": [{"system": "http://terminology.hl7.org/CodeSystem/v2-0131",
+                                   "code": "N"}]}
+                    ],
+                    "telecom": [{"system": "phone", "value": "+65 8111 2222"}]
+                  }]
+                }"""));
+    }
+
     /** A Patient with no Demographic details is served as its five elements alone. */
     @Test
     void aPatientWithNoDemographicDetailsIsServedAsItsFiveElementsAlone() throws Exception {

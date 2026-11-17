@@ -32,6 +32,29 @@ const TAN_WEI_MINGS_ELEMENTS = {
   nric: present("S1234567A"),
 };
 
+/** Every Demographic detail missing: what a patient with none of them is read with. */
+const NO_DETAILS = { email: MISSING, phone: MISSING, residentialAddress: MISSING };
+
+/** A service record with every field missing, but those given. */
+const record = (fields: object) => ({
+  rank: MISSING,
+  service: MISSING,
+  serviceType: MISSING,
+  unit: MISSING,
+  vocation: MISSING,
+  ...fields,
+});
+
+/** A Military history with no record and every date missing, but those given. */
+const history = (fields: object) => ({
+  enlistmentDate: MISSING,
+  mrDate: MISSING,
+  ordDate: MISSING,
+  rodDate: MISSING,
+  serviceRecords: [],
+  ...fields,
+});
+
 /** Tan Wei Ming's four elements as read from `patient`, the rest of him dropped. */
 const elementsOf = async (patient: object) => {
   const { birthDate, gender, name, nric } = await PATIENT.decode(Response.json(patient));
@@ -58,39 +81,45 @@ describe("PATIENT", () => {
 
 describe("PATIENT's answer", () => {
   it("is read down to the name text, NRIC, gender and date of birth when it has nothing else", async () => {
-    await expect(PATIENT.decode(Response.json(TAN_WEI_MING_BARE))).resolves.toStrictEqual(
-      TAN_WEI_MINGS_ELEMENTS,
-    );
+    await expect(PATIENT.decode(Response.json(TAN_WEI_MING_BARE))).resolves.toStrictEqual({
+      ...TAN_WEI_MINGS_ELEMENTS,
+      ...NO_DETAILS,
+    });
   });
 
   it("reads the Demographic details: phone, email, home address, Next of kin and Military history", async () => {
     await expect(PATIENT.decode(Response.json(TAN_WEI_MING))).resolves.toStrictEqual({
       ...TAN_WEI_MINGS_ELEMENTS,
-      email: "tan.hw@email.com",
+      email: present("tan.hw@email.com"),
       militaryHistory: {
-        enlistmentDate: "2018-01-15",
-        ordDate: "2020-01-14",
-        rodDate: "2037-09-08",
+        enlistmentDate: present("2018-01-15"),
+        mrDate: MISSING,
+        ordDate: present("2020-01-14"),
+        rodDate: present("2037-09-08"),
         serviceRecords: [
           {
-            rank: "CPT",
-            service: "Army",
-            serviceType: "NSman",
-            unit: "3 SIR",
-            vocation: "Infantry Officer",
+            rank: present("CPT"),
+            service: present("Army"),
+            serviceType: present("NSman"),
+            unit: present("3 SIR"),
+            vocation: present("Infantry Officer"),
           },
           {
-            rank: "ME2",
-            service: "Navy",
-            serviceType: "DXO",
-            unit: "RSS Supreme",
-            vocation: "Naval Safety Officer",
+            rank: present("ME2"),
+            service: present("Navy"),
+            serviceType: present("DXO"),
+            unit: present("RSS Supreme"),
+            vocation: present("Naval Safety Officer"),
           },
         ],
       },
-      nextOfKin: { name: "Mdm Lee Siew Kuen", phone: "+65 8234 5678", relationship: "Mother" },
-      phone: "+65 9123 4567",
-      residentialAddress: "Blk 123 Bishan Street 12 #10-456, Singapore 570123",
+      nextOfKin: {
+        name: present("Mdm Lee Siew Kuen"),
+        phone: present("+65 8234 5678"),
+        relationship: present("Mother"),
+      },
+      phone: present("+65 9123 4567"),
+      residentialAddress: present("Blk 123 Bishan Street 12 #10-456, Singapore 570123"),
     });
   });
 
@@ -104,7 +133,10 @@ describe("PATIENT's answer", () => {
     ];
 
     await expect(PATIENT.decode(Response.json({ ...TAN_WEI_MING, telecom }))).resolves.toEqual(
-      expect.objectContaining({ email: "first@example.org", phone: "+65 6000 0001" }),
+      expect.objectContaining({
+        email: present("first@example.org"),
+        phone: present("+65 6000 0001"),
+      }),
     );
   });
 
@@ -115,16 +147,8 @@ describe("PATIENT's answer", () => {
     ];
 
     await expect(PATIENT.decode(Response.json({ ...TAN_WEI_MING, address }))).resolves.toEqual(
-      expect.objectContaining({ residentialAddress: "2 Home Road" }),
+      expect.objectContaining({ residentialAddress: present("2 Home Road") }),
     );
-  });
-
-  it("has no residential address when the patient has only another kind", async () => {
-    const address = [{ text: "1 Office Road", use: "work" }];
-
-    const patient = await PATIENT.decode(Response.json({ ...TAN_WEI_MING, address }));
-
-    expect(patient).not.toHaveProperty("residentialAddress");
   });
 
   it("reads the Next of kin from the first contact coded as one, past any other contact", async () => {
@@ -135,7 +159,11 @@ describe("PATIENT's answer", () => {
       PATIENT.decode(Response.json({ ...TAN_WEI_MING, contact: [employer, nextOfKin] })),
     ).resolves.toEqual(
       expect.objectContaining({
-        nextOfKin: { name: "Mdm Lee Siew Kuen", phone: "+65 8234 5678", relationship: "Mother" },
+        nextOfKin: {
+          name: present("Mdm Lee Siew Kuen"),
+          phone: present("+65 8234 5678"),
+          relationship: present("Mother"),
+        },
       }),
     );
   });
@@ -145,7 +173,11 @@ describe("PATIENT's answer", () => {
 
     const patient = await PATIENT.decode(Response.json({ ...TAN_WEI_MING, contact }));
 
-    expect(patient.nextOfKin).toStrictEqual({ name: "Mdm Lee Siew Kuen" });
+    expect(patient.nextOfKin).toStrictEqual({
+      name: present("Mdm Lee Siew Kuen"),
+      phone: MISSING,
+      relationship: MISSING,
+    });
   });
 
   it.each([
@@ -163,12 +195,13 @@ describe("PATIENT's answer", () => {
     expect(patient).not.toHaveProperty("nextOfKin");
   });
 
-  it("reads a Military history with an empty record and an unknown field, leaving what it lacks out", async () => {
+  it("reads a Military history with an empty record and an unknown field, each field the first under its url", async () => {
     const extension = military([
       { url: "serviceRecord" },
       {
         extension: [
           { url: "rank", valueString: "CPT" },
+          { url: "rank", valueString: "MAJ" },
           { url: "a-later-field", valueString: "unread" },
         ],
         url: "serviceRecord",
@@ -179,10 +212,12 @@ describe("PATIENT's answer", () => {
 
     const patient = await PATIENT.decode(Response.json({ ...TAN_WEI_MING, extension }));
 
-    expect(patient.militaryHistory).toStrictEqual({
-      mrDate: "2030-04-01",
-      serviceRecords: [{}, { rank: "CPT" }],
-    });
+    expect(patient.militaryHistory).toStrictEqual(
+      history({
+        mrDate: present("2030-04-01"),
+        serviceRecords: [record({}), record({ rank: present("CPT") })],
+      }),
+    );
   });
 
   it("has no Military history when the patient has only another extension", async () => {
@@ -191,6 +226,180 @@ describe("PATIENT's answer", () => {
     const patient = await PATIENT.decode(Response.json({ ...TAN_WEI_MING, extension }));
 
     expect(patient).not.toHaveProperty("militaryHistory");
+  });
+
+  // Shown as received (ADR 0020): each Demographic detail is its value, missing
+  // when the backend left it out, and invalid when an invalid-field extension
+  // names it by its path or it is not a value of its kind; none of them refuses
+  // the Patient, and each is read apart from the others.
+  it.each([
+    ["no telecom", { telecom: undefined }, { email: MISSING, phone: MISSING }],
+    ["a phone with no value", { telecom: [{ system: "phone" }] }, { phone: MISSING }],
+    [
+      "no home address",
+      { address: [{ text: "1 Office Road", use: "work" }] },
+      {
+        residentialAddress: MISSING,
+      },
+    ],
+    [
+      "a home address with no text",
+      { address: [{ line: ["Blk 123"], use: "home" }] },
+      { residentialAddress: MISSING },
+    ],
+  ])("reads %s as that detail missing", async (_, change, read) => {
+    await expect(PATIENT.decode(Response.json({ ...TAN_WEI_MING, ...change }))).resolves.toEqual(
+      expect.objectContaining(read),
+    );
+  });
+
+  it.each([
+    [
+      "the phone",
+      { extension: [invalidField("telecom[0].value")], telecom: [{ system: "phone" }] },
+      { phone: INVALID },
+    ],
+    [
+      "the email after a phone",
+      {
+        extension: [invalidField("telecom[1].value")],
+        telecom: [{ system: "phone", value: "+65 9123 4567" }, { system: "email" }],
+      },
+      { email: INVALID, phone: present("+65 9123 4567") },
+    ],
+    [
+      "a phone that is no string",
+      { telecom: [{ system: "phone", value: 6591234567 }] },
+      {
+        phone: INVALID,
+      },
+    ],
+    [
+      "the home address",
+      { address: [{ use: "home" }], extension: [invalidField("address[0].text")] },
+      { residentialAddress: INVALID },
+    ],
+    [
+      "a home address text that is no string",
+      { address: [{ text: ["Blk 123"], use: "home" }] },
+      { residentialAddress: INVALID },
+    ],
+  ])("reads %s as invalid, the rest as it came", async (_, change, read) => {
+    await expect(PATIENT.decode(Response.json({ ...TAN_WEI_MING, ...change }))).resolves.toEqual(
+      expect.objectContaining(read),
+    );
+  });
+
+  it("reads a Next of kin with no name text as their name missing", async () => {
+    const contact = [{ name: { family: "Lee" }, relationship: [nextOfKinRole] }];
+
+    const patient = await PATIENT.decode(Response.json({ ...TAN_WEI_MING, contact }));
+
+    expect(patient.nextOfKin?.name).toStrictEqual(MISSING);
+  });
+
+  it("reads each of a Next of kin's details invalid when an invalid-field extension names it", async () => {
+    const contact = [{ relationship: [nextOfKinRole], telecom: [{ system: "phone" }] }];
+    const extension = [
+      invalidField("contact[0].name.text"),
+      invalidField("contact[0].relationship[1].text"),
+      invalidField("contact[0].telecom[0].value"),
+    ];
+
+    const patient = await PATIENT.decode(Response.json({ ...TAN_WEI_MING, contact, extension }));
+
+    expect(patient.nextOfKin).toStrictEqual({
+      name: INVALID,
+      phone: INVALID,
+      relationship: INVALID,
+    });
+  });
+
+  it("reads a Next of kin's details that are no strings as invalid", async () => {
+    const contact = [
+      {
+        name: { text: 3 },
+        relationship: [nextOfKinRole, { text: 1 }],
+        telecom: [{ system: "phone", value: 82345678 }],
+      },
+    ];
+
+    const patient = await PATIENT.decode(Response.json({ ...TAN_WEI_MING, contact }));
+
+    expect(patient.nextOfKin).toStrictEqual({
+      name: INVALID,
+      phone: INVALID,
+      relationship: INVALID,
+    });
+  });
+
+  it("reads a Military history's fields and dates invalid when an invalid-field extension names each, the rest as they came", async () => {
+    const extension = [
+      ...military([
+        { extension: [{ url: "rank", valueString: "CPT" }], url: "serviceRecord" },
+        { extension: [{ url: "serviceType", valueString: "NSF" }], url: "serviceRecord" },
+        { url: "ordDate", valueDate: "2020-01-14" },
+      ]),
+      invalidField("extension[0].extension[1].extension('unit').valueString"),
+      invalidField("extension[0].extension('enlistmentDate').valueDate"),
+    ];
+
+    const patient = await PATIENT.decode(Response.json({ ...TAN_WEI_MING, extension }));
+
+    expect(patient.militaryHistory).toStrictEqual(
+      history({
+        enlistmentDate: INVALID,
+        ordDate: present("2020-01-14"),
+        serviceRecords: [
+          record({ rank: present("CPT") }),
+          record({ serviceType: present("NSF"), unit: INVALID }),
+        ],
+      }),
+    );
+  });
+
+  it.each([
+    [
+      "a service record field that is no string",
+      [{ extension: [{ url: "rank", valueString: 3 }], url: "serviceRecord" }],
+      { serviceRecords: [record({ rank: INVALID })] },
+    ],
+    [
+      "a service date not to the day",
+      [{ url: "ordDate", valueDate: "2020-01" }],
+      {
+        ordDate: INVALID,
+      },
+    ],
+    [
+      "a service date no calendar has",
+      [{ url: "ordDate", valueDate: "2020-02-30" }],
+      {
+        ordDate: INVALID,
+      },
+    ],
+    ["a service date with no value", [{ url: "ordDate" }], {}],
+  ])("reads %s as the Military history holds it", async (_, parts, read) => {
+    const patient = await PATIENT.decode(
+      Response.json({ ...TAN_WEI_MING, extension: military(parts) }),
+    );
+
+    expect(patient.militaryHistory).toStrictEqual(history(read));
+  });
+
+  it("reads a Patient whose every Demographic detail is malformed with its card's elements as they came", async () => {
+    const malformed = {
+      ...TAN_WEI_MING,
+      address: [{ text: 1, use: "home" }],
+      contact: [{ name: { text: 2 }, relationship: [nextOfKinRole] }],
+      extension: military([{ extension: [{ url: "rank", valueString: 4 }], url: "serviceRecord" }]),
+      telecom: [
+        { system: "phone", value: 5 },
+        { system: "email", value: 6 },
+      ],
+    };
+
+    await expect(elementsOf(malformed)).resolves.toStrictEqual(TAN_WEI_MINGS_ELEMENTS);
   });
 
   it("reads a name with no family or given part by its text alone", async () => {
@@ -294,9 +503,10 @@ describe("PATIENT's answer", () => {
     };
 
     await expect(PATIENT.decode(Response.json(patient))).resolves.toStrictEqual({
+      ...NO_DETAILS,
       birthDate: INVALID,
       gender: INVALID,
-      militaryHistory: { mrDate: "2030-04-01", serviceRecords: [] },
+      militaryHistory: history({ mrDate: present("2030-04-01") }),
       name: INVALID,
       nric: INVALID,
     });
@@ -364,29 +574,19 @@ describe("PATIENT's answer", () => {
       "Patient.telecom is not an array",
     ],
     [
-      "a contact point with no value",
-      { ...TAN_WEI_MING, telecom: [{ system: "phone" }] },
-      "ContactPoint.value is not a string",
+      "a Next of kin's name that is not an object",
+      { ...TAN_WEI_MING, contact: [{ name: "Lee", relationship: [nextOfKinRole] }] },
+      "Patient.contact.name is not an object",
     ],
     [
-      "a home address with no text",
-      { ...TAN_WEI_MING, address: [{ line: ["Blk 123"], use: "home" }] },
-      "Address.text is not a string",
+      "a contact point that is not an object",
+      { ...TAN_WEI_MING, telecom: ["+65 9123 4567"] },
+      "ContactPoint is not an object",
     ],
     [
-      "a Next of kin with no name text",
-      { ...TAN_WEI_MING, contact: [{ name: {}, relationship: [nextOfKinRole] }] },
-      "Patient.contact.name.text is not a string",
-    ],
-    [
-      "a service record field that is not a string",
-      {
-        ...TAN_WEI_MING,
-        extension: military([
-          { extension: [{ url: "rank", valueInteger: 3 }], url: "serviceRecord" },
-        ]),
-      },
-      "serviceRecord.rank.valueString is not a string",
+      "an address that is not an object",
+      { ...TAN_WEI_MING, address: ["Blk 123"] },
+      "Address is not an object",
     ],
     [
       "a contact that is not an object",
@@ -412,14 +612,6 @@ describe("PATIENT's answer", () => {
       "a coding that is not an object",
       { ...TAN_WEI_MING, contact: [{ name: { text: "Lee" }, relationship: [{ coding: ["N"] }] }] },
       "Coding is not an object",
-    ],
-    [
-      "a relationship text that is not a string",
-      {
-        ...TAN_WEI_MING,
-        contact: [{ name: { text: "Lee" }, relationship: [nextOfKinRole, { text: 3 }] }],
-      },
-      "CodeableConcept.text is not a string",
     ],
     [
       "a Next of kin's contact points that are not an array",
@@ -458,16 +650,6 @@ describe("PATIENT's answer", () => {
       "a Military history part with no url",
       { ...TAN_WEI_MING, extension: military([{ valueDate: "2020-01-14" }]) },
       "Extension.url is not a string",
-    ],
-    [
-      "a service date with no value",
-      { ...TAN_WEI_MING, extension: military([{ url: "ordDate" }]) },
-      "military-service.ordDate.valueDate is not a string",
-    ],
-    [
-      "a service date not to the day",
-      { ...TAN_WEI_MING, extension: military([{ url: "ordDate", valueDate: "2020-01" }]) },
-      "military-service.ordDate is not a date",
     ],
   ])("is refused with %s", async (_, body, message) => {
     await expect(PATIENT.decode(Response.json(body))).rejects.toThrow(

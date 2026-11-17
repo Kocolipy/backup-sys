@@ -7,10 +7,11 @@ import {
   TriangleAlertIcon,
   UserIcon,
 } from "lucide-react";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { shown, type SourceField } from "@/lib/source-field";
 import { formatCalendarDateTwoDigitDay } from "@/lib/time";
 
 import type {
@@ -21,29 +22,57 @@ import type {
 } from "@/pages/patient-api";
 import { usePatientInContext } from "@/pages/patient-in-context";
 
-/** What a field the patient has no value for shows. */
-const NONE = "—";
-
 /** The service record slots the overview always lays out, filled or not. */
 const SERVICE_RECORD_SLOTS = 3;
 
-/** A patient with no Military history: every slot and date unknown. */
-const NO_MILITARY_HISTORY: MilitaryHistory = { serviceRecords: [] };
+const MISSING: SourceField<never> = { state: "missing" };
 
-/** `parts` that are present, joined by " / ", or {@link NONE} when none is. */
-const joined = (...parts: (string | undefined)[]): string => {
-  const present = parts.filter((part) => part !== undefined);
-  return present.length === 0 ? NONE : present.join(" / ");
+/** A service record with every field missing: an empty slot. */
+const NO_SERVICE_RECORD: ServiceRecord = {
+  rank: MISSING,
+  service: MISSING,
+  serviceType: MISSING,
+  unit: MISSING,
+  vocation: MISSING,
 };
 
-/** A `YYYY-MM-DD` date as `dd MMM yyyy` (`08 Sep 2037`), or {@link NONE} for none. */
-const dateOrNone = (date: string | undefined): string =>
-  date === undefined ? NONE : formatCalendarDateTwoDigitDay(date);
+/** A patient with no Military history: every slot and date missing. */
+const NO_MILITARY_HISTORY: MilitaryHistory = {
+  enlistmentDate: MISSING,
+  mrDate: MISSING,
+  ordDate: MISSING,
+  rodDate: MISSING,
+  serviceRecords: [],
+};
 
-const isEmpty = (record: ServiceRecord) => Object.keys(record).length === 0;
+/** A text field as shown: its value, "—" when missing, "Error" when invalid. */
+const text = (field: SourceField<string>) => shown(field, (value) => value);
+
+/** A `YYYY-MM-DD` date as `dd MMM yyyy` (`08 Sep 2037`), "—" or "Error" as it is. */
+const date = (field: SourceField<string>) => shown(field, formatCalendarDateTwoDigitDay);
+
+/**
+ * The unit and the service, each as shown, joined by " / " — one missing left
+ * out — or "—" when both are missing.
+ */
+const unitAndService = (record: ServiceRecord): ReactNode => {
+  const parts = [record.unit, record.service].filter((part) => part.state !== "missing");
+  if (parts.length === 0) return text(MISSING);
+  return parts.flatMap((part, at) => (at === 0 ? [text(part)] : [" / ", text(part)]));
+};
+
+/** Whether a service record holds nothing at all: every field missing. */
+const isEmpty = (record: ServiceRecord) =>
+  Object.values(record).every((field) => field.state === "missing");
 
 /** Label–value rows, each value a plain text node. */
-function Rows({ className, rows }: { className: string; rows: [label: string, value: string][] }) {
+function Rows({
+  className,
+  rows,
+}: {
+  className: string;
+  rows: [label: string, value: ReactNode][];
+}) {
   return (
     <dl className={className}>
       {rows.map(([label, value]) => (
@@ -81,10 +110,10 @@ function ServiceRecordSlot({ number, record }: { number: number; record: Service
         <Rows
           className="flex flex-col px-2 pb-2 [&>div:last-child]:border-b-0"
           rows={[
-            ["Service Type", record.serviceType ?? NONE],
-            ["Rank", record.rank ?? NONE],
-            ["Unit / Service", joined(record.unit, record.service)],
-            ["Vocation", record.vocation ?? NONE],
+            ["Service Type", text(record.serviceType)],
+            ["Rank", text(record.rank)],
+            ["Unit / Service", unitAndService(record)],
+            ["Vocation", text(record.vocation)],
           ]}
         />
       </CollapsibleContent>
@@ -97,7 +126,7 @@ function MilitaryOverview({ history }: { history: MilitaryHistory }) {
   const records = history.serviceRecords;
   const slots = Array.from(
     { length: Math.max(SERVICE_RECORD_SLOTS, records.length) },
-    (_, index): ServiceRecord => records[index] ?? {},
+    (_, index): ServiceRecord => records[index] ?? NO_SERVICE_RECORD,
   );
   return (
     <Card aria-labelledby="military-overview" className="w-full" role="region">
@@ -113,10 +142,10 @@ function MilitaryOverview({ history }: { history: MilitaryHistory }) {
         <Rows
           className="flex flex-col pt-6"
           rows={[
-            ["Enlistment Date", dateOrNone(history.enlistmentDate)],
-            ["ORD Date", dateOrNone(history.ordDate)],
-            ["MR Date", dateOrNone(history.mrDate)],
-            ["ROD Date", dateOrNone(history.rodDate)],
+            ["Enlistment Date", date(history.enlistmentDate)],
+            ["ORD Date", date(history.ordDate)],
+            ["MR Date", date(history.mrDate)],
+            ["ROD Date", date(history.rodDate)],
           ]}
         />
       </CardContent>
@@ -146,7 +175,7 @@ function IconTitle({
 
 /** How the patient is reached: their phone, email and residential address. */
 function ContactDetails({ patient }: { patient: PatientSummary }) {
-  const rows: [label: string, value: string | undefined, icon: LucideIcon][] = [
+  const rows: [label: string, value: SourceField<string>, icon: LucideIcon][] = [
     ["Phone", patient.phone, PhoneIcon],
     ["Email address", patient.email, MailIcon],
     ["Residential address", patient.residentialAddress, MapPinIcon],
@@ -172,7 +201,7 @@ function ContactDetails({ patient }: { patient: PatientSummary }) {
                 <dt className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
                   {label}
                 </dt>
-                <dd className="font-medium">{value ?? NONE}</dd>
+                <dd className="font-medium">{text(value)}</dd>
               </div>
             </div>
           ))}
@@ -203,19 +232,19 @@ function NextOfKinCard({ nextOfKin }: { nextOfKin?: NextOfKin }) {
               <dt className="text-xs font-semibold tracking-widest text-destructive uppercase">
                 Name
               </dt>
-              <dd className="text-lg font-bold">{nextOfKin.name}</dd>
+              <dd className="text-lg font-bold">{text(nextOfKin.name)}</dd>
             </div>
             <div className="flex flex-col gap-1 pt-2">
               <dt className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
                 Relationship
               </dt>
-              <dd className="font-medium">{nextOfKin.relationship ?? NONE}</dd>
+              <dd className="font-medium">{text(nextOfKin.relationship)}</dd>
             </div>
             <div className="flex flex-col gap-1 pt-2">
               <dt className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
                 Contact number
               </dt>
-              <dd className="font-medium">{nextOfKin.phone ?? NONE}</dd>
+              <dd className="font-medium">{text(nextOfKin.phone)}</dd>
             </div>
           </dl>
         )}
@@ -230,8 +259,10 @@ function NextOfKinCard({ nextOfKin }: { nextOfKin?: NextOfKin }) {
  * of Kin. Rendered from the signed-in layout's one read of the patient in
  * context (`usePatientInContext`), reading nothing itself; with no patient
  * loaded — none in context, a `404`, no `patient:read`, still loading or
- * failed — it renders nothing, the Patient card saying why. A field the
- * patient has no value for shows "—". Every value is a plain text node.
+ * failed — it renders nothing, the Patient card saying why. Each detail is
+ * shown as received (ADR 0020), independently of the others: its value, "—"
+ * when missing, "Error" when in the wrong format; a patient with no Next of
+ * kin shows that none is recorded. Every value is a plain text node.
  */
 export function DemographicDetails() {
   const view = usePatientInContext();

@@ -480,17 +480,18 @@ shows it in each row, as received.
 _Avoid_: last seen, last encounter, last admission
 
 **Demographic details**:
-What a read of one Patient by id serves beside their five elements, each only
-when the Patient has it: their phone, email, residential address, Next
-of kin and Military history. A Patient search serves none of them. The
-Demographic page shows them.
+What a read of one Patient by id serves beside their five elements: their
+phone, email, residential address, Next of kin and Military history, each
+detail shown as received — its value, "—" when missing, "Error" when in the
+wrong format — independently of the others. A Patient search serves none of
+them. The Demographic page shows them.
 _Avoid_: demographics (the glossary's word for a whole patient record), profile,
 contact info
 
 **Next of kin**:
 The one contact a Patient names to be called for them: the first contact the
-Patient source codes as next of kin (HL7 v2-0131 `N`), with a name, and their
-relationship and phone when known.
+Patient source codes as next of kin (HL7 v2-0131 `N`): their name,
+relationship and phone, each as received.
 _Avoid_: NOK (outside a label), emergency contact, guardian
 
 **Military history**:
