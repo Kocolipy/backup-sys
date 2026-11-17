@@ -132,8 +132,9 @@ element flags a row, missing or invalid.
   the flagged rows.
 
 The mechanism is shared (`src/pages/mandatory-elements.tsx`), each history
-declaring its own Mandatory elements beside its table; the Medication History
-is the one that declares any.
+declaring its own Mandatory elements beside its table: the FFI, NUMC and ARMC
+Histories declare theirs ([ffi](ffi.md), [numc](numc.md), [armc](armc.md),
+each "Mandatory elements") and warn as this one does.
 
 ## The source contract
 

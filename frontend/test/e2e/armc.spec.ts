@@ -104,6 +104,19 @@ test.describe("ARMC", () => {
       "ACES—————",
     ]);
     await expect(page.getByText("Showing 1 to 4 of 4 records")).toBeVisible();
+    // The first misses its Outcome, the second holds its Start Date in the
+    // wrong format and the fourth misses both, Mandatory elements of an ARMC
+    // Board: those rows warn, and the third, whose codes are outside their
+    // sets, does not.
+    for (const [row, warns] of [1, 1, 0, 1].entries()) {
+      await expect(armcRows(page).nth(row).getByRole("img")).toHaveCount(warns);
+    }
+    const warning = armcRows(page).nth(3).getByRole("img");
+    await expect(warning).toHaveAccessibleName("Critical information missing: Outcome, Start Date");
+    await warning.hover();
+    await expect(page.getByRole("tooltip")).toHaveText(
+      "Critical information missing: Outcome, Start Date",
+    );
   });
 
   test.describe("sorted", () => {

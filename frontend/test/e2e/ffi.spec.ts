@@ -100,6 +100,16 @@ test.describe("FFI", () => {
       "Vocational FFI—————Inactive",
     ]);
     await expect(page.getByText("Showing 1 to 4 of 4 records")).toBeVisible();
+    // The first and the fourth miss their Outcome and the second holds its
+    // Status in the wrong format, Mandatory elements of an FFI: those rows
+    // warn, and the third, whose codes are outside their sets, does not.
+    for (const [row, warns] of [1, 1, 0, 1].entries()) {
+      await expect(ffiRows(page).nth(row).getByRole("img")).toHaveCount(warns);
+    }
+    const warning = ffiRows(page).nth(1).getByRole("img");
+    await expect(warning).toHaveAccessibleName("Critical information missing: Status");
+    await warning.hover();
+    await expect(page.getByRole("tooltip")).toHaveText("Critical information missing: Status");
   });
 
   test.describe("sorted", () => {

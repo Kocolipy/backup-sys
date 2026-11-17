@@ -11,6 +11,12 @@ import { orElse, shown } from "@/lib/source-field";
 import { formatCalendarDateTwoDigitDay } from "@/lib/time";
 import { FilteredHistory } from "@/pages/filtered-history";
 import { ForPatientInContext } from "@/pages/for-patient-in-context";
+import {
+  anyWarns,
+  type MandatoryElement,
+  MissingInformationCell,
+  MissingInformationHeading,
+} from "@/pages/mandatory-elements";
 import { type ColumnSorting, PlainHeading, SortHeading } from "@/pages/sort-heading";
 import { badged, type BadgeVariant, labelled } from "@/pages/source-code";
 
@@ -33,6 +39,26 @@ const OUTCOME_BADGES: Readonly<Record<ArmcOutcome, BadgeVariant>> = {
   unfit: "danger",
 };
 
+/** The Board Type column: a Mandatory element, its label the column's heading. */
+const BOARD_TYPE: MandatoryElement<keyof ArmcBoard> = { element: "boardType", label: "Board Type" };
+
+/** The Outcome column: a Mandatory element, its label the column's heading. */
+const OUTCOME: MandatoryElement<keyof ArmcBoard> = { element: "outcome", label: "Outcome" };
+
+/** The Start Date column: a Mandatory element, its label the column's heading. */
+const START_DATE: MandatoryElement<keyof ArmcBoard> = { element: "startDate", label: "Start Date" };
+
+/**
+ * The Mandatory elements of an ARMC Board, in the table's column order: a
+ * row missing one, or holding one in the wrong format, carries a warning.
+ * The End Date is not one: a board still open has none.
+ */
+const MANDATORY_ELEMENTS: readonly MandatoryElement<keyof ArmcBoard>[] = [
+  BOARD_TYPE,
+  OUTCOME,
+  START_DATE,
+];
+
 /**
  * The page's ARMC Boards, one row each, in the order read, shown as the
  * patient source sent them (ADR 0020): the ARMC Board Type by its label, in
@@ -40,7 +66,10 @@ const OUTCOME_BADGES: Readonly<Record<ArmcOutcome, BadgeVariant>> = {
  * Medical Officers' names as the source gives them; a code outside its closed
  * set as it came, the Outcome's on a neutral badge; a missing element as "—" —
  * the End Date of a board still open among them — and one in the wrong format
- * as "Error" (`shown`). Nothing checks a board's dates against each other.
+ * as "Error" (`shown`). A leading column warns on a row whose Mandatory
+ * element is missing or in the wrong format ({@link MissingInformationCell}),
+ * the row shown in full; a page with no row warning has no leading column
+ * ({@link anyWarns}). Nothing checks a board's dates against each other.
  * Start Date and End Date sort, one at a time, held still while a read is
  * `pending`; no other column does. Read-only, with no row action; each row is
  * keyed by the board's id, which is never shown, or its place without one.
@@ -54,14 +83,21 @@ function ArmcTable({
   pending: boolean;
   sorting: ColumnSorting<ArmcSortColumn>;
 }) {
+  const warns = anyWarns(MANDATORY_ELEMENTS, boards);
   return (
     <Table>
       <TableCaption className="sr-only">ARMC History</TableCaption>
       <TableHeader>
         <TableRow>
-          <PlainHeading>Board Type</PlainHeading>
-          <PlainHeading>Outcome</PlainHeading>
-          <SortHeading by="startDate" disabled={pending} label="Start Date" sorting={sorting} />
+          {warns ? <MissingInformationHeading /> : null}
+          <PlainHeading>{BOARD_TYPE.label}</PlainHeading>
+          <PlainHeading>{OUTCOME.label}</PlainHeading>
+          <SortHeading
+            by="startDate"
+            disabled={pending}
+            label={START_DATE.label}
+            sorting={sorting}
+          />
           <SortHeading by="endDate" disabled={pending} label="End Date" sorting={sorting} />
           <PlainHeading>Medical Officer #1</PlainHeading>
           <PlainHeading>Medical Officer #2</PlainHeading>
@@ -70,6 +106,9 @@ function ArmcTable({
       <TableBody>
         {boards.map((board, place) => (
           <TableRow key={orElse(board.id, place)}>
+            {warns ? (
+              <MissingInformationCell mandatory={MANDATORY_ELEMENTS} record={board} />
+            ) : null}
             <TableCell className="font-semibold">
               {shown(board.boardType, labelled(ARMC_BOARD_TYPE_LABELS))}
             </TableCell>

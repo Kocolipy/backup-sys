@@ -11,6 +11,12 @@ import { orElse, shown } from "@/lib/source-field";
 import { formatCalendarDateTwoDigitDay } from "@/lib/time";
 import { FilteredHistory } from "@/pages/filtered-history";
 import { ForPatientInContext } from "@/pages/for-patient-in-context";
+import {
+  anyWarns,
+  type MandatoryElement,
+  MissingInformationCell,
+  MissingInformationHeading,
+} from "@/pages/mandatory-elements";
 import { MEDICAL_CENTRE_LABELS } from "@/pages/medical-centre-api";
 import { type ColumnSorting, PlainHeading, SortHeading } from "@/pages/sort-heading";
 import { badged, type BadgeVariant, labelled } from "@/pages/source-code";
@@ -50,13 +56,31 @@ const STATUS_BADGES: Readonly<Record<FfiStatus, BadgeVariant>> = {
 /** How the history is sorted, by the listing that holds the sort. */
 type HistorySorting = ColumnSorting<FfiSortColumn>;
 
+/** The FFI Type column: a Mandatory element, its label the column's heading. */
+const FFI_TYPE: MandatoryElement<keyof Ffi> = { element: "type", label: "FFI Type" };
+
+/** The Outcome column: a Mandatory element, its label the column's heading. */
+const OUTCOME: MandatoryElement<keyof Ffi> = { element: "outcome", label: "Outcome" };
+
+/** The Status column: a Mandatory element, its label the column's heading. */
+const STATUS: MandatoryElement<keyof Ffi> = { element: "status", label: "Status" };
+
+/**
+ * The Mandatory elements of an FFI, in the table's column order: a row
+ * missing one, or holding one in the wrong format, carries a warning.
+ */
+const MANDATORY_ELEMENTS: readonly MandatoryElement<keyof Ffi>[] = [FFI_TYPE, OUTCOME, STATUS];
+
 /**
  * The page's FFIs, one row each, in the order read, shown as the patient
  * source sent them (ADR 0020): each closed set's code by its label, the
  * Outcome and the Status as badges, and both dates as `dd MMM yyyy`; a code
  * outside its closed set as it came, the Outcome's and the Status's on a
  * neutral badge; a missing field as "—" and one in the wrong format as
- * "Error" (`shown`). Issue Date and Expiry Date sort, one at a time, held
+ * "Error" (`shown`). A leading column warns on a row whose Mandatory element
+ * is missing or in the wrong format ({@link MissingInformationCell}), the row
+ * shown in full; a page with no row warning has no leading column
+ * ({@link anyWarns}). Issue Date and Expiry Date sort, one at a time, held
  * still while a read is `pending`; every other column does not. Read-only,
  * with no row action; each row is keyed by the FFI's id, which is never shown,
  * or its place without one. The Status is the source's, shown as sent:
@@ -71,23 +95,26 @@ function FfiTable({
   pending: boolean;
   sorting: HistorySorting;
 }) {
+  const warns = anyWarns(MANDATORY_ELEMENTS, ffis);
   return (
     <Table>
       <TableCaption className="sr-only">FFI History</TableCaption>
       <TableHeader>
         <TableRow>
-          <PlainHeading>FFI Type</PlainHeading>
-          <PlainHeading>Outcome</PlainHeading>
+          {warns ? <MissingInformationHeading /> : null}
+          <PlainHeading>{FFI_TYPE.label}</PlainHeading>
+          <PlainHeading>{OUTCOME.label}</PlainHeading>
           <SortHeading by="issueDate" disabled={pending} label="Issue Date" sorting={sorting} />
           <SortHeading by="expiryDate" disabled={pending} label="Expiry Date" sorting={sorting} />
           <PlainHeading>Higher Authority</PlainHeading>
           <PlainHeading>Submitting MC</PlainHeading>
-          <PlainHeading>Status</PlainHeading>
+          <PlainHeading>{STATUS.label}</PlainHeading>
         </TableRow>
       </TableHeader>
       <TableBody>
         {ffis.map((ffi, place) => (
           <TableRow key={orElse(ffi.id, place)}>
+            {warns ? <MissingInformationCell mandatory={MANDATORY_ELEMENTS} record={ffi} /> : null}
             <TableCell>{shown(ffi.type, labelled(FFI_TYPE_LABELS))}</TableCell>
             <TableCell>{shown(ffi.outcome, badged(FFI_OUTCOME_LABELS, OUTCOME_BADGES))}</TableCell>
             <TableCell className="tabular-nums">

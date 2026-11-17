@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { clearEhrContext } from "@/auth/ehr-context";
 import { bare, deferred, holding, json, type Answers } from "@/auth/session-adapter.testHelpers";
+import { leadingCells, leadingColumn, warnings } from "@/pages/mandatory-elements.testHelpers";
 import { TAN_WEI_MING, TAN_WEI_MING_READ, withPatientInContext } from "@/pages/patient.testHelpers";
 import { renderSignedIn } from "@/shell/signed-in-shell.testHelpers";
 
@@ -70,26 +71,32 @@ const armcReads = (sent: readonly { method: string; path: string }[]) =>
 
 const table = () => screen.getByRole("table", { name: "ARMC History" });
 
-/** Each body row's cells, as text. */
-const rows = () =>
-  within(table())
+/** Each body row's data cells, as text: the leading warning cell, where shown, left out. */
+const rows = () => {
+  const leading = leadingCells(table());
+  return within(table())
     .getAllByRole("row")
     .slice(1)
     .map((row) =>
       within(row)
         .getAllByRole("cell")
+        .slice(leading)
         .map((cell) => cell.textContent),
     );
+};
 
 /** The Outcome badge in each body row, by its text and its variant. */
-const outcomeBadges = () =>
-  within(table())
+const outcomeBadges = () => {
+  const leading = leadingCells(table());
+  return within(table())
     .getAllByRole("row")
     .slice(1)
     .map((row) => {
-      const badge = within(row).getAllByRole("cell")[1]!.querySelector("[data-slot=badge]");
+      const cell = within(row).getAllByRole("cell")[leading + 1]!;
+      const badge = cell.querySelector("[data-slot=badge]");
       return `${badge?.textContent} ${badge?.getAttribute("data-variant")}`;
     });
+};
 
 afterEach(() => {
   clearEhrContext();
@@ -315,6 +322,101 @@ describe("ARMC", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(/^Couldn't load ARMC records$/);
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
     expect(screen.queryByText("No patient in context")).not.toBeInTheDocument();
+  });
+});
+
+// The Mandatory elements of an ARMC Board are its Board Type, Outcome and
+// Start Date (/docs/domain/armc.md): a row missing one, or with one in the
+// wrong format, carries a warning, and is shown in full. The End Date is not
+// one: a board still open has none. How the warning is drawn and read is the
+// shared module's (mandatory-elements.test.tsx).
+describe("ARMC, a Mandatory element missing", () => {
+  it.each([
+    ["Board Type", "boardType"],
+    ["Outcome", "outcome"],
+    ["Start Date", "startDate"],
+  ] as const)("warns on a row whose %s is missing, naming its column", async (label, element) => {
+    await renderArmc(page([board("armc-1", { [element]: null })], 1, 1));
+    await screen.findByRole("table", { name: "ARMC History" });
+
+    expect(warnings(table())).toEqual([`Critical information missing: ${label}`]);
+  });
+
+  it.each([
+    ["Board Type", "boardType"],
+    ["Outcome", "outcome"],
+    ["Start Date", "startDate"],
+  ] as const)(
+    "warns on a row whose %s is in the wrong format, naming its column",
+    async (label, element) => {
+      await renderArmc(page([board("armc-1", { [element]: null, invalid: [element] })], 1, 1));
+      await screen.findByRole("table", { name: "ARMC History" });
+
+      expect(warnings(table())).toEqual([`Critical information missing: ${label}`]);
+    },
+  );
+
+  it("leads the row with the warning, naming every affected column in the table's order", async () => {
+    await renderArmc(
+      page(
+        [
+          board("armc-1", {
+            boardType: null,
+            invalid: ["outcome"],
+            outcome: null,
+            startDate: null,
+          }),
+        ],
+        1,
+        1,
+      ),
+    );
+    await screen.findByRole("table", { name: "ARMC History" });
+
+    expect({
+      firstHeading: within(table()).getAllByRole("columnheader")[0]!.textContent,
+      warnings: warnings(table()),
+    }).toEqual({
+      firstHeading: "Missing information",
+      warnings: ["Critical information missing: Board Type, Outcome, Start Date"],
+    });
+  });
+
+  // A code outside its closed set is a present value (ADR 0020, D2).
+  it("does not warn on a row whose codes are outside their sets", async () => {
+    await renderArmc(page([board("armc-1", { boardType: "pes", outcome: "deferred" })], 1, 1));
+    await screen.findByRole("table", { name: "ARMC History" });
+
+    expect(warnings(table())).toEqual([null]);
+  });
+
+  it("does not warn on a row missing, or holding in the wrong format, only other elements", async () => {
+    await renderArmc(
+      page(
+        [
+          board("armc-1", { endDate: null, medicalOfficer1: null, medicalOfficer2: null }),
+          board(null, {
+            endDate: null,
+            invalid: ["id", "endDate", "medicalOfficer1", "medicalOfficer2"],
+            medicalOfficer1: null,
+            medicalOfficer2: null,
+          }),
+          board("armc-3", { boardType: null }),
+        ],
+        1,
+        3,
+      ),
+    );
+    await screen.findByRole("table", { name: "ARMC History" });
+
+    expect(warnings(table())).toEqual([null, null, "Critical information missing: Board Type"]);
+  });
+
+  it("shows no leading column on a page where no row warns", async () => {
+    await renderArmc(page([board("armc-1", { endDate: null }), board("armc-2")], 1, 2));
+    await screen.findByRole("table", { name: "ARMC History" });
+
+    expect(leadingColumn(table())).toEqual({ firstCells: ["ACES", "ACES"], heading: null });
   });
 });
 

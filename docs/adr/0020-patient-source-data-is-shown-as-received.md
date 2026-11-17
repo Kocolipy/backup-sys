@@ -1,7 +1,7 @@
 ---
 type: Decision Record
 title: "ADR 0020: Patient-source data is shown as received"
-description: The patient source is the truth, so no record or response is refused for what a field holds — a missing field is shown as "—", one in the wrong format as "Error", a code outside its closed set as the raw code — while transport and structural failures still fail the read, and a Patient search's match without a FHIR id is dropped and counted, the one field validated; a row missing a Mandatory element is flagged, never refused; the shared pieces each read adopts it through, enacted for the FFI, NUMC, ARMC and Medication Histories, a Patient read by id — its Demographic details included — and a Patient search, and the parts of ADR 0014, 0018 and 0019 it supersedes.
+description: The patient source is the truth, so no record or response is refused for what a field holds — a missing field is shown as "—", one in the wrong format as "Error", a code outside its closed set as the raw code — while transport and structural failures still fail the read, and a Patient search's match without a FHIR id is dropped and counted, the one field validated; a row missing a Mandatory element is flagged, never refused, each of the FFI, NUMC, ARMC and Medication Histories declaring its own; the shared pieces each read adopts it through, enacted for the FFI, NUMC, ARMC and Medication Histories, a Patient read by id — its Demographic details included — and a Patient search, and the parts of ADR 0014, 0018 and 0019 it supersedes.
 tags:
   [
     patient,
@@ -188,9 +188,17 @@ element is missing or in the wrong format carries a warning naming each such
 element; the record is still shown in full, each such cell as "—" or "Error",
 and is never rejected. The SPA decides the warning from the backend's
 classification alone (D5) and never inspects a value, so a code outside its
-closed set (D2) is present and flags nothing. A Medication Record's Mandatory
-elements are its Medication and its Dispense Status
-(`/docs/domain/medication.md`); no other history declares any.
+closed set (D2) is present and flags nothing. Each history declares its own,
+named by their columns' headings:
+
+| History    | Mandatory elements                     | Rules                        |
+| ---------- | -------------------------------------- | ---------------------------- |
+| FFI        | FFI Type, Outcome, Status              | `/docs/domain/ffi.md`        |
+| NUMC       | Type, Outcome, Issue Date, Expiry Date | `/docs/domain/numc.md`       |
+| ARMC       | Board Type, Outcome, Start Date        | `/docs/domain/armc.md`       |
+| Medication | Medication, Dispense Status            | `/docs/domain/medication.md` |
+
+An ARMC Board's End Date is not one: a board still open has none.
 
 ## Consequences
 
