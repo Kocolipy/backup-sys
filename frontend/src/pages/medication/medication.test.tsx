@@ -114,7 +114,7 @@ const statusBadges = () =>
     .getAllByRole("row")
     .slice(1)
     .map((row) => {
-      const badge = within(row).getAllByRole("cell")[6]!.querySelector("[data-slot=badge]");
+      const badge = within(row).getAllByRole("cell")[7]!.querySelector("[data-slot=badge]");
       return `${badge?.textContent} ${badge?.getAttribute("data-variant")}`;
     });
 
@@ -133,6 +133,7 @@ describe("Medication", () => {
       rows: rows(),
     }).toEqual({
       headings: [
+        "Missing information",
         "Medication",
         "Dosage",
         "Route",
@@ -148,6 +149,7 @@ describe("Medication", () => {
       ],
       rows: [
         [
+          "",
           "Paracetamol",
           "750 mg",
           "PO",
@@ -162,6 +164,7 @@ describe("Medication", () => {
           "Dr Lim Wei Jie",
         ],
         [
+          "",
           "Amoxicillin",
           "300 mg",
           "PO",
@@ -209,7 +212,7 @@ describe("Medication", () => {
     );
     await screen.findByRole("table", { name: "Medication History" });
 
-    expect(rows().map((row) => row[10])).toEqual([
+    expect(rows().map((row) => row[11])).toEqual([
       "Nee Soon Camp MC",
       "Kranji Camp MC",
       "Hendon Camp MC",
@@ -232,7 +235,7 @@ describe("Medication", () => {
     );
     await screen.findByRole("table", { name: "Medication History" });
 
-    expect(rows()[0]!.slice(8, 10)).toEqual(["02 Mar 2026 05:30", "06 Mar 2026 10:00"]);
+    expect(rows()[0]!.slice(9, 11)).toEqual(["02 Mar 2026 05:30", "06 Mar 2026 10:00"]);
   });
 
   // The patient source is the truth (ADR 0020): its data is shown as received.
@@ -264,6 +267,7 @@ describe("Medication", () => {
 
     expect(rows()).toEqual([
       [
+        "",
         "Paracetamol",
         "—",
         "—",
@@ -277,7 +281,7 @@ describe("Medication", () => {
         "Nee Soon Camp MC",
         "Dr Lim Wei Jie",
       ],
-      ["—", "750 mg", "PO", "QDS", "—", "30 tablets", "—", "5 days", "—", "—", "—", "—"],
+      ["", "—", "750 mg", "PO", "QDS", "—", "30 tablets", "—", "5 days", "—", "—", "—", "—"],
     ]);
   });
 
@@ -307,6 +311,7 @@ describe("Medication", () => {
 
     expect(rows()).toEqual([
       [
+        "",
         "Paracetamol",
         "Error",
         "PO",
@@ -321,6 +326,7 @@ describe("Medication", () => {
         "Dr Lim Wei Jie",
       ],
       [
+        "",
         "Error",
         "750 mg",
         "PO",
@@ -345,7 +351,7 @@ describe("Medication", () => {
     );
     await screen.findByRole("table", { name: "Medication History" });
 
-    expect(rows()[0]!.slice(8, 10)).toEqual(["Error", "Error"]);
+    expect(rows()[0]!.slice(9, 11)).toEqual(["Error", "Error"]);
   });
 
   it("shows a code outside its closed set as it came, the Dispense Status on a neutral badge", async () => {
@@ -358,7 +364,7 @@ describe("Medication", () => {
     );
     await screen.findByRole("table", { name: "Medication History" });
 
-    expect({ badges: statusBadges(), cells: [rows()[0]![6], rows()[0]![10]] }).toEqual({
+    expect({ badges: statusBadges(), cells: [rows()[0]![7], rows()[0]![11]] }).toEqual({
       badges: ["on-hold outline"],
       cells: ["on-hold", "tengah-air-base"],
     });
@@ -375,7 +381,7 @@ describe("Medication", () => {
     );
     await screen.findByRole("table", { name: "Medication History" });
 
-    expect({ badges: statusBadges(), cells: [rows()[0]![6], rows()[0]![10]] }).toEqual({
+    expect({ badges: statusBadges(), cells: [rows()[0]![7], rows()[0]![11]] }).toEqual({
       badges: ["toString outline"],
       cells: ["toString", "constructor"],
     });
@@ -398,7 +404,7 @@ describe("Medication", () => {
     );
     await screen.findByRole("table", { name: "Medication History" });
 
-    expect(rows()[0]!.slice(8, 10)).toEqual(["16 Mar 2022 09:00", "14 Mar 2022 09:00"]);
+    expect(rows()[0]!.slice(9, 11)).toEqual(["16 Mar 2022 09:00", "14 Mar 2022 09:00"]);
   });
 
   it("keys a row with no id by its place, as React needs each row keyed", async () => {
@@ -429,7 +435,7 @@ describe("Medication", () => {
     );
     await screen.findByRole("table", { name: "Medication History" });
 
-    expect([rows()[0]![4], rows()[0]![7]]).toEqual(["Step 2", "<b>about a week</b>"]);
+    expect([rows()[0]![5], rows()[0]![8]]).toEqual(["Step 2", "<b>about a week</b>"]);
   });
 
   // The table is wider than a card: its rows stay on one line each and the
@@ -469,7 +475,7 @@ describe("Medication", () => {
     );
 
     expect(await screen.findByText("Showing 6 to 6 of 6 records")).toBeInTheDocument();
-    expect({ reads: medicationReads(requests()), rows: rows().map((row) => row[0]) }).toEqual({
+    expect({ reads: medicationReads(requests()), rows: rows().map((row) => row[1]) }).toEqual({
       reads: [FIRST_PAGE, SECOND_PAGE],
       rows: ["Prednisolone"],
     });
@@ -538,6 +544,149 @@ describe("Medication", () => {
   });
 });
 
+/** The warning icon of each body row, by its accessible name, `null` on a row with none. */
+const warnings = () =>
+  within(table())
+    .getAllByRole("row")
+    .slice(1)
+    .map((row) => within(row).queryByRole("img")?.getAttribute("aria-label") ?? null);
+
+// The Mandatory elements of a Medication Record are its Medication and its
+// Dispense Status (/docs/domain/medication.md): a row missing either, or with
+// either in the wrong format, carries a warning, and is shown in full.
+describe("Medication, a Mandatory element missing", () => {
+  it("warns on a row whose Medication is missing, naming its column", async () => {
+    await renderMedication(page([record("medication-1", { medication: null })], 1, 1));
+    await screen.findByRole("table", { name: "Medication History" });
+
+    expect(warnings()).toEqual(["Critical information missing: Medication"]);
+  });
+
+  it("warns on a row whose Dispense Status is missing, naming its column", async () => {
+    await renderMedication(page([record("medication-1", { dispenseStatus: null })], 1, 1));
+    await screen.findByRole("table", { name: "Medication History" });
+
+    expect(warnings()).toEqual(["Critical information missing: Dispense Status"]);
+  });
+
+  it("warns once on a row missing both, naming each column in the table's order", async () => {
+    await renderMedication(
+      page([record("medication-1", { dispenseStatus: null, medication: null })], 1, 1),
+    );
+    await screen.findByRole("table", { name: "Medication History" });
+
+    expect(warnings()).toEqual(["Critical information missing: Medication, Dispense Status"]);
+  });
+
+  it("leaves the leading cell of a row holding both empty", async () => {
+    await renderMedication(page([record("medication-1")], 1, 1));
+    await screen.findByRole("table", { name: "Medication History" });
+
+    expect(within(table()).getAllByRole("cell")[0]!.childNodes).toHaveLength(0);
+  });
+
+  it("warns on a row whose Mandatory element is in the wrong format, as on one missing it", async () => {
+    await renderMedication(
+      page(
+        [
+          record("medication-1", { invalid: ["medication"], medication: null }),
+          record("medication-2", { dispenseStatus: null, invalid: ["dispenseStatus"] }),
+        ],
+        1,
+        2,
+      ),
+    );
+    await screen.findByRole("table", { name: "Medication History" });
+
+    expect(warnings()).toEqual([
+      "Critical information missing: Medication",
+      "Critical information missing: Dispense Status",
+    ]);
+  });
+
+  // A code outside its closed set is a present value (ADR 0020, D2).
+  it("does not warn on a row whose Dispense Status is a code outside its set", async () => {
+    await renderMedication(page([record("medication-1", { dispenseStatus: "on-hold" })], 1, 1));
+    await screen.findByRole("table", { name: "Medication History" });
+
+    expect(warnings()).toEqual([null]);
+  });
+
+  it("does not warn on a row missing, or holding in the wrong format, only other elements", async () => {
+    await renderMedication(
+      page(
+        [
+          record("medication-1", {
+            dispensary: null,
+            dosage: null,
+            duration: null,
+            endDate: null,
+            frequency: null,
+            prescribingDoctor: null,
+            quantity: null,
+            route: null,
+            startDate: null,
+          }),
+          record("medication-2", {
+            dispensary: null,
+            endDate: null,
+            id: null,
+            invalid: ["id", "dosage", "step", "startDate", "endDate", "dispensary"],
+            dosage: null,
+            startDate: null,
+          }),
+        ],
+        1,
+        2,
+      ),
+    );
+    await screen.findByRole("table", { name: "Medication History" });
+
+    expect(warnings()).toEqual([null, null]);
+  });
+
+  it("draws the warning as a triangle in the warning colour, a tab stop", async () => {
+    await renderMedication(page([record("medication-1", { medication: null })], 1, 1));
+    await screen.findByRole("table", { name: "Medication History" });
+    const warning = within(table()).getByRole("img");
+
+    const icon = warning.querySelector("svg.lucide-triangle-alert");
+    expect({
+      colour: icon?.classList.contains("text-warning-soft-foreground"),
+      hidden: icon?.getAttribute("aria-hidden"),
+      tabIndex: warning.tabIndex,
+    }).toEqual({ colour: true, hidden: "true", tabIndex: 0 });
+  });
+
+  it("heads the warnings' column with a hidden heading, Missing information", async () => {
+    await renderMedication(page([record("medication-1")], 1, 1));
+    await screen.findByRole("table", { name: "Medication History" });
+    const heading = within(table()).getAllByRole("columnheader")[0]!;
+
+    expect({
+      hidden: heading.querySelector(".sr-only")?.textContent,
+      scope: heading.getAttribute("scope"),
+    }).toEqual({ hidden: "Missing information", scope: "col" });
+  });
+
+  it("opens the warning's tooltip on focus, naming the columns as its accessible name does", async () => {
+    await renderMedication(
+      page([record("medication-1", { dispenseStatus: null, medication: null })], 1, 1),
+    );
+    await screen.findByRole("table", { name: "Medication History" });
+
+    fireEvent.focus(
+      within(table()).getByRole("img", {
+        name: "Critical information missing: Medication, Dispense Status",
+      }),
+    );
+
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(
+      /^Critical information missing: Medication, Dispense Status$/,
+    );
+  });
+});
+
 /** The read of Tan Wei Ming's history from `startIndex`, with `asked` — filters, a sort — before the page. */
 const historyPage = (startIndex: number, asked = "") =>
   `GET /api/patient-medication/eq081-VQEgP8drUUqCWzHfw3?${asked === "" ? "" : `${asked}&`}startIndex=${startIndex}&count=5`;
@@ -577,6 +726,7 @@ describe("Medication, sorted", () => {
           within(header).queryByRole("button") !== null,
         ]),
     ).toEqual([
+      ["Missing information", null, false],
       ["Medication", null, false],
       ["Dosage", null, false],
       ["Route", null, false],

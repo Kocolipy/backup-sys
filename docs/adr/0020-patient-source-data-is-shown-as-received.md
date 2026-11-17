@@ -1,7 +1,7 @@
 ---
 type: Decision Record
 title: "ADR 0020: Patient-source data is shown as received"
-description: The patient source is the truth, so no record or response is refused for what a field holds — a missing field is shown as "—", one in the wrong format as "Error", a code outside its closed set as the raw code — while transport and structural failures still fail the read; the shared pieces each read adopts it through, enacted for the FFI, NUMC, ARMC and Medication Histories, a Patient read by id and a Patient search's Last visit, and the parts of ADR 0014, 0018 and 0019 it supersedes.
+description: The patient source is the truth, so no record or response is refused for what a field holds — a missing field is shown as "—", one in the wrong format as "Error", a code outside its closed set as the raw code — while transport and structural failures still fail the read; a row missing a Mandatory element is flagged, never refused; the shared pieces each read adopts it through, enacted for the FFI, NUMC, ARMC and Medication Histories, a Patient read by id and a Patient search's Last visit, and the parts of ADR 0014, 0018 and 0019 it supersedes.
 tags: [patient, ffi, numc, armc, medication, search, integration, observability, spa]
 ---
 
@@ -144,6 +144,16 @@ For a Patient search's Last visit:
 For each other read, as it adopts the rule:
 
 - ADR 0018, D1: a search's entry with no `id` being a failure of the source.
+
+**D7. A Mandatory element is flagged, never refused.** A history may declare
+an element of its record a **Mandatory element**. A row whose Mandatory
+element is missing or in the wrong format carries a warning naming each such
+element; the record is still shown in full, each such cell as "—" or "Error",
+and is never rejected. The SPA decides the warning from the backend's
+classification alone (D5) and never inspects a value, so a code outside its
+closed set (D2) is present and flags nothing. A Medication Record's Mandatory
+elements are its Medication and its Dispense Status
+(`/docs/domain/medication.md`); no other history declares any.
 
 ## Consequences
 

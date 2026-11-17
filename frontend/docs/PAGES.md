@@ -182,7 +182,10 @@ What differs is each history's own:
 
 `DESIGN.md` ("Badge") has which variant each status takes. The Medication
 table is wider than its card: the table primitive keeps each cell to one line
-and scrolls sideways in its own container.
+and scrolls sideways in its own container. It alone declares Mandatory
+elements, its Medication and its Dispense Status, so it alone opens with a
+narrow leading column warning on a row missing one (`mandatory-elements.tsx`);
+the FFI, NUMC and ARMC tables have none.
 
 - `filtered-history.tsx` — `FilteredHistory`, the filtered, sorted listing
   every history page renders once the patient in context is read. Each page
@@ -270,6 +273,16 @@ and scrolls sideways in its own container.
   sort. The sort it sets, `ColumnSort`, lives in `src/lib/sorting.ts` beside
   `sortParameters`, the one encoding of a sort as its `sortBy` and `sortOrder`
   query parameters.
+- `mandatory-elements.tsx` — the warning on a row whose Mandatory element is
+  missing or in the wrong format (ADR 0020). A history declares its Mandatory
+  elements beside its table, each a `MandatoryElement`: the record's field and
+  its column's exact heading, in column order. `MissingInformationHeading` is
+  the leading column's heading, visually hidden and read as "Missing
+  information"; `MissingInformationCell` is each row's leading cell, empty or
+  holding a `TriangleAlert` icon in the warning tone that is a tab stop, whose
+  tooltip — "Critical information missing: " and the affected columns'
+  headings — is its accessible name. It reads only each field's `SourceField`
+  state, never a value, and the row is shown in full.
 - `filter-popover.tsx`, `multi-select-picker.tsx`, `choice-toggle.tsx`,
   `date-range-fields.tsx` — the shared filter parts every Filter panel is
   built from.
