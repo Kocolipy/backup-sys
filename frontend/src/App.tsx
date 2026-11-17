@@ -23,7 +23,7 @@ import { SignedInShell } from "@/shell/signed-in-shell";
  * `SignedInShell`, which owns their header, their one error line (the page
  * status every page, panel and Sign out reports to, reset on every path) and
  * Sign out. They are declared once in `SIGNED_IN_PAGES`; a page
- * that lists `permissions` keeps its own guard inside the shell.
+ * that states what it `requires` keeps its own guard inside the shell.
  */
 export function App() {
   return (
@@ -47,13 +47,13 @@ export function App() {
                   </ProtectedRoute>
                 }
               >
-                {SIGNED_IN_PAGES.map(({ element, path, permissions }) => (
+                {SIGNED_IN_PAGES.map(({ element, path, requires }) => (
                   <Route
                     key={path}
                     path={path}
                     element={
-                      permissions ? (
-                        <ProtectedRoute requiredPermissions={permissions}>{element}</ProtectedRoute>
+                      requires ? (
+                        <ProtectedRoute requires={requires}>{element}</ProtectedRoute>
                       ) : (
                         element
                       )

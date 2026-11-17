@@ -1,10 +1,11 @@
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { Route, Routes } from "react-router-dom";
+import { matchPath, Route, Routes } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 
 import type { Permission } from "@/auth/api";
 import { EVERY_PERMISSION } from "@/auth/auth-context.testHelpers";
+import { mayOpen } from "@/auth/permissions";
 import {
   bare,
   deferred,
@@ -54,10 +55,25 @@ describe("SignedInShell", () => {
     expect(screen.getByText("page body")).toBeInTheDocument();
   });
 
-  it("lands a session holding only the Permission Patient Search is guarded by on Patient Search", () => {
-    const search = SIGNED_IN_PAGES.find((page) => page.title === "Patient Search");
-    expect(landingPath(search?.permissions)).toBe("/search");
-  });
+  // A landing page its own session is refused would route that session on
+  // without end.
+  it.each([
+    ["no Permission", []],
+    ["patient:read alone", ["patient:read"]],
+    ["audit:read alone", ["audit:read"]],
+    ["every Permission, as a Superuser does", EVERY_PERMISSION],
+  ] as [string, Permission[]][])(
+    "lands a session holding %s on a page its route guard opens to it",
+    (_held, permissions) => {
+      const landing = SIGNED_IN_PAGES.find((page) =>
+        matchPath(page.path, landingPath(permissions)),
+      );
+      expect([
+        landing?.title,
+        landing && mayOpen({ permissions }, landing.requires ?? "authenticated"),
+      ]).toEqual([permissions.includes("patient:read") ? "Patient Search" : "Home", true]);
+    },
+  );
 
   it("signs out through the auth context", async () => {
     const { requests, session } = await renderShell("/", {
@@ -84,9 +100,7 @@ describe("SignedInShell", () => {
     expect(screen.getByRole("button", { name: "Sign out" })).toBeEnabled();
   });
 
-  // Profile's patient banner heads the page in its title's place.
   it.each([
-    ["Profile", "/"],
     ["Accounts", "/accounts"],
     ["Audit", "/audit"],
     ["Settings", "/settings"],
@@ -95,11 +109,12 @@ describe("SignedInShell", () => {
     expect(screen.getByRole("heading", { level: 1, name: title })).toHaveClass("sr-only");
   });
 
-  it("shows Patient Search's title, which heads the page", async () => {
-    await renderShell("/search");
-    expect(screen.getByRole("heading", { level: 1, name: "Patient Search" })).not.toHaveClass(
-      "sr-only",
-    );
+  it.each([
+    ["Patient Search", "/search"],
+    ["Home", "/"],
+  ])("shows the %s page's title, which heads the page", async (title, path) => {
+    await renderShell(path);
+    expect(screen.getByRole("heading", { level: 1, name: title })).not.toHaveClass("sr-only");
   });
 
   it("sets a page title it shows in the headline type", async () => {
@@ -117,7 +132,7 @@ describe("SignedInShell", () => {
 
   it("renders the Home layout for a path it has no page for", async () => {
     await renderShell("/nowhere");
-    expect(screen.getByRole("heading", { level: 1, name: "Profile" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "Home" })).toBeInTheDocument();
   });
 
   it("renders a page's own layout for its trailing-slash path", async () => {

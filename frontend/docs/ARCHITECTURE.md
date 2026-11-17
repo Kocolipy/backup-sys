@@ -56,8 +56,8 @@ straight into `lib/http`) but may never point back up.
 - `permissions.ts` — `holds` / `holdsAny`, `SUPERUSER`, and the one rule for
   whether a session may open a page. `holds` answers a `Requirement`: a
   Permission, or the Superuser, which no number of Permissions satisfies. The one
-  rule: `requirementOf` reads a page's `permissions` as "any
-  one of these", `mayOpen` decides. Which Permission a _request_ needs is
+  rule: a page's `PageRequirement` is any signed-in session, `{ anyOf }` (any
+  one of these) or `{ noneOf }` (none of these), and `mayOpen` decides. Which Permission a _request_ needs is
   declared on the endpoint instead.
 - `declarations.ts` — an endpoint as data: a `ReadDeclaration` (Permission,
   path, decoder, opt-in `absentOnNotFound`) and a `WriteDeclaration` (plus method
@@ -316,10 +316,11 @@ and opens no HMR socket, so no page reloads under a spec.
 falling back to `/`.
 
 **Each signed-in page is declared once**, as an entry in `SIGNED_IN_PAGES`
-(`shell/signed-in-pages.tsx`): path, element, optional `permissions` guard,
+(`shell/signed-in-pages.tsx`): path, element, optional `requires` guard,
 optional `homeLink`, and the shell's metadata (the title, and whether it is kept
-for screen readers only). `App.tsx` maps the table to routes, wrapping an entry
-with `permissions` in its own `ProtectedRoute`; the shell finds the current
+for screen readers only — always, or while a patient is in context to show).
+`App.tsx` maps the table to routes, wrapping an entry with `requires` in its
+own `ProtectedRoute`; the shell finds the current
 entry with `matchPath`, and its navigation sidebar links each entry with a
 `homeLink` that `mayOpen` admits — beneath its collapsible group's button where
 the entry names a `group` (Accounts and Audit are both in Admin), a group
@@ -335,8 +336,8 @@ the patient in the tab's EHR context by name and NRIC, rendered from the
 layout's one read of them (`PatientInContextScope`), which the Patient card
 and the Demographic details render from too, then Notifications, the one link to Settings,
 Help and who is signed in: the username, and beneath it the Groups the session
-was signed in with), the page title (kept for screen readers only on every page the
-sidebar or the top bar reaches, `titleHidden`) and the page's one error line (the page-status
+was signed in with), the page title (kept for screen readers only as its entry's
+`titleHidden` says — the Demographic page's only while a patient is in context to show) and the page's one error line (the page-status
 scope); a page renders only its body. Settings (`SETTINGS_PATH`, `/settings`)
 holds the password change, both the voluntary one and the one the
 change-required flag requires: a flagged session is confined to Settings, in
@@ -350,10 +351,11 @@ Guest to login with a return destination and the provider's sign-in reason;
 **confines a flagged session** (`passwordChangeRequired: true` on `/me`) to
 Settings (`/settings`) from every path, ahead of the Permission check and any
 return destination;
-renders a Permission-guarded route for a session holding any of its
-Permissions; and redirects every other session to its landing page
-(`landingPath`: Patient Search for a session holding `patient:read`, Home
-otherwise), as it does an authenticated visitor on `/login` with no return
+renders a guarded route for a session its requirement admits — holding any of
+its `anyOf` Permissions, or none of its `noneOf` ones; and redirects every
+other session to its landing page (`landingPath`: Patient Search for a session
+holding `patient:read`, Home otherwise, each opening to the session it is the
+landing page of), as it does an authenticated visitor on `/login` with no return
 destination and one on a path with no route (`LandingRoute`). The guards decide what is
 _rendered_; Spring Security decides what is _permitted_.
 

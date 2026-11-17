@@ -97,26 +97,36 @@ const medicationReads = (sent: readonly { method: string; path: string }[]) =>
 
 const table = () => screen.getByRole("table", { name: "Medication History" });
 
-/** Each body row's cells, as text. */
-const rows = () =>
-  within(table())
+/** Whether the table shows the warnings' leading column. */
+const hasLeadingColumn = () =>
+  within(table()).queryByRole("columnheader", { name: "Missing information" }) !== null;
+
+/** Each body row's data cells, as text: the leading warning cell, where shown, left out. */
+const rows = () => {
+  const leading = hasLeadingColumn() ? 1 : 0;
+  return within(table())
     .getAllByRole("row")
     .slice(1)
     .map((row) =>
       within(row)
         .getAllByRole("cell")
+        .slice(leading)
         .map((cell) => cell.textContent),
     );
+};
 
 /** The Dispense Status badge in each body row, by its text and its variant. */
-const statusBadges = () =>
-  within(table())
+const statusBadges = () => {
+  const statusCell = hasLeadingColumn() ? 7 : 6;
+  return within(table())
     .getAllByRole("row")
     .slice(1)
     .map((row) => {
-      const badge = within(row).getAllByRole("cell")[7]!.querySelector("[data-slot=badge]");
+      const cell = within(row).getAllByRole("cell")[statusCell]!;
+      const badge = cell.querySelector("[data-slot=badge]");
       return `${badge?.textContent} ${badge?.getAttribute("data-variant")}`;
     });
+};
 
 afterEach(() => {
   clearEhrContext();
@@ -133,7 +143,6 @@ describe("Medication", () => {
       rows: rows(),
     }).toEqual({
       headings: [
-        "Missing information",
         "Medication",
         "Dosage",
         "Route",
@@ -149,7 +158,6 @@ describe("Medication", () => {
       ],
       rows: [
         [
-          "",
           "Paracetamol",
           "750 mg",
           "PO",
@@ -164,7 +172,6 @@ describe("Medication", () => {
           "Dr Lim Wei Jie",
         ],
         [
-          "",
           "Amoxicillin",
           "300 mg",
           "PO",
@@ -212,7 +219,7 @@ describe("Medication", () => {
     );
     await screen.findByRole("table", { name: "Medication History" });
 
-    expect(rows().map((row) => row[11])).toEqual([
+    expect(rows().map((row) => row[10])).toEqual([
       "Nee Soon Camp MC",
       "Kranji Camp MC",
       "Hendon Camp MC",
@@ -235,7 +242,7 @@ describe("Medication", () => {
     );
     await screen.findByRole("table", { name: "Medication History" });
 
-    expect(rows()[0]!.slice(9, 11)).toEqual(["02 Mar 2026 05:30", "06 Mar 2026 10:00"]);
+    expect(rows()[0]!.slice(8, 10)).toEqual(["02 Mar 2026 05:30", "06 Mar 2026 10:00"]);
   });
 
   // The patient source is the truth (ADR 0020): its data is shown as received.
@@ -267,7 +274,6 @@ describe("Medication", () => {
 
     expect(rows()).toEqual([
       [
-        "",
         "Paracetamol",
         "—",
         "—",
@@ -281,7 +287,7 @@ describe("Medication", () => {
         "Nee Soon Camp MC",
         "Dr Lim Wei Jie",
       ],
-      ["", "—", "750 mg", "PO", "QDS", "—", "30 tablets", "—", "5 days", "—", "—", "—", "—"],
+      ["—", "750 mg", "PO", "QDS", "—", "30 tablets", "—", "5 days", "—", "—", "—", "—"],
     ]);
   });
 
@@ -311,7 +317,6 @@ describe("Medication", () => {
 
     expect(rows()).toEqual([
       [
-        "",
         "Paracetamol",
         "Error",
         "PO",
@@ -326,7 +331,6 @@ describe("Medication", () => {
         "Dr Lim Wei Jie",
       ],
       [
-        "",
         "Error",
         "750 mg",
         "PO",
@@ -351,7 +355,7 @@ describe("Medication", () => {
     );
     await screen.findByRole("table", { name: "Medication History" });
 
-    expect(rows()[0]!.slice(9, 11)).toEqual(["Error", "Error"]);
+    expect(rows()[0]!.slice(8, 10)).toEqual(["Error", "Error"]);
   });
 
   it("shows a code outside its closed set as it came, the Dispense Status on a neutral badge", async () => {
@@ -364,7 +368,7 @@ describe("Medication", () => {
     );
     await screen.findByRole("table", { name: "Medication History" });
 
-    expect({ badges: statusBadges(), cells: [rows()[0]![7], rows()[0]![11]] }).toEqual({
+    expect({ badges: statusBadges(), cells: [rows()[0]![6], rows()[0]![10]] }).toEqual({
       badges: ["on-hold outline"],
       cells: ["on-hold", "tengah-air-base"],
     });
@@ -381,7 +385,7 @@ describe("Medication", () => {
     );
     await screen.findByRole("table", { name: "Medication History" });
 
-    expect({ badges: statusBadges(), cells: [rows()[0]![7], rows()[0]![11]] }).toEqual({
+    expect({ badges: statusBadges(), cells: [rows()[0]![6], rows()[0]![10]] }).toEqual({
       badges: ["toString outline"],
       cells: ["toString", "constructor"],
     });
@@ -404,7 +408,7 @@ describe("Medication", () => {
     );
     await screen.findByRole("table", { name: "Medication History" });
 
-    expect(rows()[0]!.slice(9, 11)).toEqual(["16 Mar 2022 09:00", "14 Mar 2022 09:00"]);
+    expect(rows()[0]!.slice(8, 10)).toEqual(["16 Mar 2022 09:00", "14 Mar 2022 09:00"]);
   });
 
   it("keys a row with no id by its place, as React needs each row keyed", async () => {
@@ -435,7 +439,7 @@ describe("Medication", () => {
     );
     await screen.findByRole("table", { name: "Medication History" });
 
-    expect([rows()[0]![5], rows()[0]![8]]).toEqual(["Step 2", "<b>about a week</b>"]);
+    expect([rows()[0]![4], rows()[0]![7]]).toEqual(["Step 2", "<b>about a week</b>"]);
   });
 
   // The table is wider than a card: its rows stay on one line each and the
@@ -467,7 +471,7 @@ describe("Medication", () => {
     );
 
     expect(await screen.findByText("Showing 6 to 6 of 6 records")).toBeInTheDocument();
-    expect({ reads: medicationReads(requests()), rows: rows().map((row) => row[1]) }).toEqual({
+    expect({ reads: medicationReads(requests()), rows: rows().map((row) => row[0]) }).toEqual({
       reads: [FIRST_PAGE, SECOND_PAGE],
       rows: ["Prednisolone"],
     });
@@ -532,11 +536,27 @@ describe("Medication, a Mandatory element missing", () => {
     expect(warnings()).toEqual(["Critical information missing: Medication, Dispense Status"]);
   });
 
-  it("leaves the leading cell of a row holding both empty", async () => {
-    await renderMedication(page([record("medication-1")], 1, 1));
+  it("leaves the leading cell of a row holding both empty, beside a row that warns", async () => {
+    await renderMedication(
+      page([record("medication-1", { medication: null }), record("medication-2")], 1, 2),
+    );
+    await screen.findByRole("table", { name: "Medication History" });
+    const secondRow = within(table()).getAllByRole("row")[2]!;
+
+    expect(within(secondRow).getAllByRole("cell")[0]!.childNodes).toHaveLength(0);
+  });
+
+  it("shows no leading column on a page where no row warns", async () => {
+    await renderMedication(page([record("medication-1"), record("medication-2")], 1, 2));
     await screen.findByRole("table", { name: "Medication History" });
 
-    expect(within(table()).getAllByRole("cell")[0]!.childNodes).toHaveLength(0);
+    expect({
+      firstCells: within(table())
+        .getAllByRole("row")
+        .slice(1)
+        .map((row) => within(row).getAllByRole("cell")[0]!.textContent),
+      heading: within(table()).queryByRole("columnheader", { name: "Missing information" }),
+    }).toEqual({ firstCells: ["Paracetamol", "Paracetamol"], heading: null });
   });
 
   it("warns on a row whose Mandatory element is in the wrong format, as on one missing it", async () => {
@@ -599,6 +619,28 @@ describe("Medication, a Mandatory element missing", () => {
     expect(warnings()).toEqual([null, null]);
   });
 
+  // The layout itself is the browser's; jsdom lays nothing out, so the
+  // classes that pull the leading column up to the Medication are the oracle.
+  it("sets the leading column close to the Medication, its heading and cells alike", async () => {
+    await renderMedication(
+      page([record("medication-1", { medication: null }), record("medication-2")], 1, 2),
+    );
+    await screen.findByRole("table", { name: "Medication History" });
+    const leading = [
+      within(table()).getAllByRole("columnheader")[0]!,
+      ...within(table())
+        .getAllByRole("row")
+        .slice(1)
+        .map((row) => within(row).getAllByRole("cell")[0]!),
+    ];
+
+    expect(
+      leading.map((cell) =>
+        ["pr-0", "[&+td]:pl-2.5", "[&+th]:pl-2.5"].every((name) => cell.classList.contains(name)),
+      ),
+    ).toEqual([true, true, true]);
+  });
+
   it("draws the warning as a triangle in the warning colour, a tab stop", async () => {
     await renderMedication(page([record("medication-1", { medication: null })], 1, 1));
     await screen.findByRole("table", { name: "Medication History" });
@@ -613,7 +655,7 @@ describe("Medication, a Mandatory element missing", () => {
   });
 
   it("heads the warnings' column with a hidden heading, Missing information", async () => {
-    await renderMedication(page([record("medication-1")], 1, 1));
+    await renderMedication(page([record("medication-1", { medication: null })], 1, 1));
     await screen.findByRole("table", { name: "Medication History" });
     const heading = within(table()).getAllByRole("columnheader")[0]!;
 
@@ -680,7 +722,6 @@ describe("Medication, sorted", () => {
           within(header).queryByRole("button") !== null,
         ]),
     ).toEqual([
-      ["Missing information", null, false],
       ["Medication", null, false],
       ["Dosage", null, false],
       ["Route", null, false],

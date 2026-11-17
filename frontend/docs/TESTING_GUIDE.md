@@ -141,9 +141,9 @@ session, answers)` in `src/shell/signed-in-shell.testHelpers.tsx` routes every
   under the same layout with `renderInLayout(routes, path, session, answers)`,
   which `renderSignedIn` is built on. A suite's own wrapper takes the wire
   answers before the session, so `renderAccounts(answers, session)` and
-  `renderShell(path, answers, session)` read alike. A suite whose answers never
-  vary fixes them inside its wrapper and takes the session alone, as Home's
-  `renderHolding(permissions)` does.
+  `renderShell(path, answers, session)` read alike. A suite whose answers and
+  session never vary fixes both inside its wrapper, as Home's `renderHome()`
+  does.
 - **A suite that brings its own router or provider** uses the backend layer
   directly. `src/App.test.tsx` renders the whole app, which owns its router and
   `AuthProvider`, over an answer table per test. `auth-context.test.tsx` mounts

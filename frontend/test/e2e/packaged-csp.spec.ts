@@ -83,7 +83,7 @@ test("every signed-in route loads under the CSP without a violation", async ({ p
   }
 
   expect(await violations()).toEqual([]);
-  // Home's Patient card rendered its empty state: no patient is in context to read.
+  // Every page showing the patient rendered its empty state: no patient is in context to read.
   expect(patientRequests()).toEqual([]);
 });
 
@@ -91,7 +91,7 @@ test("every signed-in route loads under the CSP without a violation", async ({ p
 // forbids, is reported rather than run.
 test("an inline script is refused and reported", async ({ page }) => {
   const violations = await recordViolations(page);
-  await openUnderPolicy(page, "/");
+  await openUnderPolicy(page, "/demographic");
   await expectNoPatientInContext(page);
 
   await page.evaluate(() => {

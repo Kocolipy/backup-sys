@@ -57,12 +57,16 @@ Where the SPA sends a signed-in User with no Return destination — after signin
 in, off the login page, from a path with no page, off a page its guard refuses,
 and back from the password change: Patient Search (`/search`) for a session
 holding `patient:read`, Home for every other. A Return destination still wins,
-and a confined session is still held to the password change.
+and a confined session is still held to the password change; a Return
+destination of Home, for a session holding `patient:read`, ends on Patient
+Search, since Home is refused to it.
 _Avoid_: default destination, start page
 
 **Home**:
-The signed-in page at `/`, open to every signed-in session: the Landing page of
-a session without `patient:read`. The login page is `/login`.
+The signed-in page at `/`, titled "Home": the Landing page of a session without
+`patient:read`, saying the account has no access to patients, and refused to a
+session holding it, which is sent on to Patient Search. The login page is
+`/login`.
 
 **Shell**:
 The layout every signed-in page renders inside — who is signed in, the page
@@ -451,12 +455,14 @@ rejects its record, the rule ADR 0020 supersedes), critical field
 The page at `/demographic`, linked from the navigation sidebar for a session
 holding `patient:read` and opened by selecting a Patient on the Search page:
 the Patient card, then the patient in context's Demographic details — the
-Military Overview, Contact Details and Next of Kin / Emergency cards. It is not
-Home, which shows the Patient card alone and is linked from no sidebar.
-_Avoid_: Profile (Home's title), patient profile
+Military Overview, Contact Details and Next of Kin / Emergency cards. With no
+patient in context it shows its title above a card saying "No patient in
+context", as the history pages do. It is not Home, which shows no patient and
+is linked from no sidebar.
+_Avoid_: Profile, patient profile
 
 **Patient card**:
-The card, on Home and the Demographic page, showing the EHR context's patient — name, NRIC, gender, date of
+The card heading the Demographic page, showing the EHR context's patient — name, NRIC, gender, date of
 birth and age, each shown as received, the age following the date of birth —
 or "No patient in context" when the tab holds no EHR context,
 its EHR context names no patient, or the Patient source holds none under its

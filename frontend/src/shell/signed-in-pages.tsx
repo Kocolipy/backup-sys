@@ -1,7 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import {
   ClipboardCheck,
-  IdCard,
+  House,
   Pill,
   Plane,
   ScrollText,
@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 
-import type { Permission } from "@/auth/api";
+import type { PageRequirement } from "@/auth/permissions";
 import {
   DEMOGRAPHIC_PAGE_PATH,
   HOME_PATH,
@@ -54,15 +54,22 @@ export interface SignedInPage {
   /** Its icon in the navigation sidebar; read only alongside `homeLink`. */
   icon: LucideIcon;
   path: string;
-  /** Renders in the sidebar only for a session holding at least one of these. Omit for every signed-in session. */
-  permissions?: readonly Permission[];
+  /**
+   * What its route guard requires of the session, which the sidebar reads to
+   * link it only to a session the guard would open it to. Omit for every
+   * signed-in session.
+   */
+  requires?: PageRequirement;
   title: string;
   /**
-   * Keeps the title for screen readers only. A page the sidebar or the top
-   * bar reaches hides it, the link marking where the user is, unless the page
-   * is headed by the title alone, as Patient Search is.
+   * Keeps the title for screen readers only: `true` always, and
+   * `"while-patient-in-context"` while the page has a patient in context to
+   * show, whose banner heads the page — the title showing whenever there is
+   * none (`isWithoutPatient`). A page the sidebar or the top bar reaches hides
+   * it, the link marking where the user is, unless the page is headed by the
+   * title alone, as Patient Search is.
    */
-  titleHidden?: boolean;
+  titleHidden?: boolean | "while-patient-in-context";
 }
 
 /** Every signed-in page but Home, in the order the sidebar links them. */
@@ -73,7 +80,7 @@ const PAGES_BEYOND_HOME: readonly SignedInPage[] = [
     homeLink: "Accounts",
     icon: Users,
     path: "/accounts",
-    permissions: ADMINISTRATION_PERMISSIONS,
+    requires: { anyOf: ADMINISTRATION_PERMISSIONS },
     title: "Accounts",
     titleHidden: true,
   },
@@ -83,7 +90,7 @@ const PAGES_BEYOND_HOME: readonly SignedInPage[] = [
     homeLink: "Audit logs",
     icon: ScrollText,
     path: "/audit",
-    permissions: [AUDIT_EVENTS.permission],
+    requires: { anyOf: [AUDIT_EVENTS.permission] },
     title: "Audit",
     titleHidden: true,
   },
@@ -91,17 +98,17 @@ const PAGES_BEYOND_HOME: readonly SignedInPage[] = [
 
 /**
  * Home: the landing page of a session without `patient:read`, and what the
- * shell falls back to for a path it does not know. Unguarded, so every
- * signed-in session may open it, and linked from no sidebar: a session with
- * `patient:read` reaches its patient on the Demographic page. Its title is
- * hidden: the patient banner heads the page.
+ * shell falls back to for a path it does not know. Refused to a session
+ * holding `patient:read`, which its guard sends on to its landing page, Patient
+ * Search, so every session's landing page opens to it. Linked from no sidebar.
+ * Its title heads the page.
  */
 export const HOME_PAGE: SignedInPage = {
   element: <Home />,
-  icon: IdCard,
+  icon: House,
   path: HOME_PATH,
-  title: "Profile",
-  titleHidden: true,
+  requires: { noneOf: ["patient:read"] },
+  title: "Home",
 };
 
 /**
@@ -110,16 +117,17 @@ export const HOME_PAGE: SignedInPage = {
  * Guarded by `patient:read`, the Permission the patient in context is read
  * with, named here rather than through `PATIENT`: only the one reader of the
  * patient in context imports `patient-api.ts` (`mb-patient-in-context-has-one-reader`).
- * Its title is hidden: the patient banner heads the page.
+ * Its title is hidden while a patient is in context, the patient banner
+ * heading the page, and heads it when none is, as on the history pages.
  */
 const DEMOGRAPHIC_PAGE: SignedInPage = {
   element: <Demographic />,
   homeLink: "Demographic",
   icon: UserRound,
   path: DEMOGRAPHIC_PAGE_PATH,
-  permissions: ["patient:read"],
+  requires: { anyOf: ["patient:read"] },
   title: "Demographic",
-  titleHidden: true,
+  titleHidden: "while-patient-in-context",
 };
 
 /**
@@ -147,7 +155,7 @@ const SEARCH_PAGE: SignedInPage = {
   homeLink: "Search",
   icon: SearchIcon,
   path: PATIENT_SEARCH_PAGE_PATH,
-  permissions: [PATIENT_SEARCH.permission],
+  requires: { anyOf: [PATIENT_SEARCH.permission] },
   title: "Patient Search",
 };
 
@@ -163,7 +171,7 @@ const MEDICATION_PAGE: SignedInPage = {
   homeLink: "Medication",
   icon: Pill,
   path: "/medication",
-  permissions: [MEDICATION_HISTORY.permission],
+  requires: { anyOf: [MEDICATION_HISTORY.permission] },
   title: "Medication",
 };
 
@@ -178,7 +186,7 @@ const FFI_PAGE: SignedInPage = {
   homeLink: "FFI",
   icon: ClipboardCheck,
   path: "/ffi",
-  permissions: [FFI_HISTORY.permission],
+  requires: { anyOf: [FFI_HISTORY.permission] },
   title: "FFI History",
 };
 
@@ -193,7 +201,7 @@ const NUMC_PAGE: SignedInPage = {
   homeLink: "NUMC",
   icon: Waves,
   path: "/numc",
-  permissions: [NUMC_HISTORY.permission],
+  requires: { anyOf: [NUMC_HISTORY.permission] },
   title: "NUMC",
 };
 
@@ -208,13 +216,13 @@ const ARMC_PAGE: SignedInPage = {
   homeLink: "ARMC",
   icon: Plane,
   path: "/armc",
-  permissions: [ARMC_HISTORY.permission],
+  requires: { anyOf: [ARMC_HISTORY.permission] },
   title: "ARMC",
 };
 
 /**
  * Every signed-in page, declared once: `App` turns each entry into a route
- * (behind its Permission guard, if any), `SignedInShell` reads the matching
+ * (behind the guard its `requires` states, if any), `SignedInShell` reads the matching
  * entry for the title, and links each entry
  * that carries a `homeLink` in the navigation sidebar. A new signed-in page
  * is one entry here, and the sidebar links them in this order.

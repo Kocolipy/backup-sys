@@ -2,7 +2,6 @@ import { screen, within } from "@testing-library/react";
 import type { OperationOutcome } from "fhir/r5";
 import { afterEach, describe, expect, it } from "vitest";
 
-import type { Permission } from "@/auth/api";
 import { clearEhrContext } from "@/auth/ehr-context";
 import { bare, deferred, holding, json, type WireAnswer } from "@/auth/session-adapter.testHelpers";
 import type { Clock } from "@/lib/time";
@@ -40,29 +39,25 @@ const ON_THE_BIRTHDAY = at("2026-03-12T01:00:00+08:00");
 /**
  * The card alone, routed in the signed-in layout that reads the patient in
  * context and renders the page's one error line, as a session holding
- * `permissions` sees it, with Tan Wei Ming in context and the read of him
+ * `patient:read` sees it, with Tan Wei Ming in context and the read of him
  * answered with `answer`.
  */
-const renderCard = (
-  answer: WireAnswer | Promise<WireAnswer>,
-  clock: Clock = ON_THE_BIRTHDAY,
-  permissions: Permission[] = ["patient:read"],
-) => {
+const renderCard = (answer: WireAnswer | Promise<WireAnswer>, clock: Clock = ON_THE_BIRTHDAY) => {
   withPatientInContext(TAN_WEI_MING.id);
   return renderInLayout(
     [{ element: <PatientCard clock={clock} />, path: "/" }],
     "/",
-    holding(permissions),
+    holding(["patient:read"]),
     { [TAN_WEI_MING_READ]: answer },
   );
 };
 
-/** The card with no patient in context, for a session holding exactly `permissions`. */
-const renderWithoutPatient = (permissions: Permission[]) =>
+/** The card with no patient in context, for a session holding `patient:read`. */
+const renderWithoutPatient = () =>
   renderInLayout(
     [{ element: <PatientCard clock={ON_THE_BIRTHDAY} />, path: "/" }],
     "/",
-    holding(permissions),
+    holding(["patient:read"]),
   );
 
 /** What the card lists, each field's label beside its value. */
@@ -79,31 +74,22 @@ afterEach(() => {
 });
 
 describe("PatientCard with no patient in context", () => {
-  it("says no patient is in context and asks nothing, for a session holding patient:read", async () => {
-    const { requests } = await renderWithoutPatient(["patient:read"]);
+  it("says no patient is in context and asks nothing", async () => {
+    const { requests } = await renderWithoutPatient();
 
     expect(screen.getByText("No patient in context")).toBeInTheDocument();
     expect(requests()).toEqual([]);
   });
 
-  it("says the account has no access to patients and asks nothing, for a session without patient:read", async () => {
-    const { requests } = await renderWithoutPatient([]);
+  it("shows its note as muted text, on a card with no heading of its own, and reports nothing", async () => {
+    await renderWithoutPatient();
 
     expect([
-      screen.getByRole("heading", { name: "Patient" }).closest("[data-slot=card]")?.textContent,
-      requests(),
-    ]).toEqual(["PatientYour account has no access to patients.", []]);
-  });
-
-  it("shows its note as muted text, under the heading Patient, and reports nothing", async () => {
-    await renderWithoutPatient(["patient:read"]);
-
-    expect(screen.getByText("No patient in context")).toHaveClass(
-      "text-sm",
-      "text-muted-foreground",
-    );
-    expect(screen.getByRole("heading", { name: "Patient" })).toBeInTheDocument();
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+      screen.getByText("No patient in context").closest("[data-slot=card]")?.textContent,
+      screen.getByText("No patient in context").className,
+      page().queryAllByRole("heading", { level: 3 }),
+      screen.queryByRole("alert"),
+    ]).toEqual(["No patient in context", "text-sm text-muted-foreground", [], null]);
   });
 });
 
@@ -288,12 +274,5 @@ describe("PatientCard with a patient in context", () => {
     await renderCard(answer);
 
     expect(await screen.findByText(note)).toHaveClass("text-sm", "text-muted-foreground");
-  });
-
-  it("asks nothing and says so for a session without patient:read", async () => {
-    const { requests } = await renderCard(json(TAN_WEI_MING), ON_THE_BIRTHDAY, []);
-
-    expect(screen.getByText("Your account has no access to patients.")).toBeInTheDocument();
-    expect(patientReads(requests())).toEqual([]);
   });
 });

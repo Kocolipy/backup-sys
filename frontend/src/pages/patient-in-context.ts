@@ -61,6 +61,18 @@ export interface PatientInContext extends PatientSummary {
  */
 export type PatientInContextView = { kind: "none" } | ReadView<PatientInContext, true>;
 
+/**
+ * Whether `view` has no patient in context to show: none in context, a `404`
+ * for the id there, or a session that may not read patients. A page shows
+ * such a view as "No patient in context", and the signed-in layout shows the
+ * title of a page the patient banner heads (`titleHidden`) in its place.
+ */
+export function isWithoutPatient(
+  view: PatientInContextView,
+): view is Extract<PatientInContextView, { kind: "absent" | "none" | "not-permitted" }> {
+  return view.kind === "none" || view.kind === "absent" || view.kind === "not-permitted";
+}
+
 /** The gated read's view, and the patient it is the view of. */
 interface Read {
   patientId: string;

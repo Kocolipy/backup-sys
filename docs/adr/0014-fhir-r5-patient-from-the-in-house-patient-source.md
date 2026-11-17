@@ -17,7 +17,7 @@ page read it.
 
 ## Context
 
-Home shows a Patient (`/docs/domain/patient.md`): the one the tab's EHR context
+The Demographic page shows a Patient (`/docs/domain/patient.md`): the one the tab's EHR context
 names, by its EHR's FHIR id. Two choices are hard to reverse once a client
 depends on the wire:
 
@@ -26,7 +26,7 @@ depends on the wire:
 2. **Where the data comes from.** Real patients come from an in-house system.
    The adapter contract is FHIR R4 `GET {base}/Patient/{id}`, with no request
    credential and with source failures mapped to `502`. The patient's id is its
-   EHR's FHIR id, the id the EHR context holds. Home's
+   EHR's FHIR id, the id the EHR context holds. The SPA's
    wire contract remains base R5 with `identifier`, `name`, `gender` and
    `birthDate`, and on a read by id the Demographic details (`extension`,
    `telecom`, `address`, `contact`), the `patient:read` gate and the `OperationOutcome` table,
@@ -223,7 +223,7 @@ and `audit` to record it (ADR 0018):
   source that accepts that contract. A source requiring authentication needs an
   adapter and external-configuration change before deployment; credentials have
   no fallback in this repository.
-- **Home's card depends on the source's availability.** A slow or failing
+- **The Patient card depends on the source's availability.** A slow or failing
   source is the card's failed state within the read timeout, never a stale or
   cached patient.
 - **The wire is independent of the source.** A different source FHIR version,

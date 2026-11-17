@@ -304,13 +304,14 @@ NRIC", searched only on submit (Enter or the Search button).
   and the range and the next page count the dropped among the page's records,
   so paging on skips none of the source's.
 - **Selecting a result** puts the row's Patient, by that id, into the tab's
-  **EHR context** and goes to Home, whose Patient card and top bar show them.
+  **EHR context** and goes to the Demographic page, whose Patient card and top
+  bar show them.
   A click anywhere on the row selects it, and the Patient Name is a button, so
   the keyboard and assistive technology select it too — whatever its fields
   hold, a name missing showing `—` on the button; rows show a hover state
   and a pointer cursor. A selection replaces the patient already in context
   with no confirmation; selecting the patient already in context only goes to
-  Home, the context unchanged and the patient not read again. No row marks the
+  the Demographic page, the context unchanged and the patient not read again. No row marks the
   patient in context. Coming back to Search starts afresh: only the box, with
   no query, page or filter kept.
 - **Order.** The results appear in the patient source's own order; no column
@@ -520,23 +521,19 @@ Contact Details and Next of Kin / Emergency, each detail
 [as received](#demographic-details) — "—" when missing, "Error" when in the
 wrong format — and nothing beyond the card while no patient is loaded. A
 malformed detail never changes what the Patient card, the top bar or a history
-page shows. Home shows the
-Patient card alone, and the navigation sidebar links it for no session. The
+page shows. The
 Patient card shows the patient in context, and only that patient: the
 patient of the tab's **EHR context**, which selecting a Patient on the Search
 page sets. A patient leaves context only when another Patient is selected or
-the session ends. With none in context it
-shows "No patient in context" and reads nothing, and a `404` for the id in
-context shows the same. For a session without `patient:read` it reads nothing
-and says "Your account has no access to patients.", and the top bar names no
-patient. Home is open to every signed-in session; Patient Search, the Landing
-page of a session holding `patient:read`, is guarded by it, so a session
-without it is offered no Search link and is routed to Home. The top bar names
-the same patient by name and NRIC.
-Both, and the FFI, NUMC, ARMC and Medication pages ([ffi](ffi.md), [numc](numc.md), [armc](armc.md), [medication](medication.md)), render from **one reader** of the patient in context, which the signed-in
+the session ends. With none in context the page reads nothing and shows its
+title above a plain card saying "No patient in context", as the history pages
+do; a `404` for the id in context shows the same. With a patient in context the
+patient banner heads the page, its title kept for screen readers only. The top
+bar names the patient in context by name and NRIC.
+The Patient card, the top bar, and the FFI, NUMC, ARMC and Medication pages ([ffi](ffi.md), [numc](numc.md), [armc](armc.md), [medication](medication.md)), render from **one reader** of the patient in context, which the signed-in
 layout renders (`frontend/src/pages/patient-in-context.ts`): each change
 of the patient in context is one `GET /api/patient/{id}` — one read of the
-uncached patient source — on Home as on every other signed-in page, and a
+uncached patient source — on every signed-in page alike, and a
 failed read is one "Couldn't load patient" on the page's error line — a body
 that is no Patient and a Patient under another id among them. The SPA
 holds no patient id beyond the EHR context, and the read is not bound to it:
@@ -544,6 +541,14 @@ holds no patient id beyond the EHR context, and the read is not bound to it:
 their histories by the EHR context's id, never by one the Patient carries. The
 top bar names the patient, and the Patient card shows them,
 [as received](#shown-as-received).
+
+Home (`/`) shows no patient: headed by its title, it says "Your account has no
+access to patients." and reads nothing, and the navigation sidebar links it for
+no session. It is the Landing page of a session without `patient:read`, and
+refused to a session holding it, which is sent on to Patient Search. Patient
+Search, the Landing page of a session holding `patient:read`, is guarded by it,
+so a session without it is offered no Search link and is routed to Home. A
+session without `patient:read` reads no patient, and the top bar names none.
 
 ## The patient source's fixtures
 

@@ -55,7 +55,7 @@ test.describe("sessions, signed in", () => {
   test("reports a 403 that survives the re-seed as permission denied without ending the session", async ({
     page,
   }) => {
-    await page.goto("/");
+    await page.goto("/search");
     await page.getByRole("link", { name: "Open settings", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Change your password" })).toBeVisible();
 
