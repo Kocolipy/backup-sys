@@ -12,6 +12,7 @@ import { formatDateTime } from "@/lib/time";
 import { FilteredHistory } from "@/pages/filtered-history";
 import { ForPatientInContext } from "@/pages/for-patient-in-context";
 import {
+  anyWarns,
   type MandatoryElement,
   MissingInformationCell,
   MissingInformationHeading,
@@ -75,7 +76,8 @@ const asGiven = (text: string): string => text;
  * it came, the Dispense Status's on a neutral badge; a missing element as "—"
  * and one in the wrong format as "Error" (`shown`). A leading column warns on
  * a row whose Mandatory element is missing or in the wrong format
- * ({@link MissingInformationCell}), the row shown in full. Nothing checks the
+ * ({@link MissingInformationCell}), the row shown in full; a page with no row
+ * warning has no leading column ({@link anyWarns}). Nothing checks the
  * dates against each other. Start Date and End Date sort, one at a time, held still
  * while a read is `pending`; no other column does. Read-only, with no row
  * action; each row is keyed by the record's id, which is never shown, or its
@@ -91,12 +93,13 @@ function MedicationTable({
   records: readonly MedicationRecord[];
   sorting: ColumnSorting<MedicationSortColumn>;
 }) {
+  const warns = anyWarns(MANDATORY_ELEMENTS, records);
   return (
     <Table>
       <TableCaption className="sr-only">Medication History</TableCaption>
       <TableHeader>
         <TableRow>
-          <MissingInformationHeading />
+          {warns ? <MissingInformationHeading /> : null}
           <PlainHeading>{MEDICATION.label}</PlainHeading>
           <PlainHeading>Dosage</PlainHeading>
           <PlainHeading>Route</PlainHeading>
@@ -114,7 +117,9 @@ function MedicationTable({
       <TableBody>
         {records.map((record, place) => (
           <TableRow key={orElse(record.id, place)}>
-            <MissingInformationCell mandatory={MANDATORY_ELEMENTS} record={record} />
+            {warns ? (
+              <MissingInformationCell mandatory={MANDATORY_ELEMENTS} record={record} />
+            ) : null}
             <TableCell className="font-semibold">{shown(record.medication, asGiven)}</TableCell>
             <TableCell>{shown(record.dosage, asGiven)}</TableCell>
             <TableCell>{shown(record.route, asGiven)}</TableCell>

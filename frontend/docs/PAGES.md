@@ -297,8 +297,10 @@ the FFI, NUMC and ARMC tables have none.
   information"; `MissingInformationCell` is each row's leading cell, empty or
   holding a `TriangleAlert` icon in the warning tone that is a tab stop, whose
   tooltip — "Critical information missing: " and the affected columns'
-  headings — is its accessible name. It reads only each field's `SourceField`
-  state, never a value, and the row is shown in full.
+  headings — is its accessible name. `anyWarns` says whether any row of the
+  page warns: a table renders the heading and every leading cell only then,
+  so a page with no warning has no leading column. It reads only each field's
+  `SourceField` state, never a value, and the row is shown in full.
 - `filter-popover.tsx`, `multi-select-picker.tsx`, `choice-toggle.tsx`,
   `date-range-fields.tsx` — the shared filter parts every Filter panel is
   built from.

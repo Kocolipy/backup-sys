@@ -119,8 +119,9 @@ element flags a row, missing or invalid.
 
 - **The warning** is a warning-coloured triangle (`TriangleAlert`) in a narrow
   leading column before the Medication, headed "Missing information" for a
-  screen reader alone. The column is always there; an unflagged row's cell is
-  empty.
+  screen reader alone. The column shows
+  only on a page where at least one row is flagged, where an unflagged row's
+  cell is empty; a page with no flagged row has no leading column.
 - **One per row.** Its tooltip, which is also its accessible name, is
   "Critical information missing: " and each affected column's heading, in the
   table's order, joined by commas —
