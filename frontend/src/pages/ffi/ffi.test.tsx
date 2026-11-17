@@ -125,6 +125,13 @@ afterEach(() => {
 });
 
 describe("FFI", () => {
+  it("shows the FFI Type in bold", async () => {
+    await renderFfi(page(FOUR_FFIS, 1, 4));
+    await screen.findByRole("table", { name: "FFI History" });
+
+    expect(within(table()).getAllByText("IPPT FFI")[0]).toHaveClass("font-semibold");
+  });
+
   it("shows a Submitting MC of Khatib Camp MC by its label", async () => {
     await renderFfi(page([ffi("ffi-khatib", { submittingMc: "khatib-camp" })], 1, 1));
     await screen.findByRole("table", { name: "FFI History" });

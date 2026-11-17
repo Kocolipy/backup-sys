@@ -125,7 +125,9 @@ function NumcTable({
             {warns ? (
               <MissingInformationCell mandatory={MANDATORY_ELEMENTS} record={record} />
             ) : null}
-            <TableCell>{shown(record.type, labelled(NUMC_TYPE_LABELS))}</TableCell>
+            <TableCell className="font-semibold">
+              {shown(record.type, labelled(NUMC_TYPE_LABELS))}
+            </TableCell>
             <TableCell>
               {shown(record.outcome, badged(NUMC_OUTCOME_LABELS, OUTCOME_BADGES))}
             </TableCell>

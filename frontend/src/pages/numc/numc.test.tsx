@@ -130,6 +130,13 @@ describe("NUMC", () => {
     });
   });
 
+  it("shows the Type in bold", async () => {
+    await renderNumc(page(FOUR_RECORDS, 1, 4));
+    await screen.findByRole("table", { name: "NUMC History" });
+
+    expect(within(table()).getAllByText("Diving Duties")[0]).toHaveClass("font-semibold");
+  });
+
   it("shows each Outcome as a badge: FIT green, UNFIT red, WAIVER GRANTED blue, WAIVER REJECTED muted", async () => {
     await renderNumc(page(FOUR_RECORDS, 1, 4));
     await screen.findByRole("table", { name: "NUMC History" });

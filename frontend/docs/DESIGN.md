@@ -129,7 +129,9 @@ truncated to the column's width. More than two Groups show the first two and a
 The header row sits on a tinted surface that a hover leaves alone, and a
 heading stands over its column's values, a sortable heading's button included.
 Identifiers — UUIDs, correlation ids, routes — are set in monospace, and
-timestamps in tabular figures, so a column of them aligns.
+timestamps in tabular figures, so a column of them aligns. A history's first
+data column — the Medication, the FFI Type, the NUMC Type, the ARMC Board
+Type — is set in bold, so each row reads by what it records.
 
 A history that declares Mandatory elements (ADR 0020, D7) leads its table with
 a narrow warning column, before its first column and shown only on a page

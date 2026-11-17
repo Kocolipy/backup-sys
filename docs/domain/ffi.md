@@ -28,15 +28,15 @@ SPA → `GET /api/patient-ffi/{patientId}` → backend →
 An FFI has seven elements, each read as the patient source sent it
 ([Shown as received](#shown-as-received)).
 
-| Element          | On the wire (both sides)   | Shown as                                                                                                                                                                                                |
-| ---------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| FFI Type         | `type`, a code             | `overseas-exercises` Overseas Exercises · `cat-a-ocs-scs` CAT A - OCS/SCS · `ippt` IPPT FFI · `dental` Dental FFI · `ord-release-from-service` ORD / Release from Service · `vocational` Vocational FFI |
-| Outcome          | `outcome`, a code          | `fit` FIT (green badge) · `request-waiver` REQUEST WAIVER (amber badge) · `unfit` UNFIT (red badge)                                                                                                     |
-| Issue Date       | `issueDate`, `YYYY-MM-DD`  | `05 Feb 2001`                                                                                                                                                                                           |
-| Expiry Date      | `expiryDate`, `YYYY-MM-DD` | `05 Feb 2001`                                                                                                                                                                                           |
-| Higher Authority | `higherAuthority`, a code  | `camo` CAMO · `carmo` CARMO · `cnmo` CNMO · `comd-mmi` Comd MMI · `dis` DIS                                                                                                                             |
-| Submitting MC    | `submittingMc`, a code     | a Medical Centre: `nee-soon-camp` Nee Soon Camp MC · `kranji-camp` Kranji Camp MC · `hendon-camp` Hendon Camp MC · `mandai-hill-camp` Mandai Hill Camp MC · `khatib-camp` Khatib Camp MC                |
-| Status           | `status`, a code           | `active` Active (green) · `inactive` Inactive (muted)                                                                                                                                                   |
+| Element          | On the wire (both sides)   | Shown as                                                                                                                                                                                                         |
+| ---------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| FFI Type         | `type`, a code             | `overseas-exercises` Overseas Exercises · `cat-a-ocs-scs` CAT A - OCS/SCS · `ippt` IPPT FFI · `dental` Dental FFI · `ord-release-from-service` ORD / Release from Service · `vocational` Vocational FFI, in bold |
+| Outcome          | `outcome`, a code          | `fit` FIT (green badge) · `request-waiver` REQUEST WAIVER (amber badge) · `unfit` UNFIT (red badge)                                                                                                              |
+| Issue Date       | `issueDate`, `YYYY-MM-DD`  | `05 Feb 2001`                                                                                                                                                                                                    |
+| Expiry Date      | `expiryDate`, `YYYY-MM-DD` | `05 Feb 2001`                                                                                                                                                                                                    |
+| Higher Authority | `higherAuthority`, a code  | `camo` CAMO · `carmo` CARMO · `cnmo` CNMO · `comd-mmi` Comd MMI · `dis` DIS                                                                                                                                      |
+| Submitting MC    | `submittingMc`, a code     | a Medical Centre: `nee-soon-camp` Nee Soon Camp MC · `kranji-camp` Kranji Camp MC · `hendon-camp` Hendon Camp MC · `mandai-hill-camp` Mandai Hill Camp MC · `khatib-camp` Khatib Camp MC                         |
+| Status           | `status`, a code           | `active` Active (green) · `inactive` Inactive (muted)                                                                                                                                                            |
 
 Each FFI also carries its own `id` at the source, never checked, which the
 page keys its row by and never shows; a row with none is keyed by its place.
@@ -301,7 +301,8 @@ offered no link and is routed to its landing page. Headed "FFI History".
   [Mandatory element](#mandatory-elements) is missing or invalid and shown
   only on a page where a row warns, then FFI Type, Outcome, Issue Date, Expiry
   Date, Higher Authority, Submitting MC, Status — each code by its label, the
-  Outcome and the Status as badges ([the elements](#the-elements)), both dates
+  FFI Type in bold, the Outcome and the Status as badges
+  ([the elements](#the-elements)), both dates
   `dd MMM yyyy`; a code outside its set as it came, the Outcome's and the
   Status's on a neutral badge; a missing field "—" and one in the wrong format
   "Error", the rest of the row as any other

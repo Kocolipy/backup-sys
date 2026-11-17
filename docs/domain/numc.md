@@ -34,7 +34,7 @@ A NUMC Record has four elements, each read as the patient source sent it
 
 | Element      | On the wire (both sides)   | Shown as                                                                                                                                             |
 | ------------ | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| NUMC Type    | `type`, a code             | `hyperbaric-chamber` Hyperbaric Chamber Duties · `submariner` Submariner Duties · `diving` Diving Duties                                             |
+| NUMC Type    | `type`, a code             | `hyperbaric-chamber` Hyperbaric Chamber Duties · `submariner` Submariner Duties · `diving` Diving Duties, in bold                                    |
 | NUMC Outcome | `outcome`, a code          | `fit` FIT (green badge) · `unfit` UNFIT (red badge) · `waiver-granted` WAIVER GRANTED (blue badge) · `waiver-rejected` WAIVER REJECTED (muted badge) |
 | Issue Date   | `issueDate`, `YYYY-MM-DD`  | `14 Oct 2023`                                                                                                                                        |
 | Expiry Date  | `expiryDate`, `YYYY-MM-DD` | `14 Oct 2023`                                                                                                                                        |
@@ -256,7 +256,7 @@ a session without it is offered no link and is routed to its landing page.
 - **The table**: a leading column of warnings, one on each row whose
   [Mandatory element](#mandatory-elements) is missing or invalid and shown
   only on a page where a row warns, then Type, Outcome, Issue Date, Expiry
-  Date — the NUMC Type by its label, the NUMC Outcome as its badge
+  Date — the NUMC Type by its label, in bold, the NUMC Outcome as its badge
   ([the elements](#the-elements)), both dates `dd MMM yyyy`; a code outside
   its set as it came, the Outcome's on a neutral badge; a missing element "—"
   and one in the wrong format "Error", the rest of the row as any other

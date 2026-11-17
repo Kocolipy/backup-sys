@@ -115,7 +115,9 @@ function FfiTable({
         {ffis.map((ffi, place) => (
           <TableRow key={orElse(ffi.id, place)}>
             {warns ? <MissingInformationCell mandatory={MANDATORY_ELEMENTS} record={ffi} /> : null}
-            <TableCell>{shown(ffi.type, labelled(FFI_TYPE_LABELS))}</TableCell>
+            <TableCell className="font-semibold">
+              {shown(ffi.type, labelled(FFI_TYPE_LABELS))}
+            </TableCell>
             <TableCell>{shown(ffi.outcome, badged(FFI_OUTCOME_LABELS, OUTCOME_BADGES))}</TableCell>
             <TableCell className="tabular-nums">
               {shown(ffi.issueDate, formatCalendarDateTwoDigitDay)}
