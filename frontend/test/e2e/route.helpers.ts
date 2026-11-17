@@ -20,8 +20,8 @@ export const ROUTE_READY: Record<string, (page: Page) => Promise<void>> = {
       page.getByRole("table", { name: "Matching patients" }).getByRole("row").nth(1),
     ).toBeVisible();
   },
-  "/": expectNoPatientInContext,
-  // A walk starts with no patient in context, so the page reads nothing and says so.
+  // A walk starts with no patient in context, so each page reads nothing and says so.
+  "/demographic": expectNoPatientInContext,
   "/ffi": async (page) => {
     await expect(page.getByRole("main").getByText("No patient in context")).toBeVisible();
   },

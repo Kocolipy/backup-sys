@@ -13,7 +13,7 @@ import type { SessionEndReason, SignInReasonState } from "./sign-in-reason";
 /** The login route, which is also where an unauthenticated visitor is sent. */
 export const LOGIN_PATH = "/login";
 
-/** Home: the landing page of a session that does not hold `patient:read`. */
+/** Home: the landing page of a session that does not hold `patient:read`, and refused to one that does. */
 export const HOME_PATH = "/";
 
 /** Patient Search: the landing page of a session holding `patient:read`. */
@@ -27,7 +27,8 @@ export const DEMOGRAPHIC_PAGE_PATH = "/demographic";
  * return destination recorded — after login, off the login route, from a path
  * with no route of its own, and off a page its guard refuses. Patient Search
  * for a session holding `patient:read`, the Permission that page is guarded
- * by; Home for every other session.
+ * by; Home, which is refused to such a session, for every other. So each
+ * session's landing page opens to it, and no session is routed on from it.
  */
 export function landingPath(permissions: readonly Permission[] | undefined): string {
   return holds({ permissions }, "patient:read") ? PATIENT_SEARCH_PAGE_PATH : HOME_PATH;
@@ -42,9 +43,10 @@ export const SETTINGS_PATH = "/settings";
 
 /**
  * What a route requires of the current visitor: a guest, what a signed-in
- * page requires — any authenticated session, or one holding at least one of
- * the named Permissions — or, for a path with no route of its own, an
- * authenticated session, which is sent on to its landing page.
+ * page requires — any authenticated session, one holding at least one of the
+ * named Permissions, or one holding none of them — or, for a path with no
+ * route of its own, an authenticated session, which is sent on to its landing
+ * page.
  */
 export type SessionRequirement = "guest" | "landing" | PageRequirement;
 
@@ -139,9 +141,11 @@ export function resolveSessionRoute({
  * An unflagged, authenticated session: off a guest route to its return
  * destination, or its landing page when none was recorded; from a path with no
  * route of its own to its landing page. On a protected route, any session
- * renders an authenticated one, and a Permission-guarded one renders for a
- * session holding any one of its Permissions. A page the session holds none of
- * them for is routed away to the session's landing page, never rendered empty.
+ * renders an authenticated one, and a guarded one renders for a session its
+ * requirement admits (`mayOpen`). A page the requirement refuses the session is
+ * routed away from to the session's landing page, never rendered empty: a
+ * Return destination of Home, for a session holding `patient:read`, ends on
+ * Patient Search.
  */
 function authenticatedRoute(
   requires: SessionRequirement,

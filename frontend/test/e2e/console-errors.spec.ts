@@ -23,7 +23,8 @@ import { USER_SESSION } from "./sessions";
 /**
  * Each identity's routes, and what each shows once loaded where it differs from
  * `ROUTE_READY`: the User holds no `patient:read`, so it opens no Patient
- * Search, and Home's Patient card says it has no access.
+ * Search, and Home says it has no access. The Admin holds it, so Home is
+ * refused to it.
  */
 const IDENTITIES: readonly {
   role: string;
@@ -35,7 +36,7 @@ const IDENTITIES: readonly {
     role: "admin",
     routes: [
       "/search",
-      "/",
+      "/demographic",
       "/medication",
       "/ffi",
       "/numc",

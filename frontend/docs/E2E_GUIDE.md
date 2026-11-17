@@ -251,8 +251,7 @@ response:
   again elsewhere, or make the SCIM write that revokes its sessions
   (`session-revocation.spec.ts`). Use a provisioned User, and make the page's
   next request one the ended session gets refused, so the spec changes nothing
-  another spec reads. Home sends nothing to fire, since no patient is in
-  context, so `session-revocation.spec.ts` parks the page on Settings
+  another spec reads. Home sends nothing to fire, so `session-revocation.spec.ts` parks the page on Settings
   (`/settings`) and submits a password change: the backend refuses it for want
   of a session before the password check, so no password moves. Were the
   session still standing, the change would apply and the spec's later sign-ins

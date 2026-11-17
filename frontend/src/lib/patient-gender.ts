@@ -1,6 +1,6 @@
 /**
  * A Patient's gender, as every page that shows a Patient reads and names it:
- * Home's patient in context, and Patient Search's matches.
+ * the Demographic page's patient in context, and Patient Search's matches.
  */
 
 /**

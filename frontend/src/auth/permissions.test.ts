@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { PERMISSIONS } from "./api";
-import { holds, holdsAny, mayOpen, requirementOf, SUPERUSER } from "./permissions";
+import { holds, holdsAny, mayOpen, SUPERUSER } from "./permissions";
 
 describe("holds", () => {
   it("is true only for a Permission the session holds", () => {
@@ -81,18 +81,6 @@ describe("holdsAny", () => {
   });
 });
 
-describe("requirementOf", () => {
-  it("requires only a signed-in session of a page that names no Permissions", () => {
-    expect(requirementOf(undefined)).toBe("authenticated");
-  });
-
-  it("requires any one of the Permissions a page names", () => {
-    expect(requirementOf(["user:read", "audit:read"])).toEqual({
-      anyOf: ["user:read", "audit:read"],
-    });
-  });
-});
-
 describe("mayOpen", () => {
   it("opens a page requiring only a signed-in session to every session", () => {
     expect(mayOpen({ permissions: [] }, "authenticated")).toBe(true);
@@ -104,5 +92,21 @@ describe("mayOpen", () => {
       mayOpen(user, { anyOf: ["user:read", "audit:read"] }),
       mayOpen(user, { anyOf: ["user:read"] }),
     ]).toEqual([true, false]);
+  });
+
+  it("opens a page refused to named Permissions only to a session holding none of them", () => {
+    const refused = { noneOf: ["patient:read", "audit:read"] } as const;
+    expect([
+      mayOpen({ permissions: ["user:read"] }, refused),
+      mayOpen({ permissions: ["user:read", "audit:read"] }, refused),
+      mayOpen({ permissions: ["patient:read"] }, refused),
+    ]).toEqual([true, false, false]);
+  });
+
+  it("opens a page refused to named Permissions to a session whose Permissions are not known yet", () => {
+    expect([
+      mayOpen({}, { noneOf: ["patient:read"] }),
+      mayOpen(null, { noneOf: ["patient:read"] }),
+    ]).toEqual([true, true]);
   });
 });

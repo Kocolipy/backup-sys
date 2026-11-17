@@ -291,16 +291,16 @@ change, when the backend side moves. What the SPA has to honour:
   login) and a password Login **clear** it. What is read back from storage is
   held to the grammar again. The EHR context is a subscribable store
   (`useEhrContext`), so the Patient card re-renders when it changes, not only
-  on load. The Patient card, on Home and on the Demographic page, and the
-  Demographic details read the patient in context through the patient read
-  below, and the card shows "No patient in context" with none. The read
+  on load. The Patient card and the Demographic details, on the Demographic
+  page, read the patient in context through the patient read below, and the
+  page shows "No patient in context" with none. The read
   is not bound to the EHR context: `patient:read` reads any id. It is a
   delegatable Permission the backend issues only to a member of a Group that
   carries it and to the Superuser; a session without it is refused the read,
   the Patient search, the FFI History, the NUMC History, the ARMC History and
-  the Medication History `403`, so the SPA sends none of them — the Patient
-  card says the account has no access to patients, and none of Patient
-  Search, Medication, FFI, NUMC or ARMC is linked or opened.
+  the Medication History `403`, so the SPA sends none of them — Home says
+  the account has no access to patients, and none of Patient Search,
+  Demographic, Medication, FFI, NUMC or ARMC is linked or opened.
 - **Logout answers `Clear-Site-Data: "cache","cookies","storage"`** — on a
   successful logout and on the `401` a logout with no live session gets. The
   browser drops anything in `localStorage` / `sessionStorage` along with the

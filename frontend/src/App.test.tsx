@@ -29,6 +29,11 @@ const MEDICAL_OFFICER = testUser({ permissions: ["patient:read"], username: "mo1
 /** The Medical Officer's signed-in session. */
 const PATIENT_READER: Answers = { [ME]: json(MEDICAL_OFFICER) };
 
+/** A Superuser's signed-in session, holding every Permission as the Superuser Group confers them. */
+const SUPERUSER: Answers = {
+  [ME]: json(testUser({ permissions: EVERY_PERMISSION, superuser: true, username: "grace" })),
+};
+
 /** Patient Search, the landing page of a session holding `patient:read`. */
 const patientSearch = () => screen.findByRole("heading", { name: "Patient Search" });
 
@@ -63,21 +68,21 @@ describe("App", () => {
   it("sends a User's visit to a path with no route of its own on to Home", async () => {
     renderApp(SIGNED_IN, "/no-such-page");
 
-    expect(await screen.findByRole("heading", { name: "Profile" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Home" })).toBeInTheDocument();
     expect(window.location.pathname).toBe("/");
   });
 
   it("sends a User's visit to login on to Home", async () => {
     renderApp(SIGNED_IN, "/login");
 
-    expect(await screen.findByRole("heading", { name: "Profile" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Home" })).toBeInTheDocument();
     expect(window.location.pathname).toBe("/");
   });
 
   it("renders Home when the session is authenticated", async () => {
     renderApp(SIGNED_IN);
 
-    expect(await screen.findByRole("heading", { name: "Profile" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Home" })).toBeInTheDocument();
     expect(screen.getByText("Signed in as ada")).toBeInTheDocument();
   });
 
@@ -134,7 +139,7 @@ describe("App", () => {
     await user.type(screen.getByLabelText("Password"), password);
     await user.click(screen.getByRole("button", { name: "Sign in" }));
 
-    expect(await screen.findByRole("heading", { name: "Profile" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Home" })).toBeInTheDocument();
     expect(window.location.pathname).toBe("/");
     // One token fetch, and the login carrying it: never refused for want of it.
     expect(requests({ tokenFetches: true })).toEqual([
@@ -145,14 +150,16 @@ describe("App", () => {
   });
 
   it.each([
-    ["a User holding no Accounts Permission", "/accounts", "Profile", SIGNED_IN, "/"],
-    ["a User holding no audit:read", "/audit", "Profile", SIGNED_IN, "/"],
-    ["a User holding no patient:read", "/search", "Profile", SIGNED_IN, "/"],
-    ["a User holding no patient:read", "/demographic", "Profile", SIGNED_IN, "/"],
-    ["a User holding no patient:read", "/medication", "Profile", SIGNED_IN, "/"],
-    ["a User holding no patient:read", "/ffi", "Profile", SIGNED_IN, "/"],
-    ["a User holding no patient:read", "/numc", "Profile", SIGNED_IN, "/"],
-    ["a User holding no patient:read", "/armc", "Profile", SIGNED_IN, "/"],
+    ["a User holding no Accounts Permission", "/accounts", "Home", SIGNED_IN, "/"],
+    ["a User holding no audit:read", "/audit", "Home", SIGNED_IN, "/"],
+    ["a User holding no patient:read", "/search", "Home", SIGNED_IN, "/"],
+    ["a User holding no patient:read", "/demographic", "Home", SIGNED_IN, "/"],
+    ["a User holding no patient:read", "/medication", "Home", SIGNED_IN, "/"],
+    ["a User holding no patient:read", "/ffi", "Home", SIGNED_IN, "/"],
+    ["a User holding no patient:read", "/numc", "Home", SIGNED_IN, "/"],
+    ["a User holding no patient:read", "/armc", "Home", SIGNED_IN, "/"],
+    ["a session holding patient:read", "/", "Patient Search", PATIENT_READER, "/search"],
+    ["a Superuser", "/", "Patient Search", SUPERUSER, "/search"],
     ["a session holding patient:read", "/search", "Patient Search", PATIENT_READER, "/search"],
     [
       "a session holding patient:read",
@@ -187,6 +194,18 @@ describe("App", () => {
 
   it("signs a session holding patient:read in to Patient Search", async () => {
     renderApp({ ...GUEST, [LOGIN]: json(MEDICAL_OFFICER) }, "/login");
+    const user = userEvent.setup();
+
+    await user.type(await screen.findByLabelText("Username"), "mo1");
+    await user.type(screen.getByLabelText("Password"), "correct-password");
+    await user.click(screen.getByRole("button", { name: "Sign in" }));
+
+    expect(await patientSearch()).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/search");
+  });
+
+  it("signs a session holding patient:read in to Patient Search from a return destination of Home", async () => {
+    renderApp({ ...GUEST, [LOGIN]: json(MEDICAL_OFFICER) }, "/");
     const user = userEvent.setup();
 
     await user.type(await screen.findByLabelText("Username"), "mo1");
@@ -324,7 +343,7 @@ describe("App with the change-required flag", () => {
     await user.click(screen.getByRole("button", { name: "Sign in" }));
 
     // Not replayed back to Settings: the change recorded no return destination.
-    expect(await screen.findByRole("heading", { name: "Profile" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Home" })).toBeInTheDocument();
     expect(window.location.pathname).toBe("/");
   });
 

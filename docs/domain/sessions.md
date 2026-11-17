@@ -52,12 +52,15 @@ return destination, to an authenticated visitor on the login page (`/login`),
 on a path with no route of its own, or on a page its guard refuses, and to the
 password change's Back link. A return destination still wins, and a confined
 session is still held to the password change. A Guest on a path with no route
-of its own goes to `/login`, recording that path.
+of its own goes to `/login`, recording that path. Each session's landing page
+opens to it, so the guards never route a session on from it.
 
-**Home** — the signed-in page at `/`, open to every signed-in session, and the
-Landing page of one without `patient:read`. `/` is a protected route like any
-other, so a Guest's cold visit records it as the return destination and goes to
-`/login`.
+**Home** — the signed-in page at `/`, the Landing page of a session without
+`patient:read`, and refused to a session holding it — a Medical Officer's, the
+Superuser's — whose guard sends it on to its Landing page, Patient Search. `/`
+is a protected route like any other, so a Guest's cold visit records it as the
+return destination and goes to `/login`; replayed after a sign-in holding
+`patient:read`, it ends on Patient Search.
 
 **Idle timeout** and **absolute session lifetime** — the two independent bounds
 on every authenticated session, a Superuser's included: 15 minutes without a request

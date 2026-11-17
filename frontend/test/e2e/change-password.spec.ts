@@ -116,7 +116,7 @@ test("an Admin's Unlock confines the User to Settings until the change is made",
     ).toBeVisible();
     await expect(own.getByRole("button", { name: "Sign out" })).toBeVisible();
 
-    // Confined: a direct navigation even to Home, which every session may open, is sent back.
+    // Confined: a direct navigation even to Home, this User's landing page, is sent back.
     // Every other path is `App.test.tsx`'s.
     await own.goto("/");
     await expect(own).toHaveURL(/\/settings$/);

@@ -61,13 +61,15 @@ test("IBM Plex Sans 500 loads from the app's own origin with an empty console", 
 });
 
 test("the page title renders on headline-lg and a card title on headline-sm", async ({ page }) => {
-  await page.goto("/");
-  await expectNoPatientInContext(page);
+  // Patient Search is headed by its title, shown; Settings holds a card with a title.
+  await page.goto("/search");
+  const pageTitle = await typeOf(page.getByRole("heading", { level: 1, name: "Patient Search" }));
+  await page.goto("/settings");
+  const cardTitle = await typeOf(
+    page.getByRole("heading", { level: 3, name: "Change your password" }),
+  );
 
-  expect({
-    pageTitle: await typeOf(page.getByRole("heading", { level: 1, name: "Profile" })),
-    cardTitle: await typeOf(page.getByRole("heading", { level: 3, name: "Patient" })),
-  }).toEqual({
+  expect({ pageTitle, cardTitle }).toEqual({
     // headline-lg: IBM Plex Sans 28/36, 700, -0.02em (of 28px).
     pageTitle: {
       family: '"IBM Plex Sans"',

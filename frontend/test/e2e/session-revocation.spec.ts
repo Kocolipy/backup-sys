@@ -78,8 +78,8 @@ async function park(page: Page) {
 /**
  * The page's next request, after the session was ended elsewhere: the parked
  * page's password change is refused for want of a session, and the SPA sends
- * the User to sign in with the expired-session notice. Home is no use here: with
- * no patient in context it sends nothing. The refusal comes before the password
+ * the User to sign in with the expired-session notice. Home is no use here: it
+ * sends nothing. The refusal comes before the password
  * check, so nothing is written; a session still standing would change the
  * password instead, and the sign-ins with `OWN_PASSWORD` after it would fail.
  * Signing in again returns the User to Settings, where it ended.

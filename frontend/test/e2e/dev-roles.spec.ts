@@ -45,9 +45,8 @@ const EXPECTED: Record<
 async function expectHome(page: Page, linksToAccounts: boolean, linksToAudit: boolean) {
   const patientRequests = recordPatientRequests(page);
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Profile" })).toBeVisible();
-  // No fixture here holds patient:read: the Patient card says it has no access
-  // and reads nothing.
+  // No fixture here holds patient:read: Home renders for it, says it has no
+  // access, and reads nothing.
   await expectNoPatientAccess(page);
   expect(patientRequests()).toEqual([]);
   await expect(page.getByRole("link", { name: "Accounts", exact: true })).toHaveCount(
@@ -62,7 +61,7 @@ async function expectAccounts(page: Page, view: AccountsView, createConnector: b
   await page.goto("/accounts");
   if (view === null) {
     // Routed away exactly as any page the User lacks the Permission for.
-    await expect(page.getByRole("heading", { name: "Profile" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Home" })).toBeVisible();
     await expect(page).toHaveURL("/");
     return;
   }
@@ -90,7 +89,7 @@ async function expectAudit(page: Page, canView: boolean) {
   await page.goto("/audit");
   if (!canView) {
     // Routed away exactly as any page the User lacks the Permission for.
-    await expect(page.getByRole("heading", { name: "Profile" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Home" })).toBeVisible();
     await expect(page).toHaveURL("/");
     return;
   }

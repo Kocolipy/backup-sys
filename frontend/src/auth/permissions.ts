@@ -44,10 +44,11 @@ type SessionStanding =
   { permissions?: readonly Permission[]; superuser?: boolean } | null | undefined;
 
 /**
- * What a signed-in page requires of a session: any authenticated one, or one
- * holding at least one of the named Permissions.
+ * What a signed-in page requires of a session: any authenticated one, one
+ * holding at least one of the named Permissions, or one holding none of them.
  */
-export type PageRequirement = "authenticated" | { anyOf: readonly Permission[] };
+export type PageRequirement =
+  "authenticated" | { anyOf: readonly Permission[] } | { noneOf: readonly Permission[] };
 
 /**
  * Whether the session meets `requirement`: holds the Permission, is the
@@ -70,18 +71,14 @@ export function holdsAny(user: SessionStanding, permissions: readonly Permission
 }
 
 /**
- * The requirement of a page declaring `permissions` — any one of them — or,
- * declaring none, of every authenticated session. The one reading of a page's
- * `permissions`, shared by its route guard and Home's link to it.
- */
-export function requirementOf(permissions: readonly Permission[] | undefined): PageRequirement {
-  return permissions ? { anyOf: permissions } : "authenticated";
-}
-
-/**
- * Whether the session may open a page with `requirement`. The one rule the
- * route guard applies, and the one Home reads to decide which pages to link.
+ * Whether the session may open a page with `requirement`: any session an
+ * authenticated page, one holding any of `anyOf`, or one holding none of
+ * `noneOf` — a session whose Permissions are not known yet among them. The one
+ * rule the route guard applies, and the one the navigation sidebar reads to
+ * decide which pages to link.
  */
 export function mayOpen(user: SessionStanding, requirement: PageRequirement) {
-  return requirement === "authenticated" || holdsAny(user, requirement.anyOf);
+  if (requirement === "authenticated") return true;
+  if ("noneOf" in requirement) return !holdsAny(user, requirement.noneOf);
+  return holdsAny(user, requirement.anyOf);
 }

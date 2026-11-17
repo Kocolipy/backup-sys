@@ -4,9 +4,9 @@ import { Navigate, useLocation } from "react-router-dom";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 
-import type { Permission, SessionCheckFailure } from "./api";
+import type { SessionCheckFailure } from "./api";
 import { useAuthState } from "./auth-context-value";
-import { requirementOf } from "./permissions";
+import type { PageRequirement } from "./permissions";
 import { sessionCheckMessage } from "./session-action-copy";
 import {
   resolveSessionRoute,
@@ -78,17 +78,17 @@ function SessionRoute({
 }
 
 /**
- * A route only an authenticated visitor may see — and, given
- * `requiredPermissions`, only one holding at least one of them.
+ * A route only an authenticated visitor may see — and, given `requires`, only
+ * one the page's requirement admits (`mayOpen`).
  */
 export function ProtectedRoute({
   children,
-  requiredPermissions,
+  requires = "authenticated",
 }: {
   children: ReactNode;
-  requiredPermissions?: readonly Permission[];
+  requires?: PageRequirement;
 }) {
-  return <SessionRoute requires={requirementOf(requiredPermissions)}>{children}</SessionRoute>;
+  return <SessionRoute requires={requires}>{children}</SessionRoute>;
 }
 
 /** A route only a guest may see; an authenticated visitor is sent onward. */

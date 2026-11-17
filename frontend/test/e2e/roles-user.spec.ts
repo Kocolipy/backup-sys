@@ -15,14 +15,11 @@ import { sidebar } from "./shell.helpers";
 // login page is routed by the same landing rule.
 
 test.describe("baseline User pages", () => {
-  test("lands on Home, whose Patient card says it has no access and reads nothing", async ({
-    page,
-  }) => {
+  test("lands on Home, which says it has no access and reads nothing", async ({ page }) => {
     const patientRequests = recordPatientRequests(page);
     await page.goto("/login");
 
     await expect(page).toHaveURL("/");
-    await expect(page.getByRole("heading", { name: "Profile" })).toBeVisible();
     await expectNoPatientAccess(page);
     await expect(page.getByRole("alert")).toHaveCount(0);
     expect(patientRequests()).toEqual([]);
@@ -37,7 +34,7 @@ test.describe("baseline User pages", () => {
   test("is routed from Patient Search to Home", async ({ page }) => {
     await page.goto("/search");
 
-    await expect(page.getByRole("heading", { name: "Profile" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Home" })).toBeVisible();
     await expect(page).toHaveURL("/");
   });
 });

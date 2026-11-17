@@ -98,11 +98,13 @@ and decoders — and imports no hook (`lb-api-modules-are-data`).
   dropped matches from (`droppedResults`) says how many beneath the table,
   "N records couldn't be shown", and the shared pager counts them among the
   page's records (`Page.droppedResults`, `src/lib/paging.ts`).
-- `home/home.tsx` — Home: the Patient card alone. The landing page of a
-  session without `patient:read`, linked from no sidebar.
-- `patient-card.tsx` — the Patient card, a part Home and the Demographic page
-  share, rendered from `usePatientInContext()`: "No patient in context" for
-  none or a `404`, "Loading the patient…", an empty card for a failure (its
+- `home/home.tsx` — Home: its title, shown, above a card saying the account
+  has no access to patients. The landing page of a session without
+  `patient:read`, refused to one holding it, and linked from no sidebar.
+- `patient-card.tsx` — the Patient card, heading the Demographic page,
+  rendered from `usePatientInContext()`: the plain card the history pages
+  show, "No patient in context", for none or a `404` (`isWithoutPatient`, by
+  which the shell shows the page's title then), "Loading the patient…", an empty card for a failure (its
   copy is on the error line), or the banner. Every field renders as a plain
   text node, shown as received through `shown` — its value, "—" when missing,
   "Error" when invalid, a gender outside the four codes by `labelled` as its
@@ -111,7 +113,9 @@ and decoders — and imports no hook (`lb-api-modules-are-data`).
   name and NRIC on the same rule.
 - `demographic/demographic.tsx` — the Demographic page, guarded by
   `patient:read`, which Patient Search opens on selecting a result: the
-  Patient card, then the Demographic details.
+  Patient card, then the Demographic details. With no patient in context it
+  is its title, shown, above the Patient card's plain "No patient in context"
+  card, as a history page is.
 - `demographic/demographic-details.tsx` — the Demographic details of the
   patient in context, rendered from `usePatientInContext()` (importing
   `patient-api.ts` for its types alone), and nothing while no patient is
@@ -143,7 +147,7 @@ and decoders — and imports no hook (`lb-api-modules-are-data`).
   - The read is a sibling of the layout's children, never their parent, so a
     patient coming into context or leaving it never remounts the page.
   - It lives in `src/pages/` itself because that is the lowest layer the
-    shell, Home, the Demographic page and the history pages may all import:
+    shell, the Demographic page and the history pages may all import:
     `mb-pages-do-not-import-the-shell` rules out `src/shell/`, and
     `mb-pages-do-not-import-another-page` a page folder.
 - `for-patient-in-context.tsx` — the part of a history page the patient in

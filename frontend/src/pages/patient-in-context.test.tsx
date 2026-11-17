@@ -5,13 +5,18 @@ import { clearEhrContext } from "@/auth/ehr-context";
 import { deferred, holding } from "@/auth/session-adapter.testHelpers";
 import { renderInLayout } from "@/shell/signed-in-shell.testHelpers";
 
-import { usePatientInContext } from "@/pages/patient-in-context";
+import {
+  isWithoutPatient,
+  type PatientInContextView,
+  usePatientInContext,
+} from "@/pages/patient-in-context";
 import { TAN_WEI_MING, TAN_WEI_MING_READ, withPatientInContext } from "@/pages/patient.testHelpers";
 
 // What the one read shows, and how often it asks, is held where it is shown:
-// `home.test.tsx` (one read per change, for the card and the top bar both),
-// `patient-card.test.tsx` and `shell/top-bar.test.tsx`. Held here is what no
-// screen shows: the view each render passes on, before the browser paints.
+// `demographic/demographic.test.tsx` (one read per change, for the card and the
+// top bar both), `patient-card.test.tsx` and `shell/top-bar.test.tsx`. Held
+// here is what no screen shows: the view each render passes on, before the
+// browser paints, and which views have no patient to show.
 
 /** A page that records every view of the patient in context it renders with. */
 function ViewsSeen({ seen }: { seen: string[] }) {
@@ -54,5 +59,21 @@ describe("usePatientInContext", () => {
     act(() => withPatientInContext(TAN_WEI_MING.id));
 
     expect(new Set(seen)).toEqual(new Set(["loading"]));
+  });
+});
+
+describe("isWithoutPatient", () => {
+  /** A read patient: the predicate reads only the view's kind, never its data. */
+  const READ_PATIENT = null as never;
+
+  it.each([
+    ["none in context", { kind: "none" }, true],
+    ["a 404 for the id in context", { kind: "absent" }, true],
+    ["a session that may not read patients", { kind: "not-permitted" }, true],
+    ["the patient still being read", { kind: "loading" }, false],
+    ["a failed read", { kind: "failed" }, false],
+    ["the patient read", { data: READ_PATIENT, kind: "ready" }, false],
+  ] as [string, PatientInContextView, boolean][])("is, for %s, %s", (_, view, without) => {
+    expect(isWithoutPatient(view)).toBe(without);
   });
 });

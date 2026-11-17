@@ -1,77 +1,43 @@
-import { act, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { holding, json, STILL_CHECKING } from "@/auth/session-adapter.testHelpers";
-import type { Permission } from "@/auth/api";
-import { clearEhrContext, setEhrContext } from "@/auth/ehr-context";
-
-import {
-  withPatientInContext,
-  page,
-  patientReads,
-  TAN_WEI_MING,
-  TAN_WEI_MING_READ,
-} from "@/pages/patient.testHelpers";
+import { holding, STILL_CHECKING } from "@/auth/session-adapter.testHelpers";
+import { page } from "@/pages/patient.testHelpers";
 import { renderSignedIn } from "@/shell/signed-in-shell.testHelpers";
 
-/** The page for a session holding exactly `permissions`, inside the signed-in layout. */
-const renderHolding = (permissions: Permission[]) => renderSignedIn("/", holding(permissions), {});
+// Who is routed to Home and who on to Patient Search is `App.test.tsx`'s; the
+// patient in context, which Home never shows, is the Demographic page's.
 
-/** A Medical Officer's Permissions: reading patients. */
-const PATIENT_ACCESS: Permission[] = ["patient:read"];
+/** Home for a session holding no Permission, inside the signed-in layout. */
+const renderHome = () => renderSignedIn("/", holding([]), {});
 
 describe("Home", () => {
-  it("shows the patient in the tab's EHR context on the Patient card", async () => {
-    withPatientInContext(TAN_WEI_MING.id);
+  it("is headed by its title alone, shown", async () => {
+    await renderHome();
 
-    await renderSignedIn("/", holding(PATIENT_ACCESS), {
-      [TAN_WEI_MING_READ]: json(TAN_WEI_MING),
-    });
-
-    expect(await page().findByRole("heading", { name: "Tan Wei Ming" })).toBeInTheDocument();
+    expect(
+      page()
+        .getAllByRole("heading")
+        .map((heading) => [heading.textContent, heading.classList.contains("sr-only")]),
+    ).toEqual([["Home", false]]);
   });
 
-  it("reads the patient in context once, for the Patient card and the top bar both", async () => {
-    withPatientInContext(TAN_WEI_MING.id);
-    const { requests } = await renderSignedIn("/", holding(PATIENT_ACCESS), {
-      [TAN_WEI_MING_READ]: json(TAN_WEI_MING),
-    });
-    await page().findByText("Tan Wei Ming");
+  it("says, on a card of its own, that the account has no access to patients", async () => {
+    await renderHome();
 
-    expect([
-      screen.getByRole("region", { name: "Patient in context" }).textContent,
-      patientReads(requests()),
-    ]).toEqual(["Tan Wei MingS1234567A", [TAN_WEI_MING_READ]]);
+    expect(
+      screen.getByText("Your account has no access to patients.").closest("[data-slot=card]")
+        ?.textContent,
+    ).toBe("Your account has no access to patients.");
   });
 
-  it("asks for no patient for an EHR context that names no patient", async () => {
-    setEhrContext({});
+  it("shows its note as muted text", async () => {
+    await renderHome();
 
-    const { requests } = await renderSignedIn("/", holding(PATIENT_ACCESS), {});
-
-    expect(screen.getByText("No patient in context")).toBeInTheDocument();
-    expect(patientReads(requests())).toEqual([]);
-  });
-
-  it("drops the patient as soon as the tab's EHR context is cleared", async () => {
-    withPatientInContext(TAN_WEI_MING.id);
-    await renderSignedIn("/", holding(PATIENT_ACCESS), {
-      [TAN_WEI_MING_READ]: json(TAN_WEI_MING),
-    });
-    await page().findByText("Tan Wei Ming");
-
-    act(() => clearEhrContext());
-
-    expect(screen.queryByText("Tan Wei Ming")).toBeNull();
-  });
-
-  it("shows the page title above the Patient card", async () => {
-    await renderHolding(PATIENT_ACCESS);
-
-    expect(screen.getAllByRole("heading").map((heading) => heading.textContent)).toEqual([
-      "Profile",
-      "Patient",
-    ]);
+    expect(screen.getByText("Your account has no access to patients.")).toHaveClass(
+      "text-sm",
+      "text-muted-foreground",
+    );
   });
 
   it("renders safely while the session's user details are unavailable", async () => {

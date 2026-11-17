@@ -1,21 +1,19 @@
-import { PatientCard } from "@/pages/patient-card";
+import { Card, CardContent } from "@/components/ui/card";
 
 /**
- * Home, the signed-in page at `/`: open to every signed-in session, and the
- * landing page of one without `patient:read` (`landingPath`).
- *
- * The Patient card comes first: the patient of the tab's EHR context
- * (`ehr-context.ts`), read with `patient:read` — read once, by the signed-in
- * layout (`patient-in-context.ts`), for the card, the top bar and the FFI page. With no
- * patient in context the card shows "No patient in context", and for a session
- * without `patient:read` it says the account has no access to patients; either
- * way nothing is asked for. The other signed-in pages are linked from the
- * navigation sidebar (`signed-in-shell.tsx`), not from here.
+ * Home, the signed-in page at `/`: the landing page of a session without
+ * `patient:read` (`landingPath`), and refused to one holding it, which its
+ * guard sends on to Patient Search. Headed by its title, it says on a card of
+ * its own that the account has no access to patients, and reads nothing. The
+ * other signed-in pages are linked from the navigation sidebar
+ * (`navigation-sidebar.tsx`), not from here.
  */
 export function Home() {
   return (
-    <div className="flex w-full flex-col gap-4">
-      <PatientCard />
-    </div>
+    <Card>
+      <CardContent className="flex flex-col gap-4">
+        <p className="text-sm text-muted-foreground">Your account has no access to patients.</p>
+      </CardContent>
+    </Card>
   );
 }

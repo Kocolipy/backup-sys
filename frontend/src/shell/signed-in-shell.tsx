@@ -6,9 +6,13 @@ import { useSessionAction } from "@/auth/use-session-action";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
-import { PatientInContextScope } from "@/pages/patient-in-context";
+import {
+  isWithoutPatient,
+  PatientInContextScope,
+  usePatientInContext,
+} from "@/pages/patient-in-context";
 import { NavigationSidebar } from "@/shell/navigation-sidebar";
-import { HOME_PAGE, SIGNED_IN_PAGES } from "@/shell/signed-in-pages";
+import { HOME_PAGE, SIGNED_IN_PAGES, type SignedInPage } from "@/shell/signed-in-pages";
 import { TopBar } from "@/shell/top-bar";
 
 /**
@@ -32,9 +36,9 @@ import { TopBar } from "@/shell/top-bar";
  * always ends it.
  *
  * The layout reads the patient in context once (`PatientInContextScope`),
- * inside the page status its failure reports to: the top bar and Home's
- * Patient card both render from that one read, and neither reads the patient
- * itself.
+ * inside the page status its failure reports to: the top bar, the page title
+ * and every page showing the patient render from that one read, and none
+ * reads the patient itself.
  */
 export function SignedInShell() {
   const { pathname } = useLocation();
@@ -46,6 +50,20 @@ export function SignedInShell() {
         </PatientInContextScope>
       )}
     </PageStatusScope>
+  );
+}
+
+/**
+ * The page's one title, in the headline type, kept for screen readers only as
+ * its `titleHidden` says — for a page the patient banner heads, only while
+ * there is a patient in context to show.
+ */
+function PageTitle({ page }: { page: SignedInPage }) {
+  const view = usePatientInContext();
+  const hidden =
+    page.titleHidden === "while-patient-in-context" ? !isWithoutPatient(view) : page.titleHidden;
+  return (
+    <h1 className={cn("font-headline text-headline-lg", hidden && "sr-only")}>{page.title}</h1>
   );
 }
 
@@ -65,9 +83,7 @@ function SignedInLayout({ error, pathname }: { error: string | null; pathname: s
       <div className="flex min-h-svh min-w-0 flex-1 flex-col">
         <TopBar user={user} />
         <SidebarInset className="flex flex-1 flex-col gap-6 p-8">
-          <h1 className={cn("font-headline text-headline-lg", page.titleHidden && "sr-only")}>
-            {page.title}
-          </h1>
+          <PageTitle page={page} />
           {error ? (
             <Alert className="w-full" variant="destructive">
               <AlertDescription>{error}</AlertDescription>

@@ -1,7 +1,5 @@
 import { expect, type Page } from "@playwright/test";
 
-import { cardTitled } from "./card.helpers";
-
 /**
  * Starts recording every read the page sends for one patient by id
  * (`/api/patient/{id}`), and returns what it has recorded so far. A Patient
@@ -17,15 +15,17 @@ export function recordPatientRequests(page: Page): () => string[] {
   return () => [...sent];
 }
 
-/** Home's Patient card with nothing in the tab's EHR context, which says so. */
+/** The Demographic page with nothing in the tab's EHR context: its title shown, above a card saying so. */
 export async function expectNoPatientInContext(page: Page): Promise<void> {
-  await expect(cardTitled(page, "Patient").getByText("No patient in context")).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Demographic" })).toBeVisible();
+  await expect(page.getByRole("main").getByText("No patient in context")).toBeVisible();
 }
 
-/** Home's Patient card for a session without `patient:read`, which says it has no access. */
+/** Home, for a session without `patient:read`: its title shown, above a card saying it has no access. */
 export async function expectNoPatientAccess(page: Page): Promise<void> {
+  await expect(page.getByRole("heading", { level: 1, name: "Home" })).toBeVisible();
   await expect(
-    cardTitled(page, "Patient").getByText("Your account has no access to patients."),
+    page.getByRole("main").getByText("Your account has no access to patients."),
   ).toBeVisible();
 }
 
@@ -57,13 +57,13 @@ export const selectResult = (page: Page, name: string) =>
     .click();
 
 /**
- * Opens Home with the Patient `patientId` in the tab's EHR context. A Patient
- * shown as received matches no Patient search, so it is put there as the
- * Search page would put it: in the tab's `sessionStorage`, under the key and in
- * the shape `src/auth/ehr-context.ts` keeps it in.
+ * Opens the page at `path` with the Patient `patientId` in the tab's EHR
+ * context. A Patient shown as received matches no Patient search, so it is put
+ * there as the Search page would put it: in the tab's `sessionStorage`, under
+ * the key and in the shape `src/auth/ehr-context.ts` keeps it in.
  */
-export async function openHomeWithPatientInContext(page: Page, patientId: string) {
-  await page.goto("/");
+export async function openWithPatientInContext(page: Page, path: string, patientId: string) {
+  await page.goto(path);
   await page.evaluate(
     (patient) => window.sessionStorage.setItem("ehr-context", JSON.stringify({ patient })),
     patientId,

@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Link, matchPath } from "react-router-dom";
 
 import { useAuth } from "@/auth/auth-context-value";
-import { mayOpen, requirementOf } from "@/auth/permissions";
+import { mayOpen } from "@/auth/permissions";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
@@ -185,7 +185,7 @@ export function NavigationSidebar({
         <SidebarMenu className="gap-0">
           {entriesOf(
             SIGNED_IN_PAGES.filter(
-              (page) => page.homeLink && mayOpen(user, requirementOf(page.permissions)),
+              (page) => page.homeLink && mayOpen(user, page.requires ?? "authenticated"),
             ),
           ).map((entry) =>
             entry.kind === "group" ? (
