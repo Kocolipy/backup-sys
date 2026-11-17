@@ -4,8 +4,8 @@ import static com.example.backend.patient.infrastructure.http.ReceivedFields.day
 import static com.example.backend.patient.infrastructure.http.ReceivedFields.text;
 
 import com.example.backend.observability.InvalidSourceFields;
-import com.example.backend.patient.domain.AdministrativeGender;
 import com.example.backend.patient.domain.Demographics;
+import com.example.backend.patient.domain.FhirId;
 import com.example.backend.patient.domain.MilitaryHistory;
 import com.example.backend.patient.domain.NextOfKin;
 import com.example.backend.patient.domain.Patient;
@@ -17,6 +17,7 @@ import com.example.backend.patient.infrastructure.http.PatientSourceException.Fa
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.IntStream;
@@ -38,15 +39,19 @@ import tools.jackson.databind.JsonNode;
  * {@code telecom}, the first {@code home} {@code address}'s text, the first {@code contact} coded
  * v2-0131 {@code N}, and the military service extension ({@link #MILITARY_SERVICE}).
  *
- * <p>A read by id copies the four and the Demographic details as received (ADR 0020): the NRIC's
- * value, the official name's text, the gender, the birth date and each Demographic detail's value
- * are bound as the raw JSON they arrived as and read by {@link ReceivedFields} — present, missing
- * or invalid — so none fails the read, and only another patient's id does. A search keeps the
- * strict reading ADR 0018 describes for the four: a match missing one, holding one in the wrong
- * format or a gender outside the four codes fails the search. Its Last visit never does.
+ * <p>A read by id and a search copy the four alike, as received (ADR 0020): the NRIC's value, the
+ * official name's text, the gender and the birth date are each bound as the raw JSON they arrived
+ * as and read by {@link ReceivedFields} — present, missing or invalid — so none fails the read, a
+ * gender outside the four codes kept as its raw code. A read by id copies each Demographic
+ * detail's value the same way. The id is bound as raw JSON too: a read by id fails only on
+ * another patient's id, and a search shows a match only under an id of its own in FHIR's grammar
+ * ({@link #ownId()}), dropping one without. A search's entry that is no {@code Patient} is a
+ * match with no Patient ({@link PatientMatch.NotAPatient}).
  *
- * @param resourceType the resource's type: a search's entry must be a {@code Patient}
- * @param id         the resource's id: the id it was read by, or in a search, a FHIR id of its own
+ * @param resourceType the resource's type: a search's entry that is no {@code Patient} is shown
+ *                     as one
+ * @param id         the resource's id, as the raw JSON it arrived as: the id it was read by, or in
+ *                   a search, a FHIR id of its own
  * @param extension  every extension the source sends; the Last visit and military service are read
  * @param identifier every identifier the source holds; only the NRIC is copied
  * @param name       every name the source holds; only the official one is copied
@@ -58,7 +63,7 @@ import tools.jackson.databind.JsonNode;
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 record R4Patient(
-        String resourceType, String id, List<Extension> extension, List<Identifier> identifier,
+        String resourceType, JsonNode id, List<Extension> extension, List<Identifier> identifier,
         List<HumanName> name, List<ContactPoint> telecom, JsonNode gender, JsonNode birthDate,
         List<Address> address, List<Contact> contact) {
 
@@ -81,40 +86,66 @@ record R4Patient(
     /** HL7 v2 table 0131, whose code {@code N} marks a contact as the next of kin. */
     static final String CONTACT_ROLE = "http://terminology.hl7.org/CodeSystem/v2-0131";
 
+    /** The element naming a resource's type: a search's entry that is no Patient is reported so. */
+    static final String RESOURCE_TYPE = "resourceType";
+
+    /** The element holding a resource's id, by which a search's dropped match is reported. */
+    static final String ID = "id";
+
+    /** Whether the resource is a {@code Patient}: a search's entry that is not is no match's. */
+    boolean isPatient() {
+        return "Patient".equals(resourceType);
+    }
+
     /**
-     * The match this resource is, in a search's answer: a Patient under its own id, which must be
-     * there and a FHIR id, with its Last visit as received (ADR 0020) — missing when the source
-     * records none, invalid when it is no date to the day, and never refused for what it holds.
-     *
-     * @throws PatientSourceException when the resource is no Patient, has no id or one outside
-     *                                FHIR's grammar, or breaks a rule a Patient must keep, naming
-     *                                which and quoting no value
+     * The id a search's match is shown under, when the resource holds one as text in FHIR's id
+     * grammar, and none when it is missing or malformed: such a match cannot be selected, so it
+     * is dropped (ADR 0018, ADR 0020).
      */
-    PatientMatch toMatch() {
-        if (!"Patient".equals(resourceType)) {
-            throw PatientSourceException.failed(Failure.ANOTHER_RESOURCE);
-        }
-        PatientId own = new PatientId(
-                SourceSearchset.ownId(id, Failure.NO_ID, Failure.INVALID_ID));
-        return new PatientMatch(core(own),
+    Optional<PatientId> ownId() {
+        String own = text(id).orElse(null);
+        return FhirId.matches(own) ? Optional.of(new PatientId(own)) : Optional.empty();
+    }
+
+    /**
+     * The match this resource is, in a search's answer: the Patient under {@code own}, its own id
+     * ({@link #ownId()}), with its NRIC, official name's text, gender and birth date and its Last
+     * visit each as received (ADR 0020) — present, missing or invalid, and never refused for what
+     * it holds.
+     */
+    PatientMatch.OfPatient toMatch(PatientId own) {
+        return new PatientMatch.OfPatient(received(own),
                 firstOf(extension, withUrl(LAST_VISIT), visit -> day(visit.valueDate())));
     }
 
     /**
      * The fields of {@code match}, read from this resource, whose format was wrong, each by its
-     * path in this resource — {@code extension[1].valueDate} — beside the row's field it is
-     * ({@link PatientMatch#invalid()}).
+     * path in this resource — {@code identifier[1].value}, {@code name[2].text},
+     * {@code extension[1].valueDate} — beside the row's field it is ({@link PatientMatch#invalid()}).
      */
-    List<InvalidSourceFields.Field> invalidFields(PatientMatch match) {
+    List<InvalidSourceFields.Field> invalidFields(PatientMatch.OfPatient match) {
         return match.invalid().stream()
-                .map(field -> new InvalidSourceFields.Field(
-                        "extension[" + lastVisitIndex() + "].valueDate", field))
+                .map(field -> new InvalidSourceFields.Field(pathOf(field), field))
                 .toList();
     }
 
-    /** The place of the first Last visit extension, or -1 when there is none. */
-    private int lastVisitIndex() {
-        return indexOf(extension, withUrl(LAST_VISIT));
+    /**
+     * Where in this resource the row's {@code field} was read from, each list counted from zero:
+     * the official name's text and the NRIC from the name and the identifier they were found in,
+     * the gender and the birth date where they are, and the Last visit from its extension.
+     *
+     * @throws IllegalArgumentException for a name that is none of a match's five fields
+     */
+    private String pathOf(String field) {
+        return switch (field) {
+            case PatientMatch.NAME -> "name[" + officialNameIndex() + "].text";
+            case PatientMatch.NRIC -> "identifier[" + nricIndex() + "].value";
+            case PatientMatch.GENDER -> "gender";
+            case PatientMatch.BIRTH_DATE -> "birthDate";
+            case PatientMatch.LAST_VISIT ->
+                    "extension[" + urlIndex(extension, LAST_VISIT) + "].valueDate";
+            default -> throw new IllegalArgumentException("No field of a match: " + field);
+        };
     }
 
     /**
@@ -268,10 +299,11 @@ record R4Patient(
      * NRIC NamingSystem's value, the official name — its text present, missing or invalid, its
      * family and given names as they came — the gender's code and the birth date.
      *
-     * @throws PatientSourceException when the resource is another patient's
+     * @throws PatientSourceException when the resource is another patient's: its id, as text, is
+     *                                not the one asked for
      */
     private Patient received(PatientId asked) {
-        if (!asked.value().equals(id)) {
+        if (!text(id).equals(SourceField.present(asked.value()))) {
             throw PatientSourceException.failed(Failure.ANOTHER_RESOURCE);
         }
         int official = officialNameIndex();
@@ -360,34 +392,6 @@ record R4Patient(
     private static int serviceRecordIndex(List<Extension> parts, int record) {
         return IntStream.range(0, parts.size()).filter(at -> isServiceRecord(parts.get(at)))
                 .skip(record).findFirst().orElseThrow();
-    }
-
-    /**
-     * The domain's Patient of the five elements this resource is, under {@code asked}, with no
-     * Demographic details, read strictly: what a search copies, each element required.
-     *
-     * @throws PatientSourceException naming the first element the resource does not hold as a
-     *                                Patient must, or another patient's id, quoting no value
-     */
-    private Patient core(PatientId asked) {
-        Patient patient = received(asked);
-        if (!patient.nric().isPresent()) {
-            throw PatientSourceException.failed(Failure.NO_NRIC);
-        }
-        if (patient.name() == null) {
-            throw PatientSourceException.failed(Failure.NO_OFFICIAL_NAME);
-        }
-        if (!patient.name().text().isPresent()) {
-            throw PatientSourceException.failed(Failure.NO_NAME_TEXT);
-        }
-        if (AdministrativeGender.fromCode(patient.gender().orElse(null)).isEmpty()) {
-            throw PatientSourceException.failed(Failure.NO_GENDER);
-        }
-        return switch (patient.birthDate().received()) {
-            case PRESENT -> patient;
-            case MISSING -> throw PatientSourceException.failed(Failure.NO_BIRTH_DATE);
-            case INVALID -> throw PatientSourceException.failed(Failure.BIRTH_DATE_NOT_TO_THE_DAY);
-        };
     }
 
     /** The place of the first identifier under the NRIC NamingSystem, or -1 when there is none. */

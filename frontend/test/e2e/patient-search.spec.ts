@@ -12,8 +12,9 @@ import {
  * Patient Search as a Medical Officer meets it, against the patient source's
  * mock (`backend/patient-source-mock`): its canned name search spanning two
  * pages in the mock's own order, filtered by gender, its NRIC searches — one
- * matching a Patient whose Last visit is in the wrong format — and its search
- * that matches nothing. Nothing about a search or its filter reaches
+ * matching a Patient whose Last visit is in the wrong format — its received
+ * search, which drops two matches with a bad id and shows the rest as
+ * received, and its search that matches nothing. Nothing about a search or its filter reaches
  * the URL. Selecting a result puts its Patient into the tab's EHR
  * context, shown on the Demographic page's Patient card and the top bar; that signing out and
  * back in leaves none is `patient-sign-out.spec.ts`'. What the page decides
@@ -83,6 +84,26 @@ test.describe("Patient Search", () => {
     await search(page, "S9912345B");
 
     await expect(resultRows(page)).toHaveText(["Rajesh KumarS9912345BMale28 May 1999Error"]);
+  });
+
+  // The patient source is the truth (ADR 0020), but a match's id is validated:
+  // the received search's two Patients with no id or a malformed one are
+  // dropped and counted, its Observation is a row of "Error" cells, and the
+  // rest show each field as its value, "—" or "Error", beside the source's
+  // total.
+  test("drops a match with a bad id, with a note, and shows the rest as received", async ({
+    page,
+  }) => {
+    await search(page, "teo");
+
+    await expect(resultRows(page)).toHaveText([
+      "Teo Ai LingErrorFError14 Oct 2026",
+      "ErrorErrorErrorErrorError",
+      "—————",
+    ]);
+    await expect(page.getByText("2 records couldn't be shown", { exact: true })).toBeVisible();
+    await expect(page.getByText("Showing 1 to 5 of 5 records")).toBeVisible();
+    await expect(page.getByText(/Teo Boon Kiat|Teo Hock Seng/)).toHaveCount(0);
   });
 
   test("says when no Patient matches", async ({ page }) => {

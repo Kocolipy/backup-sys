@@ -89,8 +89,8 @@ class PatientSearchIntegrationTests {
 
     /**
      * A name search's row: the User as actor, the {@code Patient} resource type and no resource
-     * or subject, the five Patients its page held, {@code NAME}, the route template — and no
-     * column holding the query.
+     * or subject, the seven Patients the source counted though its page held five,
+     * {@code NAME}, the route template — and no column holding the query.
      */
     @Test
     void anAnsweredSearchAppendsOneRowNamingItsSearcherCountAndKind() throws Exception {
@@ -109,7 +109,7 @@ class PatientSearchIntegrationTests {
         row.put("resource_type", "Patient");
         row.put("resource_id", null);
         row.put("subject_id", null);
-        row.put("result_count", 5);
+        row.put("result_count", 7);
         row.put("filter_shape", "NAME");
         row.put("error_code", null);
         row.put("changed_paths", null);
@@ -178,6 +178,40 @@ class PatientSearchIntegrationTests {
                 .contains("/api/patient-search")
                 .doesNotContain("Kavitha", "s9212345a", "S9212345A", "Siti Nurhaliza",
                         "1992-08-21");
+    }
+
+    /**
+     * The received search is answered, as received (ADR 0020), and writes exactly one
+     * {@code WARN} beside the request's record, naming each dropped match's id, the entry that is
+     * no Patient and each field in the wrong format by its path in the source's answer, and no
+     * {@code ERROR}; nothing in the stream names anything an entry holds.
+     */
+    @Test
+    void aSearchDroppingMatchesWarnsOnceNamingTheirPaths() throws Exception {
+        HttpClient session = signedIn();
+        logs.reset();
+
+        HttpResponse<String> response = send(session, search("teo", 5));
+        logs.awaitRequestRecords(1);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(logs.records())
+                .filteredOn(record -> List.of("WARN", "ERROR")
+                        .contains(record.at("/log/level").asText()))
+                .filteredOn(record -> !"http.request".equals(record.at("/app/event/action")
+                        .asText()))
+                .singleElement()
+                .satisfies(warning -> assertThat(List.of(warning.at("/log/level").asText(),
+                        warning.at("/app/event/action").asText(),
+                        warning.at("/app/patient_source/read").asText(),
+                        warning.at("/app/patient_source/invalid_fields").toString()))
+                        .containsExactly("WARN", "patient_source.invalid_fields", "search",
+                                "[\"entry[0].identifier[0].value\",\"entry[0].birthDate\","
+                                        + "\"entry[1].id\",\"entry[2].resourceType\","
+                                        + "\"entry[3].id\"]"));
+        assertThat(logs.lines()).doesNotContain("received-search", "received search 04",
+                "8800011", "Teo Ai Ling", "Teo Boon Kiat", "Teo Hock Seng", "1971-03",
+                "Observation");
     }
 
     // ---- harness -------------------------------------------------------------------------

@@ -20,8 +20,8 @@ import org.springframework.stereotype.Service;
  * and caches nothing — and one {@code PATIENT_SEARCH} audit row for every search the source
  * answered.
  *
- * <p>The row names the signed-in User who searched, how many Patients the answered page held,
- * whether the query was an NRIC or a name, and whether the gender filter narrowed it, and nothing
+ * <p>The row names the signed-in User who searched, the total the source counted — every page
+ * together, whatever of the answered page could be shown — whether the query was an NRIC or a name, and whether the gender filter narrowed it, and nothing
  * of the query or the filter's value. It is appended after the source answered, fail-closed
  * (ADR 0004): a search that cannot be recorded is not answered, and one the source failed read
  * nothing, so it records nothing. No transaction of the caller's: the read is a call to the
@@ -49,7 +49,7 @@ public class PatientSearchService {
     public PatientMatches search(PatientQuery query, PatientFilter filter, PageRequest page) {
         PatientMatches matches = patients.search(query, filter, page);
         audit.append(new Audited.PatientsSearched(actors.signedInUser().orElse(null),
-                kindOf(query), used(filter), matches.patients().size()));
+                kindOf(query), used(filter), matches.totalResults()));
         return matches;
     }
 

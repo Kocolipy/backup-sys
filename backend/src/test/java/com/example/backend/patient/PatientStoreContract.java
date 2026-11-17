@@ -267,7 +267,7 @@ public abstract class PatientStoreContract {
 
     /** Each match on a page, as its id and its Last visit, {@code null} for none. */
     private static List<String> idsAndLastVisits(PatientMatches matches) {
-        return matches.patients().stream()
+        return matches.patients().stream().map(PatientMatch.OfPatient.class::cast)
                 .map(match -> match.patient().id() + " " + match.lastVisit().orElse(null))
                 .toList();
     }
@@ -306,7 +306,7 @@ public abstract class PatientStoreContract {
         PatientMatches matches = patients().search(
                 new PatientQuery.ByName("tan"), PatientFilter.NONE, FIRST_FIVE);
 
-        assertThat(matches.patients().get(3)).isEqualTo(new PatientMatch(
+        assertThat(matches.patients().get(3)).isEqualTo(new PatientMatch.OfPatient(
                 searchFixtures().get(2), SourceField.present(LocalDate.of(2026, 9, 30))));
     }
 
@@ -314,14 +314,14 @@ public abstract class PatientStoreContract {
     void an_nric_search_reads_the_one_patient_holding_it() {
         assertThat(patients().search(
                 new PatientQuery.ByNric("S9212345A"), PatientFilter.NONE, FIRST_FIVE))
-                .isEqualTo(new PatientMatches(1, List.of(new PatientMatch(
+                .isEqualTo(new PatientMatches(1, List.of(new PatientMatch.OfPatient(
                         new Patient(
                                 new PatientId("erXuFYUfucBZaryVksYEcMg3"),
                                 "S9212345A",
                                 new PatientName("Siti Nurhaliza binte Ahmad", null, List.of()),
                                 AdministrativeGender.FEMALE,
                                 LocalDate.of(1992, 8, 21)),
-                        SourceField.present(LocalDate.of(2026, 7, 11))))));
+                        SourceField.present(LocalDate.of(2026, 7, 11)))), 0));
     }
 
     /**
@@ -332,8 +332,34 @@ public abstract class PatientStoreContract {
     void a_match_whose_last_visit_is_not_to_the_day_is_read_with_it_invalid() {
         assertThat(patients().search(
                 new PatientQuery.ByNric("S9912345B"), PatientFilter.NONE, FIRST_FIVE))
-                .isEqualTo(new PatientMatches(1, List.of(new PatientMatch(
-                        searchFixtures().get(7), SourceField.invalid()))));
+                .isEqualTo(new PatientMatches(1, List.of(new PatientMatch.OfPatient(
+                        searchFixtures().get(7), SourceField.invalid())), 0));
+    }
+
+    /**
+     * The {@code teo} search's page is shown as received (ADR 0020): of its five entries, the two
+     * Patients with no id or one outside FHIR's grammar are dropped and counted, the entry that is
+     * no Patient is a match with no Patient, and the other two are read with their fields as
+     * received — an NRIC and a birth date in the wrong format, a gender's raw code, and every
+     * field missing — beside the source's total, unchanged.
+     */
+    @Test
+    void the_received_search_drops_the_matches_with_a_bad_id_and_reads_the_rest_as_received() {
+        SourceField<String> missing = SourceField.missing();
+        assertThat(patients().search(
+                new PatientQuery.ByName("teo"), PatientFilter.NONE, FIRST_FIVE))
+                .isEqualTo(new PatientMatches(5, List.of(
+                        new PatientMatch.OfPatient(new Patient(new PatientId("received-search-01"),
+                                SourceField.invalid(),
+                                new PatientName("Teo Ai Ling", "Teo", List.of("Ai Ling")),
+                                SourceField.present("F"), SourceField.invalid(),
+                                Demographics.NONE),
+                                SourceField.present(LocalDate.of(2026, 10, 14))),
+                        new PatientMatch.NotAPatient(),
+                        new PatientMatch.OfPatient(new Patient(new PatientId("received-search-05"),
+                                missing, null, missing, SourceField.missing(), Demographics.NONE),
+                                SourceField.missing())),
+                        2));
     }
 
     private static PatientFilter gender(AdministrativeGender gender) {
@@ -361,6 +387,7 @@ public abstract class PatientStoreContract {
                 patients().search(new PatientQuery.ByName("tan"), filter, FIRST_FIVE);
 
         assertThat(List.of(matches.totalResults(), matches.patients().stream()
+                .map(PatientMatch.OfPatient.class::cast)
                 .map(match -> match.patient().id().value()).toList()))
                 .containsExactly(total, ids);
     }
@@ -370,14 +397,14 @@ public abstract class PatientStoreContract {
     void a_filtered_search_no_stub_names_reads_no_patients() {
         assertThat(patients().search(new PatientQuery.ByName("tan"),
                 gender(AdministrativeGender.MALE), NEXT_FIVE))
-                .isEqualTo(new PatientMatches(0, List.of()));
+                .isEqualTo(new PatientMatches(0, List.of(), 0));
     }
 
     @Test
     void a_search_nothing_matches_reads_no_patients_and_a_total_of_none() {
         assertThat(patients().search(
                 new PatientQuery.ByName("nobody"), PatientFilter.NONE, FIRST_FIVE))
-                .isEqualTo(new PatientMatches(0, List.of()));
+                .isEqualTo(new PatientMatches(0, List.of(), 0));
     }
 
     // ---- the FFI Histories -----------------------------------------------------------------

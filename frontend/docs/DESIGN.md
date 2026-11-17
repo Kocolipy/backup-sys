@@ -44,7 +44,8 @@ also colours a table's warning icon ("Table" below).
 
 A Patient's gender badge in Patient Search's results is no status: Male draws
 on `male-soft` and Female on `female-soft`, applied by the page, and any other
-gender keeps the `secondary` badge.
+gender — a code outside the four, shown as itself, included — keeps the
+`secondary` badge.
 
 ## Typography
 

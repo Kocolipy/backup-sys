@@ -286,7 +286,7 @@ class ApiExceptionHandlerTests {
     /** The fault's own follow-up reaches the record: an answer the service cannot use needs one. */
     @Test
     void anUpstreamFaultNeedingAPersonIsRecordedForFollowUp() {
-        handler.handleUnexpected(new Upstream(LogEvent.ErrorCategory.DATA, "no-nric"), request);
+        handler.handleUnexpected(new Upstream(LogEvent.ErrorCategory.DATA, "no-total"), request);
 
         assertThat(CapturedLog.fields(onlyRecord()))
                 .containsEntry(LogEvent.ERROR_CATEGORY, "data")

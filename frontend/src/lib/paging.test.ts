@@ -44,4 +44,45 @@ describe("pageDecoder", () => {
       "WidgetPage.itemsPerPage is not expected",
     );
   });
+
+  it("refuses droppedResults on a page whose read drops nothing", () => {
+    expect(() =>
+      decode({ droppedResults: 0, startIndex: 1, totalResults: 0, widgets: [] }),
+    ).toThrow("WidgetPage.droppedResults is not expected");
+  });
+
+  describe("for a read that drops entries", () => {
+    const decodeDropping = pageDecoder("WidgetPage", "widgets", decodeWidget, {
+      dropsEntries: true,
+    });
+
+    it("reads how many entries the page dropped beside its rows", () => {
+      expect(
+        decodeDropping({
+          droppedResults: 2,
+          startIndex: 6,
+          totalResults: 9,
+          widgets: [{ name: "anvil" }],
+        }),
+      ).toEqual({ droppedResults: 2, rows: ["anvil"], startIndex: 6, totalResults: 9 });
+    });
+
+    it("refuses a page without droppedResults", () => {
+      expect(() => decodeDropping({ startIndex: 1, totalResults: 0, widgets: [] })).toThrow(
+        "WidgetPage.droppedResults is not an integer",
+      );
+    });
+
+    it("refuses a page carrying a field beside its four", () => {
+      expect(() =>
+        decodeDropping({
+          droppedResults: 0,
+          itemsPerPage: 2,
+          startIndex: 1,
+          totalResults: 0,
+          widgets: [],
+        }),
+      ).toThrow("WidgetPage.itemsPerPage is not expected");
+    });
+  });
 });

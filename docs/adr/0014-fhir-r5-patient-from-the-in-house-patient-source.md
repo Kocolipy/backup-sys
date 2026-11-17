@@ -119,8 +119,8 @@ own: no table, no grant on one, no seeded fixtures.
   its code, the one way a Patient shown as received leaves base R5's required
   value set; a next of kin with neither a name nor a phone, or a service record
   with no field present, is served bare, which base R5's invariants on a
-  contact and an extension do not admit. A Patient search keeps the strict
-  reading (ADR 0018).
+  contact and an extension do not admit. A Patient search reads its matches'
+  four elements the same way, into rows of its own plain JSON (ADR 0018, D5).
 - **Nothing patient-identifying in a failure.** The adapter's exception carries a
   fixed message, naming at most a status or an element, and its cause redacted
   to its type (`observability.RedactedFaultException`): an HTTP client's message

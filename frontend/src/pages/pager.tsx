@@ -39,7 +39,8 @@ function pageNumbersOf(current: number, count: number): (number | "gap")[] {
  * records ("Showing 21 to 40 of 45 records", "… of 1 record"), and the moves
  * from it: « back by one page, never before the first; » on from where this
  * page ended — counted from the page's own `startIndex` and row count, so a
- * page that came back short is moved on from its last row; and a number for
+ * page that came back short is moved on from its last row, and a page whose
+ * read dropped entries (`droppedResults`) from past them too; and a number for
  * each page, which moves to that page's first row. Every paged read moves
  * through this one control. A move with nowhere to go — « on the first page,
  * » once no rows lie past this one — is disabled, never hidden.
@@ -58,7 +59,7 @@ export function Pager({
   label,
   onMove,
   onePage = "hidden",
-  page: { rows, startIndex, totalResults },
+  page: { droppedResults = 0, rows, startIndex, totalResults },
   pageSize,
 }: {
   /** Holds the page still, as while an action that answers onto it is in flight. */
@@ -72,9 +73,11 @@ export function Pager({
   page: Page<unknown>;
   pageSize: number;
 }) {
-  const last = startIndex + rows.length - 1;
+  // The page spans every entry it held: its rows, and any its read dropped.
+  const held = rows.length + droppedResults;
+  const last = startIndex + held - 1;
   const everyRowShown = startIndex <= 1 && last >= totalResults;
-  if (everyRowShown && (onePage === "hidden" || rows.length === 0)) return null;
+  if (everyRowShown && (onePage === "hidden" || held === 0)) return null;
   const current = Math.floor((startIndex - 1) / pageSize) + 1;
   const count = Math.max(current, Math.ceil(totalResults / pageSize));
   return (
@@ -83,7 +86,7 @@ export function Pager({
           backwards, since `last` falls one short of `startIndex`: say how
           many rows there are in all instead of a range that contradicts itself. */}
       <p className="text-sm text-muted-foreground">
-        {rows.length === 0
+        {held === 0
           ? `Showing 0 of ${recordsCounted(totalResults)}`
           : `Showing ${startIndex} to ${last} of ${recordsCounted(totalResults)}`}
       </p>

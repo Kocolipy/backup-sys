@@ -241,7 +241,7 @@ public enum AuditOperation {
     /**
      * A signed-in User searched the Patients, by name or by NRIC, and the patient source answered.
      * Recorded with the User as actor, no subject, the {@code Patient} resource type, how many
-     * Patients the answered page held and the query's kind — {@code NRIC} or {@code NAME} — and
+     * Patients the source counted the search matching and the query's kind — {@code NRIC} or {@code NAME} — and
      * never the query, a name or an NRIC. A search refused before it reached the source, or that
      * the source failed, read nothing and records nothing. Reading one Patient by its id is not
      * this operation and is not recorded at all (/docs/domain/patient.md, ADR 0018).

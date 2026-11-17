@@ -1,7 +1,7 @@
 ---
 type: Decision Record
 title: "ADR 0018: Patient search is the patient source's own, passed through"
-description: A Patient search by name or full NRIC, filtered by gender, is passed through to the in-house patient source, which matches, filters, pages and counts, in its own stable order with no sort sent; the service reads startIndex and count by ADR 0017's rules but filters, orders and pages nothing itself, answers plain JSON with each Patient's Last visit from the source's last-visit extension, and audits every search it answers as PATIENT_SEARCH with the query's kind, whether the gender filter was used and the count, never the query or the filter's value.
+description: A Patient search by name or full NRIC, filtered by gender, is passed through to the in-house patient source, which matches, filters, pages and counts, in its own stable order with no sort sent; the service reads startIndex and count by ADR 0017's rules but filters, orders and pages nothing itself, shows each match as received but for its id — a match without a FHIR id dropped and counted — answers plain JSON with each Patient's Last visit from the source's last-visit extension, and audits every search it answers as PATIENT_SEARCH with the query's kind, whether the gender filter was used and the source's total, never the query or the filter's value.
 tags: [patient, search, paging, audit, integration]
 ---
 
@@ -39,12 +39,17 @@ on the existing HTTP adapter (`PatientSourceAdapter`, the module's one outbound
 client), sends FHIR R4 `GET {base}/Patient?…` with the query, the filter, the
 page and `_total=accurate`, and takes the searchset `Bundle` it answers as the
 page and the total. The service filters, orders and pages nothing of its own and
-holds and caches nothing. The source's answer is held to the same rules as a
-read by id: every entry is copied as a Patient is (ADR 0014, "A straight
-copy"), and only a `200` searchset is an answer — any other status, a `404`
-included, no answer within the timeouts, a Bundle with no `total`, or an entry
-that is no Patient the service can hold, one with no `id` included, is a
-failure of the source, the `502` a read by id answers with.
+holds and caches nothing. Every entry is copied as a read by id copies a
+Patient (ADR 0014, "A straight copy"), as received (ADR 0020): its NRIC,
+official name's text, gender and birth date are each present, missing or in the
+wrong format, and none fails the search. Its id is the one field validated
+(ADR 0020, D1): a row is selected by it, so a match with no id, or one outside
+FHIR's id grammar, is dropped from the page and counted (D5), never a failure.
+An entry whose resource is no Patient is a row whose every field is invalid,
+which selects nothing. Only a `200` searchset is an answer — any other status, a
+`404` included, no answer within the timeouts, a Bundle that is no searchset,
+has no `total` or a negative one, or an entry with no resource is a failure of
+the source, the `502` a read by id answers with.
 
 **D2. One box, two searches, refused before the source.** The query, trimmed,
 is an exact NRIC search when it is a full NRIC in either case
@@ -75,17 +80,25 @@ never a failure of the source. A read by id ignores it, and the R5
 `Patient` served at `GET /api/patient/{id}` does not carry it.
 
 **D5. Plain JSON, outside the FHIR namespace.** The answer is the application
-API's own shape, `{totalResults, startIndex, patients: [{id, name, nric,
-gender, birthDate, lastVisit, invalid}]}`, at `/api/patient-search` — outside
-`/api/patient`, so its errors are `ApiError`, not a FHIR `OperationOutcome`.
-Each row carries the Patient's id, the EHR's FHIR id a read by id takes, so a
-page can open the Patient from it. `patient:read` gates it, in the handler's
+API's own shape, `{totalResults, startIndex, droppedResults, patients: [{id,
+name, nric, gender, birthDate, lastVisit, invalid}]}`, at `/api/patient-search`
+— outside `/api/patient`, so its errors are `ApiError`, not a FHIR
+`OperationOutcome`. Each row carries the Patient's id, the EHR's FHIR id a read
+by id takes, so a page can open the Patient from it; a row's other fields are
+each `null` when missing or in the wrong format, `invalid` naming the second
+kind, and a gender outside the four is its raw code (ADR 0020, D5). A row for an
+entry that is no Patient has a `null` id and every other field named in
+`invalid`. `totalResults` is the source's `total`, unchanged; `droppedResults`
+counts the page's matches dropped for want of a FHIR id, so the page says how
+many it could not show without naming any, and its pager counts them among the
+page's entries, since the source's next page starts after them. `patient:read` gates it, in the handler's
 `@PreAuthorize`, the chain's backstop and the document's `security` (ADR 0015).
 
 **D6. Every answered search is audited; reads by id stay unaudited.** Each
 search the source answers appends one `PATIENT_SEARCH`: the signed-in User as
-actor, resource type `Patient` with no subject, the number of Patients the page
-held, and the query's kind — `NRIC` or `NAME`, a closed set — as the row's
+actor, resource type `Patient` with no subject, the source's `total` — how many
+Patients the search matched, every page together, whatever the page dropped —
+and the query's kind — `NRIC` or `NAME`, a closed set — as the row's
 filter shape. Never the query, a name or an NRIC: no component of an audit
 event can hold a string (ADR 0004's boundary), and the kind is what tells a
 lookup from a sweep. Fail-closed, as a SCIM bulk read is: a search the trail
@@ -145,5 +158,9 @@ kept as it was stored, and the Audit page shows it verbatim.
   name or NRIC is still a partial identifier, and a hash of an NRIC is reversible
   by enumerating the NRIC space. The kind and count say what kind of search was
   made without saying for whom.
+- **Record the number of Patients the answered page held.** Rejected: a page
+  that dropped a match would record fewer than the source matched, and the
+  total says how broad the search was, which is what tells a lookup from a
+  sweep.
 - **Leave searches unaudited, as reads by id are.** Rejected: a search is a
   bulk read, the shape enumeration takes, and an unrecorded one is invisible.

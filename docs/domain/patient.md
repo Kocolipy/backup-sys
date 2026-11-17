@@ -1,7 +1,7 @@
 ---
 type: Domain Rules
 title: Patients
-description: The FHIR R5 Patient the service serves — its element rules, each of its four elements and its Demographic details shown as received, the NRIC system, the authoritative name text, derived age, the in-house patient source it is read from and the elements copied, no caching, Patient search and the Last visit shown as received, the data classification, the error contract, the logging rules, the absence of auditing for reads by id and the audit of every search, the follow-ups before real data, the Patient card's patient in context, the Search page, the development fixtures, received stubs, search stubs and fault stubs in the source's mock, and how R5 conformance is proven.
+description: The FHIR R5 Patient the service serves — its element rules, each of its four elements and its Demographic details shown as received, the NRIC system, the authoritative name text, derived age, the in-house patient source it is read from and the elements copied, no caching, Patient search shown as received with its Last visit, a match without a FHIR id dropped and counted, the data classification, the error contract, the logging rules, the absence of auditing for reads by id and the audit of every search, the follow-ups before real data, the Patient card's patient in context, the Search page, the development fixtures, received stubs, search stubs and fault stubs in the source's mock, and how R5 conformance is proven.
 tags: [patient, fhir]
 ---
 
@@ -218,27 +218,46 @@ own, and holds and caches nothing.
   filter.
 - **Checked as the request is read in.** A gender spelled any other way is
   `400`, before the source is called. Any other parameter is ignored.
-- **The answer** is plain JSON, `{totalResults, startIndex, patients: [{id,
-name, nric, gender, birthDate, lastVisit, invalid}]}`: the Patient's id (the
-  EHR's FHIR id, which `GET /api/patient/{id}` reads it by), the official name's
-  text, the NRIC, the gender code, and both dates as `YYYY-MM-DD`. Each match's
-  five elements are copied as a read by id copies them, but read strictly
-  (ADR 0018), so a match must hold each, a gender of the four and a birth date
-  to the day. Its Last visit is shown as received (ADR 0020,
-  ["Last visit"](#last-visit)): `null` for a Patient with none or one in the
-  wrong format, and `invalid`, `["lastVisit"]` in the second case and `[]`
-  otherwise, tells the two apart.
+- **The answer** is plain JSON, `{totalResults, startIndex, droppedResults,
+patients: [{id, name, nric, gender, birthDate, lastVisit, invalid}]}`: the
+  Patient's id (the EHR's FHIR id, which `GET /api/patient/{id}` reads it by),
+  the official name's text, the NRIC, the gender code, and both dates as
+  `YYYY-MM-DD`.
+- **Shown as received** (ADR 0020, ["Shown as received"](#shown-as-received)).
+  Each match's NRIC, official name's text, gender and birth date are copied as a
+  read by id copies them, and its Last visit as ["Last visit"](#last-visit)
+  has it: each is `null` when missing or in the wrong format, and `invalid`
+  names the second kind, in the row's order (`name`, `nric`, `gender`,
+  `birthDate`, `lastVisit`). A gender outside the four codes is its raw code.
+  Nothing a match holds fails the search.
+- **The id is validated.** A row is selected by its Patient's id, so a match
+  is shown only under one in FHIR's id grammar, `[A-Za-z0-9\-.]{1,64}`, sent as
+  text (ADR 0020, D1). A match with no `id`, one of another JSON type or one
+  outside the grammar is dropped from `patients` and counted in
+  `droppedResults`; `totalResults` stays the source's `total`. Nothing else of
+  a dropped match is answered.
+- **An entry that is no Patient** — another resource, or one naming no type —
+  is a row whose `id` and every other field is `null`, each but the id named in
+  `invalid`: a row of "Error" cells that selects nothing.
+- **Reported, never a value.** A page that dropped a match, held an entry that
+  is no Patient or a field in the wrong format writes one `WARN`
+  `patient_source.invalid_fields`, its read `search`, naming each by its path in
+  the source's answer — a dropped match's `entry[1].id`, an entry that is no
+  Patient's `entry[2].resourceType`, a field's `entry[0].identifier[1].value`,
+  `entry[0].name[1].text`, `entry[0].gender`, `entry[0].birthDate` or
+  `entry[0].extension[0].valueDate` — and each counts once in the
+  `patient_source.invalid_fields` counter, tagged `read` `search` and `field`
+  (`id`, `resourceType`, `name`, `nric`, `gender`, `birthDate` or `lastVisit`)
+  (`backend/docs/LOG_RECORDS.md`).
 - **Errors are the application API's `ApiError`**, not an `OperationOutcome`:
   the search is outside `/api/patient`. `400` for a query too short, a gender
   the search cannot take, or a paging value that is no integer, `401` and
   `403` as everywhere (`patient:read`), and
   `502` for the source failing as a read by id's `502` — no connection, no answer
   within 2 seconds to connect and 5 to answer, any status but a `200` (a `404`
-  included) — or answering a `200` that is no searchset Bundle, has no `total`,
-  or holds an entry that is no Patient the service can hold: no `id` or one
-  outside FHIR's grammar, no NRIC, no official name or one with no `text`, no
-  gender or a code outside the four, or a birth date missing or not to the day.
-  A Last visit never fails it.
+  included) — or answering a `200` that is no searchset Bundle, has no `total`
+  or a negative one, or holds an entry with no resource. What a match holds
+  never fails it.
 - **Audited, unlike a read by id.** Each search the source answers appends one
   `PATIENT_SEARCH` (["Patient reads are not audited"](#patient-reads-are-not-audited)).
 
@@ -255,11 +274,8 @@ first `last-visit` extension's `valueDate` is present when it is a calendar
 date, missing when there is no such extension or its `valueDate` is absent,
 `null` or blank, and invalid — "Error" on the Search page — when it is the wrong
 JSON type or no date to the day (`2026-10`, a month alone). It never fails the
-search. A search whose matches hold an invalid one writes one `WARN`
-`patient_source.invalid_fields`, its read `search` and each by its path in the
-source's answer, `entry[0].extension[0].valueDate`, never its value; each
-counts once in the `patient_source.invalid_fields` counter, tagged `read`
-`search` and `field` `lastVisit` (`backend/docs/LOG_RECORDS.md`).
+search; an invalid one is reported as any field of a match is, by its path,
+`entry[0].extension[0].valueDate`, under `field` `lastVisit`.
 
 ### The Search page
 
@@ -274,15 +290,24 @@ NRIC", searched only on submit (Enter or the Search button).
   "Enter at least 3 characters to search by name." beside the box and sends
   nothing; the results last read stay.
 - **Results**, under the heading "Search Results": a table of Patient Name (the
-  official name only), NRIC (in full), Gender (a badge, Male blue and Female pink), Date of Birth and Last
-  Visit (`dd MMM yyyy`, a missing Last visit `—`, one in the wrong format
-  "Error"), five to a page with the numbered pager and "Showing x to y of N
-  records" — shown whenever there is a
-  match, on a single page too. Each row keeps the Patient's id, never shown.
+  official name only), NRIC (in full), Gender (a badge, Male blue and Female
+  pink, a code outside the four as itself on the plain badge), Date of Birth
+  and Last Visit (`dd MMM yyyy`), each cell shown as received — its value, `—`
+  when missing, "Error" in the wrong format — five to a page with the numbered
+  pager and "Showing x to y of N records" — shown whenever there is a match, on
+  a single page too. Each row keeps the Patient's id, never shown. An entry
+  that is no Patient is a row of "Error" cells, with no pointer, that selects
+  nothing.
+- **Matches not shown.** A page that dropped matches for want of a FHIR id says
+  how many beneath the table — "1 record couldn't be shown", "2 records
+  couldn't be shown" — and nothing else of them. `N` stays the source's total,
+  and the range and the next page count the dropped among the page's records,
+  so paging on skips none of the source's.
 - **Selecting a result** puts the row's Patient, by that id, into the tab's
   **EHR context** and goes to Home, whose Patient card and top bar show them.
   A click anywhere on the row selects it, and the Patient Name is a button, so
-  the keyboard and assistive technology select it too; rows show a hover state
+  the keyboard and assistive technology select it too — whatever its fields
+  hold, a name missing showing `—` on the button; rows show a hover state
   and a pointer cursor. A selection replaces the patient already in context
   with no confirmation; selecting the patient already in context only goes to
   Home, the context unchanged and the patient not read again. No row marks the
@@ -410,10 +435,9 @@ adapter every namespace shares. A new FHIR resource served beneath
   connect timeout, or no whole answer within the read timeout: headers late,
   or a body that stalled past it), `server-error`, `unexpected-status`,
   `unreadable` (a body that arrived whole and is not JSON or not a Patient) —
-  or the rule the Patient broke — `another-resource` — or, for a search, what its answer or a match
-  lacked — `not-a-searchset`, `no-total`, `no-id`, `invalid-id`, `no-nric`,
-  `no-official-name`, `no-name-text`, `no-gender`, `no-birth-date`,
-  `birth-date-not-to-the-day` — and whose error message is the fault's fixed
+  or the rule the Patient broke — `another-resource` — or, for a search, what
+  its answer lacked — `not-a-searchset`, `no-total`, `another-resource` (an
+  entry with no resource) — and whose error message is the fault's fixed
   sentence. It never names the patient id, the NRIC, the name, the birth date,
   the query searched for or anything of the source's body.
 - **A Patient holding elements in the wrong format is one `WARN`**,
@@ -430,6 +454,9 @@ adapter every namespace shares. A new FHIR resource served beneath
   `nextOfKin.name`, `nextOfKin.relationship`, `nextOfKin.phone`,
   `serviceRecord.<field>` and each date's url (`ordDate`). A Patient with none
   writes nothing. `PatientSourceAdapterContractTests` holds the record and the counter.
+  A search's page is reported the same way, its read `search`
+  (["Patient search"](#patient-search)), and one with nothing to report writes
+  nothing.
 - **A failure of the patient source names nothing of the patient.** Its
   exception's message is fixed text, naming at most a status or an element, and
   its cause is redacted to its type (`RedactedFaultException`): an HTTP client's
@@ -458,7 +485,8 @@ deployment that adds one must account for this audit boundary.
 Restricted data, the shape enumeration takes. Each search the source answers
 appends one `PATIENT_SEARCH`, fail-closed as a SCIM bulk read is (ADR 0004):
 the signed-in User as actor, resource type `Patient` with no subject or
-resource, how many Patients the answered page held as `resultCount`, and as
+resource, the source's `total` — every Patient the search matched, whatever
+the answered page dropped — as `resultCount`, and as
 `filterShape` the query's kind — `NRIC` or `NAME` — then the gender filter
 when it was used, with `?` for its value: `NAME and gender eq ?` for a name
 search filtered by gender (`AuditPatientSearchFilter`). It never holds the
@@ -550,10 +578,18 @@ reaches a deployed environment. The backend holds no fixture of its own.
   `last-visit` extension whose one service record has a `rank` that is a number
   and no `unit`, an `enlistmentDate` to the month, a present `ordDate`, no
   `mrDate` and a `rodDate` that is a number. A received stub is no fixture: every
-  reader of the fixtures leaves it out, and it matches no search, which reads
-  its matches strictly. Its NRIC, where it has one as text, is as dummy as a
-  fixture's, and the tests hold it to the same check. `PatientStoreContract`
-  holds what each reads as, written out.
+  reader of the fixtures leaves it out, and it matches no search. Its NRIC,
+  where it has one as text, is as dummy as a fixture's, and the tests hold it to
+  the same check. `PatientStoreContract` holds what each reads as, written out.
+- **The received search.** A search shown as received has no data-fault stubs
+  either: `search-received`, marked with `metadata.received`, answers the name
+  search `teo`, which names no fixture, with a page of five, `total: 5` — a
+  Patient whose NRIC is a number, whose gender is `F` and whose birth date is
+  `1971-03`; a Patient with no `id`; an `Observation`; a Patient whose `id`
+  holds a space; and a Patient with no NRIC, no official name, no gender, no
+  birth date and no Last visit. None of its entries is a fixture, and none
+  carries an NRIC as text. `PatientStoreContract` holds what it reads as: two
+  matches dropped, a row with no Patient, and two matches shown as received.
 - **Fault stubs.** Beside them, each failure a stub can serve has a
   stub of its own, marked with `metadata.fault` and under a well-formed id no
   fixture uses: `fault-slow` answers only after the read timeout,
@@ -561,8 +597,8 @@ reaches a deployed environment. The backend holds no fixture of its own.
   the read timeout, and `fault-server-error` answers `503`. A fault
   stub is no fixture: every reader of the fixtures leaves it out. Its NRIC, where it has one, is as
   dummy as a fixture's, and the tests hold it to the same check.
-- **Search stubs.** Each documented search has a canned stub answering a
-  searchset Bundle whose entries are the fixtures themselves, exactly as their
+- **Search stubs.** Each documented search but the received one has a canned
+  stub answering a searchset Bundle whose entries are the fixtures themselves, exactly as their
   own stubs serve them, in the mock's one stable order — newest Last visit
   first, ties by id, a Patient with none last — matched on the query the
   backend sends, with the `gender` filter pinned to its exact value or, where
@@ -581,7 +617,7 @@ reaches a deployed environment. The backend holds no fixture of its own.
   A low-priority fallback, `search-fallback`, answers any other `/Patient`
   search — a gender filter on any other search or page included — with an
   empty searchset, `total: 0`. `PatientSourceFixturesTests` holds each search's
-  entries to the fixtures, the `tan` pages to every fixture whose name contains
+  entries to the fixtures, the received search's to none of them, the `tan` pages to every fixture whose name contains
   it, and each `tan` stub to the fixtures its gender filter selects in the
   mock's order; `PatientStoreContract` holds what each canned search reads,
   written out.

@@ -1,7 +1,7 @@
 ---
 type: Decision Record
 title: "ADR 0020: Patient-source data is shown as received"
-description: The patient source is the truth, so no record or response is refused for what a field holds — a missing field is shown as "—", one in the wrong format as "Error", a code outside its closed set as the raw code — while transport and structural failures still fail the read; a row missing a Mandatory element is flagged, never refused; the shared pieces each read adopts it through, enacted for the FFI, NUMC, ARMC and Medication Histories, a Patient read by id — its Demographic details included — and a Patient search's Last visit, and the parts of ADR 0014, 0018 and 0019 it supersedes.
+description: The patient source is the truth, so no record or response is refused for what a field holds — a missing field is shown as "—", one in the wrong format as "Error", a code outside its closed set as the raw code — while transport and structural failures still fail the read, and a Patient search's match without a FHIR id is dropped and counted, the one field validated; a row missing a Mandatory element is flagged, never refused; the shared pieces each read adopts it through, enacted for the FFI, NUMC, ARMC and Medication Histories, a Patient read by id — its Demographic details included — and a Patient search, and the parts of ADR 0014, 0018 and 0019 it supersedes.
 tags:
   [
     patient,
@@ -26,10 +26,9 @@ Accepted. Enacted for the FFI History (`/docs/domain/ffi.md`), the NUMC
 History (`/docs/domain/numc.md`), the ARMC History (`/docs/domain/armc.md`),
 the Medication History (`/docs/domain/medication.md`), a Patient read by id —
 its NRIC, official name's text, gender, birth date and Demographic details —
-and a Patient search's Last visit (`/docs/domain/patient.md`). The other
-patient-source read — the rest of a Patient search's match — keeps the strict
-reading its ADR describes until it adopts the shared pieces below; the rule is
-decided for it too.
+and a Patient search, its matches' five fields and Last visit
+(`/docs/domain/patient.md`): every patient-source read. A search's match's id
+is the one field validated (D1).
 
 ## Context
 
@@ -64,6 +63,15 @@ shows) or as **"Error"**:
 end before its start, or an id outside FHIR's id grammar is shown as received.
 History record ids are not checked; a row with no id is keyed by its place.
 
+**A Patient search's match is the one exception: its id is validated.** The id
+is what selecting the match's row opens the Patient by, so a match is shown
+only under one in FHIR's id grammar, `[A-Za-z0-9\-.]{1,64}`, sent as text. A
+match with no id, one of another JSON type or one outside the grammar is
+dropped from the page, never a failure of the search: the page counts it
+beside the source's `total`, which it answers unchanged, says how many it
+dropped and nothing else of them, and reports each as D5's observability
+reports an invalid field, by its path (`entry[2].id`).
+
 **D2. A code outside a closed set is shown as the raw code**, with a neutral
 label or badge. The closed sets stay, for what the service checks and offers:
 an unknown code in a filter parameter is our `400`, a Filter panel offers only
@@ -77,7 +85,11 @@ the SPA–API contract check.
   unreachable, or a status the read does not take.
 - **Structural failures**: a body that is not JSON, not the expected resource
   or not a `searchset` `Bundle`; a missing or negative `total`; an entry with no
-  resource, one that is no object, or one of another resource.
+  resource, one that is no object, or, in a history, one of another resource.
+
+A Patient search's entry whose resource is no Patient fails nothing: it is
+shown as a row whose every field is invalid, "Error" in each cell, and which
+has no id, so it selects no Patient.
 
 **D4. The sort is the source's, passed through unchanged**, as ADR 0018, D7
 and ADR 0019, D4 have it: a malformed field sorts wherever the source puts it.
@@ -93,17 +105,22 @@ and ADR 0019, D4 have it: a malformed field sorts wherever the source puts it.
 - **The API's shape.** A patient-source field is nullable; a closed-set field is
   "a known code or any string" (`anyOf` the set's enum, any string, and
   `null`); and each row carries `invalid`, the names of its fields whose format
-  was wrong. A `null` field `invalid` does not name is missing. A FHIR resource
+  was wrong. A `null` field `invalid` does not name is missing. A search's page
+  answers `droppedResults`, how many of its matches it dropped (D1), beside its
+  rows and the source's `totalResults`. A FHIR resource
   — a Patient read by id — has no `null` and no element for `invalid`, so there
   a field missing or in the wrong format is left out, and each one in the wrong
   format is named by its path in the resource (`name[0].text`, nested as deep
   as `contact[0].relationship[1].text` or a path into the military service
   extension) in an extension of the service's own, keeping the resource base
   R5 (ADR 0014).
-- **Observability.** One `WARN` per response that held invalid fields,
+- **Observability.** One `WARN` per response that held invalid fields — or, in
+  a search, dropped a match or held an entry that is no Patient —
   `patient_source.invalid_fields`, listing each field's path in the source's
-  answer (`entry[3].issueDate`) and never its value (ADR 0003), and the counter
-  `patient_source.invalid_fields`, tagged by `read` and `field`. Both are
+  answer (`entry[3].issueDate`; a dropped match's `entry[2].id`, an entry that
+  is no Patient's `entry[1].resourceType`) and never its value (ADR 0003), and
+  the counter `patient_source.invalid_fields`, tagged by `read` and `field`, one
+  count per path. Both are
   written by `observability.InvalidSourceFields`: the patient module writes no
   log record (ADR 0014).
 - **The SPA–API contract check.** The response-shape sampler samples nullable
@@ -153,14 +170,17 @@ For a Patient read by id:
   stays one: it is not the expected resource, and the Patient's histories are
   read by the id asked for, never one the Patient carries.
 
-For a Patient search's Last visit:
+For a Patient search:
 
-- ADR 0018, D4: a Last visit not to the day being a failure of the source. The
-  rest of a search's match keeps ADR 0018's strict reading.
-
-For each other read, as it adopts the rule:
-
-- ADR 0018, D1: a search's entry with no `id` being a failure of the source.
+- ADR 0018, D1: a match being copied strictly — one with no NRIC, no official
+  name or one with no text, no gender or a code outside the four, or a birth
+  date missing or not to the day being a failure of the source — and an entry
+  with no `id`, one outside FHIR's grammar or one of another resource being one.
+  A match without a FHIR id is dropped and counted (D1), and an entry of another
+  resource is a row of "Error" cells (D3).
+- ADR 0018, D4: a Last visit not to the day being a failure of the source.
+- ADR 0018, D6: the audit row counting the Patients the page held. It records
+  the source's `total`, which no dropped match changes.
 
 **D7. A Mandatory element is flagged, never refused.** A history may declare
 an element of its record a **Mandatory element**. A row whose Mandatory
@@ -196,9 +216,15 @@ elements are its Medication and its Dispense Status
 - **Keep failing the response on a malformed field.** Rejected: one field of
   one record hides the whole history, and the service cannot correct the data
   it refuses.
-- **Drop a malformed record and show the rest.** Rejected: the clinician cannot
-  tell a record that is not there from one that was dropped, and the count would
-  not match the source's `total`.
+- **Drop a malformed record and show the rest.** Rejected for every field but a
+  search's match's id: the clinician cannot tell a record that is not there from
+  one that was dropped, and the count would not match the source's `total`. A
+  match without a FHIR id is dropped all the same, because a row with none could
+  not be selected; the page keeps the source's `total` and says how many it
+  dropped, so the clinician can tell.
+- **Show a match without a FHIR id as a row that selects nothing.** Rejected: a
+  Patient Search row exists to be selected, and an id outside the grammar is no
+  id the service can read the Patient by.
 - **Show a malformed field blank.** Rejected: a blank reads as "the source holds
   nothing" when it holds something wrong; "Error" and "—" keep the two apart.
 - **Send the raw invalid value to the SPA.** Rejected: the SPA would have to

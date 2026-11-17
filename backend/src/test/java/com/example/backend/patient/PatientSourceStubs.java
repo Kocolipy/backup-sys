@@ -75,7 +75,8 @@ public final class PatientSourceStubs {
 
     /**
      * Every search stub: the R4 searchset {@code Bundle} each stub answering
-     * {@code GET /Patient?…} serves — the canned searches and the fallback for any other.
+     * {@code GET /Patient?…} serves — the canned searches, the received search and the fallback
+     * for any other.
      */
     public static List<JsonNode> searches() {
         return searchStubs().stream().map(SearchStub::bundle).toList();
@@ -83,23 +84,31 @@ public final class PatientSourceStubs {
 
     /**
      * Every search stub, as the search it matches beside the Bundle it answers: the canned
-     * searches and the fallback for any other, whose matcher names no query parameter.
+     * searches, the received search ({@link SearchStub#received()}) and the fallback for any
+     * other, whose matcher names no query parameter.
      */
     public static List<SearchStub> searchStubs() {
         return stubs()
-                .filter(stub -> "/Patient".equals(stub.at("/request/urlPath").asString("")))
+                .filter(stub -> SEARCH.equals(stub.at("/request/urlPath").asString("")))
                 .map(stub -> new SearchStub(stub.at("/request/queryParameters"),
-                        stub.at("/response/jsonBody")))
+                        stub.at("/response/jsonBody"), !stub.at(RECEIVED).isMissingNode()))
                 .toList();
     }
+
+    /** The path every search stub answers. */
+    private static final String SEARCH = "/Patient";
 
     /**
      * One search stub.
      *
-     * @param query  its query parameters' matchers, by parameter name — missing for the fallback
-     * @param bundle the searchset it answers
+     * @param query    its query parameters' matchers, by parameter name — missing for the fallback
+     * @param bundle   the searchset it answers
+     * @param received whether it is the received search, marked with {@code metadata.received}:
+     *                 entries shown as received (ADR 0020) — a Patient with no id or one outside
+     *                 FHIR's grammar, an entry that is no Patient, fields missing and malformed —
+     *                 rather than the fixtures themselves
      */
-    public record SearchStub(JsonNode query, JsonNode bundle) {
+    public record SearchStub(JsonNode query, JsonNode bundle, boolean received) {
 
         /** Whether it is the fallback, matching any search. */
         public boolean fallback() {
@@ -111,11 +120,13 @@ public final class PatientSourceStubs {
      * Every received stub: a stub whose {@code metadata.received} names what of a Patient's
      * elements it holds missing or in the wrong format — a {@code 200} Patient a read by id shows
      * as received (ADR 0020), not a failure — under a well-formed id no fixture uses. It is no
-     * fixture: it matches no search, which reads its Patients strictly.
+     * fixture, and no search matches it. The received search is a search stub
+     * ({@link #searchStubs()}), not one of these.
      */
     public static List<ReceivedStub> received() {
         return stubs()
                 .filter(stub -> !stub.at(RECEIVED).isMissingNode())
+                .filter(stub -> !SEARCH.equals(stub.at("/request/urlPath").asString("")))
                 .map(stub -> new ReceivedStub(stub.at(RECEIVED).asString(),
                         stub.at("/request/urlPath").asString().substring("/Patient/".length()),
                         stub.at("/response")))

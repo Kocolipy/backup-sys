@@ -125,11 +125,20 @@ change, when the backend side moves. What the SPA has to honour:
   a gender it does not offer, and `502` for the patient source failing, which
   the Search page reports with a Retry. Its query and filter travel only in
   that request's query string — the query through `encodeURIComponent` —
-  never in the page's URL. Each match's five elements are decoded strictly;
-  its `lastVisit` is shown as received (ADR 0020), read by the lenient field
-  decoder against the row's `invalid`: `null` is "—", `null` named in
-  `invalid` is "Error", and so is a value that is no calendar date, so a
-  Last visit never fails the read.
+  never in the page's URL. A match is shown as received (ADR 0020): the page
+  and each row's shape are decoded strictly — `droppedResults` beside
+  `totalResults` and `startIndex`, every field of a row there, `invalid` an
+  array of strings, and a field the decoder does not know refused — and the
+  row's `id` strictly too, a string or, for an entry that is no Patient,
+  `null`; but `name`, `nric`, `gender`, `birthDate` and `lastVisit` through the
+  lenient field decoder against the row's `invalid`: `null` is "—", `null`
+  named in `invalid` is "Error", and so is a date that is no calendar date,
+  and a gender outside the four codes is shown as it came, so none fails the
+  read. A row with a `null` id selects nothing. The backend never sends a
+  match it could not give a FHIR id: it counts it in `droppedResults`, which
+  the page says beneath the table ("2 records couldn't be shown") and its
+  pager counts among the page's records, so moving on asks for the source's
+  next page from past them; `totalResults` stays the source's.
 - **A patient's FFI History answers plain JSON, not FHIR.**
   `GET /api/patient-ffi/{patientId}` sits outside `/api/patient` too, so it
   answers `application/json` and every refusal or fault the application API's

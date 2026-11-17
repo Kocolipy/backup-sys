@@ -4,8 +4,8 @@ import java.util.List;
 
 /**
  * A record shown as the patient source sent it (ADR 0020) — a patient history's, a Patient read
- * by id, or a search's match, whose Last visit is — each such element a {@link SourceField}, and
- * none refused for what it holds.
+ * by id, or a search's match — each such element a {@link SourceField}, and none refused for
+ * what it holds.
  */
 public interface ReceivedRecord {
 

@@ -22,7 +22,11 @@ public enum SourceRead {
     /** A Patient read by id. */
     PATIENT("patient"),
 
-    /** A Patient search, whose matches' Last visits are shown as received. */
+    /**
+     * A Patient search, whose matches are shown as received, and whose dropped matches — a
+     * Patient with no id in FHIR's grammar — and entries that are no Patient are reported beside
+     * its invalid fields.
+     */
     SEARCH("search");
 
     private final String tag;

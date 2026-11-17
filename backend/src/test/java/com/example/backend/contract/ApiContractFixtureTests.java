@@ -357,6 +357,10 @@ class ApiContractFixtureTests {
             t.expect(t.get("/api/patient-search?q=s9212345a&count=5").cookie(user), 200);
             // A match whose Last visit is not to the day: null, and named in its invalid.
             t.expect(t.get("/api/patient-search?q=S9912345B&count=5").cookie(user), 200);
+            // The received search (ADR 0020): two matches with a bad id dropped and counted, an
+            // entry that is no Patient a row of nulls, and fields missing, malformed and a
+            // gender's raw code.
+            t.expect(t.get("/api/patient-search?q=teo&count=5").cookie(user), 200);
             t.expect(t.get("/api/patient-search?q=tan&count=5&gender=male").cookie(user), 200);
             t.expect(t.get("/api/patient-search?q=ta").cookie(user), 400);
             t.expect(t.get("/api/patient-search?q=tan&count=five").cookie(user), 400);

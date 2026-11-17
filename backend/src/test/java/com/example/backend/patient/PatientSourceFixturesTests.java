@@ -30,7 +30,8 @@ import tools.jackson.databind.JsonNode;
  * reads them are {@code PatientStoreContract}'s. Beside them, the received stubs serve Patients
  * holding elements missing or in the wrong format, shown as received (ADR 0020), the fault stubs
  * each way the source fails, both under ids of their own, and the search stubs answer the
- * documented searches with the fixtures themselves.
+ * documented searches with the fixtures themselves, but for the received search's entries,
+ * shown as received.
  */
 class PatientSourceFixturesTests {
 
@@ -123,10 +124,15 @@ class PatientSourceFixturesTests {
                         tuple("dev-patient-12", "2026-10"));
     }
 
-    /** Each search answers its matches as the fixtures themselves, exactly as read by id. */
+    /**
+     * Each search but the received one answers its matches as the fixtures themselves, exactly as
+     * read by id.
+     */
     @Test
     void everySearchMatchIsTheFixtureUnderItsId() {
-        List<JsonNode> matches = PatientSourceStubs.searches().stream()
+        List<JsonNode> matches = PatientSourceStubs.searchStubs().stream()
+                .filter(stub -> !stub.received())
+                .map(PatientSourceStubs.SearchStub::bundle)
                 .flatMap(bundle -> StreamSupport.stream(bundle.at("/entry").spliterator(), false))
                 .map(entry -> entry.get("resource"))
                 .toList();
@@ -196,7 +202,31 @@ class PatientSourceFixturesTests {
                         tuple("Bundle", "searchset", 7),
                         tuple("Bundle", "searchset", 7),
                         tuple("Bundle", "searchset", 3),
-                        tuple("Bundle", "searchset", 4));
+                        tuple("Bundle", "searchset", 4),
+                        tuple("Bundle", "searchset", 5));
+    }
+
+    /**
+     * The one received search is no fixture's: none of its entries is a fixture, and no
+     * fixture's name holds its query. What it reads as is {@code PatientStoreContract}'s.
+     */
+    @Test
+    void theReceivedSearchServesNoFixture() {
+        List<String> fixtureIds = FIXTURES.stream().map(fixture -> fixture.get("id").asString())
+                .toList();
+        List<PatientSourceStubs.SearchStub> received = PatientSourceStubs.searchStubs().stream()
+                .filter(PatientSourceStubs.SearchStub::received)
+                .toList();
+
+        assertThat(received).singleElement().satisfies(stub -> {
+            String query = asked(stub, "name:contains").orElseThrow();
+            assertThat(StreamSupport.stream(stub.bundle().at("/entry").spliterator(), false)
+                    .map(entry -> entry.at("/resource/id").asString("")))
+                    .doesNotContainAnyElementsOf(fixtureIds);
+            assertThat(FIXTURES).noneMatch(fixture -> StreamSupport.stream(
+                            fixture.at("/name").spliterator(), false)
+                    .anyMatch(name -> name.get("text").asString().toLowerCase().contains(query)));
+        });
     }
 
     // ---- the sort and filter stubs -------------------------------------------------------
@@ -212,7 +242,7 @@ class PatientSourceFixturesTests {
     @Test
     void everyCannedSearchPinsEveryFilterItUsesOrNot() {
         assertThat(PatientSourceStubs.searchStubs()).filteredOn(stub -> !stub.fallback())
-                .hasSize(7)
+                .hasSize(8)
                 .allSatisfy(stub -> assertThat(FILTER_PARAMETERS)
                         .as("each filter's matcher, absent or pinned")
                         .allMatch(parameter -> pinsOrAbsent(stub.query().path(parameter))));
