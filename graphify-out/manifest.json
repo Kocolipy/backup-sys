@@ -5826,9 +5826,9 @@
     "semantic_hash": ""
   },
   "frontend/docs/DESIGN.md": {
-    "mtime": 1794908074.3797026,
-    "seen": 1794910330.4238603,
-    "ast_hash": "d296785012362e32894c14b604164b05",
+    "mtime": 1794922969.756164,
+    "seen": 1794923317.1240969,
+    "ast_hash": "6b124687627be2c7188be115ebd32253",
     "semantic_hash": ""
   },
   "docs/agents/test-design.md": {
@@ -7050,15 +7050,15 @@
     "semantic_hash": ""
   },
   "frontend/src/pages/ffi/ffi.test.tsx": {
-    "mtime": 1794909423.8393035,
-    "seen": 1794910330.4236894,
-    "ast_hash": "7a10c6931f5a62e811462a0524556c81",
+    "mtime": 1794922923.0255017,
+    "seen": 1794923317.1180568,
+    "ast_hash": "2ef02d68625155ddddcf434797dfd680",
     "semantic_hash": ""
   },
   "frontend/src/pages/ffi/ffi.tsx": {
-    "mtime": 1794907704.4118073,
-    "seen": 1794910330.4236903,
-    "ast_hash": "bd6176cdf545323f4b5b09885f5b3585",
+    "mtime": 1794923173.0432572,
+    "seen": 1794923317.118059,
+    "ast_hash": "75c7ec0152438d28ccad202782d5c663",
     "semantic_hash": ""
   },
   "frontend/src/pages/filter-popover.test.tsx": {
@@ -7134,9 +7134,9 @@
     "semantic_hash": ""
   },
   "docs/domain/ffi.md": {
-    "mtime": 1794909395.7753112,
-    "seen": 1794910330.4238524,
-    "ast_hash": "ee4ad3ff471de0b13803f288db69938d",
+    "mtime": 1794922953.112107,
+    "seen": 1794923317.1238575,
+    "ast_hash": "6e16730cf813ecc8f0723d31869f6ca2",
     "semantic_hash": ""
   },
   "backend/src/main/java/com/example/backend/patient/domain/SourceCode.java": {
@@ -7260,15 +7260,15 @@
     "semantic_hash": ""
   },
   "frontend/src/pages/numc/numc.test.tsx": {
-    "mtime": 1794909423.8993034,
-    "seen": 1794910330.423715,
-    "ast_hash": "4b62714186e30ebc837145ee93f15fbf",
+    "mtime": 1794922925.1704414,
+    "seen": 1794923317.118948,
+    "ast_hash": "e5e8996c3145dfb9fb1e16e4fd8704c1",
     "semantic_hash": ""
   },
   "frontend/src/pages/numc/numc.tsx": {
-    "mtime": 1794907756.3277924,
-    "seen": 1794910330.4237156,
-    "ast_hash": "ffd9e93ddb421f1853195fdb7f782485",
+    "mtime": 1794923173.0443828,
+    "seen": 1794923317.1189492,
+    "ast_hash": "f8f594a8f37f685d7767cf9efad515af",
     "semantic_hash": ""
   },
   "frontend/test/e2e/numc.spec.ts": {
@@ -7278,9 +7278,9 @@
     "semantic_hash": ""
   },
   "docs/domain/numc.md": {
-    "mtime": 1794909401.1553097,
-    "seen": 1794910330.4238546,
-    "ast_hash": "7bda311c3e7a7d8af9f8efe6059f3e79",
+    "mtime": 1794922954.5331097,
+    "seen": 1794923317.1239069,
+    "ast_hash": "26fd81c3c48b836d5f4033b044d7ee10",
     "semantic_hash": ""
   },
   "backend/src/main/java/com/example/backend/patient/domain/ClosedSets.java": {
@@ -8460,9 +8460,9 @@
     "semantic_hash": ""
   },
   "frontend/src/pages/mandatory-elements.tsx": {
-    "mtime": 1794907416.061164,
-    "seen": 1794910330.4237068,
-    "ast_hash": "d6ddb8ad63daab0d9e09d1d5a2c27773",
+    "mtime": 1794922511.4768875,
+    "seen": 1794922887.4009073,
+    "ast_hash": "d93776d4eda15bbe920e82888aa9f41e",
     "semantic_hash": ""
   },
   "frontend/test/e2e/demographic.spec.ts": {
@@ -8484,9 +8484,9 @@
     "semantic_hash": ""
   },
   "frontend/src/pages/mandatory-elements.test.tsx": {
-    "mtime": 1794909357.8099427,
-    "seen": 1794910330.4237049,
-    "ast_hash": "128fbf55fe59313bfb79fc3116c88333",
+    "mtime": 1794922682.799431,
+    "seen": 1794922887.4008684,
+    "ast_hash": "02fe8d10b1307128aa5959b1ed72b00b",
     "semantic_hash": ""
   },
   "frontend/src/pages/mandatory-elements.testHelpers.ts": {
