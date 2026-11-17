@@ -842,6 +842,15 @@ paths:
         four, on one page; `start-date=lt2025-07-14T08:21:00Z` leaves three,
         her second, which starts at 08:20 UTC (16:20 in Singapore), among them.
 
+        **Shown as received** (ADR 0020): the backend refuses no Medication
+        Record for what its fields hold. A field left out, `null`, empty or
+        blank is shown missing; one of another JSON type, a number in free
+        text among them, or a date that is no date-time with an offset, is
+        shown "Error"; a code outside its set, an id outside FHIR's id
+        grammar, or an `endDate` before its `startDate`, is shown as it came.
+        Tan Boon Huat (`dev-patient-10`) has four such Medication Records.
+        Only the page itself can fail the read.
+
         **FHIR-shaped paging only, not FHIR-conformant**: the answer borrows a
         searchset `Bundle`'s shape, and its entries are a custom `Medication`
         object of flat fields, not FHIR's `Medication` resource (ADR 0019,
@@ -851,22 +860,14 @@ paths:
         **Fault ids (mock only).** Beside the fixtures' histories, the mock
         serves one failure of this read per patient id, none a fixture's:
 
-        | Id                                            | Answers                                                                 |
-        | --------------------------------------------- | ----------------------------------------------------------------------- |
-        | `fault-medication-unreachable`                | the connection reset, no answer                                         |
-        | `fault-medication-slow`                       | `200` page after 7 seconds, past the read timeout                       |
-        | `fault-medication-server-error`               | `503`                                                                   |
-        | `fault-medication-unexpected-status`          | `400`                                                                   |
-        | `fault-medication-not-a-searchset`            | `200` Bundle of `type: collection`                                      |
-        | `fault-medication-no-total`                   | `200` searchset with no `total`                                         |
-        | `fault-medication-no-id`                      | `200` page whose Medication Record has no `id`                          |
-        | `fault-medication-invalid-id`                 | `200` page whose Medication Record's `id` is outside FHIR's id grammar  |
-        | `fault-medication-no-dispense-status`         | `200` page whose Medication Record has no `dispenseStatus`              |
-        | `fault-medication-no-prescribing-doctor`      | `200` page whose Medication Record has no `prescribingDoctor`           |
-        | `fault-medication-unknown-dispense-status`    | `200` page whose `dispenseStatus` is no code of its set                 |
-        | `fault-medication-unknown-dispensary`         | `200` page whose `dispensary` is no Medical Centre's code               |
-        | `fault-medication-start-date-not-a-date-time` | `200` page whose `startDate` has no offset                              |
-        | `fault-medication-end-before-start`           | `200` page whose `endDate` is before its `startDate`                    |
+        | Id                                   | Answers                                           |
+        | ------------------------------------ | ------------------------------------------------- |
+        | `fault-medication-unreachable`       | the connection reset, no answer                   |
+        | `fault-medication-slow`              | `200` page after 7 seconds, past the read timeout |
+        | `fault-medication-server-error`      | `503`                                             |
+        | `fault-medication-unexpected-status` | `400`                                             |
+        | `fault-medication-not-a-searchset`   | `200` Bundle of `type: collection`                |
+        | `fault-medication-no-total`          | `200` searchset with no `total`                   |
       parameters:
         - name: id
           in: path
@@ -1682,83 +1683,60 @@ components:
     Medication:
       description: |
         One Medication Record, a custom object of flat fields — not FHIR's
-        `Medication` resource. Six fields are required; `dosage`, `route`,
-        `frequency`, `step`, `quantity` and `duration` are optional free text,
-        left out when the source has none. Each rule below is one the backend
-        holds: a record breaking any is the source failing, the backend's
-        `502`. A field it does not read is ignored.
+        `Medication` resource — shown as received (ADR 0020). Only its
+        `resourceType` is required: an entry of another resource is the source
+        failing, the backend's `502`. Each other field is expected in the form
+        its description names, but none is required and no value of one fails
+        the read: a field left out, `null`, empty or blank is shown missing,
+        and one of another JSON type, a number in free text among them, or a
+        date that is no date-time with an offset, is shown "Error". A field it
+        does not read is ignored.
       type: object
-      required:
-        [
-          resourceType,
-          id,
-          medication,
-          dispenseStatus,
-          startDate,
-          endDate,
-          dispensary,
-          prescribingDoctor,
-        ]
+      required: [resourceType]
       properties:
         resourceType:
           const: Medication
         id:
-          description: The Medication Record's own id, in FHIR's id grammar.
-          type: string
-          pattern: '^[A-Za-z0-9\-.]{1,64}$'
+          description: |
+            The Medication Record's own id, a string; never checked, so one
+            outside FHIR's id grammar is kept.
         medication:
-          description: The Medication, free text. Not blank.
-          type: string
-          minLength: 1
+          description: The Medication, free text, a string.
         dosage:
-          description: The Dosage, free text. Left out when there is none; never `null`.
-          type: string
+          description: The Dosage, free text, a string.
         route:
-          description: The Route, free text. Left out when there is none; never `null`.
-          type: string
+          description: The Route, free text, a string.
         frequency:
-          description: The Frequency, free text. Left out when there is none; never `null`.
-          type: string
+          description: The Frequency, free text, a string.
         step:
-          description: The Step, free text. Left out when there is none; never `null`.
-          type: string
+          description: The Step, free text, a string.
         quantity:
-          description: The Quantity, free text. Left out when there is none; never `null`.
-          type: string
+          description: The Quantity, free text, a string.
         dispenseStatus:
-          description: The Dispense Status, by its code.
-          type: string
-          enum: [pending, dispensed, uncollected]
+          description: |
+            The Dispense Status, by its code — a string, one of `pending`,
+            `dispensed` and `uncollected`; another is shown as it came.
         duration:
           description: |
-            The Duration, free text ("5 days"), never worked out from the
-            dates. Left out when there is none; never `null`.
-          type: string
+            The Duration, free text ("5 days"), a string, never worked out from
+            the dates.
         startDate:
-          description: ISO-8601 with an offset (`Z` among them), to the minute or finer.
-          type: string
-          format: date-time
+          description: |
+            A date-time, ISO-8601 with an offset (`Z` among them), to the
+            minute or finer; one with no offset is shown "Error".
         endDate:
           description: |
-            ISO-8601 with an offset, to the minute or finer, and not before
-            `startDate` as an instant.
-          type: string
-          format: date-time
+            A date-time, ISO-8601 with an offset, to the minute or finer. The
+            backend checks it against nothing: one before `startDate` is shown
+            as it came.
         dispensary:
-          description: The Dispensary, by its code — a Medical Centre's, as an FFI's `submittingMc` is.
-          type: string
-          enum:
-            [
-              nee-soon-camp,
-              kranji-camp,
-              hendon-camp,
-              mandai-hill-camp,
-              khatib-camp,
-            ]
+          description: |
+            The Dispensary, by its code — a string, a Medical Centre's, as an
+            FFI's `submittingMc` is, one of `nee-soon-camp`, `kranji-camp`,
+            `hendon-camp`, `mandai-hill-camp` and `khatib-camp`; another is
+            shown as it came.
         prescribingDoctor:
-          description: The Prescribing Doctor's name, as the source holds it. Not blank.
-          type: string
-          minLength: 1
+          description: The Prescribing Doctor's name, a string, as the source holds it.
 
     OperationOutcome:
       description: The `404`'s body, which the backend never reads.

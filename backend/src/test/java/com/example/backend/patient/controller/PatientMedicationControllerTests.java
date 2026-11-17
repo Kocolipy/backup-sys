@@ -34,9 +34,10 @@ import tools.jackson.databind.json.JsonMapper;
  * {@code GET /api/patient-medication/{patientId}} as the web adapter answers it, through the HTTP
  * adapter over the patient source's mock — the stub files the local mock serves
  * ({@link PatientSourceStubs}) — with the app-wide exception handler its failures go to: one page
- * of the patient's Medication History as plain JSON, its codes as the source sent them, its
- * date-times ISO-8601 with their offsets, and no field at all for an optional element the
- * source lacks, with each filter and the sort the read takes passed to the source, or the
+ * of the patient's Medication History as plain JSON, as received (ADR 0020) — its codes as the
+ * source sent them, its date-times ISO-8601 with their offsets, a field missing or invalid
+ * {@code null} and each invalid one named — with each filter and the sort the read takes passed
+ * to the source, or the
  * application API's {@code ApiError}. The filter chain is not in this
  * MockMvc: the Permission and its backstop are {@code AuthorizationContractTests}', the paging
  * coercion {@code PagingContractTests}', and what is logged and audited over the real chain
@@ -98,36 +99,66 @@ class PatientMedicationControllerTests {
         assertThat(List.of(page.at("/records/0"), page.at("/records/1")))
                 .containsExactly(json.readTree("""
                         {"id": "medication-tan-wei-ming-1", "medication": "Paracetamol",
-                         "dosage": "750 mg", "route": "PO", "frequency": "QDS",
+                         "dosage": "750 mg", "route": "PO", "frequency": "QDS", "step": null,
                          "quantity": "30 tablets", "dispenseStatus": "pending",
                          "duration": "5 days", "startDate": "2026-10-18T17:30:00+08:00",
                          "endDate": "2026-10-22T17:30:00+08:00", "dispensary": "nee-soon-camp",
-                         "prescribingDoctor": "Dr Lim Wei Jie"}"""),
+                         "prescribingDoctor": "Dr Lim Wei Jie", "invalid": []}"""),
                         json.readTree("""
                         {"id": "medication-tan-wei-ming-2", "medication": "Amoxicillin",
-                         "dosage": "300 mg", "route": "PO", "frequency": "TDS",
+                         "dosage": "300 mg", "route": "PO", "frequency": "TDS", "step": null,
                          "quantity": "20 tablets", "dispenseStatus": "pending",
                          "duration": "5 days", "startDate": "2026-10-18T17:31:00+08:00",
                          "endDate": "2026-10-22T17:31:00+08:00", "dispensary": "khatib-camp",
-                         "prescribingDoctor": "Dr Lim Wei Jie"}"""));
+                         "prescribingDoctor": "Dr Lim Wei Jie", "invalid": []}"""));
+    }
+
+    /** A date-time the source gave in UTC is answered in UTC. */
+    @Test
+    void aDateTimeIsAnsweredInTheOffsetTheSourceGave() throws Exception {
+        JsonNode records = body(reading(records("dev-patient-05"))).at("/records");
+
+        assertThat(records.at("/0/startDate").asString()).isEqualTo("2026-03-01T02:00:00Z");
     }
 
     /**
-     * A record lacking every optional element is answered with none of those fields at all, not
-     * {@code null} ones; a date-time the source gave in UTC is answered in UTC.
+     * Tan Boon Huat's four Medication Records, as received (ADR 0020): every field always there, a
+     * field missing or invalid {@code null}, each invalid one named in its row's {@code invalid},
+     * a code outside its closed set or an id outside FHIR's grammar as the source sent it, and an
+     * End Date before its Start Date as it came.
      */
     @Test
-    void anOptionalElementTheSourceLacksIsLeftOut() throws Exception {
-        JsonNode records = body(reading(records("dev-patient-05"))).at("/records");
-
-        assertThat(List.of(records.at("/3"), records.at("/0/startDate").asString()))
-                .containsExactly(json.readTree("""
-                        {"id": "medication-tan-hui-min-4",
-                         "medication": "Oral rehydration salts", "dispenseStatus": "dispensed",
-                         "startDate": "2024-08-05T11:05:00+08:00",
-                         "endDate": "2024-08-05T11:05:00+08:00", "dispensary": "kranji-camp",
-                         "prescribingDoctor": "Dr Lim Wei Jie"}"""),
-                        "2026-03-01T02:00:00Z");
+    void aRecordsMissingAndInvalidFieldsAreNullTheInvalidOnesNamed() throws Exception {
+        assertThat(body(reading(records("dev-patient-10")))).isEqualTo(json.readTree("""
+                {
+                  "totalResults": 4,
+                  "startIndex": 1,
+                  "records": [
+                    {"id": "medication-tan-boon-huat-1", "medication": "Paracetamol",
+                     "dosage": null, "route": null, "frequency": null, "step": null,
+                     "quantity": null, "dispenseStatus": "on-hold", "duration": "3 days",
+                     "startDate": "2022-03-16T09:00:00+08:00",
+                     "endDate": "2022-03-14T09:00:00+08:00", "dispensary": "tengah-air-base",
+                     "prescribingDoctor": "Dr Lim Wei Jie", "invalid": ["quantity"]},
+                    {"id": "medication-tan-boon-huat-2", "medication": "Ibuprofen",
+                     "dosage": "400 mg", "route": "PO", "frequency": "TDS", "step": null,
+                     "quantity": "15 tablets", "dispenseStatus": "dispensed",
+                     "duration": "5 days", "startDate": null, "endDate": null,
+                     "dispensary": "kranji-camp", "prescribingDoctor": null,
+                     "invalid": ["startDate", "endDate"]},
+                    {"id": "medication tan boon huat 3", "medication": null, "dosage": null,
+                     "route": null, "frequency": null, "step": null, "quantity": null,
+                     "dispenseStatus": null, "duration": null,
+                     "startDate": "2020-03-16T01:00:00Z", "endDate": null, "dispensary": null,
+                     "prescribingDoctor": "Dr Chen Mei Ling",
+                     "invalid": ["medication", "endDate"]},
+                    {"id": null, "medication": "Oral rehydration salts", "dosage": null,
+                     "route": null, "frequency": null, "step": null, "quantity": null,
+                     "dispenseStatus": "pending", "duration": null, "startDate": null,
+                     "endDate": null, "dispensary": null, "prescribingDoctor": null,
+                     "invalid": []}
+                  ]
+                }"""));
     }
 
     /** The one Medication History read the source was sent, every value of each query parameter. */
@@ -305,7 +336,7 @@ class PatientMedicationControllerTests {
         assertThat(new MedicationHistoryPage.Row("medication-tan-wei-ming-1", "Paracetamol",
                 "750 mg", "PO", "QDS", null, "30 tablets", "pending", "5 days",
                 "2026-10-18T17:30:00+08:00", "2026-10-22T17:30:00+08:00", "nee-soon-camp",
-                "Dr Lim Wei Jie"))
+                "Dr Lim Wei Jie", List.of()))
                 .hasToString("Row[id=medication-tan-wei-ming-1]");
     }
 }

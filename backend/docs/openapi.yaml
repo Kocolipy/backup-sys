@@ -1471,12 +1471,20 @@ paths:
         Each Medication Record is one prescription, with how it was dispensed
         and who prescribed it. Its Dispense Status and its Dispensary, a Medical
         Centre, are closed sets, carried as their codes, and the SPA names each
-        code with its label. Its Medication and Prescribing Doctor are required
-        free text; its Dosage, Route, Frequency, Step, Quantity and Duration are
-        optional free text, left out when the source has none. Its Start Date
-        and End Date are date-times with an offset, the End Date never before
-        the Start Date. The Prescribing Doctor is a name, as the source gives
-        it, linked to no User or account.
+        known code with its label. Its Medication, Dosage, Route, Frequency,
+        Step, Quantity, Duration and Prescribing Doctor are free text; its Start
+        Date and End Date are date-times with an offset. The Prescribing Doctor
+        is a name, as the source gives it, linked to no User or account.
+
+        **Shown as received** (ADR 0020): the patient source is the truth, so
+        no Medication Record fails the read for what a field holds. A field
+        missing or in the wrong format — a number in free text, or a date that
+        is no date-time with an offset, among them — is `null`, the second
+        named in the row's `invalid`; a code outside its closed set is passed
+        through as it came, and an End Date before its Start Date as it came;
+        only the closed set of the filter is checked. A response holding
+        fields in the wrong format is one `WARN`, naming their paths and never
+        their values, and counts each in `patient_source.invalid_fields`.
 
         Paging follows ADR 0017's parameter rules: `startIndex` one-based,
         `count` defaulting to 100 and capped at 200, an out-of-range value
@@ -1493,9 +1501,9 @@ paths:
         **Not audited**, as a read of one Patient by id is not: a read appends
         no audit row. The request's own log record names the route template,
         never the patient id; a `502` adds the fault's one `ERROR` record,
-        naming the source's failure or the rule its answer broke under a
-        Medication reason, and never the patient id or anything of the answer
-        (`docs/domain/medication.md`, "Logging").
+        naming the failure of the call or of its searchset, and never the
+        patient id or anything of the answer (`docs/domain/medication.md`,
+        "Logging").
       operationId: getPatientMedicationHistory
       security:
         - sessionCookie: [patient:read]
@@ -1646,14 +1654,12 @@ paths:
             The patient source failed: it could not be reached, gave no answer
             within 2 seconds to connect and 5 to answer, answered any status but
             a `200` or a `404`, or answered a `200` that is no searchset
-            `Bundle`, has no `total`, or holds an entry that is no Medication
-            Record the service can hold — no `id` or one outside FHIR's id
-            grammar, a required element missing or a Medication or Prescribing
-            Doctor blank, a code outside its closed set, a date that is no
-            date-time with an offset, or an End Date before its Start Date. The
-            generic `server-error` `ApiError`, saying nothing about the failure;
-            the fault's one record names its reason. The SPA shows it as
-            "Couldn't load medication records", with Try again.
+            `Bundle`, has no `total` or a negative one, or holds an entry with
+            no resource, one that is no object or one of another resource. What
+            a Medication Record's fields hold never fails the read (ADR 0020).
+            The generic `server-error` `ApiError`, saying nothing about the
+            failure; the fault's one record names its reason. The SPA shows it
+            as "Couldn't load medication records", with Try again.
           content:
             application/json:
               schema:
@@ -5518,72 +5524,119 @@ components:
         [
           id,
           medication,
+          dosage,
+          route,
+          frequency,
+          step,
+          quantity,
           dispenseStatus,
+          duration,
           startDate,
           endDate,
           dispensary,
           prescribingDoctor,
+          invalid,
         ]
       additionalProperties: false
       description: |
         One Medication Record in a patient's Medication History: one
-        prescription, with how it was dispensed and who prescribed it. Six
-        elements are required; the Dosage, Route, Frequency, Step, Quantity and
-        Duration are optional, each absent — never `null` — when the source has
-        none. Every free-text element is as the source gives it. Restricted,
-        Sensitive Normal, as the patient's data is.
+        prescription, with how it was dispensed and who prescribed it, shown as
+        the patient source sent it (ADR 0020). Every property is always there.
+        A field the source left out, sent `null`, empty or blank, or sent in
+        the wrong format is `null`, and `invalid` names each whose format was
+        wrong — the wrong JSON type, a number in free text among them, or a
+        date that is no date-time with an offset: a `null` field it does not
+        name is missing. Nothing of a value's meaning is checked, an End Date
+        before its Start Date included, and a code outside its closed set is
+        passed through as it came. Every free-text element is as the source
+        gives it. Restricted, Sensitive Normal, as the patient's data is.
       properties:
         id:
-          type: string
-          pattern: "^[A-Za-z0-9\\-.]{1,64}$"
-          description: The Medication Record's own id at the patient source.
+          type: [string, "null"]
+          description: |
+            The Medication Record's own id at the patient source, as it came:
+            never checked, FHIR's id grammar included.
         medication:
-          type: string
-          minLength: 1
+          type: [string, "null"]
           description: The Medication, free text as the source gives it.
         dosage:
-          type: string
-          description: The Dosage, free text. Absent when the source has none.
+          type: [string, "null"]
+          description: The Dosage, free text.
         route:
-          type: string
-          description: The Route, free text. Absent when the source has none.
+          type: [string, "null"]
+          description: The Route, free text.
         frequency:
-          type: string
-          description: The Frequency, free text. Absent when the source has none.
+          type: [string, "null"]
+          description: The Frequency, free text.
         step:
-          type: string
-          description: The Step, free text. Absent when the source has none.
+          type: [string, "null"]
+          description: The Step, free text.
         quantity:
-          type: string
-          description: The Quantity, free text. Absent when the source has none.
+          type: [string, "null"]
+          description: The Quantity, free text.
         dispenseStatus:
-          $ref: "#/components/schemas/DispenseStatus"
+          description: |
+            The Dispense Status's code: one of the closed set's, or any other
+            the source sent, as it came.
+          anyOf:
+            - $ref: "#/components/schemas/DispenseStatus"
+            - type: string
+            - type: "null"
         duration:
-          type: string
+          type: [string, "null"]
           description: |
             The Duration, free text ("5 days"). Nothing works it out from the
-            dates. Absent when the source has none.
+            dates.
         startDate:
-          type: string
+          type: [string, "null"]
           format: date-time
           description: |
             The Start Date, a date-time ISO-8601 with the offset the source gave
             it. The SPA shows it in Singapore time, to the minute.
         endDate:
-          type: string
+          type: [string, "null"]
           format: date-time
           description: |
             The End Date, a date-time ISO-8601 with the offset the source gave
-            it, never before the Start Date. The SPA shows it in Singapore time,
+            it, before its Start Date too. The SPA shows it in Singapore time,
             to the minute.
         dispensary:
-          $ref: "#/components/schemas/MedicalCentre"
+          description: |
+            The Dispensary's code, a Medical Centre's: one of the closed set's,
+            or any other the source sent, as it came.
+          anyOf:
+            - $ref: "#/components/schemas/MedicalCentre"
+            - type: string
+            - type: "null"
         prescribingDoctor:
-          type: string
-          minLength: 1
+          type: [string, "null"]
           description: |
             The Prescribing Doctor, a name as the patient source gives it,
             linked to no User or account.
+        invalid:
+          type: array
+          description: |
+            The fields whose format was wrong at the source, each `null`
+            above, in the record's order; none when each is present or
+            missing.
+          items:
+            type: string
+            enum:
+              [
+                id,
+                medication,
+                dosage,
+                route,
+                frequency,
+                step,
+                quantity,
+                dispenseStatus,
+                duration,
+                startDate,
+                endDate,
+                dispensary,
+                prescribingDoctor,
+              ]
     DispenseStatus:
       type: string
       description: |

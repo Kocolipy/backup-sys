@@ -226,12 +226,11 @@ page, which quoted the path.
   (`another-resource`, `service-date-not-to-the-day`), or the rule a page of a
   Patient search broke — a match's own among them (`no-nric`,
   `no-official-name`, `no-name-text`, `no-gender`, `no-birth-date`,
-  `birth-date-not-to-the-day`) — or a history's, each history's under
-  a reason naming it (`/docs/domain/patient.md`, "Logging", and "Failures" in
-  each history's file in `/docs/domain/`); a read shown as received, the
-  FFI, the NUMC or the ARMC History or a Patient by id, breaks no rule of what
-  its fields hold, and a search's match none of what its Last visit holds
-  (ADR 0020) — and its `error.category` is the
+  `birth-date-not-to-the-day`) (`/docs/domain/patient.md`, "Logging", and
+  "Failures" in each history's file in `/docs/domain/`); a read shown as
+  received, the FFI, the NUMC, the ARMC or the Medication History or a Patient
+  by id, breaks no rule of what its fields hold, and a search's match none of
+  what its Last visit holds (ADR 0020) — and its `error.category` is the
   fault's own, as ADR 0014's table has it for an outbound call: `network` and
   `server` with no follow-up, `cert/auth` and `data` with one.
 - A `4xx` that Spring MVC maps (validation, an unreadable body, an unbindable
@@ -247,14 +246,15 @@ page, which quoted the path.
 ### The patient source's invalid fields
 
 A read that shows the patient source's data as received — the FFI History, the
-NUMC History, the ARMC History, a Patient read by id and a Patient search's
-Last visit — answers a field in the wrong format as `null`, or, in a Patient,
-leaves it out and names it by an extension, shown as "Error" (ADR 0020), and
+NUMC History, the ARMC History, the Medication History, a Patient read by id
+and a Patient search's Last visit — answers a field in the wrong format as
+`null`, or, in a Patient, leaves it out and names it by an extension, shown as
+"Error" (ADR 0020), and
 writes one `WARN` `patient_source.invalid_fields` (`successAtWarn`,
 `event.category` `network`, `event.type` `info`) for the whole response that
 held any, beside the request's own record. It carries
-`app.patient_source.read`, the read (`ffi`, `numc`, `armc`, `patient` or
-`search`), and
+`app.patient_source.read`, the read (`ffi`, `numc`, `armc`, `medication`,
+`patient` or `search`), and
 `app.patient_source.invalid_fields`, the path of each such field in the
 source's answer, in its order (`entry[1].issueDate`, a Patient's
 `name[1].text`, a search's `entry[0].extension[0].valueDate`) — never a value,

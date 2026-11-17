@@ -432,8 +432,8 @@ present, shown as its value; missing — no key, `null`, or a blank string —
 shown as "—"; or invalid — the wrong JSON type, or a string that is no date or
 date-time of its kind — shown as "Error". A code outside its closed set is
 shown as the raw code. Only a failure of the call or of the page's structure
-fails the read. The FFI, NUMC and ARMC Histories, a Patient read by id and a
-Patient search's Last visit are read so.
+fails the read. The FFI, NUMC, ARMC and Medication Histories, a Patient read by
+id and a Patient search's Last visit are read so.
 _Avoid_: validated, sanitised, lenient (the reading is lenient; what the
 clinician sees is the data as received)
 **Demographic page**:
@@ -637,16 +637,17 @@ _Avoid_: MO 1 / MO 2, board member
 
 ### Medication
 
-Rules: [medication](docs/domain/medication.md). Decided in ADR 0019 (D7).
+Rules: [medication](docs/domain/medication.md). Decided in ADR 0019 (D7) and
+ADR 0020.
 
 **Medication Record**:
 One prescription of a patient's, with how it was dispensed and who prescribed
-it, as the Patient source holds it: its Medication, Dispense Status, Start
-Date, End Date, Dispensary and Prescribing Doctor, every one required, and its
-Dosage, Route, Frequency, Step, Quantity and Duration, each optional. Every
-element but the Dispense Status, the dates and the Dispensary is free text,
-shown as the source gives it. Read from the Patient source on every read,
-never held, and not audited.
+it, as the Patient source holds it: its Medication, Dosage, Route, Frequency,
+Step, Quantity, Dispense Status, Duration, Start Date, End Date, Dispensary
+and Prescribing Doctor, each shown as received — missing or invalid included,
+and a code outside its closed set shown raw. Every element but the Dispense
+Status, the dates and the Dispensary is free text, shown as the source gives
+it. Read from the Patient source on every read, never held, and not audited.
 _Avoid_: prescription record, medication order, drug record
 
 **Medication History**:
@@ -657,7 +658,8 @@ _Avoid_: medication list, medication log, prescription history
 
 **Dispense Status**:
 Whether a Medication Record's medication was dispensed and collected, one of a
-closed set: PENDING, DISPENSED, UNCOLLECTED.
+closed set: PENDING, DISPENSED, UNCOLLECTED. A code outside it is shown as it
+came.
 _Avoid_: dispensing state, a bare "Status" (that is an FFI's)
 
 **Dispensary**:

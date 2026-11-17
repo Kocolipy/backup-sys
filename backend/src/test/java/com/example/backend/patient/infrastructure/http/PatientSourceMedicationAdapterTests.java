@@ -7,20 +7,26 @@ import static com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import com.example.backend.audit.CapturedLog;
+import com.example.backend.observability.LogEvent;
 import com.example.backend.observability.LogEvent.ErrorCategory;
 import com.example.backend.paging.domain.PageRequest;
 import com.example.backend.patient.PatientSourceStubs;
 import com.example.backend.patient.domain.DateRange;
 import com.example.backend.patient.domain.DispenseStatus;
 import com.example.backend.patient.domain.HistorySort;
-import com.example.backend.patient.domain.MedicalCentre;
 import com.example.backend.patient.domain.MedicationFilter;
 import com.example.backend.patient.domain.MedicationHistory;
 import com.example.backend.patient.domain.MedicationRecord;
 import com.example.backend.patient.domain.PatientId;
 import com.example.backend.patient.domain.SortOrder;
+import com.example.backend.patient.domain.SourceField;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
-import java.time.Duration;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -36,22 +42,21 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
-import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.web.client.RestClient;
 
 /**
- * A patient's Medication History as the HTTP adapter reads it (ADR 0019, D7), against the
- * patient source's mock in process: the one call it sends — the page, counted by the source, with
- * each filter and the sort as the source's own search parameters, the sort's ties the source's to
- * break and each end of a date-time range the instant it names — how an entry's fields become a
- * Medication Record, its six optional
- * elements the ones it may lack, and what a failure of that call is, each Medication Record's
- * under a reason naming Medication. What the mock's Medication Histories hold is
- * {@code PatientStoreContract}'s. What every history shares — the page's call, the statuses that
- * are no page, the timeout, the fault stubs they have in common — is
- * {@code PatientSourceHistoriesAdapterTests}'.
+ * A patient's Medication History as the HTTP adapter reads it (ADR 0019, D7; ADR 0020), against
+ * the patient source's mock in process: the one call it sends — the page, counted by the source,
+ * with each filter and the sort as the source's own search parameters, the sort's ties the
+ * source's to break and each end of a date-time range the instant it names — and each Medication
+ * Record read as received, each element present, missing or invalid and none refused, a response
+ * holding invalid elements reported once in the log and counted by element. What the mock's
+ * Medication Histories hold is {@code PatientStoreContract}'s, and how one field is classified
+ * {@code ReceivedFieldsTests}'. What every history shares — the page's call, the statuses that are
+ * no page, the timeout, the fault stubs they have in common, an entry that is another resource —
+ * is {@code PatientSourceHistoriesAdapterTests}'.
  */
 class PatientSourceMedicationAdapterTests {
 
@@ -65,24 +70,39 @@ class PatientSourceMedicationAdapterTests {
 
     private static final String PROBE_PATH = "/Patient/" + PROBE_PATIENT + "/medication";
 
-    /** One Medication Record as the source answers it, every field there and well-formed. */
-    private static final Map<String, String> WELL_FORMED = Map.ofEntries(
-            Map.entry("resourceType", "Medication"),
-            Map.entry("id", "probe-medication-K4t8"),
-            Map.entry("medication", "Probe Amoxicillin"),
-            Map.entry("dosage", "300 mg"),
-            Map.entry("route", "PO"),
-            Map.entry("frequency", "TDS"),
-            Map.entry("step", "Step 2"),
-            Map.entry("quantity", "20 tablets"),
-            Map.entry("dispenseStatus", "uncollected"),
-            Map.entry("duration", "3 days"),
-            Map.entry("startDate", "2017-02-13T10:00:00+08:00"),
-            Map.entry("endDate", "2017-02-15T10:00:00+08:00"),
-            Map.entry("dispensary", "khatib-camp"),
-            Map.entry("prescribingDoctor", "Dr Probe Lee"));
+    private static final ZoneOffset SINGAPORE = ZoneOffset.ofHours(8);
 
-    /** {@link #WELL_FORMED} with {@code field} set to {@code value}, or left out for {@code null}. */
+    /** One Medication Record as the source answers it, every field there and well-formed, as JSON. */
+    private static final Map<String, String> WELL_FORMED = Map.ofEntries(
+            Map.entry("resourceType", "\"Medication\""),
+            Map.entry("id", "\"probe-medication-K4t8\""),
+            Map.entry("medication", "\"Probe Amoxicillin\""),
+            Map.entry("dosage", "\"300 mg\""),
+            Map.entry("route", "\"PO\""),
+            Map.entry("frequency", "\"TDS\""),
+            Map.entry("step", "\"Step 2\""),
+            Map.entry("quantity", "\"20 tablets\""),
+            Map.entry("dispenseStatus", "\"uncollected\""),
+            Map.entry("duration", "\"3 days\""),
+            Map.entry("startDate", "\"2017-02-13T10:00:00+08:00\""),
+            Map.entry("endDate", "\"2017-02-15T10:00:00+08:00\""),
+            Map.entry("dispensary", "\"khatib-camp\""),
+            Map.entry("prescribingDoctor", "\"Dr Probe Lee\""));
+
+    /** {@link #WELL_FORMED} as the domain reads it. */
+    private static final MedicationRecord READ = new MedicationRecord(
+            SourceField.present("probe-medication-K4t8"), SourceField.present("Probe Amoxicillin"),
+            SourceField.present("300 mg"), SourceField.present("PO"), SourceField.present("TDS"),
+            SourceField.present("Step 2"), SourceField.present("20 tablets"),
+            SourceField.present("uncollected"), SourceField.present("3 days"),
+            SourceField.present(OffsetDateTime.of(2017, 2, 13, 10, 0, 0, 0, SINGAPORE)),
+            SourceField.present(OffsetDateTime.of(2017, 2, 15, 10, 0, 0, 0, SINGAPORE)),
+            SourceField.present("khatib-camp"), SourceField.present("Dr Probe Lee"));
+
+    /**
+     * {@link #WELL_FORMED} with {@code field} set to the JSON {@code value}, or left out for
+     * {@code null}.
+     */
     private static String record(String field, String value) {
         Map<String, String> fields = new TreeMap<>(WELL_FORMED);
         if (value == null) {
@@ -92,7 +112,7 @@ class PatientSourceMedicationAdapterTests {
         }
         StringBuilder json = new StringBuilder("{");
         fields.forEach((name, member) -> json.append(json.length() > 1 ? ", " : "")
-                .append('"').append(name).append("\": \"").append(member).append('"'));
+                .append('"').append(name).append("\": ").append(member));
         return json.append('}').toString();
     }
 
@@ -105,7 +125,11 @@ class PatientSourceMedicationAdapterTests {
     }
 
     private static PatientSourceAdapter adapter() {
-        return PatientSourceAdapters.at(SOURCE.baseUrl());
+        return adapter(new SimpleMeterRegistry());
+    }
+
+    private static PatientSourceAdapter adapter(MeterRegistry meters) {
+        return new PatientSourceAdapter(RestClient.builder(), SOURCE.baseUrl(), meters);
     }
 
     private static void answering(String body) {
@@ -119,31 +143,20 @@ class PatientSourceMedicationAdapterTests {
                 HistorySort.SOURCE_ORDER, SECOND_PAGE_OF_FIVE);
     }
 
-    private static MedicationHistory reading() {
-        return unfiltered(adapter(), PROBE_PATIENT).orElseThrow();
-    }
-
-    private static MedicationRecord readingOne(String field, String value) {
-        answering(page(record(field, value)));
-        return reading().records().getFirst();
+    /** The probe patient's one Medication Record, the source answering a page of {@code record} alone. */
+    private static MedicationRecord readingOne(String record) {
+        answering(page(record));
+        return unfiltered(adapter(), PROBE_PATIENT).orElseThrow().records().getFirst();
     }
 
     /** A fault as its record reports it: its fixed message, its reason and its category. */
     private record Fault(String message, String reason, ErrorCategory category) {
     }
 
-    private static Fault faultReading(PatientSourceAdapter adapter, String patient) {
-        PatientSourceException fault = (PatientSourceException) catchThrowable(() ->
-                unfiltered(adapter, patient));
-        return new Fault(fault.getMessage(), fault.reason(), fault.category());
-    }
-
     private static Fault faultReading(PatientSourceAdapter adapter) {
-        return faultReading(adapter, PROBE_PATIENT);
-    }
-
-    private static Fault data(String message, String reason) {
-        return new Fault(message, reason, ErrorCategory.DATA);
+        PatientSourceException fault = (PatientSourceException) catchThrowable(() ->
+                unfiltered(adapter, PROBE_PATIENT));
+        return new Fault(fault.getMessage(), fault.reason(), fault.category());
     }
 
     // ---- the call ------------------------------------------------------------------------
@@ -253,195 +266,259 @@ class PatientSourceMedicationAdapterTests {
                 Map.entry("_total", List.of("accurate"))));
     }
 
-    // ---- the answer ----------------------------------------------------------------------
+    // ---- each record as received --------------------------------------------------------
 
-    /**
-     * Each field of the entry is the record's element of that name, the free text exactly as
-     * sent and each date-time with its offset; the source's total is the history's count.
-     */
+    /** Each field of the entry is the record's element of that name; the source's total is the history's count. */
     @Test
-    void anEntryIsTheMedicationRecordItsFieldsSpell() {
-        answering(page(record("dispenseStatus", "uncollected"))
+    void aWellFormedEntryIsTheRecordItsFieldsSpellBesideTheSourcesTotal() {
+        answering(page(record("id", "\"probe-medication-K4t8\""))
                 .replace("\"total\": 1", "\"total\": 9"));
 
-        ZoneOffset singapore = ZoneOffset.ofHours(8);
-        assertThat(reading()).isEqualTo(new MedicationHistory(9, List.of(new MedicationRecord(
-                "probe-medication-K4t8", "Probe Amoxicillin", "300 mg", "PO", "TDS", "Step 2",
-                "20 tablets", DispenseStatus.UNCOLLECTED, "3 days",
-                OffsetDateTime.of(2017, 2, 13, 10, 0, 0, 0, singapore),
-                OffsetDateTime.of(2017, 2, 15, 10, 0, 0, 0, singapore),
-                MedicalCentre.KHATIB_CAMP, "Dr Probe Lee"))));
+        assertThat(unfiltered(adapter(), PROBE_PATIENT))
+                .contains(new MedicationHistory(9, List.of(READ)));
     }
 
-    /** Each optional element may be left out: the record reads without it. */
+    /**
+     * An element the source left out, sent {@code null}, or sent empty or blank is missing — the
+     * six optional free-text elements as any other — and the rest of the record is read as it
+     * came.
+     */
     @ParameterizedTest
-    @ValueSource(strings = {"dosage", "route", "frequency", "step", "quantity", "duration"})
-    void aRecordLackingAnOptionalElementIsRead(String field) {
-        MedicationRecord record = readingOne(field, null);
+    @CsvSource(nullValues = "-", delimiter = '|', textBlock = """
+        id                | -
+        medication        | '""'
+        dosage            | null
+        route             | -
+        frequency         | '"   "'
+        step              | null
+        quantity          | -
+        dispenseStatus    | null
+        duration          | '""'
+        startDate         | -
+        endDate           | '"  "'
+        dispensary        | '""'
+        prescribingDoctor | null
+        """)
+    void anElementLeftOutOrBlankIsMissing(String field, String value) {
+        assertThat(readingOne(record(field, value))).isEqualTo(with(field,
+                SourceField.missing()));
+    }
 
-        assertThat(Arrays.asList(record.dosage(), record.route(), record.frequency(),
-                record.step(), record.quantity(), record.duration()))
-                .containsOnlyOnce((String) null);
+    /**
+     * An element of the wrong JSON type — a number in free text is not coerced into a string — or
+     * a date that is no date-time with an offset is invalid, and the rest of the record is read as
+     * it came.
+     */
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', textBlock = """
+        id                | 7
+        medication        | true
+        dosage            | 300
+        route             | ["PO"]
+        frequency         | {"code": "TDS"}
+        step              | 2
+        quantity          | 20
+        dispenseStatus    | {"code": "uncollected"}
+        duration          | 3
+        startDate         | "2017-02-13"
+        startDate         | "2017-02-13T10:00"
+        endDate           | "2017-02-15T10:00:00"
+        endDate           | "2017-02-30T10:00:00+08:00"
+        endDate           | 20170215
+        dispensary        | ["khatib-camp"]
+        prescribingDoctor | false
+        """)
+    void anElementOfTheWrongFormatIsInvalid(String field, String value) {
+        assertThat(readingOne(record(field, value))).isEqualTo(with(field,
+                SourceField.invalid()));
+    }
+
+    /**
+     * A code outside its closed set is kept as the source sent it: one in another case, a label in
+     * place of the code, or a code of no set.
+     */
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', textBlock = """
+        dispenseStatus | DISPENSED
+        dispenseStatus | collected
+        dispenseStatus | active
+        dispensary     | Khatib Camp MC
+        dispensary     | sembawang-camp
+        """)
+    void aCodeOutsideItsClosedSetIsKeptAsItCame(String field, String code) {
+        assertThat(readingOne(record(field, "\"" + code + "\"")))
+                .isEqualTo(with(field, SourceField.present(code)));
+    }
+
+    /** A record's id is not checked: one outside FHIR's id grammar is kept as it came. */
+    @ParameterizedTest
+    @ValueSource(strings = {"medication tan/1", "medication_1",
+        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"})
+    void anIdIsKeptAsItCame(String id) {
+        assertThat(readingOne(record("id", "\"" + id + "\"")).id())
+                .isEqualTo(SourceField.present(id));
     }
 
     /** Free text is the source's, read as it is: no Duration is worked out, no Dosage parsed. */
     @Test
     void freeTextIsReadExactlyAsTheSourceGivesIt() {
-        MedicationRecord record = readingOne("duration", "  about a week <b>");
-
-        assertThat(record.duration()).isEqualTo("  about a week <b>");
+        assertThat(readingOne(record("duration", "\"  about a week <b>\"")).duration())
+                .isEqualTo(SourceField.present("  about a week <b>"));
     }
 
     /** A date-time may be given in any offset, UTC's {@code Z} among them, and keeps it. */
     @Test
     void aDateTimeInAnotherOffsetIsReadWithItsOffset() {
-        MedicationRecord record = readingOne("endDate", "2017-02-15T02:00:00Z");
-
-        assertThat(record.endDate())
-                .isEqualTo(OffsetDateTime.of(2017, 2, 15, 2, 0, 0, 0, ZoneOffset.UTC));
+        assertThat(readingOne(record("endDate", "\"2017-02-15T02:00:00Z\"")).endDate())
+                .isEqualTo(SourceField.present(
+                        OffsetDateTime.of(2017, 2, 15, 2, 0, 0, 0, ZoneOffset.UTC)));
     }
 
-    /** A record may end the minute it starts. */
-    @Test
-    void aRecordEndingWhenItStartsIsRead() {
-        MedicationRecord record = readingOne("endDate", "2017-02-13T02:00:00Z");
+    /**
+     * Nothing of a date-time's meaning is checked: an End Date before the Start Date, as instants
+     * too where the End Date's own clock reads later, is kept as it came.
+     */
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', textBlock = """
+        2017-02-13T09:59:00+08:00 | 2017-02-13T09:59+08:00
+        2017-02-13T10:30:00+09:00 | 2017-02-13T10:30+09:00
+        """)
+    void aRecordEndingBeforeItStartsIsKept(String endDate, OffsetDateTime read) {
+        assertThat(readingOne(record("endDate", "\"" + endDate + "\"")).endDate())
+                .isEqualTo(SourceField.present(read));
+    }
 
-        assertThat(record.endDate()).isEqualTo(record.startDate());
+    /** {@link #READ} with its {@code field} read as {@code read}. */
+    @SuppressWarnings("unchecked")
+    private static MedicationRecord with(String field, SourceField<?> read) {
+        return new MedicationRecord(
+                field.equals("id") ? (SourceField<String>) read : READ.id(),
+                field.equals("medication") ? (SourceField<String>) read : READ.medication(),
+                field.equals("dosage") ? (SourceField<String>) read : READ.dosage(),
+                field.equals("route") ? (SourceField<String>) read : READ.route(),
+                field.equals("frequency") ? (SourceField<String>) read : READ.frequency(),
+                field.equals("step") ? (SourceField<String>) read : READ.step(),
+                field.equals("quantity") ? (SourceField<String>) read : READ.quantity(),
+                field.equals("dispenseStatus") ? (SourceField<String>) read
+                        : READ.dispenseStatus(),
+                field.equals("duration") ? (SourceField<String>) read : READ.duration(),
+                field.equals("startDate") ? (SourceField<OffsetDateTime>) read
+                        : READ.startDate(),
+                field.equals("endDate") ? (SourceField<OffsetDateTime>) read : READ.endDate(),
+                field.equals("dispensary") ? (SourceField<String>) read : READ.dispensary(),
+                field.equals("prescribingDoctor") ? (SourceField<String>) read
+                        : READ.prescribingDoctor());
+    }
+
+    // ---- invalid elements, reported -----------------------------------------------------
+
+    /** Three records, the second well-formed: the first's quantity and the third's dates invalid. */
+    private static final String TWO_RECORDS_WITH_INVALID_ELEMENTS = page(
+            record("quantity", "20"),
+            record("id", "\"probe-medication-K4t9\""),
+            record("startDate", "\"2017-02-13T10:00:00\"")
+                    .replace("\"2017-02-15T10:00:00+08:00\"", "20170215"));
+
+    /** The WARN records reporting a response's invalid fields. */
+    private static List<ILoggingEvent> invalidFieldRecords(CapturedLog captured) {
+        return captured.withAction(Level.WARN, LogEvent.LOCAL_ACTION,
+                "patient_source.invalid_fields");
+    }
+
+    /**
+     * A response holding invalid elements is one WARN, naming the read and each invalid field by
+     * its path in the response — never its value, nor the patient.
+     */
+    @Test
+    void aResponseHoldingInvalidElementsIsOneWarnNamingTheirPaths() {
+        answering(TWO_RECORDS_WITH_INVALID_ELEMENTS);
+
+        try (CapturedLog captured = CapturedLog.attach()) {
+            unfiltered(adapter(), PROBE_PATIENT);
+
+            assertThat(invalidFieldRecords(captured)).singleElement()
+                    .satisfies(warning -> assertThat(CapturedLog.fields(warning))
+                            .containsEntry("app.patient_source.read", "medication")
+                            .containsEntry("app.patient_source.invalid_fields", List.of(
+                                    "entry[0].quantity", "entry[2].startDate",
+                                    "entry[2].endDate")));
+        }
+    }
+
+    @Test
+    void theWarnQuotesNoValueOfTheResponseNorThePatient() {
+        answering(TWO_RECORDS_WITH_INVALID_ELEMENTS);
+
+        try (CapturedLog captured = CapturedLog.attach()) {
+            unfiltered(adapter(), PROBE_PATIENT);
+
+            ILoggingEvent warning = invalidFieldRecords(captured).getFirst();
+            assertThat(warning.getFormattedMessage() + " " + CapturedLog.fields(warning))
+                    .doesNotContain(PROBE_PATIENT, "probe-medication", "2017", "20170215",
+                            "Amoxicillin", "uncollected", "khatib-camp", "Dr Probe Lee");
+        }
+    }
+
+    /** A response whose elements are each present or missing reports nothing. */
+    @Test
+    void aResponseWithNoInvalidElementIsNotReported() {
+        answering(page(record("dosage", null), record("dispenseStatus", "\"\"")));
+        MeterRegistry meters = new SimpleMeterRegistry();
+
+        try (CapturedLog captured = CapturedLog.attach()) {
+            unfiltered(adapter(meters), PROBE_PATIENT);
+
+            assertThat(List.of(invalidFieldRecords(captured),
+                    meters.find("patient_source.invalid_fields").counters()))
+                    .containsExactly(List.of(), List.of());
+        }
+    }
+
+    /** Each invalid element counts once, tagged by the read and the element. */
+    @Test
+    void eachInvalidElementCountsOnceByTheReadAndTheElement() {
+        answering(TWO_RECORDS_WITH_INVALID_ELEMENTS);
+        MeterRegistry meters = new SimpleMeterRegistry();
+        PatientSourceAdapter adapter = adapter(meters);
+
+        unfiltered(adapter, PROBE_PATIENT);
+        unfiltered(adapter, PROBE_PATIENT);
+
+        Map<String, Double> counted = new TreeMap<>();
+        for (Counter counter : meters.find("patient_source.invalid_fields").counters()) {
+            counted.put(counter.getId().getTag("read") + " " + counter.getId().getTag("field"),
+                    counter.count());
+        }
+        assertThat(counted).isEqualTo(Map.of(
+                "medication quantity", 2.0,
+                "medication startDate", 2.0,
+                "medication endDate", 2.0));
     }
 
     // ---- a failure of the source ---------------------------------------------------------
 
     /**
-     * Each fault stub of a Medication History that is its own, by the failure it serves: the
-     * stubs every history serves are {@code PatientSourceHistoriesAdapterTests}'.
+     * A resource that is no object is no record the read can hold: the response is unreadable,
+     * whatever its other entries hold.
      */
-    static Stream<Arguments> faultStubs() {
-        return Stream.of(
-                Arguments.of("fault-medication-no-id", data(
-                        "The patient source's Medication Record has no id",
-                        "medication-no-id")),
-                Arguments.of("fault-medication-invalid-id", data(
-                        "The patient source's Medication Record's id is not a FHIR id",
-                        "medication-invalid-id")),
-                Arguments.of("fault-medication-no-dispense-status", data(
-                        "The patient source's Medication Record has no dispense status",
-                        "no-dispense-status")),
-                Arguments.of("fault-medication-no-prescribing-doctor", data(
-                        "The patient source's Medication Record has no prescribing doctor",
-                        "no-prescribing-doctor")),
-                Arguments.of("fault-medication-unknown-dispense-status", data(
-                        "The patient source's Medication Record's dispense status is not a"
-                                + " Dispense Status",
-                        "unknown-dispense-status")),
-                Arguments.of("fault-medication-unknown-dispensary", data(
-                        "The patient source's Medication Record's dispensary is not a Medical"
-                                + " Centre",
-                        "unknown-dispensary")),
-                Arguments.of("fault-medication-start-date-not-a-date-time", data(
-                        "The patient source's Medication Record's start date is not a date-time"
-                                + " with an offset",
-                        "medication-start-date-not-a-date-time")),
-                Arguments.of("fault-medication-end-before-start", data(
-                        "The patient source's Medication Record ends before it starts",
-                        "medication-end-before-start")));
-    }
-
     @ParameterizedTest
-    @MethodSource("faultStubs")
-    void eachFaultStubIsTheFaultItServes(String patient, Fault expected) {
-        assertThat(faultReading(adapter(), patient)).isEqualTo(expected);
+    @ValueSource(strings = {"\"Medication\"", "7", "[]"})
+    void aResourceThatIsNoObjectIsAFault(String resource) {
+        answering("""
+                {"resourceType": "Bundle", "type": "searchset", "total": 2,
+                 "entry": [{"resource": %s}, {"resource": %s}]}"""
+                .formatted(record("id", "\"probe-medication-K4t8\""), resource));
+
+        assertThat(faultReading(adapter())).isEqualTo(new Fault(
+                "The patient source could not be read", "unreadable", ErrorCategory.DATA));
     }
 
-    /** The cases above, the shared stubs and the slow one are every Medication fault stub the files hold. */
+    /** The stubs every history serves and the slow one are every Medication fault stub the files hold. */
     @Test
-    void everyMedicationFaultStubIsReadAbove() {
-        Stream<String> covered = Stream.concat(
-                PatientSourceHistoriesAdapterTests.sharedFaultStubs("medication").stream(),
-                faultStubs().map(arguments -> (String) arguments.get()[0]));
-
+    void everyMedicationFaultStubIsOneEveryHistoryServes() {
         assertThat(PatientSourceStubs.medicationFaults())
                 .extracting(PatientSourceStubs.FaultStub::id)
-                .containsExactlyInAnyOrderElementsOf(covered.toList());
+                .containsExactlyInAnyOrderElementsOf(
+                        PatientSourceHistoriesAdapterTests.sharedFaultStubs("medication"));
     }
-
-    /** Each required element is required: a record missing any one is a fault naming it. */
-    @ParameterizedTest
-    @CsvSource(delimiter = '|', textBlock = """
-        id                | medication-no-id         | The patient source's Medication Record has no id
-        medication        | no-medication            | The patient source's Medication Record has no medication
-        dispenseStatus    | no-dispense-status       | The patient source's Medication Record has no dispense status
-        startDate         | no-medication-start-date | The patient source's Medication Record has no start date
-        endDate           | no-medication-end-date   | The patient source's Medication Record has no end date
-        dispensary        | no-dispensary            | The patient source's Medication Record has no dispensary
-        prescribingDoctor | no-prescribing-doctor    | The patient source's Medication Record has no prescribing doctor
-        """)
-    void aRecordMissingARequiredElementIsAFault(String field, String reason, String message) {
-        answering(page(record(field, null)));
-
-        assertThat(faultReading(adapter())).isEqualTo(data(message, reason));
-    }
-
-    /** The Medication and the Prescribing Doctor are required text: blank is as missing. */
-    @ParameterizedTest
-    @CsvSource(delimiter = '|', textBlock = """
-        medication        | ''    | no-medication         | The patient source's Medication Record has no medication
-        prescribingDoctor | '   ' | no-prescribing-doctor | The patient source's Medication Record has no prescribing doctor
-        """)
-    void aBlankRequiredTextIsAFault(String field, String text, String reason, String message) {
-        answering(page(record(field, text)));
-
-        assertThat(faultReading(adapter())).isEqualTo(data(message, reason));
-    }
-
-    /**
-     * A code outside its closed set is a fault naming the set: a code is matched exactly, so one
-     * in another case, a label in place of the code, or another set's code is outside it too.
-     */
-    @ParameterizedTest
-    @CsvSource(delimiter = '|', textBlock = """
-        dispenseStatus | DISPENSED      | unknown-dispense-status | The patient source's Medication Record's dispense status is not a Dispense Status
-        dispenseStatus | collected      | unknown-dispense-status | The patient source's Medication Record's dispense status is not a Dispense Status
-        dispenseStatus | active         | unknown-dispense-status | The patient source's Medication Record's dispense status is not a Dispense Status
-        dispensary     | Khatib Camp MC | unknown-dispensary      | The patient source's Medication Record's dispensary is not a Medical Centre
-        dispensary     | sembawang-camp | unknown-dispensary      | The patient source's Medication Record's dispensary is not a Medical Centre
-        """)
-    void aCodeOutsideItsClosedSetIsAFault(String field, String code, String reason,
-            String message) {
-        answering(page(record(field, code)));
-
-        assertThat(faultReading(adapter())).isEqualTo(data(message, reason));
-    }
-
-    /**
-     * Each date must be a date-time with an offset: a calendar date, one with no offset, or no
-     * time the calendar has is a fault naming the date.
-     */
-    @ParameterizedTest
-    @CsvSource(delimiter = '|', textBlock = """
-        startDate | 2017-02-13                | medication-start-date-not-a-date-time | The patient source's Medication Record's start date is not a date-time with an offset
-        startDate | 2017-02-13T10:00          | medication-start-date-not-a-date-time | The patient source's Medication Record's start date is not a date-time with an offset
-        endDate   | 2017-02-15T10:00:00       | medication-end-date-not-a-date-time   | The patient source's Medication Record's end date is not a date-time with an offset
-        endDate   | 2017-02-30T10:00:00+08:00 | medication-end-date-not-a-date-time   | The patient source's Medication Record's end date is not a date-time with an offset
-        """)
-    void aDateThatIsNoDateTimeWithAnOffsetIsAFault(String field, String date, String reason,
-            String message) {
-        answering(page(record(field, date)));
-
-        assertThat(faultReading(adapter())).isEqualTo(data(message, reason));
-    }
-
-    /**
-     * An End Date before the Start Date breaks the record's own rule, as instants: a fault
-     * naming Medication, even where the End Date's own clock reads later.
-     */
-    @ParameterizedTest
-    @ValueSource(strings = {"2017-02-13T09:59:00+08:00", "2017-02-13T10:30:00+09:00"})
-    void anEndDateBeforeTheStartDateIsAFault(String endDate) {
-        answering(page(record("endDate", endDate)));
-
-        assertThat(faultReading(adapter())).isEqualTo(data(
-                "The patient source's Medication Record ends before it starts",
-                "medication-end-before-start"));
-    }
-
 }

@@ -2,7 +2,6 @@ package com.example.backend.patient.controller;
 
 import com.example.backend.patient.domain.MedicationHistory;
 import com.example.backend.patient.domain.MedicationRecord;
-import com.fasterxml.jackson.annotation.JsonInclude;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 
@@ -25,36 +24,37 @@ public record MedicationHistoryPage(int totalResults, int startIndex, List<Row> 
     }
 
     /**
-     * One Medication Record: its id, its free text as the source gave it — no field at all for
-     * an optional element the source lacks — each closed set's member as its code, and its
-     * date-times ISO-8601 with the offset the source gave, to the second. The SPA names each code
-     * with its label and shows each date-time in Singapore time.
+     * One Medication Record as received (ADR 0020): each field the source sent, its free text as
+     * it came, each closed set's code as it came — known to its set or not — and its date-times
+     * ISO-8601 with the offset the source gave, to the second. A field the source left out, sent
+     * blank or sent in the wrong format is {@code null}, and {@code invalid} names those whose
+     * format was wrong: a {@code null} field it does not name is missing. The SPA names each
+     * known code with its label and shows each date-time in Singapore time.
+     *
+     * @param invalid the fields whose format was wrong, in the row's order; none when each field
+     *                is present or missing
      */
-    public record Row(String id, String medication,
-            @JsonInclude(JsonInclude.Include.NON_NULL) String dosage,
-            @JsonInclude(JsonInclude.Include.NON_NULL) String route,
-            @JsonInclude(JsonInclude.Include.NON_NULL) String frequency,
-            @JsonInclude(JsonInclude.Include.NON_NULL) String step,
-            @JsonInclude(JsonInclude.Include.NON_NULL) String quantity,
-            String dispenseStatus,
-            @JsonInclude(JsonInclude.Include.NON_NULL) String duration,
-            String startDate, String endDate, String dispensary, String prescribingDoctor) {
+    public record Row(String id, String medication, String dosage, String route,
+            String frequency, String step, String quantity, String dispenseStatus,
+            String duration, String startDate, String endDate, String dispensary,
+            String prescribingDoctor, List<String> invalid) {
 
         static Row of(MedicationRecord record) {
             return new Row(
-                    record.id(),
-                    record.medication(),
-                    record.dosage(),
-                    record.route(),
-                    record.frequency(),
-                    record.step(),
-                    record.quantity(),
-                    record.dispenseStatus().code(),
-                    record.duration(),
-                    DateTimeFormatter.ISO_OFFSET_DATE_TIME.format(record.startDate()),
-                    DateTimeFormatter.ISO_OFFSET_DATE_TIME.format(record.endDate()),
-                    record.dispensary().code(),
-                    record.prescribingDoctor());
+                    record.id().value(),
+                    record.medication().value(),
+                    record.dosage().value(),
+                    record.route().value(),
+                    record.frequency().value(),
+                    record.step().value(),
+                    record.quantity().value(),
+                    record.dispenseStatus().value(),
+                    record.duration().value(),
+                    record.startDate().map(DateTimeFormatter.ISO_OFFSET_DATE_TIME::format).value(),
+                    record.endDate().map(DateTimeFormatter.ISO_OFFSET_DATE_TIME::format).value(),
+                    record.dispensary().value(),
+                    record.prescribingDoctor().value(),
+                    record.invalid());
         }
 
         /** A Medication Record is Restricted data: printed, it names the record by id alone. */

@@ -53,7 +53,7 @@ set-equal to the one before it. The document's enums are named under
   also decodes another response with: `PERMISSIONS` against the delegatable
   enum). A new closed set joins both lists.
 - **A set shown as received** (ADR 0020) stays `equal`. An FFI's, a NUMC
-  Record's or an ARMC Board's code may be any string — the document's row field is `anyOf` the set's enum, any
+  Record's, an ARMC Board's or a Medication Record's code may be any string — the document's row field is `anyOf` the set's enum, any
   string and `null` — but the set is what a filter's codes are checked
   against and what the Filter panel offers, so the SPA's copy and the enum hold
   the same known codes, and the check compares the enum, not the row field.

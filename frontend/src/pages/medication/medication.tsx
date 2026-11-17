@@ -1,4 +1,3 @@
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Table,
@@ -8,11 +7,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { orElse, shown } from "@/lib/source-field";
 import { formatDateTime } from "@/lib/time";
 import { FilteredHistory } from "@/pages/filtered-history";
 import { ForPatientInContext } from "@/pages/for-patient-in-context";
 import { MEDICAL_CENTRE_LABELS } from "@/pages/medical-centre-api";
 import { type ColumnSorting, PlainHeading, SortHeading } from "@/pages/sort-heading";
+import { badged, type BadgeVariant, labelled } from "@/pages/source-code";
 
 import {
   countMedicationFilters,
@@ -26,26 +27,32 @@ import {
 } from "./medication-api";
 import { MedicationFilterPopover } from "./medication-filter-popover";
 
-/** Each Dispense Status's badge: PENDING muted, DISPENSED green, UNCOLLECTED red. */
-const STATUS_BADGES: Readonly<Record<DispenseStatus, "muted" | "success" | "danger">> = {
+/**
+ * Each Dispense Status's badge: PENDING muted, DISPENSED green, UNCOLLECTED
+ * red. A code outside the set is on a neutral one.
+ */
+const STATUS_BADGES: Readonly<Record<DispenseStatus, BadgeVariant>> = {
   dispensed: "success",
   pending: "muted",
   uncollected: "danger",
 };
 
-/** An optional element as shown: the source's text, or `—` when it has none. */
-const orDash = (text: string | undefined): string => text ?? "—";
+/** Free text as shown: exactly as the source gives it. */
+const asGiven = (text: string): string => text;
 
 /**
- * The page's Medication Records, one row each, in the order read: the
- * Medication in bold, each free-text element exactly as the source gives it
- * and `—` for an optional one it lacks, the Dispense Status as a badge, both
- * date-times in Singapore time as `dd MMM yyyy HH:mm`, and the Dispensary by
- * its Medical Centre's label. Start Date and End Date sort, one at a time,
- * held still while a read is `pending`; no other column does. Read-only, with
- * no row action; each row is keyed by the record's id, which is never shown.
- * The table is wider than a card: each cell keeps to one line and the table
- * scrolls sideways inside its card.
+ * The page's Medication Records, one row each, in the order read, shown as
+ * the patient source sent them (ADR 0020): the Medication in bold, each
+ * free-text element exactly as the source gives it, the Dispense Status as a
+ * badge, both date-times in Singapore time as `dd MMM yyyy HH:mm`, and the
+ * Dispensary by its Medical Centre's label; a code outside its closed set as
+ * it came, the Dispense Status's on a neutral badge; a missing element as "—"
+ * and one in the wrong format as "Error" (`shown`). Nothing checks the dates
+ * against each other. Start Date and End Date sort, one at a time, held still
+ * while a read is `pending`; no other column does. Read-only, with no row
+ * action; each row is keyed by the record's id, which is never shown, or its
+ * place without one. The table is wider than a card: each cell keeps to one
+ * line and the table scrolls sideways inside its card.
  */
 function MedicationTable({
   pending,
@@ -76,24 +83,24 @@ function MedicationTable({
         </TableRow>
       </TableHeader>
       <TableBody>
-        {records.map((record) => (
-          <TableRow key={record.id}>
-            <TableCell className="font-semibold">{record.medication}</TableCell>
-            <TableCell>{orDash(record.dosage)}</TableCell>
-            <TableCell>{orDash(record.route)}</TableCell>
-            <TableCell>{orDash(record.frequency)}</TableCell>
-            <TableCell>{orDash(record.step)}</TableCell>
-            <TableCell>{orDash(record.quantity)}</TableCell>
+        {records.map((record, place) => (
+          <TableRow key={orElse(record.id, place)}>
+            <TableCell className="font-semibold">{shown(record.medication, asGiven)}</TableCell>
+            <TableCell>{shown(record.dosage, asGiven)}</TableCell>
+            <TableCell>{shown(record.route, asGiven)}</TableCell>
+            <TableCell>{shown(record.frequency, asGiven)}</TableCell>
+            <TableCell>{shown(record.step, asGiven)}</TableCell>
+            <TableCell>{shown(record.quantity, asGiven)}</TableCell>
             <TableCell>
-              <Badge variant={STATUS_BADGES[record.dispenseStatus]}>
-                {DISPENSE_STATUS_LABELS[record.dispenseStatus]}
-              </Badge>
+              {shown(record.dispenseStatus, badged(DISPENSE_STATUS_LABELS, STATUS_BADGES))}
             </TableCell>
-            <TableCell>{orDash(record.duration)}</TableCell>
-            <TableCell className="tabular-nums">{formatDateTime(record.startDate)}</TableCell>
-            <TableCell className="tabular-nums">{formatDateTime(record.endDate)}</TableCell>
-            <TableCell>{MEDICAL_CENTRE_LABELS[record.dispensary]}</TableCell>
-            <TableCell>{record.prescribingDoctor}</TableCell>
+            <TableCell>{shown(record.duration, asGiven)}</TableCell>
+            <TableCell className="tabular-nums">
+              {shown(record.startDate, formatDateTime)}
+            </TableCell>
+            <TableCell className="tabular-nums">{shown(record.endDate, formatDateTime)}</TableCell>
+            <TableCell>{shown(record.dispensary, labelled(MEDICAL_CENTRE_LABELS))}</TableCell>
+            <TableCell>{shown(record.prescribingDoctor, asGiven)}</TableCell>
           </TableRow>
         ))}
       </TableBody>

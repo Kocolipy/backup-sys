@@ -79,8 +79,8 @@ import org.springframework.web.client.RestClient;
  * is ({@code http.client.requests}, under the URI template, never the id), on the JDK client with
  * redirects off and the timeouts below: a fixed connect timeout, and a read timeout a deployment
  * may set ({@code APP_PATIENT_SOURCE_READ_TIMEOUT}). Nothing here logs: a Patient read by id, a
- * Patient search's Last visits, and an FFI, a NUMC and an ARMC History, shown as received
- * (ADR 0020), hand the paths of the fields their answer held in the wrong format to
+ * Patient search's Last visits, and an FFI, a NUMC, an ARMC and a Medication History, shown as
+ * received (ADR 0020), hand the paths of the fields their answer held in the wrong format to
  * {@link InvalidSourceFields}, which reports them.
  */
 @Component
@@ -377,7 +377,9 @@ class PatientSourceAdapter implements PatientStore {
      * no column to sort by, no {@code _sort} is sent, and the order is the source's own. A
      * {@code 404} is no patient under the id; the one other good answer is a {@code 200}
      * searchset of Medication Records, and anything else is a fault, as is a searchset with no
-     * total or an entry that is no Medication Record the service can hold. The id and the
+     * total or an entry that is no Medication Record. What a Medication Record's fields hold
+     * never is: each is read as received (ADR 0020), and the answer's invalid fields are
+     * reported. The id and the
      * filters' values are URI variables, so the call is observed under the template alone: which
      * filters were asked for and the sort, and none of their values.
      */
@@ -391,7 +393,7 @@ class PatientSourceAdapter implements PatientStore {
         query.narrowing(MedicationHistory.END_DATE, filter.endDate());
         query.sorted(sort, Ties.THE_SOURCES);
         return history(query, MEDICATION_RECORDS, SourceMedication::toRecord,
-                MedicationHistory::new);
+                reportingInvalidFields(SourceRead.MEDICATION, MedicationHistory::new));
     }
 
     /**

@@ -14,7 +14,7 @@
  */
 
 import type { SourceField } from "./source-field";
-import { isCalendarDate, isOffsetDateTime } from "./time";
+import { isCalendarDate } from "./time";
 
 /** A body that does not have the shape its decoder expects. */
 export class DecodeError extends Error {
@@ -117,16 +117,6 @@ export function decodeArray<T>(value: unknown, decode: (item: unknown) => T, wha
  */
 export function calendarDate(value: string, what: string): string {
   if (!isCalendarDate(value)) throw new DecodeError(`${what} is not a date`);
-  return value;
-}
-
-/**
- * `value` read as a date-time with an offset, ISO-8601 and an instant the
- * calendar and the clock have ({@link isOffsetDateTime}); `what` names it in
- * the error.
- */
-export function dateTime(value: string, what: string): string {
-  if (!isOffsetDateTime(value)) throw new DecodeError(`${what} is not a date-time`);
   return value;
 }
 

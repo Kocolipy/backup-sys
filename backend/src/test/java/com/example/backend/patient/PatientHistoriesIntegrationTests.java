@@ -141,14 +141,6 @@ class PatientHistoriesIntegrationTests {
             fault-medication-unexpected-status,          unexpected-status,                     data
             fault-medication-not-a-searchset,            not-a-searchset,                       data
             fault-medication-no-total,                   no-total,                              data
-            fault-medication-no-id,                      medication-no-id,                      data
-            fault-medication-invalid-id,                 medication-invalid-id,                 data
-            fault-medication-no-dispense-status,         no-dispense-status,                    data
-            fault-medication-no-prescribing-doctor,      no-prescribing-doctor,                 data
-            fault-medication-unknown-dispense-status,    unknown-dispense-status,               data
-            fault-medication-unknown-dispensary,         unknown-dispensary,                    data
-            fault-medication-start-date-not-a-date-time, medication-start-date-not-a-date-time, data
-            fault-medication-end-before-start,           medication-end-before-start,           data
             """;
 
     /** What the fault stub {@code id}'s record names: the fault, then its row's reason and category. */
@@ -384,6 +376,42 @@ class PatientHistoriesIntegrationTests {
         assertThat(logs.lines()).doesNotContain("dev-patient-10", "armc-tan-boon-huat",
                 "armc tan boon huat", "20210316", "2021-04", "aircrew", "waiver-granted",
                 "Dr Rajesh Kumar");
+    }
+
+    /**
+     * A Medication History holding fields in the wrong format is answered, as received (ADR
+     * 0020), and writes exactly one {@code WARN} beside the request's record, naming each such
+     * field by its path in the source's answer, and no {@code ERROR}; nothing in the stream names
+     * the patient or anything the records hold.
+     */
+    @Test
+    void aMedicationHistoryWithInvalidFieldsIsAnsweredAndWarnsOnceNamingTheirPaths()
+            throws Exception {
+        HttpClient session = signedIn();
+        logs.reset();
+
+        HttpResponse<String> response = send(session, HttpRequest.newBuilder(URI.create(
+                "http://localhost:" + port + "/api/patient-medication/dev-patient-10?count=5")));
+        logs.awaitRequestRecords(1);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(logs.records())
+                .filteredOn(record -> List.of("WARN", "ERROR")
+                        .contains(record.at("/log/level").asText()))
+                .filteredOn(record -> !"http.request".equals(record.at("/app/event/action")
+                        .asText()))
+                .singleElement()
+                .satisfies(warning -> assertThat(List.of(warning.at("/log/level").asText(),
+                        warning.at("/app/event/action").asText(),
+                        warning.at("/app/patient_source/read").asText(),
+                        warning.at("/app/patient_source/invalid_fields").toString()))
+                        .containsExactly("WARN", "patient_source.invalid_fields", "medication",
+                                "[\"entry[0].quantity\",\"entry[1].startDate\","
+                                        + "\"entry[1].endDate\",\"entry[2].medication\","
+                                        + "\"entry[2].endDate\"]"));
+        assertThat(logs.lines()).doesNotContain("dev-patient-10", "medication-tan-boon-huat",
+                "medication tan boon huat", "20210321", "2021-03-16T09:00", "2020-03-21",
+                "on-hold", "tengah-air-base", "Amoxicillin", "Dr Chen Mei Ling");
     }
 
     /** The table of fault stubs holds every fault stub the stub files serve, of every history. */

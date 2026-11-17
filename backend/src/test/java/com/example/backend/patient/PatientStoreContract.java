@@ -813,6 +813,27 @@ public abstract class PatientStoreContract {
                 HistorySort.SOURCE_ORDER, page);
     }
 
+    /** {@code text} as received: present, or missing for {@code null}. */
+    private static SourceField<String> received(String text) {
+        return text == null ? SourceField.missing() : SourceField.present(text);
+    }
+
+    /**
+     * A Medication Record whose every element is present — each free text, each code and each
+     * date-time, ISO-8601 with an offset, as given — or missing where given {@code null}.
+     */
+    private static MedicationRecord record(String id, String medication, String dosage,
+            String route, String frequency, String step, String quantity,
+            DispenseStatus dispenseStatus, String duration, String startDate, String endDate,
+            MedicalCentre dispensary, String prescribingDoctor) {
+        return new MedicationRecord(received(id), received(medication), received(dosage),
+                received(route), received(frequency), received(step), received(quantity),
+                received(dispenseStatus.code()), received(duration),
+                SourceField.present(OffsetDateTime.parse(startDate)),
+                SourceField.present(OffsetDateTime.parse(endDate)),
+                received(dispensary.code()), received(prescribingDoctor));
+    }
+
     /**
      * A Medication Record with every optional element there but its Step — as each of Tan Wei
      * Ming's first five is — its dates ISO-8601 with an offset.
@@ -821,9 +842,8 @@ public abstract class PatientStoreContract {
             String frequency, String quantity, DispenseStatus dispenseStatus, String duration,
             String startDate, String endDate, MedicalCentre dispensary,
             String prescribingDoctor) {
-        return new MedicationRecord(id, medication, dosage, "PO", frequency, null, quantity,
-                dispenseStatus, duration, OffsetDateTime.parse(startDate),
-                OffsetDateTime.parse(endDate), dispensary, prescribingDoctor);
+        return record(id, medication, dosage, "PO", frequency, null, quantity, dispenseStatus,
+                duration, startDate, endDate, dispensary, prescribingDoctor);
     }
 
     /** Tan Wei Ming's first five Medication Records of six, in the source's own order. */
@@ -857,11 +877,10 @@ public abstract class PatientStoreContract {
     @Test
     void tan_wei_mings_medication_history_reads_its_sixth_on_the_second_page() {
         assertThat(medicationHistory(new PatientId("eq081-VQEgP8drUUqCWzHfw3"),
-                NEXT_FIVE)).contains(new MedicationHistory(6, List.of(new MedicationRecord(
+                NEXT_FIVE)).contains(new MedicationHistory(6, List.of(record(
                         "medication-tan-wei-ming-6", "Prednisolone", "30 mg", "PO", "OM", "1",
                         "14 tablets", DispenseStatus.DISPENSED, "7 days",
-                        OffsetDateTime.parse("2024-12-02T09:15:00+08:00"),
-                        OffsetDateTime.parse("2024-12-09T09:15:00+08:00"),
+                        "2024-12-02T09:15:00+08:00", "2024-12-09T09:15:00+08:00",
                         MedicalCentre.HENDON_CAMP, "Dr Chen Mei Ling"))));
     }
 
@@ -873,35 +892,79 @@ public abstract class PatientStoreContract {
     void tan_hui_mins_medication_history_reads_her_four_records() {
         assertThat(medicationHistory(new PatientId("dev-patient-05"), FIRST_FIVE))
                 .contains(new MedicationHistory(4, List.of(
-                        new MedicationRecord("medication-tan-hui-min-1", "Ibuprofen", "400 mg",
-                                "PO", "TDS", null, "15 tablets", DispenseStatus.DISPENSED,
-                                "5 days", OffsetDateTime.parse("2026-03-01T02:00:00Z"),
-                                OffsetDateTime.parse("2026-03-06T02:00:00Z"),
+                        record("medication-tan-hui-min-1", "Ibuprofen", "400 mg", "PO",
+                                "TDS", null, "15 tablets", DispenseStatus.DISPENSED, "5 days",
+                                "2026-03-01T02:00:00Z", "2026-03-06T02:00:00Z",
                                 MedicalCentre.HENDON_CAMP, "Dr Rajesh Kumar"),
-                        new MedicationRecord("medication-tan-hui-min-2", "Lignocaine 2% gel",
-                                null, "Topical", null, null, "1 tube",
-                                DispenseStatus.UNCOLLECTED, null,
-                                OffsetDateTime.parse("2025-07-14T16:20:00+08:00"),
-                                OffsetDateTime.parse("2025-07-21T16:20:00+08:00"),
+                        record("medication-tan-hui-min-2", "Lignocaine 2% gel", null,
+                                "Topical", null, null, "1 tube", DispenseStatus.UNCOLLECTED,
+                                null, "2025-07-14T16:20:00+08:00", "2025-07-21T16:20:00+08:00",
                                 MedicalCentre.MANDAI_HILL_CAMP, "Dr Nur Aisyah binte Rahman"),
-                        new MedicationRecord("medication-tan-hui-min-3", "Prednisolone",
-                                "20 mg", "PO", "OM", "2", "7 tablets", DispenseStatus.PENDING,
-                                "7 days", OffsetDateTime.parse("2025-02-10T08:45:00+08:00"),
-                                OffsetDateTime.parse("2025-02-17T08:45:00+08:00"),
+                        record("medication-tan-hui-min-3", "Prednisolone", "20 mg", "PO", "OM",
+                                "2", "7 tablets", DispenseStatus.PENDING, "7 days",
+                                "2025-02-10T08:45:00+08:00", "2025-02-17T08:45:00+08:00",
                                 MedicalCentre.MANDAI_HILL_CAMP, "Dr Chen Mei Ling"),
-                        new MedicationRecord("medication-tan-hui-min-4",
-                                "Oral rehydration salts", null, null, null, null, null,
-                                DispenseStatus.DISPENSED, null,
-                                OffsetDateTime.parse("2024-08-05T11:05:00+08:00"),
-                                OffsetDateTime.parse("2024-08-05T11:05:00+08:00"),
+                        record("medication-tan-hui-min-4", "Oral rehydration salts", null,
+                                null, null, null, null, DispenseStatus.DISPENSED, null,
+                                "2024-08-05T11:05:00+08:00", "2024-08-05T11:05:00+08:00",
                                 MedicalCentre.KRANJI_CAMP, "Dr Lim Wei Jie"))));
+    }
+
+    /**
+     * Tan Boon Huat's four Medication Records, read as received (ADR 0020): a Dosage {@code null},
+     * a Route empty and a Quantity of the wrong JSON type, a Dispense Status and a Dispensary
+     * outside their closed sets kept as they came, and an End Date before its Start Date kept; a
+     * Start Date with no offset, an End Date of the wrong JSON type and a blank Prescribing
+     * Doctor; an id outside FHIR's grammar kept, a Medication of the wrong JSON type, a Dispense
+     * Status {@code null}, an End Date that is a date alone and a Dispensary empty; and a record
+     * with no id whose Start Date is blank, its End Date {@code null}, and its Dispensary,
+     * Prescribing Doctor and every optional element left out.
+     */
+    @Test
+    void tan_boon_huats_medication_history_is_read_as_received() {
+        assertThat(medicationHistory(new PatientId("dev-patient-10"), FIRST_FIVE))
+                .contains(new MedicationHistory(4, List.of(
+                        new MedicationRecord(SourceField.present("medication-tan-boon-huat-1"),
+                                SourceField.present("Paracetamol"), SourceField.missing(),
+                                SourceField.missing(), SourceField.missing(),
+                                SourceField.missing(), SourceField.invalid(),
+                                SourceField.present("on-hold"), SourceField.present("3 days"),
+                                SourceField.present(
+                                        OffsetDateTime.parse("2022-03-16T09:00:00+08:00")),
+                                SourceField.present(
+                                        OffsetDateTime.parse("2022-03-14T09:00:00+08:00")),
+                                SourceField.present("tengah-air-base"),
+                                SourceField.present("Dr Lim Wei Jie")),
+                        new MedicationRecord(SourceField.present("medication-tan-boon-huat-2"),
+                                SourceField.present("Ibuprofen"), SourceField.present("400 mg"),
+                                SourceField.present("PO"), SourceField.present("TDS"),
+                                SourceField.missing(), SourceField.present("15 tablets"),
+                                SourceField.present("dispensed"), SourceField.present("5 days"),
+                                SourceField.invalid(), SourceField.invalid(),
+                                SourceField.present("kranji-camp"), SourceField.missing()),
+                        new MedicationRecord(SourceField.present("medication tan boon huat 3"),
+                                SourceField.invalid(), SourceField.missing(),
+                                SourceField.missing(), SourceField.missing(),
+                                SourceField.missing(), SourceField.missing(),
+                                SourceField.missing(), SourceField.missing(),
+                                SourceField.present(OffsetDateTime.parse("2020-03-16T01:00:00Z")),
+                                SourceField.invalid(), SourceField.missing(),
+                                SourceField.present("Dr Chen Mei Ling")),
+                        new MedicationRecord(SourceField.missing(),
+                                SourceField.present("Oral rehydration salts"),
+                                SourceField.missing(), SourceField.missing(),
+                                SourceField.missing(), SourceField.missing(),
+                                SourceField.missing(), SourceField.present("pending"),
+                                SourceField.missing(), SourceField.missing(),
+                                SourceField.missing(), SourceField.missing(),
+                                SourceField.missing()))));
     }
 
     /** The ids of a Medication History's page, in its order, beside its total. */
     private static List<Object> medicationIdsAndTotal(Optional<MedicationHistory> history) {
         MedicationHistory read = history.orElseThrow();
         return List.of(read.totalResults(),
-                read.records().stream().map(MedicationRecord::id).toList());
+                read.records().stream().map(record -> record.id().value()).toList());
     }
 
     /**
@@ -987,7 +1050,7 @@ public abstract class PatientStoreContract {
                 .containsExactly(ids.size(), ids);
     }
 
-    /** Siti Nurhaliza binte Ahmad, as every fixture but those two, has no Medication Record. */
+    /** Siti Nurhaliza binte Ahmad, as every fixture but those three, has no Medication Record. */
     @Test
     void a_patient_with_no_medication_records_reads_an_empty_history_of_none() {
         assertThat(medicationHistory(new PatientId("erXuFYUfucBZaryVksYEcMg3"),

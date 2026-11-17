@@ -8,15 +8,17 @@ import { sidebar } from "./shell.helpers";
  * source's mock (`backend/patient-source-mock`): the patient in context is
  * selected on Patient Search, then Medication opened from the sidebar. Tan Wei
  * Ming has six Medication Records over two pages, Tan Hui Min four covering
- * every Dispense Status, the last with no optional element, and Siti Nurhaliza
- * binte Ahmad none (`/docs/domain/medication.md`, "The patient source's
- * Medication fixtures"), each sort of his and each filter of hers a canned
- * stub of its own ("Sort and filter stubs"). A failing source is the mock's own
+ * every Dispense Status, the last with no optional element, Tan Boon Huat four
+ * shown as received, and Siti Nurhaliza binte Ahmad none
+ * (`/docs/domain/medication.md`, "The patient source's Medication fixtures"),
+ * each sort of his and each filter of hers a canned stub of its own ("Sort and
+ * filter stubs"). A failing source is the mock's own
  * `fault-medication-server-error`, the page's read sent there in place of the
  * patient's, so the backend's real `502` reaches the page: the one history
  * whose failure is read here, the others' pages reading theirs as this one
  * does (`filtered-history.tsx`). What the page decides without the backend —
- * the labels, the badges, a loading patient, no patient in context — is
+ * the labels, the badges, "—", "Error" and a raw code, a loading patient, no
+ * patient in context — is
  * `medication.test.tsx`'s; that a session without `patient:read` is offered no
  * Medication link is `roles-user.spec.ts`', and that it is routed to Home
  * `App.test.tsx`'s.
@@ -98,6 +100,31 @@ test.describe("Medication", () => {
     expect(
       await badges.evaluateAll((all) => all.map((badge) => badge.getAttribute("data-variant"))),
     ).toEqual(["success", "danger", "muted", "success"]);
+  });
+
+  // The patient source is the truth (ADR 0020): Tan Boon Huat's Medication
+  // Records hold free text null, empty, blank, left out and of the wrong JSON
+  // type, a Dispense Status and a Dispensary outside their closed sets, an End
+  // Date before its Start Date, a Start Date with no offset, an End Date of the
+  // wrong JSON type and one a date alone, and a record with no id.
+  test('shows Tan Boon Huat\'s Medication Records as received: "—", "Error" and raw codes in one table', async ({
+    page,
+  }) => {
+    await page.goto("/search");
+    await search(page, "tan");
+    await page.getByRole("button", { name: "Page 2" }).click();
+    await selectResult(page, "Tan Boon Huat");
+    await expectOnDemographicInContext(page, "Tan Boon Huat", "S5512345A");
+
+    await openMedication(page);
+
+    await expect(medicationRows(page)).toHaveText([
+      "Paracetamol————Erroron-hold3 days16 Mar 2022 09:0014 Mar 2022 09:00tengah-air-baseDr Lim Wei Jie",
+      "Ibuprofen400 mgPOTDS—15 tabletsDISPENSED5 daysErrorErrorKranji Camp MC—",
+      "Error———————16 Mar 2020 09:00Error—Dr Chen Mei Ling",
+      "Oral rehydration salts—————PENDING—————",
+    ]);
+    await expect(page.getByText("Showing 1 to 4 of 4 records")).toBeVisible();
   });
 
   test("says no records are found for a patient with none", async ({ page }) => {

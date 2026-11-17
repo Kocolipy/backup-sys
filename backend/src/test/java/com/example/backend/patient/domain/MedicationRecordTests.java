@@ -7,20 +7,19 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
-import org.junit.jupiter.params.provider.ValueSource;
 
 /**
- * A Medication Record as the domain holds it (/docs/domain/medication.md): its six required
- * elements there and its six optional ones there or not, its End Date not before its Start Date,
- * its Medication and Prescribing Doctor not blank, its id in FHIR's id grammar, printed by its id
- * alone; and a page of Medication History counting no fewer than none. How a closed set's member
- * is found by its code is {@code SourceCodeTests}'.
+ * A Medication Record as the domain holds it (/docs/domain/medication.md; ADR 0020): each element
+ * as the patient source sent it — present, missing or invalid — none refused, naming the elements
+ * whose format was wrong, printed by its id alone; and a page of Medication History counting no
+ * fewer than none. How a field is classified as it is read is {@code ReceivedFieldsTests}'.
  */
 class MedicationRecordTests {
 
@@ -32,130 +31,141 @@ class MedicationRecordTests {
     private static final OffsetDateTime ENDED = OffsetDateTime.of(2026, 10, 22, 17, 30, 0, 0,
             SINGAPORE);
 
-    private static MedicationRecord record(String id, OffsetDateTime startDate,
-            OffsetDateTime endDate) {
-        return new MedicationRecord(id, "Paracetamol", "750 mg", "PO", "QDS", null, "30 tablets",
-                DispenseStatus.PENDING, "5 days", startDate, endDate, MedicalCentre.NEE_SOON_CAMP,
-                "Dr Lim Wei Jie");
-    }
+    /** The names of a Medication Record's elements, as the API spells them, in its order. */
+    private static final List<String> ELEMENTS = List.of("id", "medication", "dosage", "route",
+            "frequency", "step", "quantity", "dispenseStatus", "duration", "startDate", "endDate",
+            "dispensary", "prescribingDoctor");
 
     private static MedicationRecord paracetamol(String id) {
-        return record(id, STARTED, ENDED);
+        return new MedicationRecord(SourceField.present(id), SourceField.present("Paracetamol"),
+                SourceField.present("750 mg"), SourceField.present("PO"),
+                SourceField.present("QDS"), SourceField.missing(),
+                SourceField.present("30 tablets"), SourceField.present("pending"),
+                SourceField.present("5 days"), SourceField.present(STARTED),
+                SourceField.present(ENDED), SourceField.present("nee-soon-camp"),
+                SourceField.present("Dr Lim Wei Jie"));
+    }
+
+    /** A record whose every element is {@code fields}' own, in {@link #ELEMENTS}' order. */
+    @SuppressWarnings("unchecked")
+    private static MedicationRecord of(SourceField<?>... fields) {
+        return new MedicationRecord((SourceField<String>) fields[0],
+                (SourceField<String>) fields[1], (SourceField<String>) fields[2],
+                (SourceField<String>) fields[3], (SourceField<String>) fields[4],
+                (SourceField<String>) fields[5], (SourceField<String>) fields[6],
+                (SourceField<String>) fields[7], (SourceField<String>) fields[8],
+                (SourceField<OffsetDateTime>) fields[9], (SourceField<OffsetDateTime>) fields[10],
+                (SourceField<String>) fields[11], (SourceField<String>) fields[12]);
+    }
+
+    private static List<Object> elementsOf(MedicationRecord record) {
+        return Arrays.asList(record.id(), record.medication(), record.dosage(), record.route(),
+                record.frequency(), record.step(), record.quantity(), record.dispenseStatus(),
+                record.duration(), record.startDate(), record.endDate(), record.dispensary(),
+                record.prescribingDoctor());
     }
 
     @Test
     void aRecordHoldsEveryElementItWasGiven() {
-        MedicationRecord record = new MedicationRecord("medication-1", "Prednisolone", "30 mg",
-                "PO", "OM", "1", "14 tablets", DispenseStatus.DISPENSED, "7 days", STARTED, ENDED,
-                MedicalCentre.KHATIB_CAMP, "Dr Chen Mei Ling");
+        MedicationRecord record = new MedicationRecord(SourceField.present("medication-1"),
+                SourceField.present("Prednisolone"), SourceField.present("30 mg"),
+                SourceField.present("PO"), SourceField.present("OM"), SourceField.present("1"),
+                SourceField.present("14 tablets"), SourceField.present("dispensed"),
+                SourceField.present("7 days"), SourceField.present(STARTED),
+                SourceField.present(ENDED), SourceField.present("khatib-camp"),
+                SourceField.present("Dr Chen Mei Ling"));
 
-        assertThat(Arrays.<Object>asList(record.id(), record.medication(), record.dosage(),
-                record.route(), record.frequency(), record.step(), record.quantity(),
-                record.dispenseStatus(), record.duration(), record.startDate(), record.endDate(),
-                record.dispensary(), record.prescribingDoctor()))
-                .containsExactly("medication-1", "Prednisolone", "30 mg", "PO", "OM", "1",
-                        "14 tablets", DispenseStatus.DISPENSED, "7 days", STARTED, ENDED,
-                        MedicalCentre.KHATIB_CAMP, "Dr Chen Mei Ling");
+        assertThat(elementsOf(record)).containsExactly(SourceField.present("medication-1"),
+                SourceField.present("Prednisolone"), SourceField.present("30 mg"),
+                SourceField.present("PO"), SourceField.present("OM"), SourceField.present("1"),
+                SourceField.present("14 tablets"), SourceField.present("dispensed"),
+                SourceField.present("7 days"), SourceField.present(STARTED),
+                SourceField.present(ENDED), SourceField.present("khatib-camp"),
+                SourceField.present("Dr Chen Mei Ling"));
     }
 
-    /** Every optional element may be absent: a record with none of them is still a record. */
+    /**
+     * The source is the truth: a record whose elements are missing or invalid, whose id is
+     * outside FHIR's grammar, whose codes are no members of their closed sets or which ends
+     * before it starts, is a record all the same.
+     */
     @Test
-    void aRecordMayLackEveryOptionalElement() {
-        MedicationRecord record = new MedicationRecord("medication-bare",
-                "Oral rehydration salts", null, null, null, null, null, DispenseStatus.DISPENSED,
-                null, STARTED, ENDED, MedicalCentre.KRANJI_CAMP, "Dr Lim Wei Jie");
+    void noRecordIsRefusedForWhatItHolds() {
+        MedicationRecord record = of(SourceField.present("medication tan/1"),
+                SourceField.invalid(), SourceField.missing(), SourceField.missing(),
+                SourceField.missing(), SourceField.missing(), SourceField.invalid(),
+                SourceField.present("on-hold"), SourceField.missing(),
+                SourceField.present(ENDED), SourceField.present(STARTED),
+                SourceField.present("tengah-air-base"), SourceField.missing());
 
-        assertThat(Arrays.asList(record.dosage(), record.route(), record.frequency(),
-                record.step(), record.quantity(), record.duration()))
-                .containsOnlyNulls().hasSize(6);
+        assertThat(elementsOf(record)).containsExactly(SourceField.present("medication tan/1"),
+                SourceField.invalid(), SourceField.missing(), SourceField.missing(),
+                SourceField.missing(), SourceField.missing(), SourceField.invalid(),
+                SourceField.present("on-hold"), SourceField.missing(),
+                SourceField.present(OffsetDateTime.of(2026, 10, 22, 17, 30, 0, 0, SINGAPORE)),
+                SourceField.present(OffsetDateTime.of(2026, 10, 18, 17, 30, 0, 0, SINGAPORE)),
+                SourceField.present("tengah-air-base"), SourceField.missing());
     }
 
-    @Test
-    void aRecordMayEndTheMinuteItStarts() {
-        assertThat(record("medication-at-once", STARTED, STARTED).endDate()).isEqualTo(STARTED);
-    }
-
-    /** The End Date is compared as an instant, whatever offset each date was given in. */
-    @Test
-    void anEndDateInAnotherOffsetIsComparedAsTheSameInstant() {
-        OffsetDateTime sameInstantInUtc = STARTED.withOffsetSameInstant(ZoneOffset.UTC);
-
-        assertThat(record("medication-utc", STARTED, sameInstantInUtc).endDate())
-                .isEqualTo(sameInstantInUtc);
-    }
-
-    @Test
-    void aRecordEndingBeforeItStartsIsRefused() {
-        assertThatThrownBy(() -> record("medication-backwards", STARTED,
-                STARTED.minusMinutes(1)))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("A Medication Record's End Date must not be before its Start Date");
-    }
-
-    /** The End Date rule, as a reader of the source asks it before building a record. */
-    @Test
-    void anEndDateBeforeTheStartDateIsTheOneThatEndsBeforeItStarts() {
-        assertThat(List.of(
-                MedicationRecord.endsBeforeItStarts(STARTED, STARTED.minusMinutes(1)),
-                MedicationRecord.endsBeforeItStarts(STARTED, STARTED),
-                MedicationRecord.endsBeforeItStarts(STARTED, ENDED),
-                MedicationRecord.endsBeforeItStarts(STARTED,
-                        STARTED.withOffsetSameInstant(ZoneOffset.UTC))))
-                .containsExactly(true, false, false, false);
-    }
-
-    /** An id outside FHIR's grammar is refused, quoting none of it. */
-    @ParameterizedTest
-    @ValueSource(strings = {"", "medication tan", "medication/tan", "medication_tan",
-        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"})
-    void anIdOutsideTheGrammarIsRefused(String id) {
-        assertThatThrownBy(() -> paracetamol(id))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("A Medication Record's id must match the FHIR id grammar");
-    }
-
-    @Test
-    void aRecordWithNoIdIsRefused() {
-        assertThatThrownBy(() -> paracetamol(null)).isInstanceOf(IllegalArgumentException.class);
-    }
-
-    /** Each required element left out is refused, naming it. */
-    static Stream<Arguments> eachRequiredElementLeftOut() {
-        Object[] whole = {"Amoxicillin", DispenseStatus.UNCOLLECTED, STARTED, ENDED,
-            MedicalCentre.KRANJI_CAMP, "Dr Nur Aisyah binte Rahman"};
-        String[] names = {"medication", "dispenseStatus", "startDate", "endDate", "dispensary",
-            "prescribingDoctor"};
+    /** Each element is held as some field, even one the source never sent: none is {@code null}. */
+    static Stream<Arguments> eachElementLeftOut() {
         List<Arguments> cases = new ArrayList<>();
-        for (int element = 0; element < whole.length; element++) {
-            Object[] elements = whole.clone();
-            elements[element] = null;
-            cases.add(Arguments.of(names[element], elements));
+        for (int element = 0; element < ELEMENTS.size(); element++) {
+            SourceField<?>[] fields = Collections.nCopies(ELEMENTS.size(), SourceField.missing())
+                    .toArray(SourceField<?>[]::new);
+            fields[element] = null;
+            cases.add(Arguments.of(ELEMENTS.get(element), fields));
         }
         return cases.stream();
     }
 
     @ParameterizedTest
-    @MethodSource("eachRequiredElementLeftOut")
-    void aRecordMissingARequiredElementIsRefused(String element, Object[] elements) {
-        assertThatThrownBy(() -> new MedicationRecord("medication-1", (String) elements[0], null,
-                null, null, null, null, (DispenseStatus) elements[1], null,
-                (OffsetDateTime) elements[2], (OffsetDateTime) elements[3],
-                (MedicalCentre) elements[4], (String) elements[5]))
+    @MethodSource("eachElementLeftOut")
+    void aRecordHoldsEachElementAsAField(String element, SourceField<?>[] fields) {
+        assertThatThrownBy(() -> of(fields))
                 .isInstanceOf(NullPointerException.class)
                 .hasMessage(element);
     }
 
-    /** The Medication and the Prescribing Doctor are text a record must have: blank is refused. */
+    /**
+     * A record names each element whose format was wrong, as the API spells it, in its order:
+     * one case for each element alone, so each is seen to be named.
+     */
+    static Stream<Arguments> eachElementInvalid() {
+        List<Arguments> cases = new ArrayList<>();
+        for (int element = 0; element < ELEMENTS.size(); element++) {
+            SourceField<?>[] fields = Collections.nCopies(ELEMENTS.size(), SourceField.missing())
+                    .toArray(SourceField<?>[]::new);
+            fields[element] = SourceField.invalid();
+            cases.add(Arguments.of(ELEMENTS.get(element), fields));
+        }
+        return cases.stream();
+    }
+
     @ParameterizedTest
-    @ValueSource(strings = {"medication", "prescribingDoctor"})
-    void aBlankMedicationOrPrescribingDoctorIsRefused(String element) {
-        boolean medication = element.equals("medication");
-        assertThatThrownBy(() -> new MedicationRecord("medication-1", medication ? " " : "Ibuprofen",
-                null, null, null, null, null, DispenseStatus.PENDING, null, STARTED, ENDED,
-                MedicalCentre.HENDON_CAMP, medication ? "Dr Rajesh Kumar" : ""))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("A Medication Record's " + (medication ? "Medication"
-                        : "Prescribing Doctor") + " must not be blank");
+    @MethodSource("eachElementInvalid")
+    void aRecordNamesAnInvalidElement(String element, SourceField<?>[] fields) {
+        assertThat(of(fields).invalid()).containsExactly(element);
+    }
+
+    @Test
+    void aRecordNamesItsInvalidElementsInItsOrder() {
+        MedicationRecord record = of(SourceField.missing(), SourceField.present("Ibuprofen"),
+                SourceField.missing(), SourceField.missing(), SourceField.missing(),
+                SourceField.missing(), SourceField.invalid(), SourceField.present("dispensed"),
+                SourceField.missing(), SourceField.invalid(), SourceField.invalid(),
+                SourceField.missing(), SourceField.invalid());
+
+        assertThat(record.invalid()).containsExactly("quantity", "startDate", "endDate",
+                "prescribingDoctor");
+    }
+
+    @Test
+    void aRecordMissingElementsButNoneInvalidNamesNone() {
+        MedicationRecord record = of(Collections.nCopies(ELEMENTS.size(), SourceField.missing())
+                .toArray(SourceField<?>[]::new));
+
+        assertThat(record.invalid()).isEmpty();
     }
 
     /** A Medication Record is the patient's Restricted data: printed, it names its id alone. */
@@ -163,6 +173,18 @@ class MedicationRecordTests {
     void aRecordPrintsItsIdAlone() {
         assertThat(paracetamol("medication-tan-wei-ming-1"))
                 .hasToString("MedicationRecord[medication-tan-wei-ming-1]");
+    }
+
+    @Test
+    void aRecordWithNoIdPrintsNoneOfItsElements() {
+        MedicationRecord record = paracetamol("unused");
+        MedicationRecord noId = new MedicationRecord(SourceField.missing(), record.medication(),
+                record.dosage(), record.route(), record.frequency(), record.step(),
+                record.quantity(), record.dispenseStatus(), record.duration(),
+                record.startDate(), record.endDate(), record.dispensary(),
+                record.prescribingDoctor());
+
+        assertThat(noId).hasToString("MedicationRecord[no id]");
     }
 
     @Test

@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import { checkDateRanges } from "@/lib/date-range";
 import { DecodeError } from "@/lib/decode";
-import { describeDecoder, STRING, without } from "@/lib/decode.testHelpers";
 
 import {
   countMedicationFilters,
@@ -13,7 +12,7 @@ import {
   NO_MEDICATION_FILTERS,
 } from "./medication-api";
 
-/** One Medication Record exactly as the backend serialises it, every optional element present. */
+/** One Medication Record exactly as the backend serialises it, every field present. */
 const AMOXICILLIN = {
   id: "medication-tan-wei-ming-2",
   medication: "Amoxicillin",
@@ -28,10 +27,42 @@ const AMOXICILLIN = {
   endDate: "2026-10-22T17:31:00+08:00",
   dispensary: "khatib-camp",
   prescribingDoctor: "Dr Lim Wei Jie",
+  invalid: [],
 };
 
-/** The six optional elements, which the backend leaves out when the source has none. */
-const OPTIONAL = ["dosage", "route", "frequency", "step", "quantity", "duration"];
+/** {@link AMOXICILLIN} as the page reads it. */
+const AMOXICILLIN_READ = {
+  id: { state: "present", value: "medication-tan-wei-ming-2" },
+  medication: { state: "present", value: "Amoxicillin" },
+  dosage: { state: "present", value: "300 mg" },
+  route: { state: "present", value: "PO" },
+  frequency: { state: "present", value: "TDS" },
+  step: { state: "present", value: "1" },
+  quantity: { state: "present", value: "20 tablets" },
+  dispenseStatus: { state: "present", value: "pending" },
+  duration: { state: "present", value: "5 days" },
+  startDate: { state: "present", value: "2026-10-18T17:31:00+08:00" },
+  endDate: { state: "present", value: "2026-10-22T17:31:00+08:00" },
+  dispensary: { state: "present", value: "khatib-camp" },
+  prescribingDoctor: { state: "present", value: "Dr Lim Wei Jie" },
+};
+
+/** Every element of a Medication Record, as the backend names it. */
+const ELEMENTS = [
+  "id",
+  "medication",
+  "dosage",
+  "route",
+  "frequency",
+  "step",
+  "quantity",
+  "dispenseStatus",
+  "duration",
+  "startDate",
+  "endDate",
+  "dispensary",
+  "prescribingDoctor",
+];
 
 /** `decode(body)`'s refusal, read through the declaration as a `Response`. */
 async function refused(body: unknown) {
@@ -41,35 +72,118 @@ async function refused(body: unknown) {
   );
 }
 
-// Six elements are required and six optional, and each is read as a string
-// first. A code is matched exactly, so a label, another case or another set's
-// code is outside its set; which strings are date-times with an offset is
-// `isOffsetDateTime`'s (lib/time.test.ts).
-describeDecoder(
-  "MedicationRecord",
-  decodeMedicationRecord,
-  AMOXICILLIN,
-  {
-    id: STRING,
-    medication: STRING,
-    dosage: STRING,
-    route: STRING,
-    frequency: STRING,
-    step: STRING,
-    quantity: STRING,
-    dispenseStatus: ["DISPENSED", "pending | dispensed | uncollected", "a string"],
-    duration: STRING,
-    startDate: ["2026-10-18", "a date-time", "a string"],
-    endDate: ["2026-10-22T17:31:00", "a date-time", "a string"],
-    dispensary: [
-      "Khatib Camp MC",
-      "nee-soon-camp | kranji-camp | hendon-camp | mandai-hill-camp | khatib-camp",
-      "a string",
-    ],
-    prescribingDoctor: STRING,
-  },
-  { optional: OPTIONAL, strict: true },
-);
+// A Medication Record is shown as received (ADR 0020): each field is read by
+// the lenient field decoder (`readObject(…).sourceFields()`,
+// lib/decode.test.ts), so its value never refuses the record — only its shape
+// does.
+describe("decodeMedicationRecord", () => {
+  it("reads every field present as it came", () => {
+    expect(decodeMedicationRecord(AMOXICILLIN)).toStrictEqual(AMOXICILLIN_READ);
+  });
+
+  it("reads a null field as missing, and one the row names invalid as invalid", () => {
+    expect(
+      decodeMedicationRecord({
+        ...AMOXICILLIN,
+        id: null,
+        step: null,
+        dispenseStatus: null,
+        endDate: null,
+        invalid: ["endDate"],
+      }),
+    ).toStrictEqual({
+      ...AMOXICILLIN_READ,
+      id: { state: "missing" },
+      step: { state: "missing" },
+      dispenseStatus: { state: "missing" },
+      endDate: { state: "invalid" },
+    });
+  });
+
+  it.each(ELEMENTS)("reads %s invalid when the row names it", (field) => {
+    expect(
+      decodeMedicationRecord({
+        ...AMOXICILLIN,
+        [field]: null,
+        invalid: [field],
+      }),
+    ).toStrictEqual({ ...AMOXICILLIN_READ, [field]: { state: "invalid" } });
+  });
+
+  // Which strings are date-times with an offset is `isOffsetDateTime`'s
+  // (lib/time.test.ts): a date alone, or one with no offset, is none.
+  it.each([
+    ["startDate", "2026-10-18"],
+    ["startDate", "2026-10-18T17:31:00"],
+    ["endDate", "2026-02-30T17:31:00+08:00"],
+  ] as const)("reads %s invalid when it is no date-time with an offset: %s", (field, text) => {
+    expect(decodeMedicationRecord({ ...AMOXICILLIN, [field]: text })[field]).toStrictEqual({
+      state: "invalid",
+    });
+  });
+
+  // Free text is any string: one that reads as a date-time is free text still.
+  it("reads free text that looks like a date as present, as it came", () => {
+    expect(decodeMedicationRecord({ ...AMOXICILLIN, duration: "2026-10-18" }).duration).toEqual({
+      state: "present",
+      value: "2026-10-18",
+    });
+  });
+
+  // A code is matched by the page, not the decoder: a label, another case or
+  // a code of no set is kept as the source sent it.
+  it.each([
+    ["dispenseStatus", "DISPENSED"],
+    ["dispenseStatus", "on-hold"],
+    ["dispensary", "Khatib Camp MC"],
+    ["dispensary", "tengah-air-base"],
+  ])("reads %s outside its closed set as present, as it came: %s", (field, code) => {
+    expect(decodeMedicationRecord({ ...AMOXICILLIN, [field]: code })).toStrictEqual({
+      ...AMOXICILLIN_READ,
+      [field]: { state: "present", value: code },
+    });
+  });
+
+  it("reads an id outside FHIR's id grammar as present: ids are not checked", () => {
+    expect(decodeMedicationRecord({ ...AMOXICILLIN, id: "medication tan/1" }).id).toStrictEqual({
+      state: "present",
+      value: "medication tan/1",
+    });
+  });
+
+  it.each(ELEMENTS)("refuses a record without %s, which the backend always sends", (field) => {
+    expect(() =>
+      decodeMedicationRecord(
+        Object.fromEntries(Object.entries(AMOXICILLIN).filter(([key]) => key !== field)),
+      ),
+    ).toThrow(new DecodeError(`MedicationRecord.${field} is not a string or null`));
+  });
+
+  it("refuses a record without invalid", () => {
+    expect(() =>
+      decodeMedicationRecord(
+        Object.fromEntries(Object.entries(AMOXICILLIN).filter(([key]) => key !== "invalid")),
+      ),
+    ).toThrow(new DecodeError("MedicationRecord.invalid is not an array"));
+  });
+
+  // A Medication Record has no Outcome: one sent is a field the record does not have.
+  it("refuses a field the record does not have", () => {
+    expect(() => decodeMedicationRecord({ ...AMOXICILLIN, outcome: "fit" })).toThrow(
+      new DecodeError("MedicationRecord.outcome is not expected"),
+    );
+  });
+
+  it.each([
+    ["an array", [AMOXICILLIN]],
+    ["null", null],
+    ["a string", "record"],
+  ])("refuses %s as a record", (_, value) => {
+    expect(() => decodeMedicationRecord(value)).toThrow(
+      new DecodeError("MedicationRecord is not an object"),
+    );
+  });
+});
 
 // How a date range is checked at each precision is `checkDateRanges`'
 // (lib/date-range.test.ts): here, that the Medication History's two ranges are
@@ -209,40 +323,46 @@ describe("MEDICATION_HISTORY", () => {
     ]);
   });
 
-  it("decodes a page of Medication Records, one with none of its optional elements", async () => {
-    const bare = OPTIONAL.reduce<object>((record, field) => without(record, field), {
+  it("decodes a page of Medication Records as received, one with fields missing and invalid", async () => {
+    const received = {
       ...AMOXICILLIN,
-      id: "medication-bare",
-    });
+      id: null,
+      quantity: null,
+      dispenseStatus: "on-hold",
+      startDate: null,
+      invalid: ["quantity", "startDate"],
+    };
 
     await expect(
       MEDICATION_HISTORY.decode(
         new Response(
-          JSON.stringify({ records: [AMOXICILLIN, bare], startIndex: 1, totalResults: 2 }),
+          JSON.stringify({ records: [AMOXICILLIN, received], startIndex: 1, totalResults: 2 }),
         ),
       ),
-    ).resolves.toStrictEqual({ rows: [AMOXICILLIN, bare], startIndex: 1, totalResults: 2 });
+    ).resolves.toStrictEqual({
+      rows: [
+        AMOXICILLIN_READ,
+        {
+          ...AMOXICILLIN_READ,
+          id: { state: "missing" },
+          quantity: { state: "invalid" },
+          dispenseStatus: { state: "present", value: "on-hold" },
+          startDate: { state: "invalid" },
+        },
+      ],
+      startIndex: 1,
+      totalResults: 2,
+    });
   });
 
-  // An absent optional element is one the source lacks; a null one is no text at all.
-  it("refuses a Medication Record whose optional element is null", async () => {
-    expect(
-      await refused({ records: [{ ...AMOXICILLIN, step: null }], startIndex: 1, totalResults: 1 }),
-    ).toStrictEqual(new DecodeError("MedicationRecord.step is not a string"));
-  });
-
-  it("refuses a page holding a Medication Record it cannot read", async () => {
+  it("refuses a page holding a Medication Record whose shape is wrong", async () => {
     expect(
       await refused({
-        records: [{ ...AMOXICILLIN, dispensary: "sembawang-camp" }],
+        records: [{ ...AMOXICILLIN, invalid: "quantity" }],
         startIndex: 1,
         totalResults: 1,
       }),
-    ).toStrictEqual(
-      new DecodeError(
-        "MedicationRecord.dispensary is not nee-soon-camp | kranji-camp | hendon-camp | mandai-hill-camp | khatib-camp",
-      ),
-    );
+    ).toStrictEqual(new DecodeError("MedicationRecord.invalid is not an array"));
   });
 
   it("refuses a page holding a field it does not know", async () => {
