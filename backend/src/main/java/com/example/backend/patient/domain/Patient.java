@@ -97,11 +97,16 @@ public record Patient(
                 .toList();
     }
 
-    /** The field {@code element} holds; a Patient with no official name has no name text. */
+    /** The official name's text, as received: missing for a Patient with no official name. */
+    public SourceField<String> nameText() {
+        return name == null ? SourceField.missing() : name.text();
+    }
+
+    /** The field {@code element} holds. */
     private SourceField<?> field(Element element) {
         return switch (element) {
             case NRIC -> nric;
-            case NAME_TEXT -> name == null ? SourceField.missing() : name.text();
+            case NAME_TEXT -> nameText();
             case GENDER -> gender;
             case BIRTH_DATE -> birthDate;
         };

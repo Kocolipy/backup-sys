@@ -18,7 +18,8 @@ import {
 } from "@/components/ui/table";
 import { formatCalendarDateTwoDigitDay } from "@/lib/time";
 import { PATIENT_GENDER_LABELS, type PatientGender } from "@/lib/patient-gender";
-import { shown } from "@/lib/source-field";
+import { byCode, shown } from "@/lib/source-field";
+import { recordsCounted } from "@/pages/listing-copy";
 import { PagedListing } from "@/pages/paged-listing";
 import { usePagedRead } from "@/pages/paged-read";
 import { PlainHeading } from "@/pages/sort-heading";
@@ -41,25 +42,58 @@ const GENDER_BADGE_TINTS: Readonly<Record<PatientGender, string | undefined>> = 
   unknown: undefined,
 };
 
+/** A gender's badge: its label, or its raw code; Male blue, Female pink, any other plain. */
+function GenderBadge({ code }: { code: string }) {
+  return (
+    <Badge className={byCode(GENDER_BADGE_TINTS, code, undefined)} variant="secondary">
+      {byCode(PATIENT_GENDER_LABELS, code, code)}
+    </Badge>
+  );
+}
+
+/** A match's cells but its name: the NRIC, the gender and both dates, each as received. */
+function MatchCells({ patient }: { patient: PatientMatch }) {
+  return (
+    <>
+      <TableCell className="font-mono">{shown(patient.nric, (nric) => nric)}</TableCell>
+      <TableCell>
+        {shown(patient.gender, (code) => (
+          <GenderBadge code={code} />
+        ))}
+      </TableCell>
+      <TableCell className="tabular-nums">
+        {shown(patient.birthDate, formatCalendarDateTwoDigitDay)}
+      </TableCell>
+      <TableCell className="tabular-nums">
+        {shown(patient.lastVisit, formatCalendarDateTwoDigitDay)}
+      </TableCell>
+    </>
+  );
+}
+
 /**
- * The matching Patients, one row each: the official name, the full NRIC, the
- * gender as a badge (Male blue, Female pink) and both dates as `dd MMM yyyy`,
- * the Last visit shown as received (ADR 0020) — `—` when missing, "Error" in
- * the wrong format — in the patient source's own order: no
- * column sorts. Each row is keyed by the Patient's id, which is kept and never
- * shown.
+ * The matching Patients, one row each, shown as received (ADR 0020): the
+ * official name, the full NRIC, the gender as a badge (Male blue, Female pink,
+ * a code outside the four as itself on the plain badge) and both dates as
+ * `dd MMM yyyy`, each `—` when missing and "Error" in the wrong format — in
+ * the patient source's own order: no column sorts. Each row is keyed by the
+ * Patient's id, which is kept and never shown.
  *
  * Selecting a row puts its Patient into the tab's EHR context, replacing any
  * patient there with no confirmation, and opens the Demographic page. A click anywhere on the
  * row selects it; the Patient Name is a button, so the keyboard and assistive
- * technology select it too, its click reaching the row's. The same Patient
+ * technology select it too, its click reaching the row's — whatever its
+ * fields hold. The same Patient
  * selected again leaves the context as it was, so the signed-in layout reads
  * them no second time. No row marks the patient in context.
+ *
+ * An entry that is no Patient has no id: its row is "Error" in every cell and
+ * selects nothing, keyed by its place.
  */
 function ResultsTable({ patients }: { patients: readonly PatientMatch[] }) {
   const navigate = useNavigate();
-  const select = (patient: PatientMatch) => {
-    setEhrContext({ patient: patient.id });
+  const select = (id: string) => {
+    setEhrContext({ patient: id });
     void navigate(DEMOGRAPHIC_PAGE_PATH);
   };
   return (
@@ -75,27 +109,28 @@ function ResultsTable({ patients }: { patients: readonly PatientMatch[] }) {
         </TableRow>
       </TableHeader>
       <TableBody>
-        {patients.map((patient) => (
-          <TableRow className="cursor-pointer" key={patient.id} onClick={() => select(patient)}>
-            <TableCell>
-              <Button className="h-auto p-0 text-foreground" variant="link">
-                {patient.name}
-              </Button>
-            </TableCell>
-            <TableCell className="font-mono">{patient.nric}</TableCell>
-            <TableCell>
-              <Badge className={GENDER_BADGE_TINTS[patient.gender]} variant="secondary">
-                {PATIENT_GENDER_LABELS[patient.gender]}
-              </Badge>
-            </TableCell>
-            <TableCell className="tabular-nums">
-              {formatCalendarDateTwoDigitDay(patient.birthDate)}
-            </TableCell>
-            <TableCell className="tabular-nums">
-              {shown(patient.lastVisit, formatCalendarDateTwoDigitDay)}
-            </TableCell>
-          </TableRow>
-        ))}
+        {patients.map((patient, place) => {
+          const { id } = patient;
+          const name = shown(patient.name, (text) => text);
+          if (id === null) {
+            return (
+              <TableRow key={`entry-${place}`}>
+                <TableCell>{name}</TableCell>
+                <MatchCells patient={patient} />
+              </TableRow>
+            );
+          }
+          return (
+            <TableRow className="cursor-pointer" key={id} onClick={() => select(id)}>
+              <TableCell>
+                <Button className="h-auto p-0 text-foreground" variant="link">
+                  {name}
+                </Button>
+              </TableCell>
+              <MatchCells patient={patient} />
+            </TableRow>
+          );
+        })}
       </TableBody>
     </Table>
   );
@@ -120,6 +155,9 @@ function SearchResults({ filters, query }: { filters: PatientFilters; query: str
   // Retry is offered only once a read has failed, so a failure never keeps a
   // page (`stale`): it is always one with nothing read.
   const failed = reading.view.kind === "failed";
+  // The matches the page read dropped, a Patient with no id the backend could
+  // give it (ADR 0018): counted beside the source's total, naming none of them.
+  const dropped = reading.view.kind === "ready" ? (reading.view.data.droppedResults ?? 0) : 0;
   return (
     <>
       <PagedListing
@@ -131,6 +169,9 @@ function SearchResults({ filters, query }: { filters: PatientFilters; query: str
       >
         {({ rows }) => <ResultsTable patients={rows} />}
       </PagedListing>
+      {dropped > 0 ? (
+        <p className="text-sm text-muted-foreground">{`${recordsCounted(dropped)} couldn't be shown`}</p>
+      ) : null}
       {failed ? (
         <Button
           className="self-start"

@@ -90,8 +90,8 @@ class PatientSearchControllerTests {
     /**
      * The name search's second page, exactly: the source's two matches in its order, each its id,
      * official name, NRIC, gender, birth date and Last visit — the Patient with none as
-     * {@code null} — and no field invalid, beside the total the source counted and where the
-     * page starts.
+     * {@code null} — and no field invalid, beside the total the source counted, where the page
+     * starts and none dropped.
      */
     @Test
     void aSearchIsAnsweredAsOnePageOfMatchesInTheSourcesOrder() throws Exception {
@@ -103,6 +103,7 @@ class PatientSearchControllerTests {
                 {
                   "totalResults": 7,
                   "startIndex": 6,
+                  "droppedResults": 0,
                   "patients": [
                     {"id": "dev-patient-09", "name": "Kavitha Tanabalan", "nric": "S9512345A",
                      "gender": "female", "birthDate": "1995-09-09", "lastVisit": "2026-05-07",
@@ -145,19 +146,55 @@ class PatientSearchControllerTests {
                           "invalid": ["lastVisit"]}]"""));
     }
 
+    /**
+     * The received search, shown as received (ADR 0020): its two matches with no id or one
+     * outside FHIR's grammar dropped and counted, beside the source's total unchanged; its entry
+     * that is no Patient a row with no id, every field {@code null} and named in {@code invalid};
+     * and the other two with each field its value — a gender's raw code included — or
+     * {@code null}, named in {@code invalid} when its format was wrong.
+     */
+    @Test
+    void aSearchIsAnsweredAsReceivedDroppingTheMatchesWithABadId() throws Exception {
+        assertThat(body(searching(search("teo")))).isEqualTo(json.readTree("""
+                {
+                  "totalResults": 5,
+                  "startIndex": 1,
+                  "droppedResults": 2,
+                  "patients": [
+                    {"id": "received-search-01", "name": "Teo Ai Ling", "nric": null,
+                     "gender": "F", "birthDate": null, "lastVisit": "2026-10-14",
+                     "invalid": ["nric", "birthDate"]},
+                    {"id": null, "name": null, "nric": null, "gender": null, "birthDate": null,
+                     "lastVisit": null,
+                     "invalid": ["name", "nric", "gender", "birthDate", "lastVisit"]},
+                    {"id": "received-search-05", "name": null, "nric": null, "gender": null,
+                     "birthDate": null, "lastVisit": null, "invalid": []}
+                  ]
+                }"""));
+    }
+
+    /** The audit row of a page that dropped matches still records the source's total. */
+    @Test
+    void aSearchDroppingMatchesIsAuditedWithTheSourcesTotal() throws Exception {
+        searching(search("teo"));
+
+        assertThat(trail.recorded()).extracting(RecordingAuditTrail.Recorded::detail)
+                .containsExactly("5 NAME");
+    }
+
     @Test
     void aSearchNothingMatchesIsAnEmptyPageOfNone() throws Exception {
         assertThat(body(searching(search("nobody")))).isEqualTo(json.readTree("""
-                {"totalResults": 0, "startIndex": 1, "patients": []}"""));
+                {"totalResults": 0, "startIndex": 1, "droppedResults": 0, "patients": []}"""));
     }
 
-    /** Each search the source answered is recorded once, by its kind and count. */
+    /** Each search the source answered is recorded once, by its kind and the source's total. */
     @Test
     void anAnsweredSearchIsAudited() throws Exception {
         searching(search("tan"));
 
         assertThat(trail.recorded()).extracting(RecordingAuditTrail.Recorded::detail)
-                .containsExactly("5 NAME");
+                .containsExactly("7 NAME");
     }
 
     /**

@@ -28,15 +28,15 @@ import org.junit.jupiter.api.Test;
 
 /**
  * A Patient search as the use case runs it: the patient source's page, passed through as it
- * answered, and one {@code PATIENT_SEARCH} naming who searched, how many Patients the page held and
+ * answered, and one {@code PATIENT_SEARCH} naming who searched, the total the source counted and
  * the query's kind — only once the source has answered.
  */
 class PatientSearchServiceTests {
 
     private static final UUID SEARCHER = UUID.fromString("5d7c1e2a-3b4f-4a6d-8e9f-0a1b2c3d4e5f");
 
-    private static PatientMatch match(String id) {
-        return new PatientMatch(new Patient(new PatientId(id), "S9012345A",
+    private static PatientMatch.OfPatient match(String id) {
+        return new PatientMatch.OfPatient(new Patient(new PatientId(id), "S9012345A",
                 new PatientName("Tan Hui Min", "Tan", List.of("Hui", "Min")),
                 AdministrativeGender.FEMALE, LocalDate.of(1990, 2, 4)),
                 SourceField.present(LocalDate.of(2026, 11, 2)));
@@ -44,7 +44,7 @@ class PatientSearchServiceTests {
 
     /** A page of two of the seven Patients the source says the search matched. */
     private static final PatientMatches TWO_OF_SEVEN =
-            new PatientMatches(7, List.of(match("dev-patient-05"), match("dev-patient-06")));
+            new PatientMatches(7, List.of(match("dev-patient-05"), match("dev-patient-06")), 0);
 
     /** A source answering every search with {@code answer}, and keeping what it was asked. */
     private static final class AnsweringStore extends RefusingPatientStore {
@@ -108,22 +108,22 @@ class PatientSearchServiceTests {
                 new PatientFilter(AdministrativeGender.FEMALE), new PageRequest(1, 5));
 
         assertThat(trail.recorded()).extracting(Recorded::detail)
-                .containsExactly("2 NAME and gender eq ?");
+                .containsExactly("7 NAME and gender eq ?");
     }
 
-    /** The count is the Patients the answered page held, never the total the source counted. */
+    /** The count is the total the source counted, never the Patients the answered page held. */
     @Test
-    void aNameSearchRecordsItsSearcherThePagesCountAndItsKind() {
+    void aNameSearchRecordsItsSearcherTheSourcesTotalAndItsKind() {
         searching(new AnsweringStore(TWO_OF_SEVEN, null))
                 .search(new PatientQuery.ByName("tan"), PatientFilter.NONE, new PageRequest(1, 5));
 
         assertThat(trail.recorded()).containsExactly(
-                new Recorded(AuditOperation.PATIENT_SEARCH, SEARCHER, null, "2 NAME"));
+                new Recorded(AuditOperation.PATIENT_SEARCH, SEARCHER, null, "7 NAME"));
     }
 
     @Test
     void anNricSearchRecordsItsKind() {
-        searching(new AnsweringStore(new PatientMatches(1, List.of(match("dev-patient-05"))),
+        searching(new AnsweringStore(new PatientMatches(1, List.of(match("dev-patient-05")), 0),
                 null))
                 .search(new PatientQuery.ByNric("S9012345A"), PatientFilter.NONE,
                         new PageRequest(1, 5));

@@ -175,6 +175,21 @@ paths:
         comes last. Adding `gender=male` leaves Tan Wei Ming, Stanley Goh Kok
         Wee and Tan Boon Huat, `total: 3`.
 
+        **Shown as received** (ADR 0020): the backend refuses no match for what
+        its fields hold, and shows the `total` as the source sent it. A match's
+        `id` is the one field validated: one with none in FHIR's id grammar is
+        dropped from the page and counted. An entry whose resource is no
+        Patient is shown as a row of "Error" cells. Only the page itself — no
+        searchset, no `total` or a negative one, an entry with no resource —
+        can fail the search.
+
+        **The received search (mock only).** `name:contains=teo`, which names
+        no fixture, answers one page of five, `total: 5`, shown as received: a
+        Patient whose NRIC is a number, whose `gender` is `F` and whose
+        `birthDate` is `1971-03`; a Patient with no `id`; an `Observation`; a
+        Patient whose `id` holds a space; and a Patient with no NRIC, no
+        official name, no `gender`, no `birthDate` and no Last visit.
+
         The backend sends parameters in no guaranteed order; read them by name.
       parameters:
         - name: name:contains
@@ -1015,25 +1030,29 @@ components:
         contact point's `use`), and the fixtures do, so the backend's selection
         is exercised. A search reads none of the Demographic details.
 
-        A **read by id** shows the Patient as received (ADR 0020): only its
-        `id` must be the one asked for. Its NRIC's `value`, its official name's
-        `text`, its `gender`, its `birthDate` and each Demographic detail's
-        value are each expected in the form their descriptions name, but none
-        is required and no value of one fails the read: one left out, `null`,
-        empty or blank is shown missing, and one of another JSON type, or a
-        birth date or a service date that is no calendar date, is shown
-        "Error"; a gender outside the four codes is shown as it came.
-
-        A **search's match** is held to every rule below: one breaking any is
-        the source failing, the backend's `502`. A part the Patient does not
-        hold is left out of the JSON, never sent as `null` or empty.
+        A read by id and a search's match show the Patient alike, **as
+        received** (ADR 0020). Its NRIC's `value`, its official name's `text`,
+        its `gender` and its `birthDate`, and on a read by id each
+        Demographic detail's value, are each expected in the form their
+        descriptions name, but none is required and no value of one fails the
+        read: one left out, `null`, empty or blank is shown missing, and one of
+        another JSON type, or a birth date or a service date that is no
+        calendar date, is shown "Error"; a gender outside the four codes is
+        shown as it came. Only the `id` is held to a rule, a different one for
+        each read (`id`).
       type: object
-      required: [resourceType, id]
+      required: [resourceType]
       properties:
         resourceType:
           const: Patient
         id:
-          description: The EHR's FHIR id, in FHIR's id grammar.
+          description: |
+            The EHR's FHIR id, in FHIR's id grammar. A read by id needs it to be
+            the id asked for, as text: any other is the source failing. A
+            search's match is shown only under one in the grammar, which
+            selecting it opens the Patient by: a match with none, one of another
+            JSON type or one outside the grammar is dropped from the page and
+            counted, never the source failing.
           type: string
           pattern: '^[A-Za-z0-9\-.]{1,64}$'
         extension:
@@ -1048,30 +1067,28 @@ components:
               - $ref: "#/components/schemas/OtherExtension"
         identifier:
           description: |
-            One identifier under the NRIC NamingSystem with a `value`, which a
-            search's match must include; others may sit beside it and are
-            ignored. The first under the NRIC NamingSystem is the NRIC.
+            One identifier under the NRIC NamingSystem with a `value`; others
+            may sit beside it and are ignored. The first under the NRIC
+            NamingSystem is the NRIC, missing when there is none.
           type: array
           items:
             $ref: "#/components/schemas/Identifier"
         name:
           description: |
-            One name of `use: official` with a non-blank `text`, which a
-            search's match must include. `usual` and `maiden` names may sit
-            beside it: a name search matches them, and the backend still shows
-            the official one. The first of `use: official` is the official name.
+            One name of `use: official` with a non-blank `text`. `usual` and
+            `maiden` names may sit beside it: a name search matches them, and
+            the backend still shows the official one. The first of
+            `use: official` is the official name, missing when there is none.
           type: array
           items:
             $ref: "#/components/schemas/HumanName"
         gender:
           description: |
             The administrative gender's code, a string, one of `male`,
-            `female`, `other` and `unknown`: a search's match must hold one of
-            the four, and a read by id shows another as it came.
+            `female`, `other` and `unknown`; another is shown as it came.
         birthDate:
           description: |
-            A calendar date, `YYYY-MM-DD`, to the day: a search's match must
-            hold one.
+            A calendar date, `YYYY-MM-DD`, to the day.
         telecom:
           description: |
             Read by id alone: the first phone's and the first email's `value`
@@ -1095,6 +1112,18 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Contact"
+
+    OtherResource:
+      description: |
+        A search's entry whose resource is no `Patient`, or names no type: the
+        backend reads nothing of it but that, and shows it as a row of "Error"
+        cells.
+      type: object
+      properties:
+        resourceType:
+          type: string
+          not:
+            const: Patient
 
     ContactPoint:
       type: object
@@ -1350,8 +1379,12 @@ components:
                   The Patient as `GET /Patient/{id}` serves it, with its
                   `last-visit` extension when it has a Last visit. A search
                   reads none of its Demographic details, so a mock may send
-                  them or leave them out.
-                $ref: "#/components/schemas/Patient"
+                  them or leave them out. An entry with no resource is the
+                  source failing; one whose resource is no Patient is shown
+                  as a row of "Error" cells, never the source failing.
+                anyOf:
+                  - $ref: "#/components/schemas/Patient"
+                  - $ref: "#/components/schemas/OtherResource"
       example:
         resourceType: Bundle
         type: searchset

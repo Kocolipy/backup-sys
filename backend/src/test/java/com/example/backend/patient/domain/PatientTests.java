@@ -98,6 +98,22 @@ class PatientTests {
     }
 
     @Test
+    void aPatientsNameTextIsItsOfficialNamesText() {
+        Patient tan = new Patient(ID, NRIC, new PatientName(SourceField.invalid(), "Tan", List.of()),
+                MALE, BIRTH_DATE, Demographics.NONE);
+
+        assertThat(tan.nameText()).isEqualTo(SourceField.invalid());
+    }
+
+    /** A Patient with no official name has no name text: it is missing, never a failure. */
+    @Test
+    void aPatientWithNoOfficialNameHasItsNameTextMissing() {
+        Patient unnamed = new Patient(ID, NRIC, null, MALE, BIRTH_DATE, Demographics.NONE);
+
+        assertThat(unnamed.nameText()).isEqualTo(SourceField.missing());
+    }
+
+    @Test
     void aNameHoldsItsTextAsReceived() {
         assertThatThrownBy(() -> new PatientName((SourceField<String>) null, "Tan", List.of("Wei")))
                 .isInstanceOf(NullPointerException.class).hasMessage("text");

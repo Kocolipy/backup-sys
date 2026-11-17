@@ -79,9 +79,10 @@ import org.springframework.web.client.RestClient;
  * is ({@code http.client.requests}, under the URI template, never the id), on the JDK client with
  * redirects off and the timeouts below: a fixed connect timeout, and a read timeout a deployment
  * may set ({@code APP_PATIENT_SOURCE_READ_TIMEOUT}). Nothing here logs: a Patient read by id, a
- * Patient search's Last visits, and an FFI, a NUMC, an ARMC and a Medication History, shown as
- * received (ADR 0020), hand the paths of the fields their answer held in the wrong format to
- * {@link InvalidSourceFields}, which reports them.
+ * Patient search, and an FFI, a NUMC, an ARMC and a Medication History, shown as received
+ * (ADR 0020), hand the paths of the fields their answer held in the wrong format — and a search,
+ * of its dropped matches and its entries that are no Patient — to {@link InvalidSourceFields},
+ * which reports them.
  */
 @Component
 class PatientSourceAdapter implements PatientStore {
@@ -228,9 +229,10 @@ class PatientSourceAdapter implements PatientStore {
      * {@code count} of them, with an accurate total — and no {@code _sort}: the source's own
      * order is stable, so its pages are consistent. Its one answer is a {@code 200} searchset
      * Bundle; anything else — a {@code 404} included — is a fault, as is a Bundle with no total
-     * or holding a Patient with no id. What a match's Last visit holds never is: it is read as
-     * received (ADR 0020), and each invalid one is reported by its path in the answer,
-     * {@code entry[2].extension[0].valueDate}. The query's text and the filter's value are URI
+     * or holding an entry with no resource. What a match holds never is: it is read as received
+     * (ADR 0020), a match with no id in FHIR's grammar dropped and counted, and an entry that is
+     * no Patient shown as a match with no Patient ({@link #matchesOf}). The query's text and the
+     * filter's value are URI
      * variables, never part of the template, so the call is observed under the template alone:
      * whether the gender filter was asked for, and none of the values.
      */
@@ -257,22 +259,45 @@ class PatientSourceAdapter implements PatientStore {
                     if (!response.getStatusCode().isSameCodeAs(HttpStatus.OK)) {
                         throw PatientSourceException.answered(response.getStatusCode().value());
                     }
-                    SourceSearchset.Page<R4Patient> answers =
-                            response.bodyTo(PATIENTS).page(Function.identity());
-                    List<PatientMatch> matches = new ArrayList<>();
-                    List<InvalidSourceFields.Field> invalid = new ArrayList<>();
-                    for (int entry = 0; entry < answers.entries().size(); entry++) {
-                        R4Patient answer = answers.entries().get(entry);
-                        PatientMatch match = answer.toMatch();
-                        matches.add(match);
-                        for (InvalidSourceFields.Field field : answer.invalidFields(match)) {
-                            invalid.add(new InvalidSourceFields.Field(
-                                    "entry[" + entry + "]." + field.path(), field.name()));
-                        }
-                    }
-                    invalidFields.report(SourceRead.SEARCH, invalid);
-                    return new PatientMatches(answers.total(), matches);
+                    return matchesOf(response.bodyTo(PATIENTS).page(Function.identity()));
                 }));
+    }
+
+    /**
+     * A search's page as the service shows it, after its faults are reported: each entry that is
+     * a Patient under an id of its own in FHIR's grammar as its match, its fields as received;
+     * each entry that is a Patient with no such id dropped and counted, its {@code id} reported;
+     * and each entry that is no Patient as a match with no Patient, its {@code resourceType}
+     * reported. Every path is the field's in the answer, {@code entry[2].id}, the entry counted
+     * from zero, and the total is the source's, unchanged.
+     */
+    private PatientMatches matchesOf(SourceSearchset.Page<R4Patient> answers) {
+        List<PatientMatch> matches = new ArrayList<>();
+        List<InvalidSourceFields.Field> faults = new ArrayList<>();
+        int dropped = 0;
+        for (int entry = 0; entry < answers.entries().size(); entry++) {
+            R4Patient answer = answers.entries().get(entry);
+            String at = "entry[" + entry + "].";
+            if (!answer.isPatient()) {
+                matches.add(new PatientMatch.NotAPatient());
+                faults.add(new InvalidSourceFields.Field(at + R4Patient.RESOURCE_TYPE,
+                        R4Patient.RESOURCE_TYPE));
+                continue;
+            }
+            Optional<PatientId> own = answer.ownId();
+            if (own.isEmpty()) {
+                dropped++;
+                faults.add(new InvalidSourceFields.Field(at + R4Patient.ID, R4Patient.ID));
+                continue;
+            }
+            PatientMatch.OfPatient match = answer.toMatch(own.get());
+            matches.add(match);
+            for (InvalidSourceFields.Field field : answer.invalidFields(match)) {
+                faults.add(new InvalidSourceFields.Field(at + field.path(), field.name()));
+            }
+        }
+        invalidFields.report(SourceRead.SEARCH, faults);
+        return new PatientMatches(answers.total(), matches, dropped);
     }
 
     /**

@@ -223,14 +223,14 @@ page, which quoted the path.
   body that stopped arriving: reset or dropped, or stalled past the read
   timeout), `server-error`, `unexpected-status`, `unreadable` (a body that
   arrived whole and could not be read), or the rule a Patient read by id broke
-  (`another-resource`), or the rule a page of a
-  Patient search broke — a match's own among them (`no-nric`,
-  `no-official-name`, `no-name-text`, `no-gender`, `no-birth-date`,
-  `birth-date-not-to-the-day`) (`/docs/domain/patient.md`, "Logging", and
+  (`another-resource`), or the rule a page of a Patient search or a history
+  broke (`not-a-searchset`, `no-total`, `another-resource`)
+  (`/docs/domain/patient.md`, "Logging", and
   "Failures" in each history's file in `/docs/domain/`); a read shown as
-  received, the FFI, the NUMC, the ARMC or the Medication History or a Patient
-  by id, breaks no rule of what its fields hold, and a search's match none of
-  what its Last visit holds (ADR 0020) — and its `error.category` is the
+  received, the FFI, the NUMC, the ARMC or the Medication History, a Patient
+  by id or a Patient search, breaks no rule of what its fields hold, and a
+  search's match without a FHIR id is dropped, not failed (ADR 0020) — and its
+  `error.category` is the
   fault's own, as ADR 0014's table has it for an outbound call: `network` and
   `server` with no follow-up, `cert/auth` and `data` with one.
 - A `4xx` that Spring MVC maps (validation, an unreadable body, an unbindable
@@ -247,22 +247,25 @@ page, which quoted the path.
 
 A read that shows the patient source's data as received — the FFI History, the
 NUMC History, the ARMC History, the Medication History, a Patient read by id
-and a Patient search's Last visit — answers a field in the wrong format as
+and a Patient search — answers a field in the wrong format as
 `null`, or, in a Patient, leaves it out and names it by an extension, shown as
 "Error" (ADR 0020), and
 writes one `WARN` `patient_source.invalid_fields` (`successAtWarn`,
 `event.category` `network`, `event.type` `info`) for the whole response that
-held any, beside the request's own record. It carries
+held any — or, in a search, dropped a match without a FHIR id or held an entry
+that is no Patient — beside the request's own record. It carries
 `app.patient_source.read`, the read (`ffi`, `numc`, `armc`, `medication`,
 `patient` or `search`), and
 `app.patient_source.invalid_fields`, the path of each such field in the
 source's answer, in its order and nested as deep as it was found
 (`entry[1].issueDate`, a Patient's `name[1].text` or
 `extension[1].extension[0].extension[2].valueString`, a search's
-`entry[0].extension[0].valueDate`) — never a value, a record's id or the
-patient. A response with none writes nothing. The
-`patient_source.invalid_fields` counter counts each such field, tagged `read`
-and `field`: a record's or a search row's field name (`lastVisit`), a
+`entry[0].extension[0].valueDate`, a dropped match's `entry[2].id`, an entry
+that is no Patient's `entry[3].resourceType`) — never a value, a record's id
+or the patient. A response with none writes nothing. The
+`patient_source.invalid_fields` counter counts each such path, tagged `read`
+and `field`: a record's or a search row's field name (`lastVisit`, `nric`;
+`id` for a dropped match, `resourceType` for an entry that is no Patient), a
 Patient's element by its path in the served resource (`name[0].text`), or a
 Patient's Demographic detail by its name (`phone`, `nextOfKin.relationship`,
 `serviceRecord.rank`, `ordDate`), the same for every Patient and service

@@ -22,13 +22,13 @@ import java.util.stream.Stream;
  *   <li>{@code server}: the source answered {@code 5xx}, {@code server-error};
  *   <li>{@code data}: the source answered with something the service cannot use — another status
  *       ({@code unexpected-status}), a body that is not JSON or not a Patient
- *       ({@code unreadable}), a Patient under another patient's id, a search's match breaking
- *       one of the domain's rules, or a search's answer or a history that is no searchset, has
- *       no total, or holds an entry of another resource. An FFI, a NUMC Record, an ARMC Board, a
- *       Medication Record, a search match's Last visit and a Patient read by id's NRIC, name,
- *       gender, birth date and Demographic details break no rule:
- *       they are shown as received (ADR 0020), so only their call, their searchset or the
- *       Patient's id fails.
+ *       ({@code unreadable}), a Patient under another patient's id, or a search's answer or a
+ *       history that is no searchset, has no total, or holds an entry with no resource — a
+ *       history's, an entry of another resource. An FFI, a NUMC Record, an ARMC Board, a
+ *       Medication Record, a search's match and a Patient read by id's NRIC, name, gender, birth
+ *       date and Demographic details break no rule: they are shown as received (ADR 0020), so
+ *       only their call, their searchset or the Patient's id fails — and a search's match without
+ *       an id of its own is dropped from the page, never a failure.
  * </ul>
  *
  * <p>Its message is fixed text, naming at most a status or an element, and its cause, when it has
@@ -58,28 +58,11 @@ public final class PatientSourceException extends UpstreamFaultException {
         UNREADABLE(Reason.UNREADABLE, "unreadable", "The patient source could not be read"),
         ANOTHER_RESOURCE("another-resource", "The patient source answered with another resource",
                 ErrorCategory.DATA),
-        // A search's match breaking a rule its five elements keep (ADR 0018); a Patient read
-        // by id keeps none of these, shown as received (ADR 0020).
-        NO_NRIC("no-nric", "The patient source's Patient has no NRIC", ErrorCategory.DATA),
-        NO_OFFICIAL_NAME("no-official-name", "The patient source's Patient has no official name",
-                ErrorCategory.DATA),
-        NO_NAME_TEXT("no-name-text", "The patient source's Patient's official name has no text",
-                ErrorCategory.DATA),
-        NO_GENDER("no-gender", "The patient source's Patient has no gender", ErrorCategory.DATA),
-        NO_BIRTH_DATE("no-birth-date", "The patient source's Patient has no birth date",
-                ErrorCategory.DATA),
-        BIRTH_DATE_NOT_TO_THE_DAY("birth-date-not-to-the-day",
-                "The patient source's Patient's birth date is not to the day", ErrorCategory.DATA),
         /** A paged read's {@code 200} — a search's or a history's — that is no searchset. */
         NOT_A_SEARCHSET("not-a-searchset", "The patient source's page is no searchset",
                 ErrorCategory.DATA),
         /** A searchset with no {@code total}, or a negative one: there is no telling the pages. */
-        NO_TOTAL("no-total", "The patient source's page has no total", ErrorCategory.DATA),
-        /** A search's Patient with no {@code id}, which no later read could open it by. */
-        NO_ID("no-id", "The patient source's Patient has no id", ErrorCategory.DATA),
-        /** A search's Patient whose {@code id} is outside FHIR's id grammar. */
-        INVALID_ID("invalid-id", "The patient source's Patient's id is not a FHIR id",
-                ErrorCategory.DATA);
+        NO_TOTAL("no-total", "The patient source's page has no total", ErrorCategory.DATA);
 
         /** The call's own failure this is, or {@code null} for a broken domain rule. */
         private final Reason outbound;

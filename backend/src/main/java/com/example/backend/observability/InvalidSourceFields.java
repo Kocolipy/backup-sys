@@ -16,7 +16,8 @@ import org.slf4j.LoggerFactory;
  * each field by its path in the answer ({@link #INVALID_FIELDS}) — never its value or the patient
  * (ADR 0003) — and the {@value #COUNTER} counter, one count for each such field, tagged by the
  * {@code read} and the {@code field}, both from closed sets: the reads, and the elements each
- * record declares. An answer with none reports nothing.
+ * record declares — for a search, also {@code id}, a match dropped for want of a FHIR id, and
+ * {@code resourceType}, an entry that is no Patient. An answer with none reports nothing.
  *
  * <p>Here rather than in the patient module, which writes no log record (ADR 0014): the adapter
  * names the fields, and this records them.

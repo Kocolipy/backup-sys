@@ -113,7 +113,8 @@ mock: WireMock answering FHIR R4 `Patient/{id}` for the development
 fixtures, a Patient shown as received for each received stub
 (`metadata.received`), a failure of the source for each fault stub (`metadata.fault`),
 `404` for any other well-formed id, and `Patient?…` for each canned Patient
-search, with an empty searchset for any other. Each patient history has the same
+search — the received search's page (`metadata.received`) shown as received —
+with an empty searchset for any other. Each patient history has the same
 shape beneath `Patient/{id}/<history>?…`: a page for each fixture's read and a
 failure for each `fault-<history>-*` stub. `patient-source-mock/README.md` lists
 every stub file and `/docs/domain/index.md` the histories. Compose

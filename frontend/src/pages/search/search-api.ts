@@ -10,27 +10,27 @@
  */
 
 import type { ReadDeclaration } from "@/auth/declarations";
-import { calendarDate, jsonDecoder, readObject } from "@/lib/decode";
+import { jsonDecoder, readObject } from "@/lib/decode";
 import { pageDecoder, pagedPath, type Page, type PageAt } from "@/lib/paging";
-import { PATIENT_GENDERS, type PatientGender } from "@/lib/patient-gender";
 import type { SourceField } from "@/lib/source-field";
 import { isCalendarDate } from "@/lib/time";
 
 /**
- * One Patient a search matched, as the backend answers it: the Patient's id
- * (its EHR's FHIR id, the id `GET /api/patient/{id}` reads it by), which the
- * page keeps but never shows, the official name's text, the full NRIC, the
- * gender code, the date of birth and the Last visit, each date `YYYY-MM-DD`.
- * The five are read strictly (ADR 0018); the Last visit is shown as the
- * patient source sent it (ADR 0020): present, missing for a Patient with
- * none, or in the wrong format.
+ * One entry a search matched, as the backend answers it, shown as the patient
+ * source sent it (ADR 0020): the Patient's id (its EHR's FHIR id, the id
+ * `GET /api/patient/{id}` reads it by), which the page keeps but never shows,
+ * and the official name's text, the full NRIC, the gender code — any code,
+ * the four known or not — the date of birth and the Last visit, each date
+ * `YYYY-MM-DD`, and each present, missing or in the wrong format. A match the
+ * backend could not give a FHIR id it drops from the page; an entry that is no
+ * Patient has no `id` — `null`, so nothing selects it — and every field invalid.
  */
 export interface PatientMatch {
-  id: string;
-  name: string;
-  nric: string;
-  gender: PatientGender;
-  birthDate: string;
+  id: string | null;
+  name: SourceField<string>;
+  nric: SourceField<string>;
+  gender: SourceField<string>;
+  birthDate: SourceField<string>;
   lastVisit: SourceField<string>;
 }
 
@@ -59,20 +59,21 @@ export function parsePatientQuery(typed: string): ParsedPatientQuery {
 }
 
 /**
- * A match, its five elements read strictly — each there, of its type, the date
- * of birth a calendar date — and its Last visit leniently, by the lenient
- * field decoder: a calendar date, missing or invalid, never refusing the match.
+ * A match, its id read strictly — a string, or `null` for an entry that is no
+ * Patient — and every other field leniently, by the lenient field decoder:
+ * each present, missing or invalid, the dates calendar dates, never refusing
+ * the match.
  */
 export const decodePatientMatch = (value: unknown): PatientMatch => {
   const patient = readObject(value, "PatientMatch");
-  const birthDate = calendarDate(patient.string("birthDate"), "PatientMatch.birthDate");
+  const fields = patient.sourceFields();
   return {
-    id: patient.string("id"),
-    name: patient.string("name"),
-    nric: patient.string("nric"),
-    gender: patient.oneOf("gender", PATIENT_GENDERS),
-    birthDate,
-    lastVisit: patient.sourceFields().read("lastVisit", isCalendarDate),
+    id: patient.nullableString("id"),
+    name: fields.read("name"),
+    nric: fields.read("nric"),
+    gender: fields.read("gender"),
+    birthDate: fields.read("birthDate", isCalendarDate),
+    lastVisit: fields.read("lastVisit", isCalendarDate),
   };
 };
 
@@ -100,12 +101,16 @@ function searchQuery(query: string, filters: PatientFilters): string {
  * The Patients `query` matches and `filters` narrow, a page at a time,
  * `GET /api/patient-search?q=…`: the Patient source's matches, in its own
  * order. The source filters and orders; the backend passes the search through.
+ * Its page carries the matches shown, where it starts, the source's total and
+ * how many of its matches the backend dropped (`pageDecoder`'s `dropsEntries`).
  */
 export const PATIENT_SEARCH: ReadDeclaration<
   Page<PatientMatch>,
   [query: string, filters: PatientFilters, at: PageAt]
 > = {
-  decode: jsonDecoder(pageDecoder("PatientSearchPage", "patients", decodePatientMatch)),
+  decode: jsonDecoder(
+    pageDecoder("PatientSearchPage", "patients", decodePatientMatch, { dropsEntries: true }),
+  ),
   path: (query, filters, at) => pagedPath(PATIENT_SEARCH_PATH, at, searchQuery(query, filters)),
   permission: "patient:read",
 };

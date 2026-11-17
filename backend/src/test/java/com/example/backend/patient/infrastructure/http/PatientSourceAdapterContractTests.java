@@ -1030,7 +1030,8 @@ class PatientSourceAdapterContractTests extends PatientStoreContract {
     void aSearchMatchCarriesNoDemographicDetails() {
         Patient tan = patients().search(new PatientQuery.ByName("tan"), PatientFilter.NONE,
                 new PageRequest(1, 5)).patients().stream()
-                .map(PatientMatch::patient)
+                .map(PatientMatch.OfPatient.class::cast)
+                .map(PatientMatch.OfPatient::patient)
                 .filter(patient -> patient.id().equals(TAN))
                 .findFirst().orElseThrow();
 

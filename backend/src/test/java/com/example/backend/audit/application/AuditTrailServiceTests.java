@@ -165,7 +165,7 @@ class AuditTrailServiceTests {
 
     /**
      * A Patient search names the signed-in User who searched as its actor, the {@code Patient}
-     * resource type, how many Patients the page it answered held, and its query kind — never the
+     * resource type, how many Patients the source counted it matching, and its query kind — never the
      * query, a name or an NRIC, which no component of the event could hold. A success with no
      * subject: no one Patient is what the search was about.
      */

@@ -433,7 +433,8 @@ shown as "—"; or invalid — the wrong JSON type, or a string that is no date 
 date-time of its kind — shown as "Error". A code outside its closed set is
 shown as the raw code. Only a failure of the call or of the page's structure
 fails the read. The FFI, NUMC, ARMC and Medication Histories, a Patient read by
-id and a Patient search's Last visit are read so.
+id and a Patient search are read so; a Patient search's match is shown only
+under a FHIR id, one without being dropped and counted.
 _Avoid_: validated, sanitised, lenient (the reading is lenient; what the
 clinician sees is the data as received)
 
@@ -466,7 +467,9 @@ context".
 Finding Patients by a name, of at least three characters, or by a full NRIC,
 typed into the Search page's one box — a page only a session holding
 `patient:read` opens or is linked to: the Patient source's own search, passed
-through in the source's own stable order and narrowed by gender. Every search
+through in the source's own stable order and narrowed by gender, each match
+shown as received but for its id: a match without a FHIR id is dropped from
+the page, which says how many it dropped beside the source's total. Every search
 the source answers is audited as `PATIENT_SEARCH`, never with its query; a read
 of one Patient by id is not. Selecting a result puts that Patient into the EHR
 context and opens the Demographic page.

@@ -90,9 +90,14 @@ and decoders — and imports no hook (`lb-api-modules-are-data`).
   patient source's own order — every heading is a `PlainHeading`. A change of
   the filter reads from the first page. A failure is reported on the page's
   line, with a Retry that reads the same page again. Each row keeps the
-  Patient's id, which it never shows. The Last Visit cell is shown as
-  received through `shown` (ADR 0020): its date, "—" when missing, "Error"
-  when invalid.
+  Patient's id, which it never shows. Every cell is shown as received through
+  `shown` (ADR 0020): its value, "—" when missing, "Error" when invalid, and
+  the gender's label and badge tint through `byCode`, a code outside the four
+  shown as itself on the plain badge. A row with no id — an entry that is no
+  Patient — is "Error" in every cell and selects nothing. A page the backend
+  dropped matches from (`droppedResults`) says how many beneath the table,
+  "N records couldn't be shown", and the shared pager counts them among the
+  page's records (`Page.droppedResults`, `src/lib/paging.ts`).
 - `home/home.tsx` — Home: the Patient card alone. The landing page of a
   session without `patient:read`, linked from no sidebar.
 - `patient-card.tsx` — the Patient card, a part Home and the Demographic page
@@ -241,7 +246,9 @@ the FFI, NUMC and ARMC tables have none.
   declarations are built from the paging vocabulary in `src/lib/paging.ts`
   (ADR 0017): `pagedPath`, the one query string, the listing's own parameters
   then `startIndex` and `count`; and `pageDecoder`, the one decoder of a
-  page's `totalResults`, `startIndex` and rows, which refuses any other field.
+  page's `totalResults`, `startIndex` and rows, which refuses any other field
+  — but `droppedResults`, which a read that drops entries (Patient search)
+  declares with `dropsEntries`, and its page then always carries.
 - `paged-listing.tsx` — the one paged listing, which every paged read renders
   through: the listing body, the pager and "Try again", around the rows the
   page renders as its own table or list. It decides, once, for every page:

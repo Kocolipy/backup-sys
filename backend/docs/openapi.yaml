@@ -662,6 +662,18 @@ paths:
         coerced rather than refused. The page they resolve to is the source's
         to read; `totalResults` is the source's count of every match.
 
+        **Shown as received** (ADR 0020). What a match holds never fails the
+        search: each field missing or in the wrong format is `null`, and
+        `invalid` names the second kind; a gender outside the four codes is
+        passed through. A match's `id` is the one field validated: one missing
+        or outside FHIR's id grammar cannot be selected, so the match is
+        dropped from `patients` and counted in `droppedResults`, and
+        `totalResults` stays the source's. An entry whose resource is no
+        Patient is a row of `null`s, each field named in `invalid`. A page
+        that dropped a match or held a field in the wrong format writes one
+        `WARN`, `patient_source.invalid_fields`, naming each by its path in the
+        source's answer and never its value.
+
         Requires `patient:read`, a delegatable Permission a User holds through a
         Group that carries it, or as the Superuser.
         Outside `/api/patient`, so the answer is plain JSON and every refusal
@@ -670,7 +682,7 @@ paths:
 
         **Audit.** Each search the source answers appends one `PATIENT_SEARCH`:
         the signed-in User as actor, resource type `Patient` and no resource,
-        how many Patients the page held as `resultCount`, and as `filterShape`
+        the source's `total` as `resultCount`, and as `filterShape`
         the query's kind — `NRIC` or `NAME` — then each filter it used, its
         value `?` (`NAME and gender eq ?`). Never the query, a name, an NRIC or
         the filter's value. A search refused with `400`, or that the source
@@ -744,13 +756,11 @@ paths:
             The patient source failed, as a read by id's `502` is: it could not
             be reached, gave no answer within 2 seconds to connect and 5 to
             answer, answered any status but a `200` — a `404` included — or
-            answered a `200` that is no searchset `Bundle`, has no `total`, or
-            holds an entry that is no Patient the service can hold: one with no
-            `id` or one outside FHIR's id grammar, or one with no NRIC, no
-            official name or one with no text, no gender or one outside the four
-            codes, or a birth date missing or not to the day, each read strictly
-            (ADR 0018). A Last visit never fails it: it is shown as received
-            (ADR 0020). The generic `server-error` `ApiError`, saying
+            answered a `200` that is no searchset `Bundle`, has no `total` or a
+            negative one, or holds an entry with no resource. What a match
+            holds never fails it, its `id` included: it is shown as received,
+            and a match with no good id dropped (ADR 0020). The generic
+            `server-error` `ApiError`, saying
             nothing about the failure; the fault's one record names its reason.
             Nothing is recorded in the audit trail. The SPA shows it as the
             search's error, with Retry.
@@ -5136,18 +5146,30 @@ components:
                 description: A fixed sentence per `code`; never anything the request carried.
     PatientSearchPage:
       type: object
-      required: [totalResults, startIndex, patients]
+      required: [totalResults, startIndex, droppedResults, patients]
       additionalProperties: false
       properties:
         totalResults:
           type: integer
-          description: Matching Patients across every page, as the patient source counted them.
+          description: |
+            Matching Patients across every page, as the patient source counted
+            them, unchanged whatever of this page is dropped.
         startIndex:
           type: integer
           description: One-based index of this page's first match, as coerced.
+        droppedResults:
+          type: integer
+          minimum: 0
+          description: |
+            How many of this page's matches the source sent are not in
+            `patients`: each a Patient whose `id` is missing or outside FHIR's
+            id grammar, which no row could select. Nothing else of them is
+            answered. `0` when every entry is shown.
         patients:
           type: array
-          description: This page's matches, in the patient source's own stable order.
+          description: |
+            This page's matches that are shown, in the patient source's own
+            stable order: every entry the source sent but the dropped.
           items:
             $ref: "#/components/schemas/PatientMatch"
     PatientMatch:
@@ -5155,29 +5177,41 @@ components:
       required: [id, name, nric, gender, birthDate, lastVisit, invalid]
       additionalProperties: false
       description: |
-        One Patient a search matched. Restricted, Sensitive Normal, as every
-        Patient is. Its five elements are read strictly, so each is there
-        (ADR 0018); its Last visit is shown as the patient source sent it
-        (ADR 0020), `null` when the source records none or sent it in the
-        wrong format, and `invalid` names it in the second case.
+        One entry a search matched, shown as the patient source sent it
+        (ADR 0020). Restricted, Sensitive Normal, as every Patient is. Every
+        property is always there. A field the source left out, sent `null`,
+        empty or blank, or sent in the wrong format is `null`, and `invalid`
+        names each whose format was wrong — the wrong JSON type, or a date
+        that is no calendar date: a `null` field it does not name is missing.
+        A Patient's `id` is the one field validated: a match without one in
+        FHIR's id grammar is dropped (`droppedResults`). An entry whose
+        resource is no Patient is answered with `id` and every other field
+        `null`, each but `id` named in `invalid`: the SPA shows it as a row of
+        "Error" cells, which selects no Patient.
       properties:
         id:
-          type: string
+          type: [string, "null"]
           pattern: "^[A-Za-z0-9\\-.]{1,64}$"
           description: |
             The Patient's id: its EHR's FHIR id, the id `GET /api/patient/{id}`
-            reads it by.
+            reads it by. `null` only for an entry that is no Patient.
         name:
-          type: string
+          type: [string, "null"]
           description: The official name's text, whichever name the search matched.
         nric:
-          type: string
-          description: The full NRIC, under the NRIC NamingSystem.
+          type: [string, "null"]
+          description: The full NRIC, under the NRIC NamingSystem, as it came.
         gender:
-          type: string
-          enum: [male, female, other, unknown]
+          description: |
+            The administrative gender's code: one of the four, or any other code
+            the source sent, as it came.
+          anyOf:
+            - type: string
+              enum: [male, female, other, unknown]
+            - type: string
+            - type: "null"
         birthDate:
-          type: string
+          type: [string, "null"]
           format: date
           pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
         lastVisit:
@@ -5193,10 +5227,10 @@ components:
           type: array
           description: |
             The fields whose format was wrong at the source, each `null`
-            above; none when each is present or missing.
+            above, in the match's order; none when each is present or missing.
           items:
             type: string
-            enum: [lastVisit]
+            enum: [name, nric, gender, birthDate, lastVisit]
     FfiHistoryPage:
       type: object
       required: [totalResults, startIndex, ffis]
@@ -5992,7 +6026,7 @@ components:
         `UNKNOWN_RESOURCE` or `PROTECTED_RESOURCE` — and no Permission.
         `PATIENT_SEARCH` is a signed-in User's Patient search the patient source
         answered: the User as actor, resource type `Patient` with no subject or
-        resource, how many Patients the page held as `resultCount`, and the
+        resource, the source's count of every match as `resultCount`, and the
         query's kind — `NRIC` or `NAME` — and the filters it used as
         `filterShape`; never the query, a name, an NRIC or a filter's value.
         Reading one Patient by its id is not audited.

@@ -35,8 +35,23 @@ const TAN_BOON_HUAT = {
   invalid: [],
 };
 
-const page = (patients: readonly object[], startIndex: number, totalResults: number) =>
-  json({ patients, startIndex, totalResults });
+const page = (
+  patients: readonly object[],
+  startIndex: number,
+  totalResults: number,
+  droppedResults = 0,
+) => json({ droppedResults, patients, startIndex, totalResults });
+
+/** An entry of the search that is no Patient, as the backend answers it. */
+const NO_PATIENT = {
+  id: null,
+  name: null,
+  nric: null,
+  gender: null,
+  birthDate: null,
+  lastVisit: null,
+  invalid: ["name", "nric", "gender", "birthDate", "lastVisit"],
+};
 
 const TAN_PAGE_1 = "GET /api/patient-search?q=tan&startIndex=1&count=5";
 const TAN_PAGE_2 = "GET /api/patient-search?q=tan&startIndex=6&count=5";
@@ -165,6 +180,118 @@ describe("Search", () => {
       ["Tan Hui Min", "S8512345A", "Female", "04 Feb 1985", "Error"],
       ["Tan Boon Huat", "S6012345C", "Male", "30 Sep 1960", "Error"],
     ]);
+  });
+
+  it("shows each field as received: — for one missing, Error for one in the wrong format", async () => {
+    await renderSearch({
+      [TAN_PAGE_1]: page(
+        [
+          {
+            ...TAN_HUI_MIN,
+            name: null,
+            nric: null,
+            gender: null,
+            birthDate: null,
+            lastVisit: null,
+          },
+          {
+            ...TAN_BOON_HUAT,
+            name: null,
+            nric: null,
+            gender: null,
+            birthDate: null,
+            invalid: ["name", "nric", "gender", "birthDate"],
+          },
+        ],
+        1,
+        2,
+      ),
+    });
+
+    await search("tan");
+    await screen.findByRole("table");
+
+    expect(rows()).toEqual([
+      ["—", "—", "—", "—", "—"],
+      ["Error", "Error", "Error", "Error", "—"],
+    ]);
+  });
+
+  it("shows a gender outside the four codes as its raw code, on the plain badge", async () => {
+    await renderSearch({ [TAN_PAGE_1]: page([{ ...TAN_HUI_MIN, gender: "F" }], 1, 1) });
+
+    await search("tan");
+    await screen.findByRole("table");
+
+    const badge = screen.getByText(/^F$/);
+    expect([
+      badge.dataset.slot,
+      ...badge.className.split(" ").filter((name) => /^(?:bg|text)-(?!xs$)/.test(name)),
+    ]).toEqual(["badge", "bg-secondary", "text-secondary-foreground"]);
+  });
+
+  it("shows an entry that is no Patient as a row of Error cells, with nothing to select", async () => {
+    await renderSearch({ [TAN_PAGE_1]: page([NO_PATIENT, TAN_HUI_MIN], 1, 2) });
+
+    await search("tan");
+    await screen.findByRole("table");
+
+    const [noPatient] = within(screen.getByRole("table")).getAllByRole("row").slice(1);
+    expect({
+      buttons: within(noPatient!).queryAllByRole("button"),
+      cells: rows()[0],
+      pointer: noPatient!.className.includes("cursor-pointer"),
+    }).toEqual({
+      buttons: [],
+      cells: ["Error", "Error", "Error", "Error", "Error"],
+      pointer: false,
+    });
+  });
+
+  it("says how many records on the page couldn't be shown, the range spanning them", async () => {
+    await renderSearch({ [TAN_PAGE_1]: page([TAN_HUI_MIN, NO_PATIENT, TAN_BOON_HUAT], 1, 5, 2) });
+
+    await search("tan");
+    await screen.findByRole("table");
+
+    expect({
+      note: screen.getByText(/couldn't be shown/).textContent,
+      range: screen.getByText(/^Showing/).textContent,
+      rows: rows().length,
+    }).toEqual({
+      note: "2 records couldn't be shown",
+      range: "Showing 1 to 5 of 5 records",
+      rows: 3,
+    });
+  });
+
+  it("says one record couldn't be shown in the singular", async () => {
+    await renderSearch({ [TAN_PAGE_1]: page([TAN_HUI_MIN], 1, 2, 1) });
+
+    await search("tan");
+
+    expect(await screen.findByText(/couldn't be shown/)).toHaveTextContent(
+      /^1 record couldn't be shown$/,
+    );
+  });
+
+  it("says nothing of records not shown when the page dropped none", async () => {
+    await renderSearch({ [TAN_PAGE_1]: page([TAN_HUI_MIN], 1, 1) });
+
+    await search("tan");
+    await screen.findByRole("table");
+
+    expect(screen.queryByText(/couldn't be shown/)).toBeNull();
+  });
+
+  it("says how many couldn't be shown when the page dropped every record on it", async () => {
+    await renderSearch({ [TAN_PAGE_1]: page([], 1, 2, 2) });
+
+    await search("tan");
+
+    expect(await screen.findByText(/couldn't be shown/)).toHaveTextContent(
+      /^2 records couldn't be shown$/,
+    );
   });
 
   it("shows each gender as a badge, tinting Male blue, Female pink, and leaving any other plain", async () => {
@@ -566,6 +693,26 @@ describe("Search, selecting a result", () => {
       }).toEqual({ context: { patient: "dev-patient-05" }, title: "Demographic" });
     },
   );
+
+  it("selects a Patient whose fields are missing or invalid by its row, as any other", async () => {
+    await renderSearch({
+      ...SELECTABLE,
+      [TAN_PAGE_1]: page(
+        [{ ...TAN_HUI_MIN, name: null, nric: null, invalid: ["nric"] }, TAN_WEI_MING_MATCH],
+        1,
+        2,
+      ),
+    });
+    await search("tan");
+    const [received] = within(await screen.findByRole("table"))
+      .getAllByRole("row")
+      .slice(1);
+
+    await userEvent.click(within(received!).getByRole("button", { name: "—" }));
+
+    await screen.findByRole("region", { name: "Patient" });
+    expect(ehrContext()).toEqual({ patient: "dev-patient-05" });
+  });
 
   it("replaces the patient already in context, with no confirmation", async () => {
     withPatientInContext(TAN_WEI_MING.id);

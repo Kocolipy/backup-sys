@@ -699,7 +699,8 @@ public sealed interface Audited {
      * @param actorId     the stable id of the User who searched
      * @param kind        whether the query was a full NRIC or a name
      * @param filters     which filters the search narrowed by, none for an unfiltered search
-     * @param resultCount how many Patients the answered page held
+     * @param resultCount how many Patients the source counted the search matching, every page
+     *                    together
      */
     record PatientsSearched(UUID actorId, AuditPatientQueryKind kind,
             Set<AuditPatientSearchFilter> filters, int resultCount) implements Accepted {

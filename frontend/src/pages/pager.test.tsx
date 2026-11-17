@@ -68,6 +68,43 @@ describe("Pager", () => {
     expect(screen.getByRole("button", { name: move }).hasAttribute("disabled")).toBe(!enabled);
   });
 
+  describe("over a page whose read dropped entries", () => {
+    /** A pager over 3 rows shown and 2 dropped, starting at `startIndex`, of `totalResults`. */
+    function renderDropping(startIndex: number, totalResults: number, onePage?: "shown") {
+      const onMove = vi.fn<(startIndex: number) => void>();
+      render(
+        <Pager
+          label="Widget pages"
+          onMove={onMove}
+          onePage={onePage}
+          page={{ droppedResults: 2, rows: [1, 2, 3], startIndex, totalResults }}
+          pageSize={5}
+        />,
+      );
+      return onMove;
+    }
+
+    it("names the range the page held, its dropped entries among it", () => {
+      renderDropping(6, 12);
+
+      expect(screen.getByText(/^Showing 6 to 10 of 12 records$/)).toBeInTheDocument();
+    });
+
+    it("moves on from past every entry the page held, the dropped included", async () => {
+      const onMove = renderDropping(1, 12);
+
+      await userEvent.click(next());
+
+      expect(onMove).toHaveBeenCalledExactlyOnceWith(6);
+    });
+
+    it("has no next page once the entries it held reach the last", () => {
+      renderDropping(1, 5, "shown");
+
+      expect(next().hasAttribute("disabled")).toBe(true);
+    });
+  });
+
   it("moves back by one page", async () => {
     const { onMove } = renderPager({ rows: 20, startIndex: 41, totalResults: 80 });
 
@@ -171,6 +208,20 @@ describe("Pager", () => {
     renderPager({ rows: 20, startIndex: 61, totalResults: 140 });
 
     expect(pageNumbers()).toHaveLength(7);
+  });
+
+  it("numbers all seven of seven pages from the first, leaving no gap", () => {
+    renderPager({ rows: 20, startIndex: 1, totalResults: 140 });
+
+    expect(pageNumbers()).toEqual([
+      "Page 1",
+      "Page 2",
+      "Page 3",
+      "Page 4",
+      "Page 5",
+      "Page 6",
+      "Page 7",
+    ]);
   });
 
   it("moves to the first row of the page numbered", async () => {

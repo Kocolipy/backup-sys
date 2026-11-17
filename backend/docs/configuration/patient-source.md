@@ -78,8 +78,8 @@ curl -s http://127.0.0.1:8104/Patient/eq081-VQEgP8drUUqCWzHfw3   # Tan Wei Ming
 
 ### The search set
 
-Each canned search answers a searchset Bundle of the fixtures themselves, in
-the mock's one stable order — newest Last visit first, ties by id, the Patient
+Each canned search but `search-received` answers a searchset Bundle of the
+fixtures themselves, in the mock's one stable order — newest Last visit first, ties by id, the Patient
 with none last — matched on the query the backend sends — the search,
 `_count=5`, `_offset`, `_total=accurate`, and the `gender` filter pinned to its
 exact value or, where the search uses none, to absent — so it answers the
@@ -94,6 +94,7 @@ and `_offset=0` unless named.
 | `search-name-tan-female`                | `tan`, `gender=female`                                            | `total: 4`                                                             |
 | `search-nric`                           | `identifier=https://fhir.synapxe.sg/NamingSystem/nric\|S9212345A` | Siti Nurhaliza binte Ahmad, `total: 1`                                 |
 | `search-nric-last-visit-not-to-the-day` | `identifier=https://fhir.synapxe.sg/NamingSystem/nric\|S9912345B` | Rajesh Kumar, `total: 1`, his Last visit `2026-10`, to the month alone |
+| `search-received`                       | `name:contains=teo`                                               | 5 entries of `total: 5`, shown as received (below)                     |
 | `search-no-match`                       | `name:contains=nobody`                                            | no entry, `total: 0`                                                   |
 | `search-fallback`                       | any other `/Patient` search, at a lower priority                  | no entry, `total: 0`                                                   |
 
@@ -103,6 +104,16 @@ Each Patient carries its Last visit as the `last-visit` extension, a
 `valueDate`, as the source does (ADR 0018); the backend shows one not to the
 day as received (ADR 0020), so Rajesh Kumar's search is answered, his Last
 visit invalid.
+
+A search's match is shown as received too, but for its id, which must be a
+FHIR id (ADR 0020, D1). `search-received` (`metadata.received`) is the search
+that shows it, its entries no fixture: Teo Ai Ling, whose NRIC is a number,
+gender `F` and birth date `1971-03`; a Patient with no `id`; an `Observation`;
+a Patient whose `id` holds a space; and a Patient with no NRIC, no official
+name, no gender, no birth date and no Last visit. The backend drops the two
+without a FHIR id and counts them, shows the `Observation` as a row of "Error"
+cells and the other two as received, beside `total: 5`. What a match holds is
+never a failure of the source, so no search fault stub serves one.
 
 ```bash
 curl -s 'http://127.0.0.1:8104/Patient?name:contains=tan&_count=5&_offset=0&_total=accurate'

@@ -1,7 +1,6 @@
 package com.example.backend.patient.infrastructure.http;
 
 import com.example.backend.paging.domain.PageRequest;
-import com.example.backend.patient.domain.FhirId;
 import com.example.backend.patient.infrastructure.http.PatientSourceException.Failure;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.util.List;
@@ -22,7 +21,7 @@ import java.util.function.Function;
  * total. The source paged it and counted every entry (ADR 0018, D3): the service takes the page
  * and the total as they are. Without a total there is no telling how many pages there are, so a
  * page without one is a failure of the source, as one that is no searchset is, or an entry that
- * holds nothing the service can read.
+ * holds no resource.
  *
  * @param resourceType must be {@code Bundle}
  * @param type         must be {@code searchset}
@@ -71,23 +70,6 @@ record SourceSearchset<R>(String resourceType, String type, Integer total, List<
             throw PatientSourceException.failed(Failure.ANOTHER_RESOURCE);
         }
         return resource;
-    }
-
-    /**
-     * An entry's own {@code id}, which a later read could open it by: it must be there, and in
-     * FHIR's id grammar.
-     *
-     * @param none    the failure of an entry with no id
-     * @param invalid the failure of an id outside the grammar
-     */
-    static String ownId(String id, Failure none, Failure invalid) {
-        if (id == null) {
-            throw PatientSourceException.failed(none);
-        }
-        if (!FhirId.matches(id)) {
-            throw PatientSourceException.failed(invalid);
-        }
-        return id;
     }
 
     /**

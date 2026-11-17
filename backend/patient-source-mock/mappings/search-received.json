@@ -1,0 +1,154 @@
+{
+  "name": "Search: name contains teo, its matches shown as received",
+  "request": {
+    "method": "GET",
+    "urlPath": "/Patient",
+    "queryParameters": {
+      "_count": {
+        "equalTo": "5"
+      },
+      "_offset": {
+        "equalTo": "0"
+      },
+      "_total": {
+        "equalTo": "accurate"
+      },
+      "name:contains": {
+        "equalTo": "teo",
+        "caseInsensitive": true
+      },
+      "gender": {
+        "absent": true
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/fhir+json"
+    },
+    "jsonBody": {
+      "resourceType": "Bundle",
+      "id": "searchset",
+      "type": "searchset",
+      "total": 5,
+      "link": [
+        {
+          "relation": "self",
+          "url": "http://127.0.0.1:8104/Patient?_offset=0&_count=5"
+        }
+      ],
+      "entry": [
+        {
+          "fullUrl": "http://127.0.0.1:8104/Patient/received-search-01",
+          "resource": {
+            "resourceType": "Patient",
+            "id": "received-search-01",
+            "extension": [
+              {
+                "url": "https://fhir.synapxe.sg/StructureDefinition/last-visit",
+                "valueDate": "2026-10-14"
+              }
+            ],
+            "identifier": [
+              {
+                "use": "official",
+                "system": "https://fhir.synapxe.sg/NamingSystem/nric",
+                "value": 8800011
+              }
+            ],
+            "name": [
+              {
+                "use": "official",
+                "text": "Teo Ai Ling",
+                "family": "Teo",
+                "given": ["Ai Ling"]
+              }
+            ],
+            "gender": "F",
+            "birthDate": "1971-03"
+          },
+          "search": {
+            "mode": "match"
+          }
+        },
+        {
+          "resource": {
+            "resourceType": "Patient",
+            "extension": [
+              {
+                "url": "https://fhir.synapxe.sg/StructureDefinition/last-visit",
+                "valueDate": "2026-09-02"
+              }
+            ],
+            "name": [
+              {
+                "use": "official",
+                "text": "Teo Boon Kiat"
+              }
+            ],
+            "gender": "male",
+            "birthDate": "1966-06-18"
+          },
+          "search": {
+            "mode": "match"
+          }
+        },
+        {
+          "fullUrl": "http://127.0.0.1:8104/Observation/received-search-03",
+          "resource": {
+            "resourceType": "Observation",
+            "id": "received-search-03",
+            "status": "final"
+          },
+          "search": {
+            "mode": "include"
+          }
+        },
+        {
+          "resource": {
+            "resourceType": "Patient",
+            "id": "received search 04",
+            "name": [
+              {
+                "use": "official",
+                "text": "Teo Hock Seng"
+              }
+            ],
+            "gender": "male",
+            "birthDate": "1958-02-11"
+          },
+          "search": {
+            "mode": "match"
+          }
+        },
+        {
+          "fullUrl": "http://127.0.0.1:8104/Patient/received-search-05",
+          "resource": {
+            "resourceType": "Patient",
+            "id": "received-search-05",
+            "identifier": [
+              {
+                "use": "usual",
+                "system": "urn:oid:1.2.840.114350.1.13.0.1.7.5.737384.14",
+                "value": "203905"
+              }
+            ],
+            "name": [
+              {
+                "use": "usual",
+                "text": "Teo"
+              }
+            ]
+          },
+          "search": {
+            "mode": "match"
+          }
+        }
+      ]
+    }
+  },
+  "metadata": {
+    "received": "search"
+  }
+}
