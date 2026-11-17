@@ -113,6 +113,21 @@ describe("Mandatory elements", () => {
     }).toEqual({ hidden: "Missing information", scope: "col" });
   });
 
+  // jsdom lays nothing out, so the classes stand for the layout: a 1px width the
+  // table widens only to the icon, whatever spare width a table of few columns has.
+  it("keeps the leading column as narrow as its icon, its heading and cells alike", () => {
+    renderTable([sample({ first: missing }), sample()]);
+    const leading = [
+      screen.getByRole("columnheader", { name: "Missing information" }),
+      ...screen
+        .getAllByRole("row")
+        .slice(1)
+        .map((row) => within(row).getAllByRole("cell")[0]!),
+    ];
+
+    expect(leading.map((cell) => cell.classList.contains("w-px"))).toEqual([true, true, true]);
+  });
+
   it("draws the warning as a triangle in the warning colour, a tab stop", () => {
     renderTable([sample({ first: missing })]);
     const warning = screen.getByRole("img");
