@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { clearEhrContext } from "@/auth/ehr-context";
 import { bare, deferred, holding, json, type Answers } from "@/auth/session-adapter.testHelpers";
+import { leadingCells, leadingColumn, warnings } from "@/pages/mandatory-elements.testHelpers";
 import { TAN_WEI_MING, TAN_WEI_MING_READ, withPatientInContext } from "@/pages/patient.testHelpers";
 import { renderSignedIn } from "@/shell/signed-in-shell.testHelpers";
 
@@ -78,26 +79,32 @@ const numcReads = (sent: readonly { method: string; path: string }[]) =>
 
 const table = () => screen.getByRole("table", { name: "NUMC History" });
 
-/** Each body row's cells, as text. */
-const rows = () =>
-  within(table())
+/** Each body row's data cells, as text: the leading warning cell, where shown, left out. */
+const rows = () => {
+  const leading = leadingCells(table());
+  return within(table())
     .getAllByRole("row")
     .slice(1)
     .map((row) =>
       within(row)
         .getAllByRole("cell")
+        .slice(leading)
         .map((cell) => cell.textContent),
     );
+};
 
 /** The Outcome badge in each body row, by its text and its variant. */
-const outcomeBadges = () =>
-  within(table())
+const outcomeBadges = () => {
+  const leading = leadingCells(table());
+  return within(table())
     .getAllByRole("row")
     .slice(1)
     .map((row) => {
-      const badge = within(row).getAllByRole("cell")[1]!.querySelector("[data-slot=badge]");
+      const cell = within(row).getAllByRole("cell")[leading + 1]!;
+      const badge = cell.querySelector("[data-slot=badge]");
       return `${badge?.textContent} ${badge?.getAttribute("data-variant")}`;
     });
+};
 
 afterEach(() => {
   clearEhrContext();
@@ -121,6 +128,13 @@ describe("NUMC", () => {
         ["Hyperbaric Chamber Duties", "UNFIT", "05 Aug 2023", "04 Aug 2024"],
       ],
     });
+  });
+
+  it("shows the Type in bold", async () => {
+    await renderNumc(page(FOUR_RECORDS, 1, 4));
+    await screen.findByRole("table", { name: "NUMC History" });
+
+    expect(within(table()).getAllByText("Diving Duties")[0]).toHaveClass("font-semibold");
   });
 
   it("shows each Outcome as a badge: FIT green, UNFIT red, WAIVER GRANTED blue, WAIVER REJECTED muted", async () => {
@@ -267,6 +281,98 @@ describe("NUMC", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(/^Couldn't load NUMC records$/);
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
     expect(screen.queryByText("No patient in context")).not.toBeInTheDocument();
+  });
+});
+
+// The Mandatory elements of a NUMC Record are its Type, Outcome, Issue Date
+// and Expiry Date (/docs/domain/numc.md): a row missing one, or with one in
+// the wrong format, carries a warning, and is shown in full. How the warning
+// is drawn and read is the shared module's (mandatory-elements.test.tsx).
+describe("NUMC, a Mandatory element missing", () => {
+  it.each([
+    ["Type", "type"],
+    ["Outcome", "outcome"],
+    ["Issue Date", "issueDate"],
+    ["Expiry Date", "expiryDate"],
+  ] as const)("warns on a row whose %s is missing, naming its column", async (label, element) => {
+    await renderNumc(page([record("numc-1", { [element]: null })], 1, 1));
+    await screen.findByRole("table", { name: "NUMC History" });
+
+    expect(warnings(table())).toEqual([`Critical information missing: ${label}`]);
+  });
+
+  it.each([
+    ["Type", "type"],
+    ["Outcome", "outcome"],
+    ["Issue Date", "issueDate"],
+    ["Expiry Date", "expiryDate"],
+  ] as const)(
+    "warns on a row whose %s is in the wrong format, naming its column",
+    async (label, element) => {
+      await renderNumc(page([record("numc-1", { [element]: null, invalid: [element] })], 1, 1));
+      await screen.findByRole("table", { name: "NUMC History" });
+
+      expect(warnings(table())).toEqual([`Critical information missing: ${label}`]);
+    },
+  );
+
+  it("leads the row with the warning, naming every affected column in the table's order", async () => {
+    await renderNumc(
+      page(
+        [
+          record("numc-1", {
+            expiryDate: null,
+            invalid: ["issueDate"],
+            issueDate: null,
+            outcome: null,
+            type: null,
+          }),
+        ],
+        1,
+        1,
+      ),
+    );
+    await screen.findByRole("table", { name: "NUMC History" });
+
+    expect({
+      firstHeading: within(table()).getAllByRole("columnheader")[0]!.textContent,
+      warnings: warnings(table()),
+    }).toEqual({
+      firstHeading: "Missing information",
+      warnings: ["Critical information missing: Type, Outcome, Issue Date, Expiry Date"],
+    });
+  });
+
+  // A code outside its closed set is a present value (ADR 0020, D2).
+  it("does not warn on a row whose codes are outside their sets", async () => {
+    await renderNumc(page([record("numc-1", { outcome: "deferred", type: "aircrew" })], 1, 1));
+    await screen.findByRole("table", { name: "NUMC History" });
+
+    expect(warnings(table())).toEqual([null]);
+  });
+
+  // The id is the one element of a NUMC Record that is not Mandatory.
+  it("does not warn on a row whose id alone is missing or in the wrong format", async () => {
+    await renderNumc(
+      page(
+        [record(null), record(null, { invalid: ["id"] }), record("numc-3", { type: null })],
+        1,
+        3,
+      ),
+    );
+    await screen.findByRole("table", { name: "NUMC History" });
+
+    expect(warnings(table())).toEqual([null, null, "Critical information missing: Type"]);
+  });
+
+  it("shows no leading column on a page where no row warns", async () => {
+    await renderNumc(page([record("numc-1"), record("numc-2")], 1, 2));
+    await screen.findByRole("table", { name: "NUMC History" });
+
+    expect(leadingColumn(table())).toEqual({
+      firstCells: ["Diving Duties", "Diving Duties"],
+      heading: null,
+    });
   });
 });
 

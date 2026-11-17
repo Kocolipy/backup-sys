@@ -129,18 +129,21 @@ truncated to the column's width. More than two Groups show the first two and a
 The header row sits on a tinted surface that a hover leaves alone, and a
 heading stands over its column's values, a sortable heading's button included.
 Identifiers — UUIDs, correlation ids, routes — are set in monospace, and
-timestamps in tabular figures, so a column of them aligns.
+timestamps in tabular figures, so a column of them aligns. A history's first
+data column — the Medication, the FFI Type, the NUMC Type, the ARMC Board
+Type — is set in bold, so each row reads by what it records.
 
 A history that declares Mandatory elements (ADR 0020, D7) leads its table with
-a narrow warning column, before its first column and present on every page,
-its heading "Missing information" for a screen reader alone
-(`src/pages/mandatory-elements.tsx`). A row whose Mandatory element is missing
-or invalid carries one `TriangleAlert` icon there in `warning-soft-foreground`
-— a state to notice, as the `warning` badge is — and every other row an empty
-cell. The icon is a tab stop with no action, its tooltip, on hover and on
-focus, also its accessible name: "Critical information missing: " and the
-affected columns' headings, in column order. The Medication History is the
-one table with the column.
+a narrow warning column, before its first column and shown only on a page
+where at least one row warns, its heading "Missing information" for a screen
+reader alone (`src/pages/mandatory-elements.tsx`); a page where no row warns
+has no such column. A row whose Mandatory element is missing or invalid
+carries one `TriangleAlert` icon there in `warning-soft-foreground` — a state
+to notice, as the `warning` badge is — and every other row an empty cell. The
+icon is a tab stop with no action, its tooltip, on hover and on focus, also
+its accessible name: "Critical information missing: " and the affected
+columns' headings, in column order. Four tables declare them: the Medication,
+FFI, NUMC and ARMC Histories.
 
 ### Sidebar
 

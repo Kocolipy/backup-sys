@@ -99,6 +99,21 @@ test.describe("NUMC", () => {
       "Hyperbaric Chamber Duties———",
     ]);
     await expect(page.getByText("Showing 1 to 4 of 4 records")).toBeVisible();
+    // The first misses its Outcome, the second holds both dates in the wrong
+    // format and the fourth misses all three, Mandatory elements of a NUMC
+    // Record: those rows warn, and the third, whose codes are outside their
+    // sets, does not.
+    for (const [row, warns] of [1, 1, 0, 1].entries()) {
+      await expect(numcRows(page).nth(row).getByRole("img")).toHaveCount(warns);
+    }
+    const warning = numcRows(page).nth(3).getByRole("img");
+    await expect(warning).toHaveAccessibleName(
+      "Critical information missing: Outcome, Issue Date, Expiry Date",
+    );
+    await warning.hover();
+    await expect(page.getByRole("tooltip")).toHaveText(
+      "Critical information missing: Outcome, Issue Date, Expiry Date",
+    );
   });
 
   test.describe("sorted", () => {

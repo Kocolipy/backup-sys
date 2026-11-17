@@ -1,7 +1,7 @@
 ---
 type: Domain Rules
 title: FFIs
-description: A patient's FFI History — the in-house patient source's own FFIs, read through it at GET {base}/Patient/{id}/ffi as a FHIR-shaped but non-conformant searchset and shown as received, the elements read and the five closed sets carried as codes, a field missing, in the wrong format or outside its set, the sort by Issue Date or Expiry Date and the filters on every column with the source parameter each is sent as and the refusals, the source's order and paging, the failures, the logging rules and the invalid-fields WARN and counter, no caching, no auditing, the FFI page with its sort headings, Filter panel and empty states, and the mock's FFI fixtures, sort and filter stubs and fault stubs.
+description: A patient's FFI History — the in-house patient source's own FFIs, read through it at GET {base}/Patient/{id}/ffi as a FHIR-shaped but non-conformant searchset and shown as received, the elements read and the five closed sets carried as codes, a field missing, in the wrong format or outside its set, the Mandatory elements and the warning on a row missing one, the sort by Issue Date or Expiry Date and the filters on every column with the source parameter each is sent as and the refusals, the source's order and paging, the failures, the logging rules and the invalid-fields WARN and counter, no caching, no auditing, the FFI page with its sort headings, Filter panel and empty states, and the mock's FFI fixtures, sort and filter stubs and fault stubs.
 tags: [patient, ffi]
 ---
 
@@ -28,15 +28,15 @@ SPA → `GET /api/patient-ffi/{patientId}` → backend →
 An FFI has seven elements, each read as the patient source sent it
 ([Shown as received](#shown-as-received)).
 
-| Element          | On the wire (both sides)   | Shown as                                                                                                                                                                                                |
-| ---------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| FFI Type         | `type`, a code             | `overseas-exercises` Overseas Exercises · `cat-a-ocs-scs` CAT A - OCS/SCS · `ippt` IPPT FFI · `dental` Dental FFI · `ord-release-from-service` ORD / Release from Service · `vocational` Vocational FFI |
-| Outcome          | `outcome`, a code          | `fit` FIT (green badge) · `request-waiver` REQUEST WAIVER (amber badge) · `unfit` UNFIT (red badge)                                                                                                     |
-| Issue Date       | `issueDate`, `YYYY-MM-DD`  | `05 Feb 2001`                                                                                                                                                                                           |
-| Expiry Date      | `expiryDate`, `YYYY-MM-DD` | `05 Feb 2001`                                                                                                                                                                                           |
-| Higher Authority | `higherAuthority`, a code  | `camo` CAMO · `carmo` CARMO · `cnmo` CNMO · `comd-mmi` Comd MMI · `dis` DIS                                                                                                                             |
-| Submitting MC    | `submittingMc`, a code     | a Medical Centre: `nee-soon-camp` Nee Soon Camp MC · `kranji-camp` Kranji Camp MC · `hendon-camp` Hendon Camp MC · `mandai-hill-camp` Mandai Hill Camp MC · `khatib-camp` Khatib Camp MC                |
-| Status           | `status`, a code           | `active` Active (green) · `inactive` Inactive (muted)                                                                                                                                                   |
+| Element          | On the wire (both sides)   | Shown as                                                                                                                                                                                                         |
+| ---------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| FFI Type         | `type`, a code             | `overseas-exercises` Overseas Exercises · `cat-a-ocs-scs` CAT A - OCS/SCS · `ippt` IPPT FFI · `dental` Dental FFI · `ord-release-from-service` ORD / Release from Service · `vocational` Vocational FFI, in bold |
+| Outcome          | `outcome`, a code          | `fit` FIT (green badge) · `request-waiver` REQUEST WAIVER (amber badge) · `unfit` UNFIT (red badge)                                                                                                              |
+| Issue Date       | `issueDate`, `YYYY-MM-DD`  | `05 Feb 2001`                                                                                                                                                                                                    |
+| Expiry Date      | `expiryDate`, `YYYY-MM-DD` | `05 Feb 2001`                                                                                                                                                                                                    |
+| Higher Authority | `higherAuthority`, a code  | `camo` CAMO · `carmo` CARMO · `cnmo` CNMO · `comd-mmi` Comd MMI · `dis` DIS                                                                                                                                      |
+| Submitting MC    | `submittingMc`, a code     | a Medical Centre: `nee-soon-camp` Nee Soon Camp MC · `kranji-camp` Kranji Camp MC · `hendon-camp` Hendon Camp MC · `mandai-hill-camp` Mandai Hill Camp MC · `khatib-camp` Khatib Camp MC                         |
+| Status           | `status`, a code           | `active` Active (green) · `inactive` Inactive (muted)                                                                                                                                                            |
 
 Each FFI also carries its own `id` at the source, never checked, which the
 page keys its row by and never shows; a row with none is keyed by its place.
@@ -82,6 +82,23 @@ response, for what a field holds. Each field — the seven elements and the `id`
 **No semantic or range check is made**: a date in the future, or an Expiry Date
 before its Issue Date, is shown as received. The domain's `Ffi` holds each
 field as a `SourceField` and refuses none.
+
+### Mandatory elements
+
+An FFI's **Mandatory elements** are its **FFI Type**, **Outcome** and
+**Status** (ADR 0020, D7). A row whose Mandatory element is missing or invalid
+carries a warning; the FFI is still shown in full, each such cell "—" or
+"Error", and is never refused. The page decides it from the backend's
+classification alone and reads no value: a code outside its
+[closed set](#the-closed-sets) is present and flags nothing, and no other
+field flags a row, missing or invalid.
+
+The warning is the Medication History's ([medication](medication.md),
+"Mandatory elements"): a warning-coloured triangle in a leading column before
+the FFI Type, shown only on a page where a row is flagged, its tooltip and
+accessible name "Critical information missing: " and each affected column's
+heading in the table's order — `Critical information missing: FFI Type,
+Outcome, Status`.
 
 ### Status is the source's
 
@@ -280,12 +297,16 @@ offered no link and is routed to its landing page. Headed "FFI History".
   and a failed read of the patient leaves the page empty, its copy
   "Couldn't load patient" on the page's error line. It is read-only, five FFIs
   a page, with no row action.
-- **The table**: FFI Type, Outcome, Issue Date, Expiry Date, Higher Authority,
-  Submitting MC, Status — each code by its label, the Outcome and the Status as
-  badges ([the elements](#the-elements)), both dates `dd MMM yyyy`; a code
-  outside its set as it came, the Outcome's and the Status's on a neutral
-  badge; a missing field "—" and one in the wrong format "Error", the rest of
-  the row as any other ([Shown as received](#shown-as-received)).
+- **The table**: a leading column of warnings, one on each row whose
+  [Mandatory element](#mandatory-elements) is missing or invalid and shown
+  only on a page where a row warns, then FFI Type, Outcome, Issue Date, Expiry
+  Date, Higher Authority, Submitting MC, Status — each code by its label, the
+  FFI Type in bold, the Outcome and the Status as badges
+  ([the elements](#the-elements)), both dates
+  `dd MMM yyyy`; a code outside its set as it came, the Outcome's and the
+  Status's on a neutral badge; a missing field "—" and one in the wrong format
+  "Error", the rest of the row as any other
+  ([Shown as received](#shown-as-received)).
 - **The shared paged listing**: the numbered pager and "Showing x to y of N
   records", named on a single page too, the page shown held while the next
   loads.
@@ -361,6 +382,9 @@ fixtures, and the backend's tests read the same stub files
   | Dental FFI     | FIT            | Error       | Error       | CNMO             | Kranji Camp MC  | Error    |
   | swimming       | waiver-granted | 16 Mar 2020 | 15 Mar 2021 | hq-medc          | tengah-air-base | expired  |
   | Vocational FFI | —              | —           | —           | —                | —               | Inactive |
+
+  The first and the fourth, their Outcome missing, and the second, its Status
+  invalid, carry a warning; the third, its codes outside their sets, does not.
 
 - **Every other fixture** has none — Siti Nurhaliza binte Ahmad
   (`erXuFYUfucBZaryVksYEcMg3`), found by the NRIC search `S9212345A`, is the

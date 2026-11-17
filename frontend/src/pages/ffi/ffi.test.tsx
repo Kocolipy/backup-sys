@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { clearEhrContext } from "@/auth/ehr-context";
 import { bare, deferred, holding, json, type Answers } from "@/auth/session-adapter.testHelpers";
+import { leadingCells, leadingColumn, warnings } from "@/pages/mandatory-elements.testHelpers";
 import { TAN_WEI_MING, TAN_WEI_MING_READ, withPatientInContext } from "@/pages/patient.testHelpers";
 import { renderSignedIn } from "@/shell/signed-in-shell.testHelpers";
 
@@ -89,32 +90,48 @@ const ffiReads = (sent: readonly { method: string; path: string }[]) =>
 
 const table = () => screen.getByRole("table", { name: "FFI History" });
 
-/** Each body row's cells, as text. */
-const rows = () =>
-  within(table())
+/** Each body row's data cells, as text: the leading warning cell, where shown, left out. */
+const rows = () => {
+  const leading = leadingCells(table());
+  return within(table())
     .getAllByRole("row")
     .slice(1)
     .map((row) =>
       within(row)
         .getAllByRole("cell")
+        .slice(leading)
         .map((cell) => cell.textContent),
     );
+};
 
-/** The badge in each body row's column `column`, by its text and its variant. */
-const badges = (column: number) =>
-  within(table())
+/**
+ * The badge in each body row's data column `column`, by its text and its
+ * variant: the leading warning cell, where shown, not counted.
+ */
+const badges = (column: number) => {
+  const leading = leadingCells(table());
+  return within(table())
     .getAllByRole("row")
     .slice(1)
     .map((row) => {
-      const badge = within(row).getAllByRole("cell")[column]!.querySelector("[data-slot=badge]");
+      const cell = within(row).getAllByRole("cell")[leading + column]!;
+      const badge = cell.querySelector("[data-slot=badge]");
       return `${badge?.textContent} ${badge?.getAttribute("data-variant")}`;
     });
+};
 
 afterEach(() => {
   clearEhrContext();
 });
 
 describe("FFI", () => {
+  it("shows the FFI Type in bold", async () => {
+    await renderFfi(page(FOUR_FFIS, 1, 4));
+    await screen.findByRole("table", { name: "FFI History" });
+
+    expect(within(table()).getAllByText("IPPT FFI")[0]).toHaveClass("font-semibold");
+  });
+
   it("shows a Submitting MC of Khatib Camp MC by its label", async () => {
     await renderFfi(page([ffi("ffi-khatib", { submittingMc: "khatib-camp" })], 1, 1));
     await screen.findByRole("table", { name: "FFI History" });
@@ -409,6 +426,100 @@ describe("FFI", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(/^Couldn't load FFIs$/);
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
     expect(screen.queryByText("No patient in context")).not.toBeInTheDocument();
+  });
+});
+
+// The Mandatory elements of an FFI are its FFI Type, Outcome and Status
+// (/docs/domain/ffi.md): a row missing one, or with one in the wrong format,
+// carries a warning, and is shown in full. How the warning is drawn and read
+// is the shared module's (mandatory-elements.test.tsx).
+describe("FFI, a Mandatory element missing", () => {
+  it.each([
+    ["FFI Type", "type"],
+    ["Outcome", "outcome"],
+    ["Status", "status"],
+  ] as const)("warns on a row whose %s is missing, naming its column", async (label, element) => {
+    await renderFfi(page([ffi("ffi-1", { [element]: null })], 1, 1));
+    await screen.findByRole("table", { name: "FFI History" });
+
+    expect(warnings(table())).toEqual([`Critical information missing: ${label}`]);
+  });
+
+  it.each([
+    ["FFI Type", "type"],
+    ["Outcome", "outcome"],
+    ["Status", "status"],
+  ] as const)(
+    "warns on a row whose %s is in the wrong format, naming its column",
+    async (label, element) => {
+      await renderFfi(page([ffi("ffi-1", { [element]: null, invalid: [element] })], 1, 1));
+      await screen.findByRole("table", { name: "FFI History" });
+
+      expect(warnings(table())).toEqual([`Critical information missing: ${label}`]);
+    },
+  );
+
+  it("leads the row with the warning, naming every affected column in the table's order", async () => {
+    await renderFfi(
+      page([ffi("ffi-1", { invalid: ["outcome"], outcome: null, status: null, type: null })], 1, 1),
+    );
+    await screen.findByRole("table", { name: "FFI History" });
+
+    expect({
+      firstHeading: within(table()).getAllByRole("columnheader")[0]!.textContent,
+      warnings: warnings(table()),
+    }).toEqual({
+      firstHeading: "Missing information",
+      warnings: ["Critical information missing: FFI Type, Outcome, Status"],
+    });
+  });
+
+  // A code outside its closed set is a present value (ADR 0020, D2).
+  it("does not warn on a row whose codes are outside their sets", async () => {
+    await renderFfi(
+      page([ffi("ffi-1", { outcome: "deferred", status: "suspended", type: "aircrew" })], 1, 1),
+    );
+    await screen.findByRole("table", { name: "FFI History" });
+
+    expect(warnings(table())).toEqual([null]);
+  });
+
+  it("does not warn on a row missing, or holding in the wrong format, only other elements", async () => {
+    await renderFfi(
+      page(
+        [
+          ffi("ffi-1", {
+            expiryDate: null,
+            higherAuthority: null,
+            issueDate: null,
+            submittingMc: null,
+          }),
+          ffi(null, {
+            expiryDate: null,
+            higherAuthority: null,
+            invalid: ["id", "issueDate", "expiryDate", "higherAuthority", "submittingMc"],
+            issueDate: null,
+            submittingMc: null,
+          }),
+          ffi("ffi-3", { status: null }),
+        ],
+        1,
+        3,
+      ),
+    );
+    await screen.findByRole("table", { name: "FFI History" });
+
+    expect(warnings(table())).toEqual([null, null, "Critical information missing: Status"]);
+  });
+
+  it("shows no leading column on a page where no row warns", async () => {
+    await renderFfi(page([ffi("ffi-1", { expiryDate: null }), ffi("ffi-2")], 1, 2));
+    await screen.findByRole("table", { name: "FFI History" });
+
+    expect(leadingColumn(table())).toEqual({
+      firstCells: ["Dental FFI", "Dental FFI"],
+      heading: null,
+    });
   });
 });
 

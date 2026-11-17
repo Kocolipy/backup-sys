@@ -15,10 +15,13 @@ export interface MandatoryElement<K extends string> {
 }
 
 /**
- * The leading column hugs the first data column: no padding of its own on that
- * side, and that column's cell — the next sibling — padded 10px from it.
+ * The leading column is as narrow as its icon on every table, however few the
+ * table's columns: a 1px width, which the table widens only to fit its content,
+ * so a full-width table's spare width goes to the data columns. It hugs the
+ * first data column: no padding of its own on that side, and that column's
+ * cell — the next sibling — padded 10px from it.
  */
-const LEADING_COLUMN = "pr-0 [&+td]:pl-2.5 [&+th]:pl-2.5";
+const LEADING_COLUMN = "w-px pr-0 [&+td]:pl-2.5 [&+th]:pl-2.5";
 
 /** The leading column's heading, over the warnings: hidden from sight, read as "Missing information". */
 export function MissingInformationHeading() {

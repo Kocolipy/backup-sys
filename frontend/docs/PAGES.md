@@ -187,19 +187,20 @@ guarded by, `patient:read`, is read-only with no row action, and:
 
 What differs is each history's own:
 
-| Page       | Date columns                        | Filters beside the date ranges                                | Shown as a badge |
-| ---------- | ----------------------------------- | ------------------------------------------------------------- | ---------------- |
-| Medication | Start Date, End Date, as date-times | Dispense Status (any of)                                      | Dispense Status  |
-| FFI        | Issue Date, Expiry Date             | each closed set but the Status (any of), and the Status (one) | Outcome, Status  |
-| NUMC       | Issue Date, Expiry Date             | Type and Outcome (any of)                                     | NUMC Outcome     |
-| ARMC       | Start Date, End Date                | Outcome (one)                                                 | ARMC Outcome     |
+| Page       | Date columns                        | Filters beside the date ranges                                | Shown as a badge | Mandatory elements                     |
+| ---------- | ----------------------------------- | ------------------------------------------------------------- | ---------------- | -------------------------------------- |
+| Medication | Start Date, End Date, as date-times | Dispense Status (any of)                                      | Dispense Status  | Medication, Dispense Status            |
+| FFI        | Issue Date, Expiry Date             | each closed set but the Status (any of), and the Status (one) | Outcome, Status  | FFI Type, Outcome, Status              |
+| NUMC       | Issue Date, Expiry Date             | Type and Outcome (any of)                                     | NUMC Outcome     | Type, Outcome, Issue Date, Expiry Date |
+| ARMC       | Start Date, End Date                | Outcome (one)                                                 | ARMC Outcome     | Board Type, Outcome, Start Date        |
 
 `DESIGN.md` ("Badge") has which variant each status takes. The Medication
 table is wider than its card: the table primitive keeps each cell to one line
-and scrolls sideways in its own container. It alone declares Mandatory
-elements, its Medication and its Dispense Status, so it alone opens with a
-narrow leading column warning on a row missing one (`mandatory-elements.tsx`);
-the FFI, NUMC and ARMC tables have none.
+and scrolls sideways in its own container. Each of the four tables declares
+its Mandatory elements beside it, in column order, each label its column's
+heading, so the two cannot drift; a page where some row misses one opens its
+table with a narrow leading column of warnings (`mandatory-elements.tsx`), and
+a page where none does has no such column.
 
 - `filtered-history.tsx` — `FilteredHistory`, the filtered, sorted listing
   every history page renders once the patient in context is read. Each page

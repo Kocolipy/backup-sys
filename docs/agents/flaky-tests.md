@@ -66,3 +66,10 @@ in the same change, so the ledger lists live flakes only.
 - **Failure**: `Error: expect(locator).toHaveText(expected) failed` — `Locator: getByRole('heading', { level: 1 })`, `Expected: "Patient Search"`, `Error: element(s) not found`, at the `beforeEach`'s `await expect(page.getByRole("heading", { level: 1 })).toHaveText("Patient Search");` (`patient-search.spec.ts:42`).
 - **Evidence**: `2026-11-14`, `3632b85a` with an uncommitted ARMC History change that touches neither the Search page nor the shell; failing `make integration-test`, then passing `make integration-test`, no edit between.
 - **Suspected cause**: the first load of `/search` in the `medical-officer` project not rendering its heading within the 5-second `expect` timeout while every project runs at once; unknown beyond that.
+
+### `frontend/test/e2e/patient-search.spec.ts` — `Patient Search › finds the one Patient holding a full NRIC`
+
+- **Command**: `make integration-test`
+- **Failure**: `Error: expect(locator).toHaveText(expected) failed` — `Locator: getByRole('heading', { level: 1 })`, `Expected: "Patient Search"`, `Timeout: 15000ms`, `Error: element(s) not found`, at the `beforeEach`'s `await expect(page.getByRole("heading", { level: 1 })).toHaveText("Patient Search");` (`patient-search.spec.ts:44`).
+- **Evidence**: `2026-11-17`, `a618cbd1` with an uncommitted change to the FFI, NUMC and ARMC Histories and their unit tests that touches neither the Search page nor the shell; failing `make integration-test`, then passing `make integration-test`, no edit between.
+- **Suspected cause**: the first load of `/search` in the `medical-officer` project not rendering, as in the entry above; in the same failing run another `medical-officer` test's screenshot shows a blank page at its own first load of `/search`. Unknown beyond that.

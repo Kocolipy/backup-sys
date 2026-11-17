@@ -1,7 +1,7 @@
 ---
 type: Domain Rules
 title: NUMC
-description: A patient's NUMC History — the in-house patient source's own NUMC Records, read through it at GET {base}/Patient/{id}/numc on the FFI History's terms and shown as received, the four elements and the two closed sets carried as codes, a field missing, in the wrong format or outside its set, the sort and filters the source applies and their refusals, the source's paging, the failures, the logging rules and the invalid-fields WARN and counter, no caching, no auditing, the NUMC page with its sort headings, Filter panel and states, and the mock's NUMC fixtures, sort and filter stubs and fault stubs.
+description: A patient's NUMC History — the in-house patient source's own NUMC Records, read through it at GET {base}/Patient/{id}/numc on the FFI History's terms and shown as received, the four elements and the two closed sets carried as codes, a field missing, in the wrong format or outside its set, the Mandatory elements and the warning on a row missing one, the sort and filters the source applies and their refusals, the source's paging, the failures, the logging rules and the invalid-fields WARN and counter, no caching, no auditing, the NUMC page with its sort headings, Filter panel and states, and the mock's NUMC fixtures, sort and filter stubs and fault stubs.
 tags: [patient, numc]
 ---
 
@@ -34,7 +34,7 @@ A NUMC Record has four elements, each read as the patient source sent it
 
 | Element      | On the wire (both sides)   | Shown as                                                                                                                                             |
 | ------------ | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| NUMC Type    | `type`, a code             | `hyperbaric-chamber` Hyperbaric Chamber Duties · `submariner` Submariner Duties · `diving` Diving Duties                                             |
+| NUMC Type    | `type`, a code             | `hyperbaric-chamber` Hyperbaric Chamber Duties · `submariner` Submariner Duties · `diving` Diving Duties, in bold                                    |
 | NUMC Outcome | `outcome`, a code          | `fit` FIT (green badge) · `unfit` UNFIT (red badge) · `waiver-granted` WAIVER GRANTED (blue badge) · `waiver-rejected` WAIVER REJECTED (muted badge) |
 | Issue Date   | `issueDate`, `YYYY-MM-DD`  | `14 Oct 2023`                                                                                                                                        |
 | Expiry Date  | `expiryDate`, `YYYY-MM-DD` | `14 Oct 2023`                                                                                                                                        |
@@ -80,6 +80,24 @@ is one of three things, read by the adapter from the raw JSON it arrived as
 **No semantic or range check is made**: a date in the future, or an Expiry Date
 before its Issue Date, is shown as received. The domain's `NumcRecord` holds each
 element as a `SourceField` and refuses none.
+
+### Mandatory elements
+
+A NUMC Record's **Mandatory elements** are all four of its elements, by their
+columns' headings its **Type**, **Outcome**, **Issue Date** and **Expiry
+Date** (ADR 0020, D7). A row whose Mandatory element is missing or invalid
+carries a warning; the record is still shown in full, each such cell "—" or
+"Error", and is never refused. The page decides it from the backend's
+classification alone and reads no value: a code outside its
+[closed set](#the-closed-sets) is present and flags nothing, and the `id`,
+missing or invalid, flags no row.
+
+The warning is the Medication History's ([medication](medication.md),
+"Mandatory elements"): a warning-coloured triangle in a leading column before
+the Type, shown only on a page where a row is flagged, its tooltip and
+accessible name "Critical information missing: " and each affected column's
+heading in the table's order — `Critical information missing: Type, Outcome,
+Issue Date, Expiry Date`.
 
 ## The source contract
 
@@ -235,11 +253,14 @@ a session without it is offered no link and is routed to its landing page.
   patient is read, says "Loading records…" while the patient or the first
   page is read, and a failed read of the patient leaves it empty. It is
   read-only, five NUMC Records a page, with no row action.
-- **The table**: Type, Outcome, Issue Date, Expiry Date — the NUMC Type by its
-  label, the NUMC Outcome as its badge ([the elements](#the-elements)), both
-  dates `dd MMM yyyy`; a code outside its set as it came, the Outcome's on a
-  neutral badge; a missing element "—" and one in the wrong format "Error", the
-  rest of the row as any other ([Shown as received](#shown-as-received)).
+- **The table**: a leading column of warnings, one on each row whose
+  [Mandatory element](#mandatory-elements) is missing or invalid and shown
+  only on a page where a row warns, then Type, Outcome, Issue Date, Expiry
+  Date — the NUMC Type by its label, in bold, the NUMC Outcome as its badge
+  ([the elements](#the-elements)), both dates `dd MMM yyyy`; a code outside
+  its set as it came, the Outcome's on a neutral badge; a missing element "—"
+  and one in the wrong format "Error", the rest of the row as any other
+  ([Shown as received](#shown-as-received)).
 - **The shared paged listing**: the numbered pager and "Showing x to y of N
   records", named on a single page too, the page shown held while the next
   loads.
@@ -310,6 +331,10 @@ tests read the same stub files (`PatientSourceStubs`).
   | Submariner Duties         | FIT            | Error       | Error       |
   | parachuting               | request-waiver | 16 Mar 2020 | 15 Mar 2021 |
   | Hyperbaric Chamber Duties | —              | —           | —           |
+
+  The first, its Outcome missing, the second, both dates invalid, and the
+  fourth, its Outcome and both dates missing, carry a warning; the third, its
+  codes outside their sets, does not.
 
 - **Every other fixture** has none — Siti Nurhaliza binte Ahmad
   (`erXuFYUfucBZaryVksYEcMg3`) is the one the tests read — answered by

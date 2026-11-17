@@ -446,8 +446,10 @@ clinician sees is the data as received)
 An element a history declares critical to its record (ADR 0020, D7): a row whose
 Mandatory element is missing or invalid carries a warning naming it, and is
 still shown in full: an element whose absence is flagged on its row, never one
-whose absence rejects the record. A Medication Record's are its Medication and
-its Dispense Status.
+whose absence rejects the record. An FFI's are its FFI Type, Outcome and
+Status; a NUMC Record's its NUMC Type, NUMC Outcome, Issue Date and Expiry
+Date; an ARMC Board's its ARMC Board Type, ARMC Outcome and Start Date; a
+Medication Record's its Medication and its Dispense Status.
 _Avoid_: required element, required field (a required element's absence
 rejects its record, the rule ADR 0020 supersedes), critical field
 
@@ -520,8 +522,9 @@ One record of whether a patient was found fit for an instruction — an
 exercise, a test, a release — as the Patient source holds it: its FFI Type,
 Outcome, Issue Date, Expiry Date, Higher Authority, Submitting MC and Status,
 each shown as received — missing or invalid included, and a code outside its
-closed set shown raw. Read from the Patient source on every read, never held,
-and not audited.
+closed set shown raw. Its FFI Type, Outcome and Status are its Mandatory
+elements. Read from the Patient source on every read, never held, and not
+audited.
 _Avoid_: fitness record, medical clearance, certificate
 
 **FFI History**:
@@ -588,8 +591,9 @@ One record of whether a patient was found fit for one underwater duty, as the
 Patient source holds it for the Navy Underwater Medicine Centre (NUMC): its
 NUMC Type, NUMC Outcome, Issue Date and Expiry Date, each shown as received —
 missing or invalid included, and a code outside its closed set shown raw. It
-has no Status. Read from the Patient source on every read, never held, and not
-audited.
+has no Status. Its NUMC Type, NUMC Outcome, Issue Date and Expiry Date are
+its Mandatory elements. Read from the Patient source on every read, never
+held, and not audited.
 _Avoid_: NUMC Assessment, dive medical, underwater fitness record
 
 **NUMC History**:
@@ -621,8 +625,10 @@ One aeromedical fitness board a patient sat, as the Patient source holds it
 for the ARMC: its ARMC Board Type, ARMC Outcome, Start Date, End Date, Medical
 Officer #1 and Medical Officer #2, each shown as received — missing or invalid
 included, a code outside its closed set shown raw, and an End Date before its
-Start Date as it came. One with no End Date is still open. Read from the
-Patient source on every read, never held, and not audited.
+Start Date as it came. One with no End Date is still open. Its ARMC Board
+Type, ARMC Outcome and Start Date are its Mandatory elements; its End Date is
+not. Read from the Patient source on every read, never held, and not
+audited.
 _Avoid_: ARMC Record, ARMC Assessment, aeromedical record
 
 **ARMC History**:

@@ -1,7 +1,7 @@
 ---
 type: Domain Rules
 title: ARMC
-description: A patient's ARMC History — the in-house patient source's own ARMC Boards, read through it at GET {base}/Patient/{id}/armc on the FFI History's terms and shown as received, the six elements, the End Date missing for a board still open, the two closed sets carried as codes, a field missing, in the wrong format or outside its set, the source's order and paging, the sort by either date and the filters the source applies — the open-board rule among them — the failures, the logging rules and the invalid-fields WARN and counter, no caching, no auditing, the ARMC page with its sort headings, Filter panel and states, and the mock's ARMC fixtures, sort and filter stubs and fault stubs.
+description: A patient's ARMC History — the in-house patient source's own ARMC Boards, read through it at GET {base}/Patient/{id}/armc on the FFI History's terms and shown as received, the six elements, the End Date missing for a board still open, the two closed sets carried as codes, a field missing, in the wrong format or outside its set, the Mandatory elements and the warning on a row missing one, the source's order and paging, the sort by either date and the filters the source applies — the open-board rule among them — the failures, the logging rules and the invalid-fields WARN and counter, no caching, no auditing, the ARMC page with its sort headings, Filter panel and states, and the mock's ARMC fixtures, sort and filter stubs and fault stubs.
 tags: [patient, armc]
 ---
 
@@ -88,6 +88,23 @@ as (`ReceivedFields`, so a number is never coerced into a string):
 **No semantic or range check is made**: a date in the future, or an End Date
 before its Start Date, is shown as received. The domain's `ArmcBoard` holds each
 element as a `SourceField` and refuses none.
+
+### Mandatory elements
+
+An ARMC Board's **Mandatory elements** are its **Board Type**, **Outcome** and
+**Start Date** (ADR 0020, D7). Its End Date is not one: a board still open has
+none. A row whose Mandatory element is missing or invalid carries a warning;
+the board is still shown in full, each such cell "—" or "Error", and is never
+refused. The page decides it from the backend's classification alone and reads
+no value: a code outside its [closed set](#the-closed-sets) is present and
+flags nothing, and no other element flags a row, missing or invalid.
+
+The warning is the Medication History's ([medication](medication.md),
+"Mandatory elements"): a warning-coloured triangle in a leading column before
+the Board Type, shown only on a page where a row is flagged, its tooltip and
+accessible name "Critical information missing: " and each affected column's
+heading in the table's order — `Critical information missing: Board Type,
+Outcome, Start Date`.
 
 ## The source contract
 
@@ -253,13 +270,16 @@ is: a session without it is offered no link and is routed to its landing page.
   patient is read, says "Loading records…" while the patient or the first
   page is read, and a failed read of the patient leaves it empty. It is
   read-only, five ARMC Boards a page, with no row action.
-- **The table**: Board Type, Outcome, Start Date, End Date, Medical Officer #1,
-  Medical Officer #2 — the ARMC Board Type by its label, in bold, the ARMC
-  Outcome as its badge ([the elements](#the-elements)), both dates
-  `dd MMM yyyy`, and both names as the source gave them; a code outside its set
-  as it came, the Outcome's on a neutral badge; a missing element "—" — the End
-  Date of a board still open among them — and one in the wrong format "Error",
-  the rest of the row as any other ([Shown as received](#shown-as-received)).
+- **The table**: a leading column of warnings, one on each row whose
+  [Mandatory element](#mandatory-elements) is missing or invalid and shown
+  only on a page where a row warns, then Board Type, Outcome, Start Date, End
+  Date, Medical Officer #1, Medical Officer #2 — the ARMC Board Type by its
+  label, in bold, the ARMC Outcome as its badge
+  ([the elements](#the-elements)), both dates `dd MMM yyyy`, and both names as
+  the source gave them; a code outside its set as it came, the Outcome's on a
+  neutral badge; a missing element "—" — the End Date of a board still open
+  among them — and one in the wrong format "Error", the rest of the row as any
+  other ([Shown as received](#shown-as-received)).
 - **The shared paged listing**: the numbered pager and "Showing x to y of N
   records", named on a single page too, the page shown held while the next
   loads.
@@ -335,6 +355,10 @@ backend's tests read the same stub files (`PatientSourceStubs`).
   | ACES            | FIT            | Error       | Error       | Dr Rajesh Kumar    | Dr Chen Mei Ling   |
   | aircrew         | waiver-granted | 16 Mar 2020 | 11 May 2020 | Dr Chen Mei Ling   | Dr Lim Wei Jie     |
   | ACES            | —              | —           | —           | —                  | —                  |
+
+  The first, its Outcome missing, the second, its Start Date invalid, and the
+  fourth, its Outcome and Start Date missing, carry a warning; the third, its
+  codes outside their sets, does not.
 
 - **Every other fixture** has none — Siti Nurhaliza binte Ahmad
   (`erXuFYUfucBZaryVksYEcMg3`) is the one the tests read — answered by
