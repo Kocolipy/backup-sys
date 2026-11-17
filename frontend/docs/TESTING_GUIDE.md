@@ -52,7 +52,7 @@ testing).
 
 `toHaveTextContent` is a **substring** match, so it passes on copy with extra
 text around the expected line — a stray suffix, a second notice. Anchor it
-(`toHaveTextContent(/^No widgets exist\.$/)`, `listing-body.test.tsx`) or
+(`toHaveTextContent(/^No records found\.$/)`, `listing-body.test.tsx`) or
 compare `textContent` with `toBe`, as `login.test.tsx` does.
 
 Playwright's `toHaveText` is exact by default, so E2E does not have this trap.

@@ -2,6 +2,7 @@ package com.example.backend.patient.controller;
 
 import com.example.backend.patient.domain.PatientMatch;
 import com.example.backend.patient.domain.PatientMatches;
+import java.time.LocalDate;
 import java.util.List;
 
 /**
@@ -24,19 +25,25 @@ public record PatientSearchPage(int totalResults, int startIndex, List<Row> pati
     /**
      * One match: the Patient's id — its EHR's FHIR id, which {@code GET /api/patient/{id}} reads
      * it by — its official name's text, its NRIC, its gender code, and its dates as
-     * {@code YYYY-MM-DD}, the Last visit {@code null} for a Patient with none.
+     * {@code YYYY-MM-DD}. A search reads each of its matches' five elements strictly (ADR 0018),
+     * so each is present. The Last visit is shown as received (ADR 0020): {@code null} for a
+     * Patient with none or one in the wrong format, and {@code invalid} names it in the second
+     * case.
+     *
+     * @param invalid the fields whose format was wrong: {@code lastVisit} or none
      */
     public record Row(String id, String name, String nric, String gender, String birthDate,
-            String lastVisit) {
+            String lastVisit, List<String> invalid) {
 
         static Row of(PatientMatch match) {
             return new Row(
                     match.patient().id().value(),
-                    match.patient().name().text(),
-                    match.patient().nric(),
-                    match.patient().gender().code(),
-                    match.patient().birthDate().toString(),
-                    match.lastVisit() == null ? null : match.lastVisit().toString());
+                    match.patient().name().text().value(),
+                    match.patient().nric().value(),
+                    match.patient().gender().value(),
+                    match.patient().birthDate().value().toString(),
+                    match.lastVisit().map(LocalDate::toString).value(),
+                    match.invalid());
         }
 
         /** A match is Restricted data: printed, it names the Patient by id alone. */

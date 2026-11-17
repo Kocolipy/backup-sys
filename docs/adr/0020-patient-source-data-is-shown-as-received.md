@@ -1,8 +1,8 @@
 ---
 type: Decision Record
 title: "ADR 0020: Patient-source data is shown as received"
-description: The patient source is the truth, so no record or response is refused for what a field holds — a missing field is shown as "—", one in the wrong format as "Error", a code outside its closed set as the raw code — while transport and structural failures still fail the read; the shared pieces each read adopts it through, enacted for the FFI, NUMC and Medication Histories, and the parts of ADR 0014, 0018 and 0019 it supersedes.
-tags: [patient, ffi, numc, medication, integration, observability, spa]
+description: The patient source is the truth, so no record or response is refused for what a field holds — a missing field is shown as "—", one in the wrong format as "Error", a code outside its closed set as the raw code — while transport and structural failures still fail the read; the shared pieces each read adopts it through, enacted for the FFI, NUMC, ARMC and Medication Histories, a Patient read by id and a Patient search's Last visit, and the parts of ADR 0014, 0018 and 0019 it supersedes.
+tags: [patient, ffi, numc, armc, medication, search, integration, observability, spa]
 ---
 
 # 20. Patient-source data is shown as received
@@ -12,11 +12,12 @@ Date: 2026-11-16
 ## Status
 
 Accepted. Enacted for the FFI History (`/docs/domain/ffi.md`), the NUMC
-History (`/docs/domain/numc.md`) and the Medication History
-(`/docs/domain/medication.md`). The other patient-source reads — the ARMC
-History, a Patient by id and a Patient search — keep the strict reading their
-ADRs describe until each adopts the shared pieces below; the rule is decided
-for all of them.
+History (`/docs/domain/numc.md`), the ARMC History (`/docs/domain/armc.md`),
+the Medication History (`/docs/domain/medication.md`), a Patient read by id —
+its NRIC, official name's text, gender and birth date — and a Patient search's
+Last visit (`/docs/domain/patient.md`). The other patient-source read — the
+rest of a Patient search's match — keeps the strict reading its ADR describes
+until it adopts the shared pieces below; the rule is decided for it too.
 
 ## Context
 
@@ -80,7 +81,11 @@ and ADR 0019, D4 have it: a malformed field sorts wherever the source puts it.
 - **The API's shape.** A patient-source field is nullable; a closed-set field is
   "a known code or any string" (`anyOf` the set's enum, any string, and
   `null`); and each row carries `invalid`, the names of its fields whose format
-  was wrong. A `null` field `invalid` does not name is missing.
+  was wrong. A `null` field `invalid` does not name is missing. A FHIR resource
+  — a Patient read by id — has no `null` and no element for `invalid`, so there
+  a field missing or in the wrong format is left out, and each one in the wrong
+  format is named by its path in the resource (`name[0].text`) in an extension
+  of the service's own, keeping the resource base R5 (ADR 0014).
 - **Observability.** One `WARN` per response that held invalid fields,
   `patient_source.invalid_fields`, listing each field's path in the source's
   answer (`entry[3].issueDate`) and never its value (ADR 0003), and the counter
@@ -114,15 +119,31 @@ and ADR 0019, D4 have it: a malformed field sorts wherever the source puts it.
 - ADR 0019, Consequences: a new code being "a `502`, not a row shown with a
   blank cell", and the source having to "send every required element".
 
-For each other read, as it adopts the rule:
+For the ARMC History:
+
+- ADR 0019, D6: an ARMC Board ending before it starts, a missing required
+  element, a blank Medical Officer or an unknown code being a failure of the
+  source, and a still-open board's End Date being left out of our answer
+  rather than sent `null`.
+- ADR 0019, D4: each rule an ARMC Board breaks being logged under a reason
+  naming ARMC — no ARMC Board breaks one.
+
+For a Patient read by id:
 
 - ADR 0014, "Only a `404` is no patient": a Patient with no NRIC, no official
   name or one with no text, no gender or an unknown code, or a birth date
   missing or not to the day being a failure of the source. Another patient's
-  id stays one: it is not the expected resource.
+  id stays one: it is not the expected resource, and the Patient's histories
+  are read by the id asked for, never one the Patient carries.
+
+For a Patient search's Last visit:
+
+- ADR 0018, D4: a Last visit not to the day being a failure of the source. The
+  rest of a search's match keeps ADR 0018's strict reading.
+
+For each other read, as it adopts the rule:
+
 - ADR 0018, D1: a search's entry with no `id` being a failure of the source.
-- ADR 0019, D6: an ARMC Board ending before it starts, a missing required
-  element or an unknown code being a failure of the source.
 
 ## Consequences
 

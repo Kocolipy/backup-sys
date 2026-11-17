@@ -25,6 +25,7 @@ import { cn } from "@/lib/utils";
 import {
   AUDIT_EVENTS,
   AUDIT_PAGE_SIZE,
+  countAuditFilters,
   EMPTY_AUDIT_FILTERS,
   type AuditEvent,
   type AuditOperation,
@@ -384,14 +385,11 @@ export function Audit() {
           {/* A refresh that failed hides the events last read, as every paged
               listing does: the trail is evidence, and rows it could not
               confirm are not shown as it. The header's Refresh stands in for
-              the listing's Try again. */}
+              the listing's Try again. With a filter applied, an empty
+              trail says no records match the filters. */}
           <PagedListing
-            copy={{
-              empty: "No audit events match the current filters.",
-              loading: "Loading audit events…",
-              noun: "events",
-              pagerLabel: "Audit trail pages",
-            }}
+            narrowing={countAuditFilters(applied) === 0 ? "none" : "filters"}
+            pagerLabel="Audit trail pages"
             read={reading}
             readAgain={false}
           >

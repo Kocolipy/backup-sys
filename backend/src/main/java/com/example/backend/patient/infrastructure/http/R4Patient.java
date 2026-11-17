@@ -1,5 +1,9 @@
 package com.example.backend.patient.infrastructure.http;
 
+import static com.example.backend.patient.infrastructure.http.ReceivedFields.day;
+import static com.example.backend.patient.infrastructure.http.ReceivedFields.text;
+
+import com.example.backend.observability.InvalidSourceFields;
 import com.example.backend.patient.domain.AdministrativeGender;
 import com.example.backend.patient.domain.Demographics;
 import com.example.backend.patient.domain.MilitaryHistory;
@@ -8,12 +12,13 @@ import com.example.backend.patient.domain.Patient;
 import com.example.backend.patient.domain.PatientId;
 import com.example.backend.patient.domain.PatientMatch;
 import com.example.backend.patient.domain.PatientName;
+import com.example.backend.patient.domain.SourceField;
 import com.example.backend.patient.infrastructure.http.PatientSourceException.Failure;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.time.LocalDate;
-import java.time.format.DateTimeParseException;
 import java.util.List;
-import java.util.Objects;
+import java.util.function.Predicate;
+import tools.jackson.databind.JsonNode;
 
 /**
  * The in-house patient source's FHIR R4 {@code Patient}, as far as the service reads it: the
@@ -24,11 +29,19 @@ import java.util.Objects;
  * <p>R4 and R5 agree on these elements (ADR 0014, "R5 on the wire"), so the mapping is a straight
  * copy: the {@code identifier} under the NRIC NamingSystem, the {@code name} whose {@code use} is
  * {@code official}, the {@code gender} and the {@code birthDate}. The Last visit is the source's
- * own extension ({@link #LAST_VISIT}, ADR 0018), a {@code valueDate} to the day. The Demographic
- * details are the first {@code phone} and {@code email} in {@code telecom}, the first {@code home}
- * {@code address}'s text, the first {@code contact} coded v2-0131 {@code N} with a name text, and
- * the military service extension ({@link #MILITARY_SERVICE}); an element without what its copy
- * needs is not copied.
+ * own extension ({@link #LAST_VISIT}, ADR 0018), a {@code valueDate} to the day, read as received
+ * (ADR 0020): bound as the raw JSON it arrived as, and present, missing or invalid. The
+ * Demographic details are the first {@code phone} and {@code email} in {@code telecom}, the first
+ * {@code home} {@code address}'s text, the first {@code contact} coded v2-0131 {@code N} with a
+ * name text, and the military service extension ({@link #MILITARY_SERVICE}); an element without
+ * what its copy needs is not copied.
+ *
+ * <p>A read by id copies the four as received (ADR 0020): the NRIC's value, the official name's
+ * text, the gender and the birth date are each bound as the raw JSON they arrived as and read by
+ * {@link ReceivedFields} — present, missing or invalid — so none fails the read, and only another
+ * patient's id does. A search keeps the strict reading ADR 0018 describes for the four: a match
+ * missing one, holding one in the wrong format or a gender outside the four codes fails the
+ * search. Its Last visit never does.
  *
  * @param resourceType the resource's type: a search's entry must be a {@code Patient}
  * @param id         the resource's id: the id it was read by, or in a search, a FHIR id of its own
@@ -36,15 +49,15 @@ import java.util.Objects;
  * @param identifier every identifier the source holds; only the NRIC is copied
  * @param name       every name the source holds; only the official one is copied
  * @param telecom    every contact point the source holds; the first phone and email are copied
- * @param gender     the administrative gender code
- * @param birthDate  the date of birth, which must be to the day
+ * @param gender     the administrative gender code, as the raw JSON it arrived as
+ * @param birthDate  the date of birth, a calendar date, as the raw JSON it arrived as
  * @param address    every address the source holds; the first home address's text is copied
  * @param contact    every contact the source holds; the first next of kin is copied
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 record R4Patient(
         String resourceType, String id, List<Extension> extension, List<Identifier> identifier,
-        List<HumanName> name, List<ContactPoint> telecom, String gender, String birthDate,
+        List<HumanName> name, List<ContactPoint> telecom, JsonNode gender, JsonNode birthDate,
         List<Address> address, List<Contact> contact) {
 
     /** The official name's {@code use}. */
@@ -65,11 +78,12 @@ record R4Patient(
 
     /**
      * The match this resource is, in a search's answer: a Patient under its own id, which must be
-     * there and a FHIR id, with its Last visit.
+     * there and a FHIR id, with its Last visit as received (ADR 0020) — missing when the source
+     * records none, invalid when it is no date to the day, and never refused for what it holds.
      *
      * @throws PatientSourceException when the resource is no Patient, has no id or one outside
-     *                                FHIR's grammar, breaks a rule a Patient must keep, or has a
-     *                                Last visit not to the day, naming which and quoting no value
+     *                                FHIR's grammar, or breaks a rule a Patient must keep, naming
+     *                                which and quoting no value
      */
     PatientMatch toMatch() {
         if (!"Patient".equals(resourceType)) {
@@ -77,35 +91,39 @@ record R4Patient(
         }
         PatientId own = new PatientId(
                 SourceSearchset.ownId(id, Failure.NO_ID, Failure.INVALID_ID));
-        return new PatientMatch(core(own), lastVisit());
-    }
-
-    /** The Last visit's date, or {@code null} when the source records none. */
-    private LocalDate lastVisit() {
-        Extension lastVisit = listed(extension).stream()
-                .filter(candidate -> LAST_VISIT.equals(candidate.url()))
-                .findFirst()
-                .orElse(null);
-        if (lastVisit == null) {
-            return null;
-        }
-        try {
-            return LocalDate.parse(Objects.requireNonNull(lastVisit.valueDate()));
-        } catch (DateTimeParseException | NullPointerException notToTheDay) {
-            throw PatientSourceException.failed(Failure.LAST_VISIT_NOT_TO_THE_DAY);
-        }
+        int lastVisit = lastVisitIndex();
+        return new PatientMatch(core(own),
+                lastVisit < 0 ? SourceField.missing() : day(extension.get(lastVisit).valueDate()));
     }
 
     /**
-     * The domain's Patient this resource is, read under {@code asked}, with its Demographic
-     * details.
+     * The fields of {@code match}, read from this resource, whose format was wrong, each by its
+     * path in this resource — {@code extension[1].valueDate} — beside the row's field it is
+     * ({@link PatientMatch#invalid()}).
+     */
+    List<InvalidSourceFields.Field> invalidFields(PatientMatch match) {
+        return match.invalid().stream()
+                .map(field -> new InvalidSourceFields.Field(
+                        "extension[" + lastVisitIndex() + "].valueDate", field))
+                .toList();
+    }
+
+    /** The place of the first Last visit extension, or -1 when there is none. */
+    private int lastVisitIndex() {
+        return indexOf(extension, candidate -> LAST_VISIT.equals(candidate.url()));
+    }
+
+    /**
+     * The domain's Patient this resource is, read under {@code asked} as received (ADR 0020),
+     * with its Demographic details: its NRIC, official name's text, gender and birth date each
+     * present, missing or invalid, and none refused for what it holds.
      *
-     * @throws PatientSourceException when the resource is another patient's, breaks a rule a
-     *                                Patient must keep, or has a military service date not to the
-     *                                day, naming which and quoting no value
+     * @throws PatientSourceException when the resource is another patient's, or has a military
+     *                                service date not to the day, naming which and quoting no
+     *                                value
      */
     Patient toPatient(PatientId asked) {
-        return core(asked).withDemographics(demographics());
+        return received(asked).withDemographics(demographics());
     }
 
     /** The Demographic details this resource holds; any the source does not hold are null. */
@@ -192,11 +210,11 @@ record R4Patient(
         if (date == null) {
             return null;
         }
-        try {
-            return LocalDate.parse(Objects.requireNonNull(date.valueDate()));
-        } catch (DateTimeParseException | NullPointerException notToTheDay) {
+        SourceField<LocalDate> day = day(date.valueDate());
+        if (!day.isPresent()) {
             throw PatientSourceException.failed(Failure.SERVICE_DATE_NOT_TO_THE_DAY);
         }
+        return day.value();
     }
 
     private static boolean present(String text) {
@@ -205,55 +223,99 @@ record R4Patient(
 
     /**
      * The domain's Patient of the five elements this resource is, under {@code asked}, with no
-     * Demographic details: what a search copies.
+     * Demographic details, each element as it was received (ADR 0020): the identifier under the
+     * NRIC NamingSystem's value, the official name — its text present, missing or invalid, its
+     * family and given names as they came — the gender's code and the birth date.
+     *
+     * @throws PatientSourceException when the resource is another patient's
      */
-    private Patient core(PatientId asked) {
+    private Patient received(PatientId asked) {
         if (!asked.value().equals(id)) {
             throw PatientSourceException.failed(Failure.ANOTHER_RESOURCE);
         }
+        int nric = nricIndex();
+        int official = officialNameIndex();
+        HumanName officialName = official < 0 ? null : name.get(official);
         return new Patient(
                 asked,
-                nric(),
-                officialName(),
-                AdministrativeGender.fromCode(gender).orElseThrow(() ->
-                        PatientSourceException.failed(Failure.NO_GENDER)),
-                dayOfBirth());
-    }
-
-    /** The date of birth, which must be there, and to the day. */
-    private LocalDate dayOfBirth() {
-        if (birthDate == null) {
-            throw PatientSourceException.failed(Failure.NO_BIRTH_DATE);
-        }
-        try {
-            return LocalDate.parse(birthDate);
-        } catch (DateTimeParseException notToTheDay) {
-            throw PatientSourceException.failed(Failure.BIRTH_DATE_NOT_TO_THE_DAY);
-        }
-    }
-
-    private String nric() {
-        return listed(identifier).stream()
-                .filter(candidate -> Patient.NRIC_SYSTEM.equals(candidate.system()))
-                .map(Identifier::value)
-                .filter(Objects::nonNull)
-                .findFirst()
-                .orElseThrow(() -> PatientSourceException.failed(Failure.NO_NRIC));
+                nric < 0 ? SourceField.missing() : text(identifier.get(nric).value()),
+                officialName == null ? null : new PatientName(text(officialName.text()),
+                        officialName.family(), officialName.given()),
+                text(gender),
+                day(birthDate),
+                Demographics.NONE);
     }
 
     /**
-     * The official name, which must have its text: the text is the name as the person writes it,
-     * and is never rebuilt from the family and given names, which many names do not split into.
+     * The fields of {@code patient}, read from this resource, whose format was wrong, each by its
+     * path in this answer — {@code identifier[1].value}, {@code name[2].text} — beside the element
+     * of the served {@code Patient} it is ({@link Patient#invalid()}).
      */
-    private PatientName officialName() {
-        HumanName official = listed(name).stream()
-                .filter(candidate -> OFFICIAL.equals(candidate.use()))
-                .findFirst()
-                .orElseThrow(() -> PatientSourceException.failed(Failure.NO_OFFICIAL_NAME));
-        if (official.text() == null || official.text().isBlank()) {
+    List<InvalidSourceFields.Field> invalidFields(Patient patient) {
+        return patient.invalidElements().stream()
+                .map(element -> new InvalidSourceFields.Field(pathOf(element), element.path()))
+                .toList();
+    }
+
+    /**
+     * Where in this answer the served {@code Patient}'s {@code element} was read from: the NRIC
+     * and the name text from the identifier and the name they were found in, each counted from
+     * zero, and the gender and the birth date where they are served.
+     */
+    private String pathOf(Patient.Element element) {
+        return switch (element) {
+            case NRIC -> "identifier[" + nricIndex() + "].value";
+            case NAME_TEXT -> "name[" + officialNameIndex() + "].text";
+            case GENDER, BIRTH_DATE -> element.path();
+        };
+    }
+
+    /**
+     * The domain's Patient of the five elements this resource is, under {@code asked}, with no
+     * Demographic details, read strictly: what a search copies, each element required.
+     *
+     * @throws PatientSourceException naming the first element the resource does not hold as a
+     *                                Patient must, or another patient's id, quoting no value
+     */
+    private Patient core(PatientId asked) {
+        Patient patient = received(asked);
+        if (!patient.nric().isPresent()) {
+            throw PatientSourceException.failed(Failure.NO_NRIC);
+        }
+        if (patient.name() == null) {
+            throw PatientSourceException.failed(Failure.NO_OFFICIAL_NAME);
+        }
+        if (!patient.name().text().isPresent()) {
             throw PatientSourceException.failed(Failure.NO_NAME_TEXT);
         }
-        return new PatientName(official.text(), official.family(), official.given());
+        if (AdministrativeGender.fromCode(patient.gender().orElse(null)).isEmpty()) {
+            throw PatientSourceException.failed(Failure.NO_GENDER);
+        }
+        return switch (patient.birthDate().received()) {
+            case PRESENT -> patient;
+            case MISSING -> throw PatientSourceException.failed(Failure.NO_BIRTH_DATE);
+            case INVALID -> throw PatientSourceException.failed(Failure.BIRTH_DATE_NOT_TO_THE_DAY);
+        };
+    }
+
+    /** The place of the first identifier under the NRIC NamingSystem, or -1 when there is none. */
+    private int nricIndex() {
+        return indexOf(identifier, candidate -> Patient.NRIC_SYSTEM.equals(candidate.system()));
+    }
+
+    /** The place of the first name whose {@code use} is {@code official}, or -1 when there is none. */
+    private int officialNameIndex() {
+        return indexOf(name, candidate -> OFFICIAL.equals(candidate.use()));
+    }
+
+    private static <T> int indexOf(List<T> elements, Predicate<T> wanted) {
+        List<T> listed = listed(elements);
+        for (int place = 0; place < listed.size(); place++) {
+            if (wanted.test(listed.get(place))) {
+                return place;
+            }
+        }
+        return -1;
     }
 
     private static <T> List<T> listed(List<T> elements) {
@@ -261,11 +323,11 @@ record R4Patient(
     }
 
     /**
-     * An R4 {@code Extension}: only its url, a {@code valueDate} or {@code valueString}, and the
-     * extensions nested in it are read.
+     * An R4 {@code Extension}: only its url, a {@code valueDate} — as the raw JSON it arrived as
+     * ({@link ReceivedFields}) — or {@code valueString}, and the extensions nested in it are read.
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
-    record Extension(String url, String valueDate, String valueString, List<Extension> extension) {
+    record Extension(String url, JsonNode valueDate, String valueString, List<Extension> extension) {
     }
 
     /** An R4 {@code ContactPoint}: only its system and value are read. */
@@ -295,20 +357,32 @@ record R4Patient(
 
     /** An R4 {@code Patient.contact}: only its relationships, name and contact points are read. */
     @JsonIgnoreProperties(ignoreUnknown = true)
-    record Contact(List<CodeableConcept> relationship, HumanName name, List<ContactPoint> telecom) {
+    record Contact(List<CodeableConcept> relationship, ContactName name,
+            List<ContactPoint> telecom) {
 
         boolean isNextOfKin() {
             return listed(relationship).stream().anyMatch(CodeableConcept::marksNextOfKin);
         }
     }
 
-    /** An R4 {@code Identifier}: only its system and value are read. */
+    /**
+     * An R4 {@code Identifier}: only its system and value are read, the value as the raw JSON it
+     * arrived as ({@link ReceivedFields}).
+     */
     @JsonIgnoreProperties(ignoreUnknown = true)
-    record Identifier(String system, String value) {
+    record Identifier(String system, JsonNode value) {
     }
 
-    /** An R4 {@code HumanName}: only its use, text, family and given names are read. */
+    /**
+     * An R4 {@code HumanName}: only its use, text, family and given names are read, the text as
+     * the raw JSON it arrived as ({@link ReceivedFields}).
+     */
     @JsonIgnoreProperties(ignoreUnknown = true)
-    record HumanName(String use, String text, String family, List<String> given) {
+    record HumanName(String use, JsonNode text, String family, List<String> given) {
+    }
+
+    /** An R4 {@code HumanName} as a contact's name: only its text is read. */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    record ContactName(String text) {
     }
 }

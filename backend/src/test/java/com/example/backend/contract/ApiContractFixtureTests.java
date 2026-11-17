@@ -312,8 +312,8 @@ class ApiContractFixtureTests {
     // ---- /api/patient/{id} --------------------------------------------------------------
 
     private static void patient(List<Fixture> all) {
-        add(all, "patient: GET as FHIR, an unknown id's and a failing source's OperationOutcomes,"
-                + " and the refusals", t -> {
+        add(all, "patient: GET as FHIR, with elements missing and invalid, an unknown id's and a"
+                + " failing source's OperationOutcomes, and the refusals", t -> {
             // Tan Wei Ming, as the patient source's mock serves him (PatientSourceStubs).
             String id = "eq081-VQEgP8drUUqCWzHfw3";
             // patient:read is a Group's to confer: a Medical Officer holds it through its Group,
@@ -325,6 +325,11 @@ class ApiContractFixtureTests {
             Cookie confined = t.logIn(t.provision(true), CONNECTOR_PASSWORD);
             t.expect(t.get("/api/patient/" + id).cookie(admin), 200);
             t.expect(t.get("/api/patient/" + id).cookie(user), 200);
+            // Shown as received (ADR 0020): each received stub holds an element missing, and
+            // one holds its four in the wrong format, each named by an invalid-field extension.
+            for (PatientSourceStubs.ReceivedStub received : PatientSourceStubs.received()) {
+                t.expect(t.get("/api/patient/" + received.id()).cookie(user), 200);
+            }
             t.expect(t.get("/api/patient/not-a-uuid").cookie(user), 404);
             t.expect(t.get("/api/patient/" + "x".repeat(65)).cookie(user), 400);
             // The patient source failing: the mock's fault stub answering 503.
@@ -350,6 +355,8 @@ class ApiContractFixtureTests {
             Cookie confined = t.logIn(t.provision(true), CONNECTOR_PASSWORD);
             t.expect(t.get("/api/patient-search?q=tan&count=5").cookie(user), 200);
             t.expect(t.get("/api/patient-search?q=s9212345a&count=5").cookie(user), 200);
+            // A match whose Last visit is not to the day: null, and named in its invalid.
+            t.expect(t.get("/api/patient-search?q=S9912345B&count=5").cookie(user), 200);
             t.expect(t.get("/api/patient-search?q=tan&count=5&gender=male").cookie(user), 200);
             t.expect(t.get("/api/patient-search?q=ta").cookie(user), 400);
             t.expect(t.get("/api/patient-search?q=tan&count=five").cookie(user), 400);
@@ -456,11 +463,14 @@ class ApiContractFixtureTests {
 
     private static void patientArmc(List<Fixture> all) {
         add(all, "patient ARMC History: a page of ARMC Boards, one still open, sorted and"
-                + " filtered, a patient with none, an unknown patient, a malformed id, a filter or"
-                + " sort it cannot take, a failing source, and the refusals", t -> {
+                + " filtered, one with fields missing, invalid and outside their closed sets, a"
+                + " patient with none, an unknown patient, a malformed id, a filter or sort it"
+                + " cannot take, a failing source, and the refusals", t -> {
             // patient:read is a Group's to confer, as for an FFI History. The histories are the
             // patient source's mock's (PatientSourceStubs): Tan Wei Ming has two ARMC Boards,
-            // Tan Hui Min seven, the first still open, Siti Nurhaliza binte Ahmad none.
+            // Tan Hui Min seven, the first still open, Tan Boon Huat four shown as received
+            // (ADR 0020) — fields missing and invalid, codes outside their closed sets, an id
+            // outside FHIR's grammar and none — and Siti Nurhaliza binte Ahmad none.
             Cookie user = t.medicalOfficer(t.logIn(ADMIN, ADMIN_PASSWORD));
             Cookie inNoGroup = t.settle(t.provision(true));
             Cookie confined = t.logIn(t.provision(true), CONNECTOR_PASSWORD);
@@ -471,6 +481,7 @@ class ApiContractFixtureTests {
                     200);
             t.expect(t.get("/api/patient-armc/dev-patient-05?count=5&endDateFrom=2023-01-01")
                     .cookie(user), 200);
+            t.expect(t.get("/api/patient-armc/dev-patient-10?count=5").cookie(user), 200);
             t.expect(t.get("/api/patient-armc/erXuFYUfucBZaryVksYEcMg3?count=5").cookie(user),
                     200);
             t.expect(t.get("/api/patient-armc/not-a-uuid").cookie(user), 404);

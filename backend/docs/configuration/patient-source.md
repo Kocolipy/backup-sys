@@ -57,8 +57,13 @@ subset of it.
 `compose.yaml`'s `patient-source` service is WireMock (`wiremock/wiremock`,
 pinned by tag and digest, the same release as the backend's test dependency)
 serving `patient-source-mock/mappings` on **`127.0.0.1:8104`**: FHIR R4
-`Patient/{id}` for the development fixtures, a `404` for any other
-well-formed id, and the search set below. It has no profile, so `make infra-up` and
+`Patient/{id}` for the development fixtures, for the received stubs — a
+Patient each, shown as received (ADR 0020): `received-no-nric`,
+`received-no-official-name`, `received-no-name-text`, `received-no-gender` and
+`received-no-birth-date` each lack that element, and `received-wrong-format`
+holds its NRIC, its official name's text, its gender and its birth date in the
+wrong format — and for the fault stubs, a `404` for any other well-formed id,
+and the search set below. It has no profile, so `make infra-up` and
 `make integration-test` start it beside SQL Server and Redis, healthy when
 WireMock's `/__admin/health` answers. `.env.example` points the backend at it:
 
@@ -80,20 +85,23 @@ exact value or, where the search uses none, to absent — so it answers the
 SPA's five-a-page reads. Every `tan` search is `name:contains=tan`, any case,
 and `_offset=0` unless named.
 
-| Stub file                | Search                                                            | Answers                                                       |
-| ------------------------ | ----------------------------------------------------------------- | ------------------------------------------------------------- |
-| `search-name-tan-page-1` | `tan`                                                             | 5 of `total: 7`                                               |
-| `search-name-tan-page-2` | `tan`, `_offset=5`                                                | the last 2 of `total: 7`, the Patient with no Last visit last |
-| `search-name-tan-male`   | `tan`, `gender=male`                                              | `total: 3`                                                    |
-| `search-name-tan-female` | `tan`, `gender=female`                                            | `total: 4`                                                    |
-| `search-nric`            | `identifier=https://fhir.synapxe.sg/NamingSystem/nric\|S9212345A` | Siti Nurhaliza binte Ahmad, `total: 1`                        |
-| `search-no-match`        | `name:contains=nobody`                                            | no entry, `total: 0`                                          |
-| `search-fallback`        | any other `/Patient` search, at a lower priority                  | no entry, `total: 0`                                          |
+| Stub file                               | Search                                                            | Answers                                                                |
+| --------------------------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `search-name-tan-page-1`                | `tan`                                                             | 5 of `total: 7`                                                        |
+| `search-name-tan-page-2`                | `tan`, `_offset=5`                                                | the last 2 of `total: 7`, the Patient with no Last visit last          |
+| `search-name-tan-male`                  | `tan`, `gender=male`                                              | `total: 3`                                                             |
+| `search-name-tan-female`                | `tan`, `gender=female`                                            | `total: 4`                                                             |
+| `search-nric`                           | `identifier=https://fhir.synapxe.sg/NamingSystem/nric\|S9212345A` | Siti Nurhaliza binte Ahmad, `total: 1`                                 |
+| `search-nric-last-visit-not-to-the-day` | `identifier=https://fhir.synapxe.sg/NamingSystem/nric\|S9912345B` | Rajesh Kumar, `total: 1`, his Last visit `2026-10`, to the month alone |
+| `search-no-match`                       | `name:contains=nobody`                                            | no entry, `total: 0`                                                   |
+| `search-fallback`                       | any other `/Patient` search, at a lower priority                  | no entry, `total: 0`                                                   |
 
 A gender filter on any other search or page falls to `search-fallback`.
 
 Each Patient carries its Last visit as the `last-visit` extension, a
-`valueDate`, as the source does (ADR 0018).
+`valueDate`, as the source does (ADR 0018); the backend shows one not to the
+day as received (ADR 0020), so Rajesh Kumar's search is answered, his Last
+visit invalid.
 
 ```bash
 curl -s 'http://127.0.0.1:8104/Patient?name:contains=tan&_count=5&_offset=0&_total=accurate'
@@ -194,30 +202,30 @@ D6; `/docs/domain/armc.md`, "The source contract"). The mock answers a
 FHIR-shaped searchset of `ARMC` objects, matched on `_count=5`, `_offset`,
 `_total=accurate`, the `_sort` and each filter, pinned or absent:
 
-| Stub file                                    | Read                                                           | Answers                                                  |
-| -------------------------------------------- | -------------------------------------------------------------- | -------------------------------------------------------- |
-| `armc-tan-wei-ming`                          | `eq081-VQEgP8drUUqCWzHfw3`                                     | Tan Wei Ming's 2 ARMC Boards, `total: 2`                 |
-| `armc-tan-wei-ming-by-start-date`            | Tan Wei Ming, `_sort=start-date`                               | his 2, earliest Start Date first                         |
-| `armc-tan-wei-ming-by-start-date-descending` | Tan Wei Ming, `_sort=-start-date`                              | his 2, latest Start Date first                           |
-| `armc-tan-wei-ming-by-end-date`              | Tan Wei Ming, `_sort=end-date`                                 | his 2, earliest End Date first                           |
-| `armc-tan-wei-ming-by-end-date-descending`   | Tan Wei Ming, `_sort=-end-date`                                | his 2, latest End Date first                             |
-| `armc-tan-hui-min-page-1`                    | `dev-patient-05`                                               | 5 of `total: 7`, the first still open, with no `endDate` |
-| `armc-tan-hui-min-page-2`                    | `dev-patient-05`, `_offset=5`                                  | the last 2 of `total: 7`                                 |
-| `armc-tan-hui-min-fit`                       | Tan Hui Min, `outcome=fit`                                     | `total: 4`, the open board among them                    |
-| `armc-tan-hui-min-unfit`                     | Tan Hui Min, `outcome=unfit`                                   | `total: 3`                                               |
-| `armc-tan-hui-min-started-2023`              | Tan Hui Min, `start-date=ge2023-01-01&start-date=le2023-12-31` | `total: 2`                                               |
-| `armc-tan-hui-min-ended-from-2023`           | Tan Hui Min, `end-date=ge2023-01-01`                           | `total: 3`: the open board left out                      |
-| `armc-tan-hui-min-fit-started-from-2023`     | Tan Hui Min, `outcome=fit&start-date=ge2023-01-01`             | `total: 3`: two filters combined                         |
-| `armc-tan-hui-min-started-to-2019`           | Tan Hui Min, `start-date=le2019-12-31`                         | no entry, `total: 0`: a filter matching nothing          |
-| `armc-fallback`                              | any other read of a development fixture's, lower priority      | no entry, `total: 0`                                     |
-| `armc-not-found`                             | any other well-formed id, lowest priority                      | `404`, as a read by id of an unknown id                  |
+| Stub file                                    | Read                                                           | Answers                                                                                                                                                                                          |
+| -------------------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `armc-tan-wei-ming`                          | `eq081-VQEgP8drUUqCWzHfw3`                                     | Tan Wei Ming's 2 ARMC Boards, `total: 2`                                                                                                                                                         |
+| `armc-tan-wei-ming-by-start-date`            | Tan Wei Ming, `_sort=start-date`                               | his 2, earliest Start Date first                                                                                                                                                                 |
+| `armc-tan-wei-ming-by-start-date-descending` | Tan Wei Ming, `_sort=-start-date`                              | his 2, latest Start Date first                                                                                                                                                                   |
+| `armc-tan-wei-ming-by-end-date`              | Tan Wei Ming, `_sort=end-date`                                 | his 2, earliest End Date first                                                                                                                                                                   |
+| `armc-tan-wei-ming-by-end-date-descending`   | Tan Wei Ming, `_sort=-end-date`                                | his 2, latest End Date first                                                                                                                                                                     |
+| `armc-tan-hui-min-page-1`                    | `dev-patient-05`                                               | 5 of `total: 7`, the first still open, with no `endDate`                                                                                                                                         |
+| `armc-tan-hui-min-page-2`                    | `dev-patient-05`, `_offset=5`                                  | the last 2 of `total: 7`                                                                                                                                                                         |
+| `armc-tan-hui-min-fit`                       | Tan Hui Min, `outcome=fit`                                     | `total: 4`, the open board among them                                                                                                                                                            |
+| `armc-tan-hui-min-unfit`                     | Tan Hui Min, `outcome=unfit`                                   | `total: 3`                                                                                                                                                                                       |
+| `armc-tan-hui-min-started-2023`              | Tan Hui Min, `start-date=ge2023-01-01&start-date=le2023-12-31` | `total: 2`                                                                                                                                                                                       |
+| `armc-tan-hui-min-ended-from-2023`           | Tan Hui Min, `end-date=ge2023-01-01`                           | `total: 3`: the open board left out                                                                                                                                                              |
+| `armc-tan-hui-min-fit-started-from-2023`     | Tan Hui Min, `outcome=fit&start-date=ge2023-01-01`             | `total: 3`: two filters combined                                                                                                                                                                 |
+| `armc-tan-hui-min-started-to-2019`           | Tan Hui Min, `start-date=le2019-12-31`                         | no entry, `total: 0`: a filter matching nothing                                                                                                                                                  |
+| `armc-tan-boon-huat`                         | `dev-patient-10`                                               | Tan Boon Huat's 4, `total: 4`, shown as received: elements missing, malformed and outside their closed sets, an End Date before its Start Date and a blank Medical Officer among them (ADR 0020) |
+| `armc-fallback`                              | any other read of a development fixture's, lower priority      | no entry, `total: 0`                                                                                                                                                                             |
+| `armc-not-found`                             | any other well-formed id, lowest priority                      | `404`, as a read by id of an unknown id                                                                                                                                                          |
 
 Beside them, `fault-armc-<failure>` answers each failure of an ARMC read under a
 patient id of its own — `unreachable` (the connection reset), `slow` (after 7
 seconds), `server-error` (`503`), `unexpected-status` (`400`),
-`not-a-searchset`, `no-total`, `no-id`, `invalid-id`, `no-outcome`,
-`no-medical-officer-2`, `unknown-board-type`, `unknown-outcome`,
-`end-before-start` and `end-date-not-to-the-day`.
+`not-a-searchset` and `no-total`. What an ARMC Board holds is never a failure:
+Tan Boon Huat's page carries it.
 
 ```bash
 curl -s 'http://127.0.0.1:8104/Patient/eq081-VQEgP8drUUqCWzHfw3/armc?_offset=0&_count=5&_total=accurate'

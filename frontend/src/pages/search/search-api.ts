@@ -13,13 +13,17 @@ import type { ReadDeclaration } from "@/auth/declarations";
 import { calendarDate, jsonDecoder, readObject } from "@/lib/decode";
 import { pageDecoder, pagedPath, type Page, type PageAt } from "@/lib/paging";
 import { PATIENT_GENDERS, type PatientGender } from "@/lib/patient-gender";
+import type { SourceField } from "@/lib/source-field";
+import { isCalendarDate } from "@/lib/time";
 
 /**
  * One Patient a search matched, as the backend answers it: the Patient's id
  * (its EHR's FHIR id, the id `GET /api/patient/{id}` reads it by), which the
  * page keeps but never shows, the official name's text, the full NRIC, the
- * gender code, the date of birth and the Last visit, each date `YYYY-MM-DD`,
- * and the Last visit `null` for a Patient with none.
+ * gender code, the date of birth and the Last visit, each date `YYYY-MM-DD`.
+ * The five are read strictly (ADR 0018); the Last visit is shown as the
+ * patient source sent it (ADR 0020): present, missing for a Patient with
+ * none, or in the wrong format.
  */
 export interface PatientMatch {
   id: string;
@@ -27,7 +31,7 @@ export interface PatientMatch {
   nric: string;
   gender: PatientGender;
   birthDate: string;
-  lastVisit: string | null;
+  lastVisit: SourceField<string>;
 }
 
 const PATIENT_SEARCH_PATH = "/api/patient-search";
@@ -54,11 +58,11 @@ export function parsePatientQuery(typed: string): ParsedPatientQuery {
   return { message: `Enter at least ${SHORTEST_NAME} characters to search by name.`, ok: false };
 }
 
-/** A FHIR `date` to the day, as the backend sends a Patient's dates; `null` stays `null`. */
-function nullableCalendarDate(value: string | null, what: string): string | null {
-  return value === null ? null : calendarDate(value, what);
-}
-
+/**
+ * A match, its five elements read strictly — each there, of its type, the date
+ * of birth a calendar date — and its Last visit leniently, by the lenient
+ * field decoder: a calendar date, missing or invalid, never refusing the match.
+ */
 export const decodePatientMatch = (value: unknown): PatientMatch => {
   const patient = readObject(value, "PatientMatch");
   const birthDate = calendarDate(patient.string("birthDate"), "PatientMatch.birthDate");
@@ -68,7 +72,7 @@ export const decodePatientMatch = (value: unknown): PatientMatch => {
     nric: patient.string("nric"),
     gender: patient.oneOf("gender", PATIENT_GENDERS),
     birthDate,
-    lastVisit: nullableCalendarDate(patient.nullableString("lastVisit"), "PatientMatch.lastVisit"),
+    lastVisit: patient.sourceFields().read("lastVisit", isCalendarDate),
   };
 };
 

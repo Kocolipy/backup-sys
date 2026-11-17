@@ -90,14 +90,20 @@ and decoders — and imports no hook (`lb-api-modules-are-data`).
   patient source's own order — every heading is a `PlainHeading`. A change of
   the filter reads from the first page. A failure is reported on the page's
   line, with a Retry that reads the same page again. Each row keeps the
-  Patient's id, which it never shows.
+  Patient's id, which it never shows. The Last Visit cell is shown as
+  received through `shown` (ADR 0020): its date, "—" when missing, "Error"
+  when invalid.
 - `home/home.tsx` — Home: the Patient card alone. The landing page of a
   session without `patient:read`, linked from no sidebar.
 - `patient-card.tsx` — the Patient card, a part Home and the Demographic page
   share, rendered from `usePatientInContext()`: "No patient in context" for
   none or a `404`, "Loading the patient…", an empty card for a failure (its
   copy is on the error line), or the banner. Every field renders as a plain
-  text node; the age is computed from the card's injectable `Clock`.
+  text node, shown as received through `shown` — its value, "—" when missing,
+  "Error" when invalid, a gender outside the four codes by `labelled` as its
+  code; the age is computed from the card's injectable `Clock`, and follows the
+  date of birth, "—" or "Error" as it is. The top bar names the patient by
+  name and NRIC on the same rule.
 - `demographic/demographic.tsx` — the Demographic page, guarded by
   `patient:read`, which Patient Search opens on selecting a result: the
   Patient card, then the Demographic details.
@@ -113,9 +119,10 @@ and decoders — and imports no hook (`lb-api-modules-are-data`).
   once inside its page status, reads `GET /api/patient/{id}` through `PATIENT`
   (opting in to `absent`, a `403` reported as failure) for the EHR context's
   patient, decoding the R5 `Patient` (typed by `@types/fhir`'s `fhir5`) down
-  to the fields shown, the Demographic details and the id the history pages
-  read by; with none in
-  context it reads nothing.
+  to the fields shown, each a `SourceField` (ADR 0020), and the Demographic
+  details; the patient it hands on carries the id it was asked for — the EHR
+  context's — which the history pages read by, never one the Patient carries.
+  With none in context it reads nothing.
   - A new id is a new path, so a new first read, and a late answer for the id
     before never lands. A failure is reported to the page's error line once,
     by this read.
@@ -130,10 +137,10 @@ and decoders — and imports no hook (`lb-api-modules-are-data`).
     `mb-pages-do-not-import-the-shell` rules out `src/shell/`, and
     `mb-pages-do-not-import-another-page` a page folder.
 - `for-patient-in-context.tsx` — the part of a history page the patient in
-  context decides. `ForPatientInContext` is handed the page's history and its
-  loading copy: with none in context, a `404` for the id there, or a session
-  without `patient:read`, `NoPatientInContext` ("No patient in context") and
-  no history; while the patient is read, the loading copy in a `status`; a
+  context decides. `ForPatientInContext` is handed the page's history: with
+  none in context, a `404` for the id there, or a session without
+  `patient:read`, `NoPatientInContext` ("No patient in context") and no
+  history; while the patient is read, "Loading records…" in a `status`; a
   failed read, nothing, its copy on the error line; and once read, the history
   of that patient, by its id, keyed by it. A history whose own read answers
   `absent` renders `NoPatientInContext` too.
@@ -152,7 +159,11 @@ guarded by, `patient:read`, is read-only with no row action, and:
   (`src/lib/decode.ts`), an optional element through `optionalString` — absent
   when the source lacks it, shown as `—` — and each closed set as a `Record`
   of labels keyed by its codes, so a code added fails typecheck until it has a
-  label;
+  label. FFI, NUMC and ARMC, shown as received (ADR 0020), decode their rows'
+  shape strictly and each field's value through `readObject(…).sourceFields()`,
+  each cell through `shown` and each code's label or badge through `byCode`
+  (`src/lib/source-field.ts`): "—" for a missing field, "Error" for one in the
+  wrong format, the raw code for one outside its set;
 - sorts by its two date columns through `SortHeading`, every other column a
   `PlainHeading`, and with no column sorted sends no `sortBy`, so the source's
   own order applies;
@@ -176,14 +187,14 @@ and scrolls sideways in its own container.
 - `filtered-history.tsx` — `FilteredHistory`, the filtered, sorted listing
   every history page renders once the patient in context is read. Each page
   hands it its paged declaration, its page size, its Filter panel, its
-  no-filter value and filter count, its copy and its table. It holds the
-  filters and the sort as component state alone, never the URL, so a new
+  no-filter value and filter count, its failure copy and pager label, and its
+  table. It holds the filters and the sort as component state alone, never the URL, so a new
   patient in context starts with neither; reads through `usePagedRead`, a
   change of either from the first page; and renders the Filter panel above the
   shared `PagedListing`, its range named on a single page too. A `404` is
-  `NoPatientInContext`; with a filter applied, an empty history gives the
-  page's "match the filters" copy; and the table is told while a read is
-  pending, so its sort headings hold still.
+  `NoPatientInContext`; with a filter applied, the listing is narrowed by
+  filters, so an empty history says "No records match the filters."; and the
+  table is told while a read is pending, so its sort headings hold still.
 - `history-api.ts`, `history-filter-popover.tsx` — what the histories share,
   naming no history's column. Each history's `*-api.ts` **declares its date
   columns** (`FFI_DATE_COLUMNS`, …), each a `DateColumn` (`lib/date-range.ts`):
@@ -226,26 +237,32 @@ and scrolls sideways in its own container.
 - `paged-listing.tsx` — the one paged listing, which every paged read renders
   through: the listing body, the pager and "Try again", around the rows the
   page renders as its own table or list. It decides, once, for every page:
-  rows a failed re-read could not confirm are hidden; the empty line comes
-  from `page-empty-copy.ts`; the pager shows for the page the latest read
-  stated for the current path and never while a first read is in flight or
-  after one failed with nothing read; and "Try again" re-reads the current
-  path through the read's `reload`, keeping the page shown. Filters, search
+  rows a failed re-read could not confirm are hidden; the loading and empty
+  copy come from the caller's `narrowing` alone (`listing-copy.ts`); the pager
+  shows for the page the latest read stated for the current path and never
+  while a first read is in flight or after one failed with nothing read; and
+  "Try again" re-reads the current path through the read's `reload`, keeping
+  the page shown. Filters, search
   boxes and toolbars stay the page's.
+- `listing-copy.ts` — what every listing says of its rows, in one place: the
+  loading and empty copy of each `Narrowing` (none, filters, search, or the
+  Search page's `patient-search`) and the pager's count of records. No caller
+  passes copy of its own.
 - `listing-body.tsx` — the one listing body, with the loading, empty and
-  failed states of `DESIGN.md` ("Loading & empty states"). Each caller names
-  its `staleRows` choice: Connectors keeps the last rows, and
-  `paged-listing.tsx` hides them. Its `ReadAgain` is the one "Try again",
+  failed states of `DESIGN.md` ("Loading & empty states"), its copy chosen by
+  the caller's `narrowing`. Each caller names its `staleRows` choice:
+  Connectors keeps the last rows, and `paged-listing.tsx` hides them. Its `ReadAgain` is the one "Try again",
   offered only once the latest read was refused or failed.
 - `pager.tsx`, `pager-move.tsx`, `page-empty-copy.ts` — the one pager, which
-  `paged-listing.tsx` places: the position line, « and » each disabled at its
-  end, a number per page, and nothing while every row sits on the first page
-  unless the listing asks for its range named anyway (`onePage="shown"`).
+  `paged-listing.tsx` places: the position line in records ("Showing 1 to 20
+  of 45 records", "… of 1 record"), « and » each disabled at its end, a
+  number per page, and nothing while every row sits on the first page unless
+  the listing asks for its range named anyway (`onePage="shown"`).
   `PagerMove` is one of its buttons, a `Button` rather than shadcn's
   `PaginationLink`, whose `<a>` would have no `href` because paging is
   component state rather than a URL. `page-empty-copy.ts` chooses the body's
   empty line: a later page says it emptied, where the first gives the
-  listing's own copy.
+  listing's empty copy.
 - `sort-heading.tsx` — the sortable column heading: `aria-sort`, a direction
   icon, and a press that sorts its column ascending first, then toggles
   descending → ascending → …, never returning a sorted column to the listing's

@@ -11,6 +11,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import com.example.backend.audit.CapturedLog;
+import com.example.backend.observability.LogEvent;
 import com.example.backend.observability.LogEvent.ErrorCategory;
 import com.example.backend.observability.RedactedFaultException;
 import com.example.backend.patient.PatientSourceStubs;
@@ -27,9 +31,11 @@ import com.example.backend.patient.domain.PatientMatch;
 import com.example.backend.patient.domain.PatientName;
 import com.example.backend.patient.domain.PatientQuery;
 import com.example.backend.patient.domain.PatientStore;
+import com.example.backend.patient.domain.SourceField;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import com.github.tomakehurst.wiremock.verification.LoggedRequest;
+import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.IOException;
@@ -45,7 +51,9 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.TreeMap;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
@@ -450,29 +458,13 @@ class PatientSourceAdapterContractTests extends PatientStoreContract {
     }
 
     /**
-     * Each fault stub that answers at once, as the fault it is: its message, the failure or
-     * the broken rule it names, and its category — a {@code 5xx} the source's failure, a Patient
-     * breaking a domain rule an answer the service cannot use. The official name with no text is
-     * a fault although it has a family and given names: the text is never rebuilt from them.
+     * Each fault stub that answers at once, as the fault it is: its message, the failure it
+     * names, and its category — a {@code 5xx} the source's failure.
      */
     static Stream<Arguments> faultStubs() {
         return Stream.of(
                 arguments("fault-server-error", new Fault(
-                        "The patient source answered 503", "server-error", ErrorCategory.SERVER)),
-                arguments("fault-no-nric", new Fault(
-                        "The patient source's Patient has no NRIC", "no-nric", ErrorCategory.DATA)),
-                arguments("fault-no-official-name", new Fault(
-                        "The patient source's Patient has no official name", "no-official-name",
-                        ErrorCategory.DATA)),
-                arguments("fault-no-name-text", new Fault(
-                        "The patient source's Patient's official name has no text",
-                        "no-name-text", ErrorCategory.DATA)),
-                arguments("fault-no-gender", new Fault(
-                        "The patient source's Patient has no gender", "no-gender",
-                        ErrorCategory.DATA)),
-                arguments("fault-no-birth-date", new Fault(
-                        "The patient source's Patient has no birth date", "no-birth-date",
-                        ErrorCategory.DATA)));
+                        "The patient source answered 503", "server-error", ErrorCategory.SERVER)));
     }
 
     @ParameterizedTest
@@ -513,50 +505,18 @@ class PatientSourceAdapterContractTests extends PatientStoreContract {
 
     /**
      * A {@code 200} whose body is not a Patient the service can hold, each as its fault reports
-     * it: another patient's, one with no NRIC (none at all, one under another system, or the
-     * NRIC's with no value), no official name (none at all, or another use only), an official name
-     * with no text (a blank one, or none beside a family name), no gender or one outside the four
-     * codes, no birth date or one not to the day — each a broken rule, reported as {@code data} —
-     * no Patient at all, and no JSON at all.
+     * it: another patient's — every read of this patient is made by the id asked for, so an id
+     * differing only by case is another — one with a military service date not to the day, no
+     * Patient at all, and no JSON at all, each reported as {@code data}.
      */
     static Stream<Arguments> bodiesTheServiceCannotHold() {
         Fault anotherResource = rule("The patient source answered with another resource",
                 "another-resource");
-        Fault noNric = rule("The patient source's Patient has no NRIC", "no-nric");
-        Fault noOfficialName = rule("The patient source's Patient has no official name",
-                "no-official-name");
-        Fault noNameText = rule("The patient source's Patient's official name has no text",
-                "no-name-text");
-        Fault noGender = rule("The patient source's Patient has no gender", "no-gender");
         return Stream.of(
                 arguments("{\"id\": \"another-patient\", " + joined(NRIC_IDENTIFIER,
                         OFFICIAL_NAME, GENDER, BIRTH_DATE) + "}", anotherResource),
-                arguments(probe(joined(OFFICIAL_NAME, GENDER, BIRTH_DATE)), noNric),
-                arguments(probe(joined(
-                        "\"identifier\": [{\"system\": \"urn:oid:1.2.3\", \"value\": \"T7391046Q\"}]",
-                        OFFICIAL_NAME, GENDER, BIRTH_DATE)), noNric),
-                arguments(probe(joined(
-                        "\"identifier\": [{\"system\": \"https://fhir.synapxe.sg/NamingSystem/nric\"}]",
-                        OFFICIAL_NAME, GENDER, BIRTH_DATE)), noNric),
-                arguments(probe(joined(NRIC_IDENTIFIER, GENDER, BIRTH_DATE)), noOfficialName),
-                arguments(probe(joined(NRIC_IDENTIFIER,
-                        "\"name\": [{\"use\": \"usual\", \"text\": \"Quah Seow Peng\"}]",
-                        GENDER, BIRTH_DATE)), noOfficialName),
-                arguments(probe(joined(NRIC_IDENTIFIER,
-                        "\"name\": [{\"use\": \"official\", \"family\": \"Quah\"}]",
-                        GENDER, BIRTH_DATE)), noNameText),
-                arguments(probe(joined(NRIC_IDENTIFIER,
-                        "\"name\": [{\"use\": \"official\", \"text\": \" \", \"family\": \"Quah\"}]",
-                        GENDER, BIRTH_DATE)), noNameText),
-                arguments(probe(joined(NRIC_IDENTIFIER, OFFICIAL_NAME, BIRTH_DATE)), noGender),
-                arguments(probe(joined(NRIC_IDENTIFIER, OFFICIAL_NAME, "\"gender\": \"F\"",
-                        BIRTH_DATE)), noGender),
-                arguments(probe(joined(NRIC_IDENTIFIER, OFFICIAL_NAME, GENDER)),
-                        rule("The patient source's Patient has no birth date", "no-birth-date")),
-                arguments(probe(joined(NRIC_IDENTIFIER, OFFICIAL_NAME, GENDER,
-                        "\"birthDate\": \"1963-07\"")),
-                        rule("The patient source's Patient's birth date is not to the day",
-                                "birth-date-not-to-the-day")),
+                arguments("{\"id\": \"PROBE-q7xkd2.v9\", " + joined(NRIC_IDENTIFIER,
+                        OFFICIAL_NAME, GENDER, BIRTH_DATE) + "}", anotherResource),
                 arguments(probe(joined(NRIC_IDENTIFIER, OFFICIAL_NAME, GENDER, BIRTH_DATE,
                         military("{\"url\": \"ordDate\", \"valueDate\": \"2020-01\"}"))),
                         rule("The patient source's Patient's military service date is not to the"
@@ -578,14 +538,206 @@ class PatientSourceAdapterContractTests extends PatientStoreContract {
         assertThat(faultReading(patients(), PROBE)).isEqualTo(expected);
     }
 
-    /** The body above with every element a Patient needs is one: the cases differ by one each. */
-    @Test
-    void aBodyWithEveryElementAPatientNeedsIsAPatient() {
-        answering(PROBE, probe(joined(NRIC_IDENTIFIER, OFFICIAL_NAME, GENDER, BIRTH_DATE)));
+    // ---- a Patient as received -------------------------------------------------------------
 
-        assertThat(patients().findById(PROBE)).contains(new Patient(PROBE, "T7391046Q",
-                new PatientName("Quah Seow Peng", null, List.of()), AdministrativeGender.FEMALE,
-                LocalDate.of(1963, 7, 29)));
+    /** The probe as its body with every element is read: each element present. */
+    private static final Patient READ = new Patient(PROBE, "T7391046Q",
+            new PatientName("Quah Seow Peng", null, List.of()), AdministrativeGender.FEMALE,
+            LocalDate.of(1963, 7, 29));
+
+    /** The probe's body with these members, an empty one left out. */
+    private static String probeWith(String nric, String name, String gender, String birthDate) {
+        return probe(String.join(", ", Stream.of(nric, name, gender, birthDate)
+                .filter(member -> !member.isEmpty()).toList()));
+    }
+
+    private Patient reading(String body) {
+        answering(PROBE, body);
+        return patients().findById(PROBE).orElseThrow();
+    }
+
+    /** The body above with every element is the Patient, each element present. */
+    @Test
+    void aBodyWithEveryElementIsReadWithEachPresent() {
+        assertThat(reading(probeWith(NRIC_IDENTIFIER, OFFICIAL_NAME, GENDER, BIRTH_DATE)))
+                .isEqualTo(READ);
+    }
+
+    /**
+     * An NRIC that is not there — no identifier at all, one under another system only, the
+     * NRIC's with no value, or a blank one — is missing, one of the wrong JSON type invalid, and
+     * the rest of the Patient is read as it came.
+     */
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', textBlock = """
+        ''                                                                                               | MISSING
+        '"identifier": [{"system": "urn:oid:1.2.3", "value": "T7391046Q"}]'                               | MISSING
+        '"identifier": [{"system": "https://fhir.synapxe.sg/NamingSystem/nric"}]'                         | MISSING
+        '"identifier": [{"system": "https://fhir.synapxe.sg/NamingSystem/nric", "value": " "}]'           | MISSING
+        '"identifier": [{"system": "https://fhir.synapxe.sg/NamingSystem/nric", "value": 7391046}]'       | INVALID
+        '"identifier": [{"system": "https://fhir.synapxe.sg/NamingSystem/nric", "value": ["T7391046Q"]}]' | INVALID
+        """)
+    void anNricIsReadAsReceived(String nric, SourceField.Received received) {
+        assertThat(reading(probeWith(nric, OFFICIAL_NAME, GENDER, BIRTH_DATE)))
+                .isEqualTo(new Patient(PROBE, new SourceField<>(received, null), READ.name(),
+                        READ.gender(), READ.birthDate(), Demographics.NONE));
+    }
+
+    /** No official name — none at all, or another use only — is no name. */
+    @ParameterizedTest
+    @ValueSource(strings = {"", "\"name\": [{\"use\": \"usual\", \"text\": \"Quah Seow Peng\"}]"})
+    void aPatientWithNoOfficialNameHasNone(String name) {
+        assertThat(reading(probeWith(NRIC_IDENTIFIER, name, GENDER, BIRTH_DATE)).name())
+                .isNull();
+    }
+
+    /**
+     * An official name's text that is not there or blank is missing, one of the wrong JSON type
+     * invalid, and its family and given names are read as they came: the text is never rebuilt
+     * from them.
+     */
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', textBlock = """
+        '"name": [{"use": "official", "family": "Quah", "given": ["Seow Peng"]}]'                                                 | MISSING
+        '"name": [{"use": "official", "text": " ", "family": "Quah", "given": ["Seow Peng"]}]'                                    | MISSING
+        '"name": [{"use": "official", "text": 7, "family": "Quah", "given": ["Seow Peng"]}]'                                      | INVALID
+        '"name": [{"use": "usual", "text": "Q"}, {"use": "official", "text": {"a": 1}, "family": "Quah", "given": ["Seow Peng"]}]' | INVALID
+        """)
+    void anOfficialNamesTextIsReadAsReceived(String name, SourceField.Received received) {
+        assertThat(reading(probeWith(NRIC_IDENTIFIER, name, GENDER, BIRTH_DATE)).name())
+                .isEqualTo(new PatientName(new SourceField<>(received, null), "Quah",
+                        List.of("Seow Peng")));
+    }
+
+    /**
+     * A gender that is not there is missing, one of the wrong JSON type invalid, and a code
+     * outside the four is kept as it came.
+     */
+    @ParameterizedTest
+    @CsvSource(nullValues = "-", delimiter = '|', textBlock = """
+        ''                 | MISSING | -
+        '"gender": null'   | MISSING | -
+        '"gender": 1'      | INVALID | -
+        '"gender": "F"'    | PRESENT | F
+        '"gender": "Male"' | PRESENT | Male
+        """)
+    void aGenderIsReadAsReceived(String gender, SourceField.Received received, String code) {
+        assertThat(reading(probeWith(NRIC_IDENTIFIER, OFFICIAL_NAME, gender, BIRTH_DATE))
+                .gender()).isEqualTo(new SourceField<>(received, code));
+    }
+
+    /**
+     * A birth date that is not there or blank is missing, and one of the wrong JSON type or that
+     * is no calendar date invalid. Nothing of its meaning is checked: one in the future is kept.
+     */
+    @ParameterizedTest
+    @CsvSource(nullValues = "-", delimiter = '|', textBlock = """
+        ''                          | MISSING | -
+        '"birthDate": ""'           | MISSING | -
+        '"birthDate": "1963-07"'    | INVALID | -
+        '"birthDate": "1963-02-30"' | INVALID | -
+        '"birthDate": "29/07/1963"' | INVALID | -
+        '"birthDate": 19630729'     | INVALID | -
+        '"birthDate": "2999-01-01"' | PRESENT | 2999-01-01
+        """)
+    void aBirthDateIsReadAsReceived(String birthDate, SourceField.Received received,
+            LocalDate day) {
+        assertThat(reading(probeWith(NRIC_IDENTIFIER, OFFICIAL_NAME, GENDER, birthDate))
+                .birthDate()).isEqualTo(new SourceField<>(received, day));
+    }
+
+    // ---- invalid elements, reported -----------------------------------------------------
+
+    /**
+     * A Patient with each of its four elements in the wrong format, the NRIC and the official
+     * name each second in their lists.
+     */
+    private static final String EVERY_ELEMENT_INVALID = probe(joined(
+            "\"identifier\": [{\"system\": \"urn:oid:1.2.3\", \"value\": \"MRN-559\"}, "
+                    + "{\"system\": \"https://fhir.synapxe.sg/NamingSystem/nric\", "
+                    + "\"value\": 7391046}]",
+            "\"name\": [{\"use\": \"usual\", \"text\": \"Quah Seow Peng\"}, "
+                    + "{\"use\": \"official\", \"text\": 7, \"family\": \"Quah\"}]",
+            "\"gender\": true", "\"birthDate\": \"1963-07\""));
+
+    private static PatientSourceAdapter adapter(MeterRegistry meters) {
+        return new PatientSourceAdapter(RestClient.builder(), SOURCE.baseUrl(), meters);
+    }
+
+    /** The WARN records reporting an answer's invalid fields. */
+    private static List<ILoggingEvent> invalidFieldRecords(CapturedLog captured) {
+        return captured.withAction(Level.WARN, LogEvent.LOCAL_ACTION,
+                "patient_source.invalid_fields");
+    }
+
+    /**
+     * A Patient holding invalid elements is one WARN, naming the read and each element by its
+     * path in the source's answer — never its value, nor the patient.
+     */
+    @Test
+    void aPatientHoldingInvalidElementsIsOneWarnNamingTheirPaths() {
+        answering(PROBE, EVERY_ELEMENT_INVALID);
+
+        try (CapturedLog captured = CapturedLog.attach()) {
+            patients().findById(PROBE);
+
+            assertThat(invalidFieldRecords(captured)).singleElement()
+                    .satisfies(warning -> assertThat(CapturedLog.fields(warning))
+                            .containsEntry("app.patient_source.read", "patient")
+                            .containsEntry("app.patient_source.invalid_fields", List.of(
+                                    "identifier[1].value", "name[1].text", "gender",
+                                    "birthDate")));
+        }
+    }
+
+    @Test
+    void theWarnQuotesNoValueOfTheAnswerNorThePatient() {
+        answering(PROBE, EVERY_ELEMENT_INVALID);
+
+        try (CapturedLog captured = CapturedLog.attach()) {
+            patients().findById(PROBE);
+
+            ILoggingEvent warning = invalidFieldRecords(captured).getFirst();
+            assertThat(warning.getFormattedMessage() + " " + CapturedLog.fields(warning))
+                    .doesNotContain(PROBE.value(), "7391046", "MRN-559", "Quah", "1963");
+        }
+    }
+
+    /** A Patient whose elements are each present or missing reports nothing. */
+    @Test
+    void aPatientWithNoInvalidElementIsNotReported() {
+        answering(PROBE, probeWith("", OFFICIAL_NAME, "", BIRTH_DATE));
+        MeterRegistry meters = new SimpleMeterRegistry();
+
+        try (CapturedLog captured = CapturedLog.attach()) {
+            adapter(meters).findById(PROBE);
+
+            assertThat(List.of(invalidFieldRecords(captured),
+                    meters.find("patient_source.invalid_fields").counters()))
+                    .containsExactly(List.of(), List.of());
+        }
+    }
+
+    /** Each invalid element counts once a read, tagged by the read and the served element. */
+    @Test
+    void eachInvalidElementCountsOnceByTheReadAndTheElement() {
+        answering(PROBE, EVERY_ELEMENT_INVALID);
+        MeterRegistry meters = new SimpleMeterRegistry();
+        PatientSourceAdapter adapter = adapter(meters);
+
+        adapter.findById(PROBE);
+        adapter.findById(PROBE);
+
+        Map<String, Double> counted = new TreeMap<>();
+        for (Counter counter : meters.find("patient_source.invalid_fields").counters()) {
+            counted.put(counter.getId().getTag("read") + " " + counter.getId().getTag("field"),
+                    counter.count());
+        }
+        assertThat(counted).isEqualTo(Map.of(
+                "patient identifier[0].value", 2.0,
+                "patient name[0].text", 2.0,
+                "patient gender", 2.0,
+                "patient birthDate", 2.0));
     }
 
     /** The military service extension, holding {@code parts}, as a JSON member. */
@@ -713,13 +865,18 @@ class PatientSourceAdapterContractTests extends PatientStoreContract {
     /**
      * Nothing of a failed read reaches its exception, whose messages a fault record would print:
      * not the id, which a client's message quotes in the URL, and nothing of the body, which a
-     * parser's message quotes — here a date not to the day, and a body that is not JSON.
+     * parser's message quotes — here a military service date not to the day, and a body that is
+     * not JSON.
      */
     @ParameterizedTest
-    @ValueSource(strings = {"12/03/1985 T7391046Q Quah Seow Peng",
-        "\"} T7391046Q Quah Seow Peng"})
-    void aFaultsExceptionSaysNothingOfThePatientOrTheBody(String birthDate) {
-        answering(PROBE, PROBE_BODY.formatted(birthDate));
+    @ValueSource(strings = {
+        "{\"id\": \"probe-Q7xKd2.v9\", \"name\": [{\"use\": \"official\", \"text\": \"Quah Seow"
+                + " Peng\"}], \"extension\": [{\"url\": \"http://example.org/fhir/"
+                + "StructureDefinition/military-service\", \"extension\": [{\"url\": \"ordDate\","
+                + " \"valueDate\": \"12/03/1985 T7391046Q Quah Seow Peng\"}]}]}",
+        "{\"id\": \"probe-Q7xKd2.v9\", \"birthDate\": \"\"} T7391046Q Quah Seow Peng\"}"})
+    void aFaultsExceptionSaysNothingOfThePatientOrTheBody(String body) {
+        answering(PROBE, body);
 
         Throwable fault = catchThrowable(() -> patients().findById(PROBE));
 

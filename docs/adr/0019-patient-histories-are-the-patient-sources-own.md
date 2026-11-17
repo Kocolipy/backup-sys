@@ -68,9 +68,9 @@ nothing in the service or the SPA works out "expired".
 contract is ours to define. The source answers a FHIR-R4-shaped `searchset`
 `Bundle` — `total`, `entry[].resource` — whose resources are a custom
 `"resourceType": "FFI"` object of flat fields. In a history shown as
-received — the FFI, the NUMC and the Medication History — each field is
-present, missing or in the wrong format and none refused (ADR 0020); in one
-read strictly, the ARMC History, every one is required. It borrows
+received — the FFI, the NUMC, the ARMC and the Medication History, every one
+— each field is present, missing or in the wrong format and none refused (ADR
+0020). It borrows
 FHIR's paging (`_offset`, `_count`, `_total=accurate`) so that one piece reads
 every page the source answers, a Patient search's and each history's
 (`SourceSearchset`: the page's parameters, the `total`, the `entry`, an entry's
@@ -78,10 +78,10 @@ every page the source answers, a Patient search's and each history's
 is run over it and no FHIR client should read it as FHIR. The closed sets
 travel as codes, each a Java enum, an enum of `openapi.yaml` and an SPA set
 held set-equal; the SPA names each code with its label. An FFI's, a NUMC
-Record's or a Medication Record's code outside its set is shown as the raw code
-(ADR 0020, D2). Paging is ADR 0017's
-`startIndex` and `count`, read by `PageParameter` and `PageRequest`, with ADR
-0018's D3 departure: the page is the source's to read, `count=0` and a page
+Record's, an ARMC Board's or a Medication Record's code outside its set is
+shown as the raw code (ADR 0020, D2). Paging is ADR 0017's `startIndex` and
+`count`, read by `PageParameter` and `PageRequest`, with ADR 0018's D3
+departure: the page is the source's to read, `count=0` and a page
 past the end included, and `totalResults` is the source's `total`. Our answer
 is plain JSON outside `/api/patient`, so its errors are the application API's
 `ApiError`.
@@ -112,15 +112,14 @@ date-time bound is sent to the source is decided once there. Each history's
 own filter type (`FfiFilter`, `NumcFilter`, `ArmcFilter`, `MedicationFilter`)
 holds its filters, and its domain file's "Sort and filters" lists them.
 
-**Each rule a record breaks is logged under a reason naming its history**
-(`armc-no-id`, `armc-end-before-start`, …), so a fault record says which
-history broke; a failure of the call or of the searchset itself is the one
-every paged read shares. An FFI, a NUMC Record and a Medication Record break no
-rule: their histories fail only by their call or their searchset (ADR 0020,
-D3). Each is shown as received — a field present, missing or in the wrong
-format, "—" and "Error" in its cell, and none refused, its id never checked,
-a code outside its closed set shown raw, and a response holding fields in the
-wrong format one `WARN` naming their paths.
+**A history's record breaks no rule, so no failure reason names a history.**
+A failure of the call or of the searchset itself is the one every paged read
+shares: the histories of an FFI, a NUMC Record, an ARMC Board and a Medication
+Record fail only by their call or their searchset (ADR 0020, D3). Each is shown as received — a
+field present, missing or in the wrong format, "—" and "Error" in its cell,
+and none refused, its id never checked, a code outside its closed set shown
+raw, and a response holding fields in the wrong format one `WARN` naming their
+paths.
 
 **D5. NUMC Records are read on the FFI History's terms** (`findNumcHistory`,
 `GET {base}/Patient/{id}/numc`, `"resourceType": "NUMC"`), shown as received
@@ -132,13 +131,14 @@ as an FFI is. What differs:
 - **It has no Status**, and nothing works out "expired" from its Expiry Date.
 
 **D6. ARMC Boards are read on the FFI History's terms** (`findArmcHistory`,
-`GET {base}/Patient/{id}/armc`, `"resourceType": "ARMC"`). What differs:
+`GET {base}/Patient/{id}/armc`, `"resourceType": "ARMC"`), shown as received
+as an FFI is. What differs:
 
-- **The End Date is optional.** A board still open has none, and it is left
-  out of our answer then, never sent as `null`. When it is there it is on or
-  after the Start Date, a rule of the domain's `ArmcBoard`: a board ending
-  before it starts is a failure of the source, never a row shown. Every other
-  date of a history read strictly stays required.
+- **A blank Medical Officer is missing**, "—" in its cell.
+- **A board still open has no End Date**: missing, `null` in our answer as
+  every missing field is, and "—" in its cell. Nothing checks the End Date
+  against the Start Date: a board ending before it starts is shown as
+  received.
 - **The source breaks the sort's ties.** The sort is sent as the column alone,
   with no `_id` after it as an FFI History's and a NUMC History's have: the
   source breaks ties, and places a board with no End Date in an End Date sort,
@@ -174,16 +174,13 @@ as an FFI is. What differs:
   empty history.
 - **A real source must answer this contract**, or the adapter changes with it.
   It must filter, sort, page, count accurately, keep its own stable order,
-  break a sort's ties the same way on every page and send every required
-  element of a history read strictly; a source that cannot is no history
-  source until its adapter changes. A history shown as received, the FFI, the
-  NUMC or the Medication History, needs only the searchset (ADR 0020).
-- **A new code in a closed set of a history read strictly is a contract
-  change.** The source sending an ARMC code the service does not know is a
-  `502`, until the enum, the document and the SPA set gain it together. An FFI,
-  NUMC or Medication code outside its set is no `502` and no blank cell: it is
-  shown as the raw code (ADR 0020, D2), and only its filter needs the set to
-  gain it.
+  and break a sort's ties the same way on every page; a source that cannot is
+  no history source until its adapter changes. What a record holds is shown as
+  received, so a history needs only the searchset (ADR 0020).
+- **A new code in a closed set is no contract change for a history.** An FFI,
+  NUMC, ARMC or Medication code outside its set is no `502` and no blank cell:
+  it is shown as the raw code (ADR 0020, D2), and only its filter needs the
+  enum, the document and the SPA set to gain it together.
 - **No trail records who read whose histories.** A deployment whose policy
   requires every read of patient data to be recorded must revisit D3 together
   with the unaudited read by id (`/docs/domain/patient.md`).
@@ -220,9 +217,6 @@ as an FFI is. What differs:
   are. Rejected: two prescriptions on one day differ by the minute, and the
   source gives the instant with its offset; a calendar date would drop the
   time, and the day itself would depend on the zone it was read in.
-- **Send a still-open board's End Date as `null`**, as the application API
-  sends its other absent values. Rejected: the source leaves it out, and an
-  absent field keeps "still open" one shape from the source to the SPA.
 - **Sort and filter the page in the service.** Rejected: the service holds only
   the page the source answered, so its order and its count would be wrong across
   pages, as a Patient search's would (ADR 0018, D7).

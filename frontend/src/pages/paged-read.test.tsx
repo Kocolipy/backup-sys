@@ -15,6 +15,7 @@ import {
 } from "@/auth/session-adapter.testHelpers";
 import { jsonDecoder, readObject } from "@/lib/decode";
 
+import type { Narrowing } from "./listing-copy";
 import { PagedListing } from "./paged-listing";
 import { pageDecoder, pagedPath, type Page, type PageAt } from "@/lib/paging";
 
@@ -44,7 +45,15 @@ const widgetPage = (names: string[], startIndex = 1, totalResults = 5) =>
   json({ startIndex, totalResults, widgets: names.map((name) => ({ name })) });
 
 /** A listing of widgets of the kind its own control picks, two to a page, as a page renders one. */
-function Widgets({ busy = false, readAgain }: { busy?: boolean; readAgain?: boolean }) {
+function Widgets({
+  busy = false,
+  narrowing = "none",
+  readAgain,
+}: {
+  busy?: boolean;
+  narrowing?: Narrowing;
+  readAgain?: boolean;
+}) {
   const [kind, setKind] = useState("bolt");
   const read = usePagedRead(WIDGETS, { args: [kind], failureMessage: FAILURE, pageSize: 2 });
   return (
@@ -62,13 +71,9 @@ function Widgets({ busy = false, readAgain }: { busy?: boolean; readAgain?: bool
       </button>
       <div data-testid="listing">
         <PagedListing
-          copy={{
-            empty: "No widgets exist.",
-            loading: "Loading widgets…",
-            noun: "widgets",
-            pagerLabel: "Widget pages",
-          }}
           disabled={busy}
+          narrowing={narrowing}
+          pagerLabel="Widget pages"
           read={read}
           readAgain={readAgain}
         >
@@ -87,7 +92,7 @@ const PERMITTED = holding(["user:read"]);
 
 const renderWidgets = (
   answers: Answers,
-  props: { busy?: boolean; readAgain?: boolean } = {},
+  props: { busy?: boolean; narrowing?: Narrowing; readAgain?: boolean } = {},
   session = PERMITTED,
 ) =>
   renderAsSession(
@@ -113,7 +118,7 @@ describe("usePagedRead, through the PagedListing it hands its read", () => {
   it("shows its loading copy while the first read is in flight", async () => {
     await renderWidgets({ [widgetsAt(1)]: deferred().answer });
 
-    expect(screen.getByRole("status")).toHaveTextContent(/^Loading widgets…$/);
+    expect(screen.getByRole("status")).toHaveTextContent(/^Loading records…$/);
     expect(pager()).toBeNull();
   });
 
@@ -124,11 +129,19 @@ describe("usePagedRead, through the PagedListing it hands its read", () => {
     expect(requests()).toEqual([]);
   });
 
-  describe("its empty copy", () => {
-    it("is the listing's own on an empty first page", async () => {
-      await renderWidgets({ [widgetsAt(1)]: widgetPage([], 1, 0) });
+  it("shows the loading copy of how it is narrowed while the first read is in flight", async () => {
+    await renderWidgets({ [widgetsAt(1)]: deferred().answer }, { narrowing: "patient-search" });
 
-      expect(await screen.findByTestId("listing-empty")).toHaveTextContent(/^No widgets exist\.$/);
+    expect(screen.getByRole("status")).toHaveTextContent(/^Searching records…$/);
+  });
+
+  describe("its empty copy", () => {
+    it("is the copy of how it is narrowed on an empty first page", async () => {
+      await renderWidgets({ [widgetsAt(1)]: widgetPage([], 1, 0) }, { narrowing: "filters" });
+
+      expect(await screen.findByTestId("listing-empty")).toHaveTextContent(
+        /^No records match the filters\.$/,
+      );
     });
 
     it("says only that a later page emptied", async () => {
@@ -152,7 +165,7 @@ describe("usePagedRead, through the PagedListing it hands its read", () => {
       await rows();
 
       expect(within(pager()!).getByText(/^Showing /).textContent).toBe(
-        "Showing 1 to 2 of 5 widgets",
+        "Showing 1 to 2 of 5 records",
       );
     });
 
@@ -194,7 +207,7 @@ describe("usePagedRead, through the PagedListing it hands its read", () => {
       await screen.findByRole("button", { name: "Try again" });
 
       expect(within(pager()!).getByText(/^Showing /).textContent).toBe(
-        "Showing 1 to 2 of 5 widgets",
+        "Showing 1 to 2 of 5 records",
       );
     });
   });
@@ -215,7 +228,7 @@ describe("usePagedRead, through the PagedListing it hands its read", () => {
       await press("Next");
 
       expect(screen.getByTestId("rows").textContent).toBe("anvil, bolt from 1 of 5");
-      expect(screen.getByRole("status")).toHaveTextContent(/^Loading widgets…$/);
+      expect(screen.getByRole("status")).toHaveTextContent(/^Loading records…$/);
       expect(busy()).toBe("true");
       expect(
         within(pager()!)
@@ -231,6 +244,18 @@ describe("usePagedRead, through the PagedListing it hands its read", () => {
       expect(within(pager()!).getByRole("button", { name: "Previous" })).toBeEnabled();
     });
 
+    it("says the loading copy of how it is narrowed while it holds the page", async () => {
+      await renderWidgets(
+        { [widgetsAt(1)]: widgetPage(["anvil", "bolt"]), [widgetsAt(3)]: deferred().answer },
+        { narrowing: "patient-search" },
+      );
+      await rows();
+
+      await press("Next");
+
+      expect(screen.getByRole("status")).toHaveTextContent(/^Searching records…$/);
+    });
+
     it("holds no page that had no rows", async () => {
       const back = deferred();
       await renderWidgets({
@@ -244,7 +269,7 @@ describe("usePagedRead, through the PagedListing it hands its read", () => {
       await press("Previous");
 
       expect(screen.queryByTestId("listing-empty")).toBeNull();
-      expect(screen.getByRole("status")).toHaveTextContent(/^Loading widgets…$/);
+      expect(screen.getByRole("status")).toHaveTextContent(/^Loading records…$/);
       expect(busy()).toBe("false");
     });
 
@@ -261,7 +286,7 @@ describe("usePagedRead, through the PagedListing it hands its read", () => {
       await press("Show nuts");
 
       expect(screen.queryByTestId("rows")).toBeNull();
-      expect(screen.getByRole("status")).toHaveTextContent(/^Loading widgets…$/);
+      expect(screen.getByRole("status")).toHaveTextContent(/^Loading records…$/);
     });
   });
 

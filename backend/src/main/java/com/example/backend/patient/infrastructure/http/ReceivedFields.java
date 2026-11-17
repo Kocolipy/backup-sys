@@ -21,8 +21,7 @@ import tools.jackson.databind.JsonNode;
  * </ul>
  *
  * <p>Nothing of a value's meaning is checked: a date in the future is present. A code of a closed
- * set is text, kept as the source sent it, known to the set or not. A read strict about its
- * fields reads them by {@link SourceFields}.
+ * set is text, kept as the source sent it, known to the set or not.
  */
 final class ReceivedFields {
 

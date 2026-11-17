@@ -135,14 +135,6 @@ class PatientHistoriesIntegrationTests {
             fault-armc-unexpected-status,                unexpected-status,                     data
             fault-armc-not-a-searchset,                  not-a-searchset,                       data
             fault-armc-no-total,                         no-total,                              data
-            fault-armc-no-id,                            armc-no-id,                            data
-            fault-armc-invalid-id,                       armc-invalid-id,                       data
-            fault-armc-no-outcome,                       no-armc-outcome,                       data
-            fault-armc-no-medical-officer-2,             no-armc-medical-officer-2,             data
-            fault-armc-unknown-board-type,               unknown-armc-board-type,               data
-            fault-armc-unknown-outcome,                  unknown-armc-outcome,                  data
-            fault-armc-end-before-start,                 armc-end-before-start,                 data
-            fault-armc-end-date-not-to-the-day,          armc-end-date-not-to-the-day,          data
             fault-medication-unreachable,                unreachable,                           network
             fault-medication-slow,                       timed-out,                             network
             fault-medication-server-error,               server-error,                          server
@@ -351,6 +343,39 @@ class PatientHistoriesIntegrationTests {
         assertThat(logs.lines()).doesNotContain("dev-patient-10", "ffi-tan-boon-huat",
                 "ffi tan boon huat", "20210316", "2022-03", "swimming", "waiver-granted",
                 "hq-medc", "tengah-air-base");
+    }
+
+    /**
+     * An ARMC History holding fields in the wrong format is answered, as received (ADR 0020), and
+     * writes exactly one {@code WARN} beside the request's record, naming each such field by its
+     * path in the source's answer, and no {@code ERROR}; nothing in the stream names the patient
+     * or anything the boards hold.
+     */
+    @Test
+    void anArmcHistoryWithInvalidFieldsIsAnsweredAndWarnsOnceNamingTheirPaths() throws Exception {
+        HttpClient session = signedIn();
+        logs.reset();
+
+        HttpResponse<String> response = send(session, HttpRequest.newBuilder(URI.create(
+                "http://localhost:" + port + "/api/patient-armc/dev-patient-10?count=5")));
+        logs.awaitRequestRecords(1);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(logs.records())
+                .filteredOn(record -> List.of("WARN", "ERROR")
+                        .contains(record.at("/log/level").asText()))
+                .filteredOn(record -> !"http.request".equals(record.at("/app/event/action")
+                        .asText()))
+                .singleElement()
+                .satisfies(warning -> assertThat(List.of(warning.at("/log/level").asText(),
+                        warning.at("/app/event/action").asText(),
+                        warning.at("/app/patient_source/read").asText(),
+                        warning.at("/app/patient_source/invalid_fields").toString()))
+                        .containsExactly("WARN", "patient_source.invalid_fields", "armc",
+                                "[\"entry[1].startDate\",\"entry[1].endDate\"]"));
+        assertThat(logs.lines()).doesNotContain("dev-patient-10", "armc-tan-boon-huat",
+                "armc tan boon huat", "20210316", "2021-04", "aircrew", "waiver-granted",
+                "Dr Rajesh Kumar");
     }
 
     /**

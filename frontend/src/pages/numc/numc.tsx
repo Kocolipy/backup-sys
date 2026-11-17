@@ -91,23 +91,15 @@ function NumcTable({
 
 /**
  * The NUMC History of the patient `patientId`, five NUMC Records a page,
- * through the shared filtered history ({@link FilteredHistory}): "Showing x
- * to y of N NUMC records", "Couldn't load NUMC records" for a failed read,
- * and "No NUMC records", or with a filter applied "No NUMC records match the
- * filters", for an empty one. It sorts by Issue Date or Expiry Date, and the
+ * through the shared filtered history ({@link FilteredHistory}), its rows
+ * named records as every paged table's are, and "Couldn't load NUMC records"
+ * for a failed read. It sorts by Issue Date or Expiry Date, and the
  * Filter panel narrows it on every column.
  */
 function NumcHistory({ patientId }: { patientId: string }) {
   return (
     <FilteredHistory
-      copy={{
-        empty: "No NUMC records",
-        emptyFiltered: "No NUMC records match the filters",
-        failure: "Couldn't load NUMC records",
-        loading: "Loading NUMC records…",
-        noun: "NUMC records",
-        pagerLabel: "NUMC History pages",
-      }}
+      copy={{ failure: "Couldn't load NUMC records", pagerLabel: "NUMC History pages" }}
       countFilters={countNumcFilters}
       declaration={NUMC_HISTORY}
       filterPopover={NumcFilterPopover}
@@ -123,7 +115,7 @@ function NumcHistory({ patientId }: { patientId: string }) {
 
 /**
  * NUMC: the NUMC History of the patient in context, read from the patient
- * source, and "Loading NUMC records…" while the patient is read
+ * source, and "Loading records…" while the patient is read
  * ({@link ForPatientInContext}). A new patient in context is a new history,
  * read from its first page.
  */
@@ -131,7 +123,7 @@ export function NumcRecords() {
   return (
     <Card>
       <CardContent className="flex flex-col gap-4">
-        <ForPatientInContext history={NumcHistory} loading="Loading NUMC records…" />
+        <ForPatientInContext history={NumcHistory} />
       </CardContent>
     </Card>
   );

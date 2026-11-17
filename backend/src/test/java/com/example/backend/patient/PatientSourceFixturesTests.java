@@ -27,9 +27,10 @@ import tools.jackson.databind.JsonNode;
  * EHR vendor's public sandbox test patients, eight under development ids of the mock's own —
  * covering every gender code, each with an NRIC that cannot be a real person's
  * (/docs/domain/patient.md, "The patient source's fixtures"). Each fixture's values as the service
- * reads them are {@code PatientStoreContract}'s. Beside them, the fault stubs serve each way the
- * source fails, under ids of their own, and the search stubs answer the documented searches with
- * the fixtures themselves.
+ * reads them are {@code PatientStoreContract}'s. Beside them, the received stubs serve Patients
+ * holding elements missing or in the wrong format, shown as received (ADR 0020), the fault stubs
+ * each way the source fails, both under ids of their own, and the search stubs answer the
+ * documented searches with the fixtures themselves.
  */
 class PatientSourceFixturesTests {
 
@@ -43,20 +44,27 @@ class PatientSourceFixturesTests {
     }
 
     /**
-     * Every NRIC the stub files hold: each fixture's, and each fault stub's that carries one — a
-     * fault stub's Patient is as dummy as a fixture's.
+     * Every NRIC the stub files hold: each fixture's, and each fault or received stub's that
+     * carries one as text — such a stub's Patient is as dummy as a fixture's.
      */
     private static List<String> stubNrics() {
-        return Stream.concat(nrics().stream(), PatientSourceStubs.faults().stream()
-                        .map(fault -> nric(fault.response().at("/jsonBody")))
-                        .flatMap(Optional::stream))
+        return Stream.of(nrics().stream(),
+                        PatientSourceStubs.faults().stream()
+                                .map(fault -> nric(fault.response().at("/jsonBody")))
+                                .flatMap(Optional::stream),
+                        PatientSourceStubs.received().stream()
+                                .map(stub -> nric(stub.response().at("/jsonBody")))
+                                .flatMap(Optional::stream))
+                .flatMap(nrics -> nrics)
                 .toList();
     }
 
     private static Optional<String> nric(JsonNode patient) {
         return StreamSupport.stream(patient.at("/identifier").spliterator(), false)
                 .filter(identifier -> NRIC_SYSTEM.equals(identifier.get("system").asString()))
-                .map(identifier -> identifier.get("value").asString())
+                .map(identifier -> identifier.path("value"))
+                .filter(JsonNode::isString)
+                .map(JsonNode::asString)
                 .findFirst();
     }
 
@@ -101,14 +109,18 @@ class PatientSourceFixturesTests {
                 .findFirst();
     }
 
-    /** Every fixture has a Last visit, a date to the day, but one: Tan Boon Huat has none. */
+    /**
+     * Every fixture has a Last visit, a date to the day, but two: Tan Boon Huat has none, and
+     * Rajesh Kumar's is to the month alone, shown as received (ADR 0020).
+     */
     @Test
-    void everyFixtureButOneHasALastVisitToTheDay() {
-        assertThat(FIXTURES).filteredOn(fixture -> lastVisit(fixture).isEmpty())
-                .extracting(fixture -> fixture.get("id").asString())
-                .containsExactly("dev-patient-10");
-        assertThat(FIXTURES).extracting(fixture -> lastVisit(fixture).orElse("2000-01-01"))
-                .allSatisfy(date -> assertThat(date).matches("\\d{4}-\\d{2}-\\d{2}"));
+    void everyFixtureButTwoHasALastVisitToTheDay() {
+        assertThat(FIXTURES).filteredOn(fixture -> !lastVisit(fixture).orElse("")
+                        .matches("\\d{4}-\\d{2}-\\d{2}"))
+                .extracting(fixture -> fixture.get("id").asString(),
+                        fixture -> lastVisit(fixture).orElse(null))
+                .containsExactlyInAnyOrder(tuple("dev-patient-10", null),
+                        tuple("dev-patient-12", "2026-10"));
     }
 
     /** Each search answers its matches as the fixtures themselves, exactly as read by id. */
@@ -119,7 +131,7 @@ class PatientSourceFixturesTests {
                 .map(entry -> entry.get("resource"))
                 .toList();
 
-        assertThat(matches).hasSize(15).allSatisfy(match -> assertThat(FIXTURES)
+        assertThat(matches).hasSize(16).allSatisfy(match -> assertThat(FIXTURES)
                 .filteredOn(fixture -> fixture.get("id").equals(match.get("id")))
                 .containsExactly(match));
     }
@@ -180,6 +192,7 @@ class PatientSourceFixturesTests {
                         tuple("Bundle", "searchset", 0),
                         tuple("Bundle", "searchset", 0),
                         tuple("Bundle", "searchset", 1),
+                        tuple("Bundle", "searchset", 1),
                         tuple("Bundle", "searchset", 7),
                         tuple("Bundle", "searchset", 7),
                         tuple("Bundle", "searchset", 3),
@@ -199,7 +212,7 @@ class PatientSourceFixturesTests {
     @Test
     void everyCannedSearchPinsEveryFilterItUsesOrNot() {
         assertThat(PatientSourceStubs.searchStubs()).filteredOn(stub -> !stub.fallback())
-                .hasSize(6)
+                .hasSize(7)
                 .allSatisfy(stub -> assertThat(FILTER_PARAMETERS)
                         .as("each filter's matcher, absent or pinned")
                         .allMatch(parameter -> pinsOrAbsent(stub.query().path(parameter))));
@@ -259,7 +272,7 @@ class PatientSourceFixturesTests {
         assertThat(nrics()).hasSize(FIXTURES.size()).doesNotHaveDuplicates();
     }
 
-    /** No two stubs, fixture or fault, share an NRIC. */
+    /** No two stubs, fixture, fault or received, share an NRIC. */
     @Test
     void everyStubNricIsUnique() {
         assertThat(stubNrics()).hasSize(FIXTURES.size() + 6).doesNotHaveDuplicates();
@@ -273,8 +286,8 @@ class PatientSourceFixturesTests {
 
     /**
      * The fault stubs, each by the failure it serves and the id it serves it under: a delay past
-     * the read timeout, a body dribbled out past it, a {@code 5xx}, and one Patient per domain
-     * rule it breaks.
+     * the read timeout, a body dribbled out past it, and a {@code 5xx}. What a Patient holds is
+     * never a failure (ADR 0020), so no fault stub serves one.
      */
     @Test
     void theFaultStubsServeEachFailureUnderAnIdOfItsOwn() {
@@ -283,12 +296,48 @@ class PatientSourceFixturesTests {
                 .containsExactlyInAnyOrder(
                         tuple("slow", "fault-slow"),
                         tuple("slow-body", "fault-slow-body"),
-                        tuple("server-error", "fault-server-error"),
-                        tuple("no-nric", "fault-no-nric"),
-                        tuple("no-official-name", "fault-no-official-name"),
-                        tuple("no-name-text", "fault-no-name-text"),
-                        tuple("no-gender", "fault-no-gender"),
-                        tuple("no-birth-date", "fault-no-birth-date"));
+                        tuple("server-error", "fault-server-error"));
+    }
+
+    /**
+     * The received stubs, each by what it holds and the id it serves it under: one Patient per
+     * element missing — the NRIC, the official name, its text, the gender and the birth date —
+     * and one whose four are each in the wrong format.
+     */
+    @Test
+    void theReceivedStubsServeEachUnderAnIdOfItsOwn() {
+        assertThat(PatientSourceStubs.received())
+                .extracting(PatientSourceStubs.ReceivedStub::received,
+                        PatientSourceStubs.ReceivedStub::id)
+                .containsExactlyInAnyOrder(
+                        tuple("no-nric", "received-no-nric"),
+                        tuple("no-official-name", "received-no-official-name"),
+                        tuple("no-name-text", "received-no-name-text"),
+                        tuple("no-gender", "received-no-gender"),
+                        tuple("no-birth-date", "received-no-birth-date"),
+                        tuple("wrong-format", "received-wrong-format"));
+    }
+
+    /**
+     * A received stub answers a {@code 200} Patient under the well-formed id it is served for,
+     * which no fixture uses and no search matches.
+     */
+    @Test
+    void everyReceivedStubIsAPatientUnderAWellFormedIdOfItsOwn() {
+        List<String> fixtureIds = FIXTURES.stream().map(fixture -> fixture.get("id").asString())
+                .toList();
+        List<String> matched = PatientSourceStubs.searches().stream()
+                .flatMap(bundle -> StreamSupport.stream(bundle.at("/entry").spliterator(), false))
+                .map(entry -> entry.at("/resource/id").asString())
+                .toList();
+        assertThat(PatientSourceStubs.received()).isNotEmpty().allSatisfy(stub -> {
+            assertThat(stub.id()).matches("[A-Za-z0-9\\-.]{1,64}").isNotIn(fixtureIds)
+                    .isNotIn(matched);
+            assertThat(List.of(stub.response().at("/status").asInt(),
+                    stub.response().at("/jsonBody/resourceType").asString(),
+                    stub.response().at("/jsonBody/id").asString()))
+                    .containsExactly(200, "Patient", stub.id());
+        });
     }
 
     /**
@@ -309,7 +358,7 @@ class PatientSourceFixturesTests {
     void everyFaultStubPatientIsUnderItsOwnId() {
         assertThat(PatientSourceStubs.faults())
                 .filteredOn(fault -> fault.response().at("/status").asInt() == 200)
-                .hasSize(7)
+                .hasSize(2)
                 .allSatisfy(fault -> assertThat(fault.response().at("/jsonBody/id").asString())
                         .isEqualTo(fault.id()));
     }
@@ -940,20 +989,33 @@ class PatientSourceFixturesTests {
                 .toList();
     }
 
-    /** Every ARMC Board of every fixture's ARMC History, each once, as its pages hold it. */
-    private static List<JsonNode> everyArmcBoard() {
+    /** The patient whose ARMC History is shown as received: the one whose boards are malformed. */
+    private static final String ARMC_AS_RECEIVED = "/Patient/dev-patient-10/armc";
+
+    /** Every ARMC History stub but Tan Boon Huat's, whose every board is well-formed. */
+    private static Stream<PatientSourceStubs.HistoryStub> wellFormedArmcHistories() {
         return PatientSourceStubs.armcHistories().stream()
+                .filter(stub -> !stub.path().equals(ARMC_AS_RECEIVED));
+    }
+
+    /**
+     * Every well-formed ARMC Board of every fixture's ARMC History — every one but Tan Boon
+     * Huat's — each once, as its pages hold it.
+     */
+    private static List<JsonNode> everyArmcBoard() {
+        return wellFormedArmcHistories()
                 .filter(stub -> inTheSourcesOrder(stub, ARMC_FILTER_PARAMETERS))
                 .flatMap(stub -> resourcesOf(stub).stream())
                 .toList();
     }
 
     /**
-     * Two fixtures have ARMC Boards, each page its own stub — Tan Wei Ming's one page of two and
-     * Tan Hui Min's two of seven — and a fallback answers every fixture's other read with none.
+     * Three fixtures have ARMC Boards, each page its own stub — Tan Wei Ming's one page of two,
+     * Tan Hui Min's two of seven and Tan Boon Huat's one of four, shown as received — and a
+     * fallback answers every fixture's other read with none.
      */
     @Test
-    void twoFixturesHaveAnArmcHistoryAndTheFallbackServesEveryFixture() {
+    void threeFixturesHaveAnArmcHistoryAndTheFallbackServesEveryFixture() {
         List<String> exact = PatientSourceStubs.armcHistories().stream()
                 .filter(stub -> inTheSourcesOrder(stub, ARMC_FILTER_PARAMETERS))
                 .map(stub -> stub.path() + " " + stub.query().at("/_offset/equalTo").asString()
@@ -967,10 +1029,11 @@ class PatientSourceFixturesTests {
         assertThat(exact).containsExactlyInAnyOrder(
                 "/Patient/eq081-VQEgP8drUUqCWzHfw3/armc 0 of 2",
                 "/Patient/dev-patient-05/armc 0 of 7",
-                "/Patient/dev-patient-05/armc 5 of 7");
+                "/Patient/dev-patient-05/armc 5 of 7",
+                "/Patient/dev-patient-10/armc 0 of 4");
         assertThat(fixtureIds()).allSatisfy(id ->
                 assertThat("/Patient/" + id + "/armc").matches(fallback));
-        assertThat("/Patient/fault-armc-no-id/armc").doesNotMatch(fallback);
+        assertThat("/Patient/fault-armc-no-total/armc").doesNotMatch(fallback);
     }
 
     /**
@@ -982,7 +1045,7 @@ class PatientSourceFixturesTests {
     @Test
     void everyCannedArmcReadPinsItsPageItsSortAndEveryFilterItUsesOrNot() {
         assertThat(PatientSourceStubs.armcHistories()).filteredOn(PatientSourceFixturesTests::canned)
-                .hasSize(13)
+                .hasSize(14)
                 .allSatisfy(stub -> assertThat(List.of(
                         stub.query().at("/_count/equalTo").asString(),
                         stub.query().at("/_offset/equalTo").isString(),
@@ -1000,7 +1063,8 @@ class PatientSourceFixturesTests {
         assertThat(PatientSourceStubs.armcHistories())
                 .allSatisfy(stub -> assertThat(resourcesOf(stub)).hasSizeLessThanOrEqualTo(5));
         assertThat(List.of(boardsOf("eq081-VQEgP8drUUqCWzHfw3").size(),
-                boardsOf("dev-patient-05").size())).containsExactly(2, 7);
+                boardsOf("dev-patient-05").size(), boardsOf("dev-patient-10").size()))
+                .containsExactly(2, 7, 4);
     }
 
     /** Every code of both closed sets an ARMC Board has, as the two sets spell them on the wire. */
@@ -1024,8 +1088,8 @@ class PatientSourceFixturesTests {
     }
 
     /**
-     * Every ARMC Board is an {@code ARMC} of exactly its six elements and its id, but a board
-     * still open, which has no End Date: at least one fixture's board is open.
+     * Every well-formed ARMC Board is an {@code ARMC} of exactly its six elements and its id, but
+     * a board still open, which has no End Date: at least one fixture's board is open.
      */
     @Test
     void everyArmcBoardHoldsItsElementsAndItsIdAloneAndOneIsStillOpen() {
@@ -1036,13 +1100,50 @@ class PatientSourceFixturesTests {
                 .containsExactly("armc-tan-hui-min-1");
     }
 
-    /** Every ARMC Board any stub answers, sorted or filtered too, holds its elements alone. */
+    /**
+     * Every ARMC Board any stub answers, sorted or filtered too, is an {@code ARMC} of its
+     * elements and its id alone, and every one but Tan Boon Huat's holds them as a well-formed
+     * board does.
+     */
     @Test
     void everyArmcBoardAnyStubAnswersHoldsItsElementsAlone() {
+        Set<String> elements = Set.of("resourceType", "id", "boardType", "outcome", "startDate",
+                "endDate", "medicalOfficer1", "medicalOfficer2");
         assertThat(PatientSourceStubs.armcHistories().stream()
                 .flatMap(stub -> resourcesOf(stub).stream()))
                 .isNotEmpty()
+                .allSatisfy(board -> assertThat(board.get("resourceType").asString())
+                        .isEqualTo("ARMC"))
+                .allSatisfy(board -> assertThat(elements).containsAll(board.propertyNames()));
+        assertThat(wellFormedArmcHistories().flatMap(stub -> resourcesOf(stub).stream()))
                 .allSatisfy(PatientSourceFixturesTests::holdsItsElementsAlone);
+    }
+
+    /**
+     * Tan Boon Huat's four ARMC Boards are the patient source's data as received (ADR 0020): an
+     * element left out, {@code null}, empty and blank — a Medical Officer among them — an End
+     * Date before its Start Date, a date of the wrong JSON type and one not to the day, a code
+     * outside each closed set — another set's among them — and an id outside FHIR's grammar and
+     * none at all, written out board by board.
+     */
+    @Test
+    void tanBoonHuatsArmcHistoryHoldsMissingMalformedAndUnknownElements() {
+        assertThat(boardsOf("dev-patient-10")).extracting(JsonNode::toString).containsExactly(
+                "{\"resourceType\":\"ARMC\",\"id\":\"armc-tan-boon-huat-1\","
+                        + "\"boardType\":\"aces\",\"startDate\":\"2022-03-16\","
+                        + "\"endDate\":\"2022-03-01\",\"medicalOfficer1\":\"Dr Lim Wei Jie\","
+                        + "\"medicalOfficer2\":\"   \"}",
+                "{\"resourceType\":\"ARMC\",\"id\":\"armc-tan-boon-huat-2\","
+                        + "\"boardType\":\"aces\",\"outcome\":\"fit\",\"startDate\":20210316,"
+                        + "\"endDate\":\"2021-04\",\"medicalOfficer1\":\"Dr Rajesh Kumar\","
+                        + "\"medicalOfficer2\":\"Dr Chen Mei Ling\"}",
+                "{\"resourceType\":\"ARMC\",\"id\":\"armc tan boon huat 3\","
+                        + "\"boardType\":\"aircrew\",\"outcome\":\"waiver-granted\","
+                        + "\"startDate\":\"2020-03-16\",\"endDate\":\"2020-05-11\","
+                        + "\"medicalOfficer1\":\"Dr Chen Mei Ling\","
+                        + "\"medicalOfficer2\":\"Dr Lim Wei Jie\"}",
+                "{\"resourceType\":\"ARMC\",\"boardType\":\"aces\",\"outcome\":\"\","
+                        + "\"startDate\":\"  \",\"endDate\":null,\"medicalOfficer1\":\"\"}");
     }
 
     /** Whether {@code board} is an {@code ARMC} of exactly its elements and its id, the End Date optional. */
@@ -1056,7 +1157,7 @@ class PatientSourceFixturesTests {
                 .isIn(List.of("ARMC", closed), List.of("ARMC", open));
     }
 
-    /** Every fixture's board ends on or after the day it starts, when it has ended. */
+    /** Every well-formed fixture's board ends on or after the day it starts, when it has ended. */
     @Test
     void everyArmcBoardEndsOnOrAfterItStarts() {
         assertThat(everyArmcBoard()).filteredOn(board -> board.has("endDate"))
@@ -1064,7 +1165,10 @@ class PatientSourceFixturesTests {
                         .isAfterOrEqualTo(LocalDate.parse(board.get("startDate").asString())));
     }
 
-    /** Every ARMC Board's id is in FHIR's id grammar and no other record's, an FFI's or NUMC's. */
+    /**
+     * Every ARMC Board's id but Tan Boon Huat's is in FHIR's id grammar and no other record's, an
+     * FFI's or NUMC's.
+     */
     @Test
     void everyArmcBoardIdIsAFhirIdOfItsOwn() {
         List<String> ids = everyArmcBoard().stream()
@@ -1175,7 +1279,9 @@ class PatientSourceFixturesTests {
 
     /**
      * The ARMC fault stubs, each by the failure it serves under a well-formed patient id no
-     * fixture uses, so it never shadows a fixture's history and the read reaches the source.
+     * fixture uses, so it never shadows a fixture's history and the read reaches the source: a
+     * failure of the call or of the searchset alone, since no ARMC Board fails a read
+     * (ADR 0020).
      */
     @Test
     void theArmcFaultStubsServeEachFailureUnderAPatientIdOfItsOwn() {
@@ -1186,10 +1292,7 @@ class PatientSourceFixturesTests {
                         .isNotIn(fixtureIds()))
                 .extracting(PatientSourceStubs.FaultStub::fault)
                 .containsExactlyInAnyOrder("unreachable", "slow", "server-error",
-                        "unexpected-status", "not-a-searchset", "no-total", "no-id",
-                        "invalid-id", "no-outcome", "no-medical-officer-2",
-                        "unknown-board-type", "unknown-outcome", "end-before-start",
-                        "end-date-not-to-the-day");
+                        "unexpected-status", "not-a-searchset", "no-total");
     }
 
     // ---- the Medication Histories -----------------------------------------------------------
@@ -1587,7 +1690,7 @@ class PatientSourceFixturesTests {
     }
 
     /**
-     * Every dummy NRIC, a fixture's or a fault stub's, carries a check letter the algorithm rejects, so none can be a real
+     * Every dummy NRIC, a fixture's, a fault stub's or a received stub's, carries a check letter the algorithm rejects, so none can be a real
      * person's, and a real-looking value cannot slip into the stub files later.
      */
     @Test

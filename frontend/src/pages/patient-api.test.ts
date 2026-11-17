@@ -3,7 +3,7 @@ import { describe, expect, expectTypeOf, it } from "vitest";
 
 import type { PatientGender } from "@/lib/patient-gender";
 
-import { MILITARY_HISTORY_EXTENSION, PATIENT } from "./patient-api";
+import { INVALID_FIELD_EXTENSION, MILITARY_HISTORY_EXTENSION, PATIENT } from "./patient-api";
 import { TAN_WEI_MING, TAN_WEI_MING_BARE } from "./patient.testHelpers";
 
 /** A relationship coded as the patient's Next of kin. */
@@ -13,6 +13,30 @@ const nextOfKinRole = {
 
 /** The Military history extension holding `extension`. */
 const military = (extension: object[]) => [{ extension, url: MILITARY_HISTORY_EXTENSION }];
+
+/** The extension naming `element` as received in the wrong format. */
+const invalidField = (element: string) => ({
+  url: "http://example.org/fhir/StructureDefinition/invalid-field",
+  valueString: element,
+});
+
+const present = (value: string) => ({ state: "present", value });
+const MISSING = { state: "missing" };
+const INVALID = { state: "invalid" };
+
+/** The four elements shown as received, as Tan Wei Ming's are read. */
+const TAN_WEI_MINGS_ELEMENTS = {
+  birthDate: present("1985-03-12"),
+  gender: present("male"),
+  name: present("Tan Wei Ming"),
+  nric: present("S1234567A"),
+};
+
+/** Tan Wei Ming's four elements as read from `patient`, the rest of him dropped. */
+const elementsOf = async (patient: object) => {
+  const { birthDate, gender, name, nric } = await PATIENT.decode(Response.json(patient));
+  return { birthDate, gender, name, nric };
+};
 
 describe("PATIENT", () => {
   it("reads a patient at /api/patient/{id}, under patient:read, a 404 being absent", () => {
@@ -34,21 +58,15 @@ describe("PATIENT", () => {
 
 describe("PATIENT's answer", () => {
   it("is read down to the name text, NRIC, gender and date of birth when it has nothing else", async () => {
-    await expect(PATIENT.decode(Response.json(TAN_WEI_MING_BARE))).resolves.toStrictEqual({
-      birthDate: "1985-03-12",
-      gender: "male",
-      id: "eq081-VQEgP8drUUqCWzHfw3",
-      name: "Tan Wei Ming",
-      nric: "S1234567A",
-    });
+    await expect(PATIENT.decode(Response.json(TAN_WEI_MING_BARE))).resolves.toStrictEqual(
+      TAN_WEI_MINGS_ELEMENTS,
+    );
   });
 
   it("reads the Demographic details: phone, email, home address, Next of kin and Military history", async () => {
     await expect(PATIENT.decode(Response.json(TAN_WEI_MING))).resolves.toStrictEqual({
-      birthDate: "1985-03-12",
+      ...TAN_WEI_MINGS_ELEMENTS,
       email: "tan.hw@email.com",
-      gender: "male",
-      id: "eq081-VQEgP8drUUqCWzHfw3",
       militaryHistory: {
         enlistmentDate: "2018-01-15",
         ordDate: "2020-01-14",
@@ -70,9 +88,7 @@ describe("PATIENT's answer", () => {
           },
         ],
       },
-      name: "Tan Wei Ming",
       nextOfKin: { name: "Mdm Lee Siew Kuen", phone: "+65 8234 5678", relationship: "Mother" },
-      nric: "S1234567A",
       phone: "+65 9123 4567",
       residentialAddress: "Blk 123 Bishan Street 12 #10-456, Singapore 570123",
     });
@@ -181,7 +197,7 @@ describe("PATIENT's answer", () => {
     const mononym = { ...TAN_WEI_MING, name: [{ text: "Suriani", use: "official" }] };
 
     await expect(PATIENT.decode(Response.json(mononym))).resolves.toEqual(
-      expect.objectContaining({ name: "Suriani" }),
+      expect.objectContaining({ name: present("Suriani") }),
     );
   });
 
@@ -192,8 +208,122 @@ describe("PATIENT's answer", () => {
     };
 
     await expect(PATIENT.decode(Response.json(twoIdentifiers))).resolves.toEqual(
-      expect.objectContaining({ nric: "S1234567A" }),
+      expect.objectContaining({ nric: present("S1234567A") }),
     );
+  });
+
+  // Shown as received (ADR 0020): each of the four is its value, missing when
+  // the backend left it out, and invalid when an invalid-field extension names
+  // it or it is not a value of its kind; none of them refuses the Patient.
+  it.each([
+    ["no name", { name: undefined }, { name: MISSING }],
+    ["no name entry", { name: [] }, { name: MISSING }],
+    ["a name with no text", { name: [{ family: "Tan", use: "official" }] }, { name: MISSING }],
+    ["no identifier", { identifier: undefined }, { nric: MISSING }],
+    [
+      "no identifier under the NRIC system",
+      { identifier: [{ system: "urn:example:other", value: "X-1" }] },
+      { nric: MISSING },
+    ],
+    [
+      "an NRIC identifier with no value",
+      { identifier: [{ system: "https://fhir.synapxe.sg/NamingSystem/nric" }] },
+      { nric: MISSING },
+    ],
+    ["no gender", { gender: undefined }, { gender: MISSING }],
+    ["no birth date", { birthDate: undefined }, { birthDate: MISSING }],
+  ])("reads %s as that element missing, and the rest as they came", async (_, change, read) => {
+    await expect(elementsOf({ ...TAN_WEI_MING_BARE, ...change })).resolves.toStrictEqual({
+      ...TAN_WEI_MINGS_ELEMENTS,
+      ...read,
+    });
+  });
+
+  it.each([
+    [
+      "the NRIC",
+      {
+        extension: [invalidField("identifier[0].value")],
+        identifier: [{ system: "https://fhir.synapxe.sg/NamingSystem/nric" }],
+      },
+      { nric: INVALID },
+    ],
+    [
+      "the NRIC past another identifier",
+      {
+        extension: [invalidField("identifier[1].value")],
+        identifier: [
+          { system: "urn:example:other", value: "X-1" },
+          { system: "https://fhir.synapxe.sg/NamingSystem/nric" },
+        ],
+      },
+      { nric: INVALID },
+    ],
+    [
+      "the name's text",
+      { extension: [invalidField("name[0].text")], name: [{ family: "Tan", use: "official" }] },
+      { name: INVALID },
+    ],
+    ["the gender", { extension: [invalidField("gender")], gender: undefined }, { gender: INVALID }],
+    [
+      "the birth date",
+      { extension: [invalidField("birthDate")], birthDate: undefined },
+      { birthDate: INVALID },
+    ],
+  ])("reads %s as invalid when an invalid-field extension names it", async (_, change, read) => {
+    await expect(elementsOf({ ...TAN_WEI_MING_BARE, ...change })).resolves.toStrictEqual({
+      ...TAN_WEI_MINGS_ELEMENTS,
+      ...read,
+    });
+  });
+
+  it("reads each of the four invalid at once, past the Military history", async () => {
+    const extension = [
+      ...military([{ url: "mrDate", valueDate: "2030-04-01" }]),
+      invalidField("identifier[0].value"),
+      invalidField("name[0].text"),
+      invalidField("gender"),
+      invalidField("birthDate"),
+    ];
+    const patient = {
+      extension,
+      id: TAN_WEI_MING_BARE.id,
+      identifier: [{ system: "https://fhir.synapxe.sg/NamingSystem/nric" }],
+      name: [{ use: "official" }],
+      resourceType: "Patient",
+    };
+
+    await expect(PATIENT.decode(Response.json(patient))).resolves.toStrictEqual({
+      birthDate: INVALID,
+      gender: INVALID,
+      militaryHistory: { mrDate: "2030-04-01", serviceRecords: [] },
+      name: INVALID,
+      nric: INVALID,
+    });
+  });
+
+  it.each([
+    ["a name text that is no string", { name: [{ text: 3, use: "official" }] }, { name: INVALID }],
+    [
+      "an NRIC that is no string",
+      { identifier: [{ system: "https://fhir.synapxe.sg/NamingSystem/nric", value: 7 }] },
+      { nric: INVALID },
+    ],
+    ["a gender that is no string", { gender: true }, { gender: INVALID }],
+    ["a birth date not to the day", { birthDate: "1985-03" }, { birthDate: INVALID }],
+    ["a birth date no calendar has", { birthDate: "1985-02-30" }, { birthDate: INVALID }],
+  ])("reads %s, a shape the backend does not send, as invalid", async (_, change, read) => {
+    await expect(elementsOf({ ...TAN_WEI_MING_BARE, ...change })).resolves.toStrictEqual({
+      ...TAN_WEI_MINGS_ELEMENTS,
+      ...read,
+    });
+  });
+
+  it("reads a gender outside the four codes as the code it came as", async () => {
+    await expect(elementsOf({ ...TAN_WEI_MING_BARE, gender: "M" })).resolves.toStrictEqual({
+      ...TAN_WEI_MINGS_ELEMENTS,
+      gender: present("M"),
+    });
   });
 
   it.each([
@@ -202,27 +332,25 @@ describe("PATIENT's answer", () => {
       { ...TAN_WEI_MING, resourceType: "Practitioner" },
       "Patient.resourceType is not Patient",
     ],
-    ["no id", { ...TAN_WEI_MING, id: undefined }, "Patient.id is not a string"],
-    ["no name", { ...TAN_WEI_MING, name: [] }, "Patient.name has no entry"],
     [
-      "a name with no text",
-      { ...TAN_WEI_MING, name: [{ use: "official" }] },
-      "HumanName.text is not a string",
+      "an invalid-field extension naming no element",
+      { ...TAN_WEI_MING, extension: [{ url: INVALID_FIELD_EXTENSION, valueInteger: 3 }] },
+      "invalid-field.valueString is not a string",
     ],
     [
-      "no NRIC identifier",
-      { ...TAN_WEI_MING, identifier: [{ system: "urn:example:other", value: "X-1" }] },
-      "Patient.identifier has no NRIC",
+      "a name that is not an object",
+      { ...TAN_WEI_MING, name: ["Tan Wei Ming"] },
+      "HumanName is not an object",
     ],
     [
-      "an unknown gender",
-      { ...TAN_WEI_MING, gender: "M" },
-      "Patient.gender is not male | female | other | unknown",
+      "names that are not an array",
+      { ...TAN_WEI_MING, name: { text: "Tan Wei Ming" } },
+      "Patient.name is not an array",
     ],
     [
-      "a malformed birth date",
-      { ...TAN_WEI_MING, birthDate: "12/03/1985" },
-      "Patient.birthDate is not a date",
+      "identifiers that are not an array",
+      { ...TAN_WEI_MING, identifier: {} },
+      "Patient.identifier is not an array",
     ],
     [
       "an identifier that is not an object",

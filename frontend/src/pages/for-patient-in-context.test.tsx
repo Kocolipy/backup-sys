@@ -22,7 +22,7 @@ const renderWrapper = (
   session: Parameters<typeof renderInLayout>[2] = CLINICIAN,
 ) =>
   renderInLayout(
-    [{ element: <ForPatientInContext history={History} loading="Loading visits…" />, path: "/" }],
+    [{ element: <ForPatientInContext history={History} />, path: "/" }],
     "/",
     session,
     answers,
@@ -64,13 +64,13 @@ describe("ForPatientInContext", () => {
     }).toEqual({ history: null, note: expect.anything() as unknown });
   });
 
-  it("says its loading copy while the patient in context is read", async () => {
+  it("says it is loading records while the patient in context is read", async () => {
     const patient = deferred();
     withPatientInContext(TAN_WEI_MING.id);
     await renderWrapper({ [TAN_WEI_MING_READ]: patient.answer });
 
     expect(screen.getByRole("main").querySelector("[role=status]")).toHaveTextContent(
-      /^Loading visits…$/,
+      /^Loading records…$/,
     );
     await patient.settle(json(TAN_WEI_MING));
   });
@@ -91,5 +91,14 @@ describe("ForPatientInContext", () => {
     await renderWrapper({ [TAN_WEI_MING_READ]: json(TAN_WEI_MING) });
 
     expect(await screen.findByText(`History of ${TAN_WEI_MING.id}`)).toBeInTheDocument();
+  });
+
+  it("reads the history by the id the patient was asked for, never the one the Patient read carries", async () => {
+    withPatientInContext(TAN_WEI_MING.id);
+    await renderWrapper({ [TAN_WEI_MING_READ]: json({ ...TAN_WEI_MING, id: "another-patient" }) });
+
+    expect(await screen.findByText(/^History of /)).toHaveTextContent(
+      `History of ${TAN_WEI_MING.id}`,
+    );
   });
 });

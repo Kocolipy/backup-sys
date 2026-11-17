@@ -154,7 +154,7 @@ describe("NUMC", () => {
     const answer = deferred();
     await renderNumc(answer.answer);
 
-    expect(await screen.findByRole("status")).toHaveTextContent(/^Loading NUMC records…$/);
+    expect(await screen.findByRole("status")).toHaveTextContent(/^Loading records…$/);
     await answer.settle(page(FOUR_RECORDS, 1, 4));
   });
 
@@ -163,7 +163,7 @@ describe("NUMC", () => {
     const { requests } = await renderNumc(page(fiveOfSeven, 1, 7), {
       [SECOND_PAGE]: page([record("numc-6", { type: "submariner" }), record("numc-7")], 6, 7),
     });
-    await screen.findByText("Showing 1 to 5 of 7 NUMC records");
+    await screen.findByText("Showing 1 to 5 of 7 records");
 
     await userEvent.click(
       within(screen.getByRole("navigation", { name: "NUMC History pages" })).getByRole("button", {
@@ -171,17 +171,17 @@ describe("NUMC", () => {
       }),
     );
 
-    expect(await screen.findByText("Showing 6 to 7 of 7 NUMC records")).toBeInTheDocument();
+    expect(await screen.findByText("Showing 6 to 7 of 7 records")).toBeInTheDocument();
     expect({ reads: numcReads(requests()), rows: rows().map((row) => row[0]) }).toEqual({
       reads: [FIRST_PAGE, SECOND_PAGE],
       rows: ["Submariner Duties", "Diving Duties"],
     });
   });
 
-  it("says No NUMC records for a patient with none", async () => {
+  it("says no records are found for a patient with none", async () => {
     await renderNumc(page([], 1, 0));
 
-    expect(await screen.findByText("No NUMC records")).toBeInTheDocument();
+    expect(await screen.findByText("No records found.")).toBeInTheDocument();
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
   });
 
@@ -202,7 +202,7 @@ describe("NUMC", () => {
 
     await patient.settle(json(TAN_WEI_MING));
 
-    expect(await screen.findByText("Showing 1 to 4 of 4 NUMC records")).toBeInTheDocument();
+    expect(await screen.findByText("Showing 1 to 4 of 4 records")).toBeInTheDocument();
     expect({ after: numcReads(requests()), before }).toEqual({ after: [FIRST_PAGE], before: [] });
   });
 
@@ -215,7 +215,7 @@ describe("NUMC", () => {
     });
 
     expect(screen.getByRole("main").querySelector("[role=status]")).toHaveTextContent(
-      /^Loading NUMC records…$/,
+      /^Loading records…$/,
     );
     await patient.settle(json(TAN_WEI_MING));
   });
@@ -333,9 +333,9 @@ const sortButton = (name: string) => within(columnHeader(name)).getByRole("butto
 
 /** Moves the history to its second page, and waits for it. */
 async function toSecondPage() {
-  await screen.findByText("Showing 1 to 5 of 7 NUMC records");
+  await screen.findByText("Showing 1 to 5 of 7 records");
   await userEvent.click(screen.getByRole("button", { name: "Page 2" }));
-  await screen.findByText("Showing 6 to 7 of 7 NUMC records");
+  await screen.findByText("Showing 6 to 7 of 7 records");
 }
 
 describe("NUMC, sorted", () => {
@@ -372,7 +372,7 @@ describe("NUMC, sorted", () => {
     await toSecondPage();
 
     await userEvent.click(sortButton(heading));
-    await screen.findByText("Showing 1 to 5 of 7 NUMC records");
+    await screen.findByText("Showing 1 to 5 of 7 records");
 
     expect({
       direction: columnHeader(heading).getAttribute("aria-sort"),
@@ -386,7 +386,7 @@ describe("NUMC, sorted", () => {
   it("holds the page, busy, and both sort headings still while a read is pending", async () => {
     const next = deferred();
     await renderNumc(FIVE_OF_SEVEN, { [SECOND_PAGE]: next.answer });
-    await screen.findByText("Showing 1 to 5 of 7 NUMC records");
+    await screen.findByText("Showing 1 to 5 of 7 records");
 
     await userEvent.click(screen.getByRole("button", { name: "Page 2" }));
 
@@ -517,7 +517,7 @@ describe("NUMC, filtered", () => {
 
       await pick(user, name, ...labels);
       await apply(user);
-      await screen.findByText("Showing 1 to 1 of 1 NUMC records");
+      await screen.findByText("Showing 1 to 1 of 1 record");
 
       expect({
         count: filterTrigger().getAttribute("aria-label"),
@@ -542,7 +542,7 @@ describe("NUMC, filtered", () => {
     setDate(range, "From", from);
     setDate(range, "To", to);
     await apply(user);
-    await screen.findByText("Showing 1 to 1 of 1 NUMC records");
+    await screen.findByText("Showing 1 to 1 of 1 record");
 
     expect({
       count: filterTrigger().getAttribute("aria-label"),
@@ -568,7 +568,7 @@ describe("NUMC, filtered", () => {
     await pick(user, "Outcome", "UNFIT");
     setDate("Issue Date", "From", "2023-01-01");
     await apply(user);
-    await screen.findByText("Showing 1 to 1 of 1 NUMC records");
+    await screen.findByText("Showing 1 to 1 of 1 record");
 
     expect({
       count: filterTrigger().getAttribute("aria-label"),
@@ -621,7 +621,7 @@ describe("NUMC, filtered", () => {
     await screen.findByRole("table", { name: "NUMC History" });
     await pick(user, "Outcome", "FIT");
     await apply(user);
-    await screen.findByText("Showing 1 to 1 of 1 NUMC records");
+    await screen.findByText("Showing 1 to 1 of 1 record");
     await pick(user, "Type", "Diving Duties");
     setDate("Issue Date", "From", "2024-01-01");
 
@@ -651,11 +651,11 @@ describe("NUMC, filtered", () => {
     await pick(user, "Type", "Diving Duties");
     setDate("Expiry Date", "From", "2024-01-01");
     await apply(user);
-    await screen.findByText("Showing 1 to 1 of 1 NUMC records");
+    await screen.findByText("Showing 1 to 1 of 1 record");
 
     await openFilters(user);
     await user.click(within(filterPanel()).getByRole("button", { name: "Reset" }));
-    await screen.findByText("Showing 1 to 4 of 4 NUMC records");
+    await screen.findByText("Showing 1 to 4 of 4 records");
 
     expect({
       count: filterTrigger().getAttribute("aria-label"),
@@ -663,7 +663,7 @@ describe("NUMC, filtered", () => {
     }).toEqual({ count: "Filter", read: FIRST_PAGE });
   });
 
-  it("says No NUMC records match the filters for a filter matching none, and offers the filters still", async () => {
+  it("says no records match the filters for a filter matching none, and offers the filters still", async () => {
     const user = userEvent.setup();
     await renderNumc(page(FOUR_RECORDS, 1, 4), {
       [historyPage(1, "expiryDateTo=2022-12-31")]: page([], 1, 0),
@@ -675,11 +675,11 @@ describe("NUMC, filtered", () => {
     await apply(user);
 
     expect({
-      empty: (await screen.findByText(/^No NUMC records/)).textContent,
+      empty: (await screen.findByText(/^No records/)).textContent,
       filter: filterTrigger().getAttribute("aria-label"),
       table: screen.queryByRole("table"),
     }).toEqual({
-      empty: "No NUMC records match the filters",
+      empty: "No records match the filters.",
       filter: "Filter, 1 set",
       table: null,
     });

@@ -10,11 +10,12 @@ import { sidebar } from "./shell.helpers";
  * two ARMC Boards, sorted by each date both ways, Tan Hui Min seven over two
  * pages, the first still open, filtered by each Outcome, each date range — an
  * End Date range leaving out the open board — two filters combined and one
- * matching nothing, and Siti Nurhaliza binte Ahmad none
- * (`/docs/domain/armc.md`, "The patient source's ARMC fixtures"). What the
- * page decides without the backend — the labels, the badges, a loading
- * patient, each filter's parameters, an inverted range, no patient in context
- * and a failure — is `armc.test.tsx`'s; the backend's real `502`
+ * matching nothing, Tan Boon Huat four shown as received, and Siti Nurhaliza
+ * binte Ahmad none (`/docs/domain/armc.md`, "The patient source's ARMC
+ * fixtures"). What the page decides without the backend — the labels, the
+ * badges, "—", "Error" and a raw code, a loading patient, each filter's
+ * parameters, an inverted range, no patient in context and a failure — is
+ * `armc.test.tsx`'s; the backend's real `502`
  * reaching a history page is `medication.spec.ts`', that a session without
  * `patient:read` is offered no ARMC link `roles-user.spec.ts`', and that it is
  * routed to Home `App.test.tsx`'s.
@@ -57,7 +58,7 @@ test.describe("ARMC", () => {
       "ACESFIT01 Jan 202410 Feb 2024Medical Officer 1Medical Officer 2",
       "ACESUNFIT21 Nov 202002 Apr 2021Medical Officer 3Medical Officer 4",
     ]);
-    await expect(page.getByText("Showing 1 to 2 of 2 ARMC records")).toBeVisible();
+    await expect(page.getByText("Showing 1 to 2 of 2 records")).toBeVisible();
   });
 
   test("shows Tan Hui Min's open board with — for its End Date, and pages to the second page", async ({
@@ -65,7 +66,7 @@ test.describe("ARMC", () => {
   }) => {
     await selectPatient(page, "tan", "Tan Hui Min", "S9012345A");
     await openArmc(page);
-    await expect(page.getByText("Showing 1 to 5 of 7 ARMC records")).toBeVisible();
+    await expect(page.getByText("Showing 1 to 5 of 7 records")).toBeVisible();
     await expect(armcRows(page)).toHaveCount(5);
     await expect(armcRows(page).first()).toHaveText(
       "ACESFIT02 Jun 2025—Dr Lim Wei JieDr Nur Aisyah binte Rahman",
@@ -73,19 +74,44 @@ test.describe("ARMC", () => {
 
     await page.getByRole("button", { name: "Page 2" }).click();
 
-    await expect(page.getByText("Showing 6 to 7 of 7 ARMC records")).toBeVisible();
+    await expect(page.getByText("Showing 6 to 7 of 7 records")).toBeVisible();
     await expect(armcRows(page)).toHaveText([
       "ACESFIT11 Oct 202120 Dec 2021Dr Rajesh KumarDr Nur Aisyah binte Rahman",
       "ACESUNFIT18 May 202024 Aug 2020Dr Chen Mei LingDr Lim Wei Jie",
     ]);
   });
 
-  test("says No ARMC records for a patient with none", async ({ page }) => {
+  // The patient source is the truth (ADR 0020): Tan Boon Huat's boards hold
+  // an outcome left out, an End Date before its Start Date and a blank
+  // Medical Officer, a date of the wrong JSON type and one not to the day,
+  // codes outside both closed sets, and a board with no id whose fields are
+  // empty, blank, null or left out.
+  test('shows Tan Boon Huat\'s ARMC Boards as received: "—", "Error" and raw codes in one table', async ({
+    page,
+  }) => {
+    await page.goto("/search");
+    await search(page, "tan");
+    await page.getByRole("button", { name: "Page 2" }).click();
+    await selectResult(page, "Tan Boon Huat");
+    await expectOnDemographicInContext(page, "Tan Boon Huat", "S5512345A");
+
+    await openArmc(page);
+
+    await expect(armcRows(page)).toHaveText([
+      "ACES—16 Mar 202201 Mar 2022Dr Lim Wei Jie—",
+      "ACESFITErrorErrorDr Rajesh KumarDr Chen Mei Ling",
+      "aircrewwaiver-granted16 Mar 202011 May 2020Dr Chen Mei LingDr Lim Wei Jie",
+      "ACES—————",
+    ]);
+    await expect(page.getByText("Showing 1 to 4 of 4 records")).toBeVisible();
+  });
+
+  test("says no records are found for a patient with none", async ({ page }) => {
     await selectPatient(page, "s9212345a", "Siti Nurhaliza binte Ahmad", "S9212345A");
 
     await openArmc(page);
 
-    await expect(page.getByText("No ARMC records")).toBeVisible();
+    await expect(page.getByText("No records found.", { exact: true })).toBeVisible();
     await expect(page.getByRole("table", { name: "ARMC History" })).toHaveCount(0);
   });
 
@@ -126,7 +152,7 @@ test.describe("ARMC", () => {
       await sortBy(page, "End Date");
       await expect(header(page, "End Date")).toHaveAttribute("aria-sort", "descending");
       await expect(armcRows(page)).toHaveText([LATER, EARLIER]);
-      await expect(page.getByText("Showing 1 to 2 of 2 ARMC records")).toBeVisible();
+      await expect(page.getByText("Showing 1 to 2 of 2 records")).toBeVisible();
       await expect(page).toHaveURL("/armc");
     });
   });
@@ -149,7 +175,7 @@ test.describe("ARMC", () => {
       await selectPatient(page, "tan", "Tan Hui Min", "S9012345A");
       await openArmc(page);
       await page.getByRole("button", { name: "Page 2" }).click();
-      await expect(page.getByText("Showing 6 to 7 of 7 ARMC records")).toBeVisible();
+      await expect(page.getByText("Showing 6 to 7 of 7 records")).toBeVisible();
       await filterButton(page).click();
     }
 
@@ -173,7 +199,7 @@ test.describe("ARMC", () => {
       await outcome(page, "FIT");
       await apply(page);
 
-      await expect(page.getByText("Showing 1 to 4 of 4 ARMC records")).toBeVisible();
+      await expect(page.getByText("Showing 1 to 4 of 4 records")).toBeVisible();
       await expect(armcRows(page)).toHaveText(rowsOf(1, 3, 4, 6));
       await expect(filterButton(page)).toHaveAccessibleName("Filter, 1 set");
       await expect(page).toHaveURL("/armc");
@@ -185,14 +211,14 @@ test.describe("ARMC", () => {
       await filterTanHuiMin(page);
       await outcome(page, "UNFIT");
       await apply(page);
-      await expect(page.getByText("Showing 1 to 3 of 3 ARMC records")).toBeVisible();
+      await expect(page.getByText("Showing 1 to 3 of 3 records")).toBeVisible();
       await expect(armcRows(page)).toHaveText(rowsOf(2, 5, 7));
 
       await filterButton(page).click();
       await outcome(page, "All");
       await apply(page);
 
-      await expect(page.getByText("Showing 1 to 5 of 7 ARMC records")).toBeVisible();
+      await expect(page.getByText("Showing 1 to 5 of 7 records")).toBeVisible();
       await expect(armcRows(page)).toHaveText(rowsOf(1, 2, 3, 4, 5));
       await expect(filterButton(page)).toHaveAccessibleName("Filter");
     });
@@ -204,7 +230,7 @@ test.describe("ARMC", () => {
       await dateField(page, "Start Date", "To").fill("2023-12-31");
       await apply(page);
 
-      await expect(page.getByText("Showing 1 to 2 of 2 ARMC records")).toBeVisible();
+      await expect(page.getByText("Showing 1 to 2 of 2 records")).toBeVisible();
       await expect(armcRows(page)).toHaveText(rowsOf(3, 4));
       await expect(filterButton(page)).toHaveAccessibleName("Filter, 2 set");
     });
@@ -215,7 +241,7 @@ test.describe("ARMC", () => {
       await dateField(page, "End Date", "From").fill("2023-01-01");
       await apply(page);
 
-      await expect(page.getByText("Showing 1 to 3 of 3 ARMC records")).toBeVisible();
+      await expect(page.getByText("Showing 1 to 3 of 3 records")).toBeVisible();
       await expect(armcRows(page)).toHaveText(rowsOf(2, 3, 4));
       await expect(armcRows(page).filter({ hasText: "—" })).toHaveCount(0);
     });
@@ -227,7 +253,7 @@ test.describe("ARMC", () => {
       await dateField(page, "Start Date", "From").fill("2023-01-01");
       await apply(page);
 
-      await expect(page.getByText("Showing 1 to 3 of 3 ARMC records")).toBeVisible();
+      await expect(page.getByText("Showing 1 to 3 of 3 records")).toBeVisible();
       await expect(armcRows(page)).toHaveText(rowsOf(1, 3, 4));
       await expect(filterButton(page)).toHaveAccessibleName("Filter, 2 set");
     });
@@ -237,25 +263,23 @@ test.describe("ARMC", () => {
       await outcome(page, "FIT");
       await dateField(page, "Start Date", "From").fill("2023-01-01");
       await apply(page);
-      await expect(page.getByText("Showing 1 to 3 of 3 ARMC records")).toBeVisible();
+      await expect(page.getByText("Showing 1 to 3 of 3 records")).toBeVisible();
 
       await filterButton(page).click();
       await panel(page).getByRole("button", { name: "Reset" }).click();
 
-      await expect(page.getByText("Showing 1 to 5 of 7 ARMC records")).toBeVisible();
+      await expect(page.getByText("Showing 1 to 5 of 7 records")).toBeVisible();
       await expect(armcRows(page)).toHaveText(rowsOf(1, 2, 3, 4, 5));
       await expect(filterButton(page)).toHaveAccessibleName("Filter");
     });
 
-    test("says No ARMC records match the filters for a filter matching none", async ({ page }) => {
+    test("says no records match the filters for a filter matching none", async ({ page }) => {
       await filterTanHuiMin(page);
 
       await dateField(page, "Start Date", "To").fill("2019-12-31");
       await apply(page);
 
-      await expect(
-        page.getByText("No ARMC records match the filters", { exact: true }),
-      ).toBeVisible();
+      await expect(page.getByText("No records match the filters.", { exact: true })).toBeVisible();
       await expect(page.getByRole("table", { name: "ARMC History" })).toHaveCount(0);
     });
   });

@@ -2,7 +2,6 @@ package com.example.backend.patient.controller;
 
 import com.example.backend.patient.domain.ArmcBoard;
 import com.example.backend.patient.domain.ArmcHistory;
-import com.fasterxml.jackson.annotation.JsonInclude;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -24,24 +23,30 @@ public record ArmcHistoryPage(int totalResults, int startIndex, List<Row> record
     }
 
     /**
-     * One ARMC Board: its id, each closed set's member as its code, its dates as
-     * {@code YYYY-MM-DD} — no {@code endDate} at all for a board still open — and its two
-     * Medical Officers' names as the source gave them. The SPA names each code with its label.
+     * One ARMC Board as received (ADR 0020): each field the source sent, each closed set's code
+     * as it came — known to its set or not — its dates as {@code YYYY-MM-DD} and its two Medical
+     * Officers' names as the source gave them. A field the source left out, sent blank or sent in
+     * the wrong format is {@code null} — the End Date of a board still open among them — and
+     * {@code invalid} names those whose format was wrong: a {@code null} field it does not name
+     * is missing. The SPA names each known code with its label.
+     *
+     * @param invalid the fields whose format was wrong, in the row's order; none when each field
+     *                is present or missing
      */
     public record Row(String id, String boardType, String outcome, String startDate,
-            @JsonInclude(JsonInclude.Include.NON_NULL) String endDate, String medicalOfficer1,
-            String medicalOfficer2) {
+            String endDate, String medicalOfficer1, String medicalOfficer2,
+            List<String> invalid) {
 
         static Row of(ArmcBoard board) {
-            LocalDate ended = board.endDate();
             return new Row(
-                    board.id(),
-                    board.boardType().code(),
-                    board.outcome().code(),
-                    board.startDate().toString(),
-                    ended == null ? null : ended.toString(),
-                    board.medicalOfficer1(),
-                    board.medicalOfficer2());
+                    board.id().value(),
+                    board.boardType().value(),
+                    board.outcome().value(),
+                    board.startDate().map(LocalDate::toString).value(),
+                    board.endDate().map(LocalDate::toString).value(),
+                    board.medicalOfficer1().value(),
+                    board.medicalOfficer2().value(),
+                    board.invalid());
         }
 
         /** An ARMC Board is Restricted data: printed, it names the board by id alone. */

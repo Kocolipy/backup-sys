@@ -84,11 +84,20 @@ paths:
         | `fault-slow`             | `200` Patient after 7 seconds, past the read timeout       |
         | `fault-slow-body`        | headers at once, the body dribbled out over 7 seconds      |
         | `fault-server-error`     | `503`                                                      |
-        | `fault-no-nric`          | `200` Patient with no identifier under the NRIC system     |
-        | `fault-no-official-name` | `200` Patient with no `name` of `use: official`            |
-        | `fault-no-name-text`     | `200` Patient whose official name has no `text`            |
-        | `fault-no-gender`        | `200` Patient with no `gender`                             |
-        | `fault-no-birth-date`    | `200` Patient with no `birthDate`                          |
+
+        **Received ids (mock only).** What a Patient's elements hold is never a
+        failure of a read by id (ADR 0020), so the mock serves, under ids of
+        their own, `200` Patients holding them missing or in the wrong format,
+        shown as received. Each is no fixture and matches no search:
+
+        | Id                          | Answers a `200` Patient                                                     |
+        | --------------------------- | --------------------------------------------------------------------------- |
+        | `received-no-nric`          | with no identifier under the NRIC system                                    |
+        | `received-no-official-name` | with no `name` of `use: official`                                           |
+        | `received-no-name-text`     | whose official name has no `text`                                           |
+        | `received-no-gender`        | with no `gender`                                                            |
+        | `received-no-birth-date`    | with no `birthDate`                                                         |
+        | `received-wrong-format`     | whose NRIC, official name's `text`, `gender` and `birthDate` are each of another JSON type or no calendar date |
       parameters:
         - name: id
           in: path
@@ -101,8 +110,11 @@ paths:
         "200":
           description: |
             The Patient under exactly this `id`. A Patient under another id is a
-            failure. The `last-visit` extension may be present; a read by id
-            ignores it.
+            failure: its histories are read by the id asked for. Its NRIC,
+            official name's `text`, `gender` and `birthDate` are shown as
+            received (ADR 0020): each may be left out or sent in another form,
+            and none fails the read. The `last-visit` extension may be present;
+            a read by id ignores it.
 
             A read by id also copies the Patient's **Demographic details**, each
             only when the Patient has it: the first `telecom` of `system: phone`
@@ -654,6 +666,15 @@ paths:
         though it starts in 2025. Tan Wei Ming has two, on one page, the latest
         first; with `_sort=start-date` the earlier is first.
 
+        **Shown as received** (ADR 0020): the backend refuses no ARMC Board for
+        what its fields hold. A field left out, `null`, empty or blank — a
+        Medical Officer among them — is shown missing; one of another JSON
+        type, or a date that is no calendar date, is shown "Error"; a code
+        outside its set, an id outside FHIR's id grammar, or an `endDate`
+        before its `startDate`, is shown as it came. Tan Boon Huat
+        (`dev-patient-10`) has four such boards. Only the page itself can fail
+        the read.
+
         **FHIR-shaped paging only, not FHIR-conformant**: the answer borrows a
         searchset `Bundle`'s shape, and its entries are a custom `ARMC` object
         no FHIR version defines (ADR 0019, D6). The id is sent unchanged, as a
@@ -663,22 +684,14 @@ paths:
         **Fault ids (mock only).** Beside the fixtures' histories, the mock
         serves one failure of this read per patient id, none a fixture's:
 
-        | Id                                   | Answers                                                           |
-        | ------------------------------------ | ----------------------------------------------------------------- |
-        | `fault-armc-unreachable`             | the connection reset, no answer                                   |
-        | `fault-armc-slow`                    | `200` page after 7 seconds, past the read timeout                 |
-        | `fault-armc-server-error`            | `503`                                                             |
-        | `fault-armc-unexpected-status`       | `400`                                                             |
-        | `fault-armc-not-a-searchset`         | `200` Bundle of `type: collection`                                |
-        | `fault-armc-no-total`                | `200` searchset with no `total`                                   |
-        | `fault-armc-no-id`                   | `200` page whose ARMC Board has no `id`                           |
-        | `fault-armc-invalid-id`              | `200` page whose ARMC Board's `id` is outside FHIR's id grammar   |
-        | `fault-armc-no-outcome`              | `200` page whose ARMC Board has no `outcome`                      |
-        | `fault-armc-no-medical-officer-2`    | `200` page whose ARMC Board has no `medicalOfficer2`              |
-        | `fault-armc-unknown-board-type`      | `200` page whose ARMC Board's `boardType` is no code of its set   |
-        | `fault-armc-unknown-outcome`         | `200` page whose ARMC Board's `outcome` is a NUMC Outcome's       |
-        | `fault-armc-end-before-start`        | `200` page whose ARMC Board's `endDate` is before its `startDate` |
-        | `fault-armc-end-date-not-to-the-day` | `200` page whose ARMC Board's `endDate` is a month                |
+        | Id                             | Answers                                           |
+        | ------------------------------ | ------------------------------------------------- |
+        | `fault-armc-unreachable`       | the connection reset, no answer                   |
+        | `fault-armc-slow`              | `200` page after 7 seconds, past the read timeout |
+        | `fault-armc-server-error`      | `503`                                             |
+        | `fault-armc-unexpected-status` | `400`                                             |
+        | `fault-armc-not-a-searchset`   | `200` Bundle of `type: collection`                |
+        | `fault-armc-no-total`          | `200` searchset with no `total`                   |
       parameters:
         - name: id
           in: path
@@ -870,7 +883,7 @@ paths:
             these codes, joined by commas (FHIR's OR). Sent once at most.
           schema:
             type: string
-            pattern: '^(pending|dispensed|uncollected)(,(pending|dispensed|uncollected))*$'
+            pattern: "^(pending|dispensed|uncollected)(,(pending|dispensed|uncollected))*$"
           example: pending,uncollected
         - name: start-date
           in: query
@@ -1000,11 +1013,19 @@ components:
         contact point's `use`), and the fixtures do, so the backend's selection
         is exercised. A search reads none of the Demographic details.
 
-        Each rule below is one the backend holds: a Patient breaking any is the
-        source failing, the backend's `502`. A part the Patient does not hold is
-        left out of the JSON, never sent as `null` or empty.
+        A **read by id** shows the Patient as received (ADR 0020): only its
+        `id` must be the one asked for. Its NRIC's `value`, its official name's
+        `text`, its `gender` and its `birthDate` are each expected in the form
+        their descriptions name, but none is required and no value of one fails
+        the read: one left out, `null`, empty or blank is shown missing, and one
+        of another JSON type, or a birth date that is no calendar date, is shown
+        "Error"; a gender outside the four codes is shown as it came.
+
+        A **search's match** is held to every rule below: one breaking any is
+        the source failing, the backend's `502`. A part the Patient does not
+        hold is left out of the JSON, never sent as `null` or empty.
       type: object
-      required: [resourceType, id, identifier, name, gender, birthDate]
+      required: [resourceType, id]
       properties:
         resourceType:
           const: Patient
@@ -1024,28 +1045,30 @@ components:
               - $ref: "#/components/schemas/OtherExtension"
         identifier:
           description: |
-            Must include one identifier under the NRIC NamingSystem with a
-            `value`; others may sit beside it and are ignored.
+            One identifier under the NRIC NamingSystem with a `value`, which a
+            search's match must include; others may sit beside it and are
+            ignored. The first under the NRIC NamingSystem is the NRIC.
           type: array
-          minItems: 1
           items:
             $ref: "#/components/schemas/Identifier"
         name:
           description: |
-            Must include one name of `use: official` with a non-blank `text`.
-            `usual` and `maiden` names may sit beside it: a name search matches
-            them, and the backend still shows the official one.
+            One name of `use: official` with a non-blank `text`, which a
+            search's match must include. `usual` and `maiden` names may sit
+            beside it: a name search matches them, and the backend still shows
+            the official one. The first of `use: official` is the official name.
           type: array
-          minItems: 1
           items:
             $ref: "#/components/schemas/HumanName"
         gender:
-          type: string
-          enum: [male, female, other, unknown]
+          description: |
+            The administrative gender's code, a string, one of `male`,
+            `female`, `other` and `unknown`: a search's match must hold one of
+            the four, and a read by id shows another as it came.
         birthDate:
-          description: To the day.
-          type: string
-          format: date
+          description: |
+            A calendar date, `YYYY-MM-DD`, to the day: a search's match must
+            hold one.
         telecom:
           description: |
             Read by id alone: the first phone and the first email that have a
@@ -1156,10 +1179,10 @@ components:
           type: string
         value:
           description: |
-            An NRIC. Every fixture's carries a deliberately wrong check letter,
-            so none can be a real person's (`/docs/domain/patient.md`, "Dummy
-            NRICs"); a mock's Patients keep that rule.
-          type: string
+            An NRIC, a string. Every fixture's carries a deliberately wrong
+            check letter, so none can be a real person's
+            (`/docs/domain/patient.md`, "Dummy NRICs"); a mock's Patients keep
+            that rule.
 
     HumanName:
       type: object
@@ -1169,9 +1192,9 @@ components:
           enum: [official, usual, maiden]
         text:
           description: |
-            The name as the person writes it, what the backend shows. Required
-            on the official name, and never rebuilt from `family` and `given`.
-          type: string
+            The name as the person writes it, a string, what the backend shows.
+            A search's match must hold it on the official name, and it is never
+            rebuilt from `family` and `given`.
         family:
           description: Left out when the name does not split, as many Singapore names do not.
           type: string
@@ -1185,14 +1208,17 @@ components:
         A Patient's Last visit, the date of their latest visit, which base FHIR
         has no element for. At most one; absent for a Patient with none.
       type: object
-      required: [url, valueDate]
+      required: [url]
       properties:
         url:
           const: https://fhir.synapxe.sg/StructureDefinition/last-visit
         valueDate:
-          description: To the day; any other precision is the source failing.
-          type: string
-          format: date
+          description: |
+            To the day. It is shown as received (ADR 0020): one left out, `null`
+            or blank is no Last visit, and one of another precision (Rajesh
+            Kumar's `2026-10`) or another JSON type is shown as "Error"; neither
+            fails the search.
+          type: [string, "null"]
 
     MilitaryHistoryExtension:
       description: |
@@ -1247,7 +1273,14 @@ components:
                   url:
                     type: string
                     not:
-                      enum: [serviceRecord, enlistmentDate, ordDate, mrDate, rodDate]
+                      enum:
+                        [
+                          serviceRecord,
+                          enlistmentDate,
+                          ordDate,
+                          mrDate,
+                          rodDate,
+                        ]
       example:
         url: http://example.org/fhir/StructureDefinition/military-service
         extension:
@@ -1561,57 +1594,45 @@ components:
     Armc:
       description: |
         One ARMC Board, a custom object no FHIR version defines, of flat
-        fields. Every field is required but `endDate`, which is left out for a
-        board still open, and each rule below is one the backend holds: a board
-        breaking any is the source failing, the backend's `502`. A field it
-        does not read is ignored.
+        fields, shown as received (ADR 0020). Only its `resourceType` is
+        required: an entry of another resource is the source failing, the
+        backend's `502`. Each other field is expected in the form its
+        description names, but none is required and no value of one fails the
+        read: a field left out, `null`, empty or blank is shown missing, and
+        one of another JSON type, or a date that is no calendar date, is shown
+        "Error". A field it does not read is ignored.
       type: object
-      required:
-        [
-          resourceType,
-          id,
-          boardType,
-          outcome,
-          startDate,
-          medicalOfficer1,
-          medicalOfficer2,
-        ]
+      required: [resourceType]
       properties:
         resourceType:
           const: ARMC
         id:
-          description: The ARMC Board's own id, in FHIR's id grammar.
-          type: string
-          pattern: '^[A-Za-z0-9\-.]{1,64}$'
+          description: |
+            The ARMC Board's own id, a string; never checked, so one outside
+            FHIR's id grammar is kept.
         boardType:
-          description: The ARMC Board Type, by its code.
-          type: string
-          enum: [aces]
+          description: |
+            The ARMC Board Type, by its code — a string, `aces`; another is
+            shown as it came.
         outcome:
           description: |
-            The ARMC Outcome, by its code: a set of its own, so a NUMC
-            Outcome's `waiver-granted` or an FFI's `request-waiver` is outside
-            it.
-          type: string
-          enum: [fit, unfit]
+            The ARMC Outcome, by its code — a string, `fit` or `unfit`, a set
+            of its own; another, a NUMC Outcome's `waiver-granted` or an FFI's
+            `request-waiver` among them, is shown as it came.
         startDate:
-          description: To the day.
-          type: string
-          format: date
+          description: A calendar date, `YYYY-MM-DD`, to the day.
         endDate:
           description: |
-            To the day, and on or after `startDate`. Left out for a board still
-            open; never `null`.
-          type: string
-          format: date
+            A calendar date, `YYYY-MM-DD`, to the day, checked against nothing.
+            Left out for a board still open.
         medicalOfficer1:
-          description: Medical Officer #1's name, as the source holds it. Not blank.
-          type: string
-          minLength: 1
+          description: |
+            Medical Officer #1's name, a string, as the source holds it; a
+            blank one is shown missing.
         medicalOfficer2:
-          description: Medical Officer #2's name, as the source holds it. Not blank.
-          type: string
-          minLength: 1
+          description: |
+            Medical Officer #2's name, a string, as the source holds it; a
+            blank one is shown missing.
 
     MedicationSearchset:
       description: |

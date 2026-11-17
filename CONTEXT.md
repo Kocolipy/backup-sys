@@ -432,7 +432,8 @@ present, shown as its value; missing — no key, `null`, or a blank string —
 shown as "—"; or invalid — the wrong JSON type, or a string that is no date or
 date-time of its kind — shown as "Error". A code outside its closed set is
 shown as the raw code. Only a failure of the call or of the page's structure
-fails the read. The FFI, the NUMC and the Medication History are read so.
+fails the read. The FFI, NUMC, ARMC and Medication Histories, a Patient read by
+id and a Patient search's Last visit are read so.
 _Avoid_: validated, sanitised, lenient (the reading is lenient; what the
 clinician sees is the data as received)
 **Demographic page**:
@@ -445,7 +446,8 @@ _Avoid_: Profile (Home's title), patient profile
 
 **Patient card**:
 The card, on Home and the Demographic page, showing the EHR context's patient — name, NRIC, gender, date of
-birth and age — or "No patient in context" when the tab holds no EHR context,
+birth and age, each shown as received, the age following the date of birth —
+or "No patient in context" when the tab holds no EHR context,
 its EHR context names no patient, or the Patient source holds none under its
 id. The Patient source failing is the card's failed state, never "No patient in
 context".
@@ -464,7 +466,7 @@ Patient)
 **Last visit**:
 The date of a Patient's latest visit, as the Patient source records it on the
 Patient (its `last-visit` extension); a Patient may have none. Patient search
-shows it in each row.
+shows it in each row, as received.
 _Avoid_: last seen, last encounter, last admission
 
 **Demographic details**:
@@ -588,7 +590,7 @@ _Avoid_: NUMC result, a bare "Outcome" (that is an FFI's)
 
 ### ARMC
 
-Rules: [armc](docs/domain/armc.md). Decided in ADR 0019 (D6).
+Rules: [armc](docs/domain/armc.md). Decided in ADR 0019 (D6) and ADR 0020.
 
 **ARMC (Aeromedical Centre)**:
 The centre that sits a patient's aeromedical fitness boards. The Patient source
@@ -597,8 +599,10 @@ holds each board it sat; the service holds none.
 **ARMC Board**:
 One aeromedical fitness board a patient sat, as the Patient source holds it
 for the ARMC: its ARMC Board Type, ARMC Outcome, Start Date, End Date, Medical
-Officer #1 and Medical Officer #2, every one required but the End Date. Read
-from the Patient source on every read, never held, and not audited.
+Officer #1 and Medical Officer #2, each shown as received — missing or invalid
+included, a code outside its closed set shown raw, and an End Date before its
+Start Date as it came. One with no End Date is still open. Read from the
+Patient source on every read, never held, and not audited.
 _Avoid_: ARMC Record, ARMC Assessment, aeromedical record
 
 **ARMC History**:
@@ -609,7 +613,7 @@ _Avoid_: ARMC list, ARMC log
 
 **ARMC Board Type**:
 The kind of aeromedical fitness board an ARMC Board is, one of a closed set:
-ACES.
+ACES. A code outside it is shown as it came.
 
 **ARMC Outcome**:
 What an ARMC Board found, one of FIT and UNFIT. A set of its own, apart from an
@@ -621,9 +625,10 @@ The start of a record's period: a calendar date on an ARMC Board, and a
 date-time, to the minute, on a Medication Record.
 
 **End Date**:
-The end of a record's period, never before its Start Date: a calendar date on
-an ARMC Board, which may have none while it is still open, and a date-time, to
-the minute, on a Medication Record, which always has one.
+The end of a record's period: a calendar date on an ARMC Board, which may have
+none while it is still open and is shown as received, before its Start Date
+too; and a date-time, to the minute, on a Medication Record, which always has
+one, never before its Start Date.
 
 **Medical Officer #1** / **Medical Officer #2**:
 The two Medical Officers who sat on an ARMC Board, each a name as the Patient

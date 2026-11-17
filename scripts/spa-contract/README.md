@@ -53,7 +53,7 @@ set-equal to the one before it. The document's enums are named under
   also decodes another response with: `PERMISSIONS` against the delegatable
   enum). A new closed set joins both lists.
 - **A set shown as received** (ADR 0020) stays `equal`. An FFI's, a NUMC
-  Record's or a Medication Record's code may be any string — the document's row field is `anyOf` the set's enum, any
+  Record's, an ARMC Board's or a Medication Record's code may be any string — the document's row field is `anyOf` the set's enum, any
   string and `null` — but the set is what a filter's codes are checked
   against and what the Filter panel offers, so the SPA's copy and the enum hold
   the same known codes, and the check compares the enum, not the row field.
@@ -123,7 +123,11 @@ So a row shown as received (ADR 0020) — each patient-source field nullable, a
 closed-set field `anyOf` its enum, any string and `null`, and `invalid` an array
 of field names — is sampled with every field set, each code a known one and
 `invalid` naming the row's first field, and with every field `null`: the
-decoder must read both without refusing the row. A sample the decoder refuses is a finding, naming the sample, the
+decoder must read both without refusing the row. A Patient read by id, a FHIR
+resource shown as received, has no `null`: its four elements are optional, the
+gender `anyOf` its enum and any string, and its `invalid-field` extensions one
+branch of its `extension`'s items, so it is sampled with every element set and
+with its `resourceType` and `id` alone. A sample the decoder refuses is a finding, naming the sample, the
 operation and the decoder's own error, which names the field; the first refusal
 per declaration is reported.
 

@@ -1,62 +1,56 @@
 package com.example.backend.patient.domain;
 
+import static java.util.Map.entry;
+
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Objects;
 
 /**
  * One ARMC Board in a patient's ARMC History: one aeromedical fitness board the patient sat, as
  * the patient source holds it for the Aeromedical Centre (/docs/domain/armc.md, ADR 0019, D6).
- * Read from the source on every read, never held. Every element is required but the End Date: a
- * board with none is still open, and one with an End Date ends on or after its Start Date.
+ * Read from the source on every read, never held, and shown as received (ADR 0020): each element
+ * is a {@link SourceField}, present, missing or invalid, and none is refused for what it holds —
+ * an id outside FHIR's grammar, a code outside its closed set, an End Date before the Start Date
+ * or a blank Medical Officer, which is missing, included. A board with no End Date is still open.
  *
  * <p>Printed by its id alone: an ARMC Board is the patient's Restricted data, so neither a board
  * nor a message may carry what it says.
  *
- * @param id              the board's id at the source, in FHIR's id grammar
- * @param boardType       its ARMC Board Type
- * @param outcome         its ARMC Outcome
+ * @param id              the board's id at the source, never checked
+ * @param boardType       its ARMC Board Type's code, known to {@link ArmcBoardType} or not
+ * @param outcome         its ARMC Outcome's code, known to {@link ArmcOutcome} or not
  * @param startDate       its Start Date, a calendar date
- * @param endDate         its End Date, a calendar date on or after the Start Date, or
- *                        {@code null} for a board still open
+ * @param endDate         its End Date, a calendar date, checked against nothing; missing for a
+ *                        board still open
  * @param medicalOfficer1 its Medical Officer #1, a name as the source gives it, linked to no User
  * @param medicalOfficer2 its Medical Officer #2, likewise
  */
-public record ArmcBoard(String id, ArmcBoardType boardType, ArmcOutcome outcome,
-        LocalDate startDate, LocalDate endDate, String medicalOfficer1, String medicalOfficer2) {
+public record ArmcBoard(SourceField<String> id, SourceField<String> boardType,
+        SourceField<String> outcome, SourceField<LocalDate> startDate,
+        SourceField<LocalDate> endDate, SourceField<String> medicalOfficer1,
+        SourceField<String> medicalOfficer2) implements ReceivedRecord {
 
     public ArmcBoard {
-        if (!FhirId.matches(id)) {
-            throw new IllegalArgumentException(
-                    "An ARMC Board's id must match the FHIR id grammar");
-        }
+        Objects.requireNonNull(id, "id");
         Objects.requireNonNull(boardType, "boardType");
         Objects.requireNonNull(outcome, "outcome");
         Objects.requireNonNull(startDate, "startDate");
-        named(Objects.requireNonNull(medicalOfficer1, "medicalOfficer1"), 1);
-        named(Objects.requireNonNull(medicalOfficer2, "medicalOfficer2"), 2);
-        if (endsBeforeItStarts(startDate, endDate)) {
-            throw new IllegalArgumentException(
-                    "An ARMC Board's End Date must not be before its Start Date");
-        }
+        Objects.requireNonNull(endDate, "endDate");
+        Objects.requireNonNull(medicalOfficer1, "medicalOfficer1");
+        Objects.requireNonNull(medicalOfficer2, "medicalOfficer2");
     }
 
-    /**
-     * Whether a board from {@code startDate} to {@code endDate} ends before it starts, which no
-     * ARMC Board does: a board still open, with no End Date, never does.
-     */
-    public static boolean endsBeforeItStarts(LocalDate startDate, LocalDate endDate) {
-        return endDate != null && endDate.isBefore(startDate);
-    }
-
-    private static void named(String medicalOfficer, int which) {
-        if (medicalOfficer.isBlank()) {
-            throw new IllegalArgumentException(
-                    "An ARMC Board's Medical Officer #" + which + " must be named");
-        }
+    @Override
+    public List<String> invalid() {
+        return SourceField.invalidAmong(entry("id", id), entry("boardType", boardType),
+                entry("outcome", outcome), entry("startDate", startDate),
+                entry("endDate", endDate), entry("medicalOfficer1", medicalOfficer1),
+                entry("medicalOfficer2", medicalOfficer2));
     }
 
     @Override
     public String toString() {
-        return "ArmcBoard[" + id + "]";
+        return "ArmcBoard[" + id.orElse("no id") + "]";
     }
 }

@@ -223,9 +223,7 @@ describe("App", () => {
     );
 
     expect(await screen.findByRole("heading", { name: "Audit" })).toBeInTheDocument();
-    expect(
-      await screen.findByText("No audit events match the current filters."),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("No records found.")).toBeInTheDocument();
   });
 
   // What each panel reads and shows is the Accounts suite's; this proves the route.

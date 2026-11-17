@@ -1,11 +1,11 @@
 {
-  "name": "Fault: a Patient with no birth date",
+  "name": "Received: a Patient with no birth date",
   "metadata": {
-    "fault": "no-birth-date"
+    "received": "no-birth-date"
   },
   "request": {
     "method": "GET",
-    "urlPath": "/Patient/fault-no-birth-date"
+    "urlPath": "/Patient/received-no-birth-date"
   },
   "response": {
     "status": 200,
@@ -14,7 +14,7 @@
     },
     "jsonBody": {
       "resourceType": "Patient",
-      "id": "fault-no-birth-date",
+      "id": "received-no-birth-date",
       "meta": {
         "versionId": "1",
         "lastUpdated": "2026-01-01T00:00:00Z"

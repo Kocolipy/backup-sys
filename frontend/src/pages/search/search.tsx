@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/table";
 import { formatCalendarDateTwoDigitDay } from "@/lib/time";
 import { PATIENT_GENDER_LABELS, type PatientGender } from "@/lib/patient-gender";
+import { shown } from "@/lib/source-field";
 import { PagedListing } from "@/pages/paged-listing";
 import { usePagedRead } from "@/pages/paged-read";
 import { PlainHeading } from "@/pages/sort-heading";
@@ -43,7 +44,8 @@ const GENDER_BADGE_TINTS: Readonly<Record<PatientGender, string | undefined>> = 
 /**
  * The matching Patients, one row each: the official name, the full NRIC, the
  * gender as a badge (Male blue, Female pink) and both dates as `dd MMM yyyy`,
- * a missing Last visit shown as `—`, in the patient source's own order: no
+ * the Last visit shown as received (ADR 0020) — `—` when missing, "Error" in
+ * the wrong format — in the patient source's own order: no
  * column sorts. Each row is keyed by the Patient's id, which is kept and never
  * shown.
  *
@@ -90,7 +92,7 @@ function ResultsTable({ patients }: { patients: readonly PatientMatch[] }) {
               {formatCalendarDateTwoDigitDay(patient.birthDate)}
             </TableCell>
             <TableCell className="tabular-nums">
-              {patient.lastVisit === null ? "—" : formatCalendarDateTwoDigitDay(patient.lastVisit)}
+              {shown(patient.lastVisit, formatCalendarDateTwoDigitDay)}
             </TableCell>
           </TableRow>
         ))}
@@ -102,8 +104,9 @@ function ResultsTable({ patients }: { patients: readonly PatientMatch[] }) {
 /**
  * One submitted search's results, read from its first page on mounting and
  * again from its first page whenever its filter changes: the table,
- * the "Showing x to y of N patients" range with the numbered pager whenever
- * there is a match, or "No patients match your search". A failed read is
+ * the "Showing x to y of N records" range with the numbered pager whenever
+ * there is a match, or "No records match your search."; "Searching
+ * records…" while it is read. A failed read is
  * reported on the page's one error line, which the signed-in layout owns, and
  * offers Retry, which reads the same page of the same search again.
  */
@@ -120,13 +123,9 @@ function SearchResults({ filters, query }: { filters: PatientFilters; query: str
   return (
     <>
       <PagedListing
-        copy={{
-          empty: "No patients match your search",
-          loading: "Searching for patients…",
-          noun: "patients",
-          pagerLabel: "Search result pages",
-        }}
+        narrowing="patient-search"
         onePage="shown"
+        pagerLabel="Search result pages"
         read={reading}
         readAgain={false}
       >

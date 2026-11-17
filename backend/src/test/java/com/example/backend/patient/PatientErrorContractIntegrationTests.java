@@ -254,20 +254,47 @@ class PatientErrorContractIntegrationTests {
     }
 
     /**
+     * A Patient holding its four elements in the wrong format is answered, as received (ADR
+     * 0020), and writes exactly one {@code WARN} beside the request's record, naming each element
+     * by its path in the source's answer, and no {@code ERROR}; nothing in the stream names the
+     * id asked for or anything the Patient holds.
+     */
+    @Test
+    void aPatientWithInvalidElementsIsAnsweredAndWarnsOnceNamingTheirPaths() throws Exception {
+        HttpClient session = signedIn();
+        logs.reset();
+
+        HttpResponse<String> response = send(session, patient("received-wrong-format").GET());
+        logs.awaitRequestRecords(1);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(logs.records())
+                .filteredOn(record -> List.of("WARN", "ERROR")
+                        .contains(record.at("/log/level").asText()))
+                .filteredOn(record -> !"http.request".equals(record.at("/app/event/action")
+                        .asText()))
+                .singleElement()
+                .satisfies(warning -> assertThat(List.of(warning.at("/log/level").asText(),
+                        warning.at("/app/event/action").asText(),
+                        warning.at("/app/patient_source/read").asText(),
+                        warning.at("/app/patient_source/invalid_fields").toString()))
+                        .containsExactly("WARN", "patient_source.invalid_fields", "patient",
+                                "[\"identifier[1].value\",\"name[1].text\",\"gender\","
+                                        + "\"birthDate\"]"));
+        assertThat(logs.lines()).doesNotContain("received-wrong-format", "8800008", "900108",
+                "Wong", "Mei Fong", "14/02/1981");
+    }
+
+    /**
      * Each fault stub the stub files serve, by the failure its record names and the
      * {@code error.category} it is reported under: no answer within the read timeout, its
-     * headers or its body, a {@code 5xx}, and a Patient breaking each domain rule. The slow stubs
-     * wait past the production read timeout, so their cases take that long.
+     * headers or its body, and a {@code 5xx}. The slow stubs wait past the production read
+     * timeout, so their cases take that long.
      */
     private static final String FAULT_STUBS = """
             fault-slow,             timed-out,        network
             fault-slow-body,        timed-out,        network
             fault-server-error,     server-error,     server
-            fault-no-nric,          no-nric,          data
-            fault-no-official-name, no-official-name, data
-            fault-no-name-text,     no-name-text,     data
-            fault-no-gender,        no-gender,        data
-            fault-no-birth-date,    no-birth-date,    data
             """;
 
     /** The table above holds every fault stub the stub files serve. */
@@ -293,8 +320,8 @@ class PatientErrorContractIntegrationTests {
     }
 
     /**
-     * A source failure writes exactly one {@code ERROR}, the fault's record, naming the failure or
-     * the broken rule under its category; and nothing in the stream names the id asked for, or
+     * A source failure writes exactly one {@code ERROR}, the fault's record, naming the failure
+     * under its category; and nothing in the stream names the id asked for, or
      * anything the source's answer carried — its NRIC, its names, its birth date, its error body.
      */
     @ParameterizedTest

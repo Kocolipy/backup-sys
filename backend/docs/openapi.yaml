@@ -511,6 +511,16 @@ paths:
         named by the response schema reach the answer. Read-only:
         nothing in the API changes a patient.
 
+        **Shown as received** (ADR 0020): the NRIC, the official name's `text`,
+        `gender` and `birthDate` are each the source's value, left out when the
+        source left it out or sent it blank, and left out and named by an
+        `invalid-field` extension when it sent it in the wrong format — the wrong
+        JSON type, or a birth date that is no calendar date. A gender outside the
+        four codes is sent as its code. None of them fails the read. A Patient
+        holding invalid elements logs one `WARN`, `patient_source.invalid_fields`,
+        naming each by its path in the source's answer and never its value, and
+        counts each in `patient_source.invalid_fields`.
+
         Requires `patient:read`, a delegatable Permission a User holds through a
         Group that carries it, or as the Superuser.
 
@@ -606,12 +616,11 @@ paths:
           description: |
             The patient source failed: it could not be reached, gave no answer
             within 2 seconds to connect and 5 to answer, answered a `5xx` or any
-            other status but a `200` or a `404`, or answered a Patient that
-            breaks a domain rule — another patient's `id`, no `identifier`
-            under the NRIC NamingSystem, no `name` with `use: official`, an
-            official name without `text` (never rebuilt from `family` and
-            `given`), no `gender` of the four codes, or no `birthDate` to the
-            day — or is no Patient at all. `code: exception`, `diagnostics` "The
+            other status but a `200` or a `404`, or answered a Patient under
+            another patient's `id` — the histories are read by the id asked
+            for — one with a military service date not to the day, or no
+            Patient at all. What the NRIC, the name, the gender or the birth
+            date hold is never a failure. `code: exception`, `diagnostics` "The
             request could not be completed.", and nothing about the failure.
             The SPA shows it as the Patient card's failed state, never "No
             patient in context".
@@ -733,9 +742,11 @@ paths:
             answer, answered any status but a `200` — a `404` included — or
             answered a `200` that is no searchset `Bundle`, has no `total`, or
             holds an entry that is no Patient the service can hold: one with no
-            `id` or one outside FHIR's id grammar, one breaking a Patient's rules
-            (`GET /api/patient/{id}`'s `502`), or one whose Last visit is not a
-            date to the day. The generic `server-error` `ApiError`, saying
+            `id` or one outside FHIR's id grammar, or one with no NRIC, no
+            official name or one with no text, no gender or one outside the four
+            codes, or a birth date missing or not to the day, each read strictly
+            (ADR 0018). A Last visit never fails it: it is shown as received
+            (ADR 0020). The generic `server-error` `ApiError`, saying
             nothing about the failure; the fault's one record names its reason.
             Nothing is recorded in the audit trail. The SPA shows it as the
             search's error, with Retry.
@@ -1247,10 +1258,19 @@ paths:
 
         Each ARMC Board is one aeromedical fitness board the patient sat: its
         ARMC Board Type and ARMC Outcome are closed sets, carried as their
-        codes, and the SPA names each code with its label. Its Start Date is
-        required and its End Date optional — absent for a board still open, and
-        on or after the Start Date when present. Its two Medical Officers are
+        codes, and the SPA names each code it knows with its label. Its End
+        Date is `null` for a board still open. Its two Medical Officers are
         names, as the source gives them, linked to no User or account.
+
+        **Shown as received** (ADR 0020): the patient source is the truth, so
+        no board fails the read for what a field holds. A field missing or in
+        the wrong format is `null`, the second named in the row's `invalid`; a
+        blank Medical Officer is missing; a code outside its closed set is
+        passed through as it came; and an End Date before its Start Date is
+        answered as it came. Only the closed set of the `outcome` filter is
+        checked. A response holding fields in the wrong format is one `WARN`,
+        naming their paths and never their values, and counts each in
+        `patient_source.invalid_fields`.
 
         Paging follows ADR 0017's parameter rules: `startIndex` one-based,
         `count` defaulting to 100 and capped at 200, an out-of-range value
@@ -1267,9 +1287,9 @@ paths:
         **Not audited**, as a read of one Patient by id is not: a read appends
         no audit row. The request's own log record names the route template,
         never the patient id; a `502` adds the fault's one `ERROR` record,
-        naming the source's failure or the rule its answer broke under an ARMC
-        reason, and never the patient id or anything of the answer
-        (`docs/domain/armc.md`, "Logging").
+        naming the failure of the call or of its searchset, and never the
+        patient id or anything of the answer (`docs/domain/armc.md`,
+        "Logging").
       operationId: getPatientArmcHistory
       security:
         - sessionCookie: [patient:read]
@@ -1412,13 +1432,12 @@ paths:
             The patient source failed: it could not be reached, gave no answer
             within 2 seconds to connect and 5 to answer, answered any status but
             a `200` or a `404`, or answered a `200` that is no searchset
-            `Bundle`, has no `total`, or holds an entry that is no ARMC Board
-            the service can hold — no `id` or one outside FHIR's id grammar, a
-            required element missing or a Medical Officer blank, a code outside
-            its closed set, a date not to the day, or an End Date before its
-            Start Date. The generic `server-error` `ApiError`, saying nothing
-            about the failure; the fault's one record names its reason. The SPA
-            shows it as "Couldn't load ARMC records", with Try again.
+            `Bundle`, has no `total` or a negative one, or holds an entry with
+            no resource, one that is no object or one of another resource. What
+            an ARMC Board's fields hold never fails the read (ADR 0020). The
+            generic `server-error` `ApiError`, saying nothing about the failure;
+            the fault's one record names its reason. The SPA shows it as
+            "Couldn't load ARMC records", with Try again.
           content:
             application/json:
               schema:
@@ -4782,10 +4801,21 @@ components:
         A base FHIR R5 `Patient`, with exactly the elements the service holds.
         `name[0].text` is authoritative; `family` and `given` are left out when
         the name is not split. Age is never sent: it is derived from `birthDate`.
-        The Demographic details — `extension` (the military service), `telecom`,
+        The Demographic details — the military service `extension`, `telecom`,
         `address` and `contact` — are each left out when the patient has none
         (`/docs/domain/patient.md`, "Demographic details").
-      required: [resourceType, id, identifier, name, gender, birthDate]
+
+        Shown as received (ADR 0020): the NRIC (`identifier[0].value`),
+        `name[0].text`, `gender` and `birthDate` are each left out when the
+        source left it out or sent it blank, and when it sent it in the wrong
+        format, which an `invalid-field` extension then names by that path: an
+        element left out that no extension names is missing. FHIR JSON has no
+        `null`, and base R5 no element for a value in the wrong format, so the
+        names travel as extensions and the resource stays base R5. The NRIC's
+        identifier is left out when the source holds no NRIC, and is its
+        `system` alone when the NRIC was invalid; `name` is left out when the
+        source holds no official name.
+      required: [resourceType, id]
       additionalProperties: false
       properties:
         resourceType:
@@ -4798,61 +4828,15 @@ components:
         extension:
           type: array
           minItems: 1
-          maxItems: 1
           description: |
-            Exactly one when present: the military service, under a placeholder
-            URL until the in-house source names its own. Its sub-extensions are
-            each `serviceRecord`, in order, then whichever of the dates the
-            patient has.
+            The military service, when the patient has one; then one
+            `invalid-field` extension for each element the source sent in the
+            wrong format, naming it by its path in this resource, in the order
+            `identifier[0].value`, `name[0].text`, `gender`, `birthDate`.
           items:
-            type: object
-            required: [url, extension]
-            additionalProperties: false
-            properties:
-              url:
-                type: string
-                enum: ["http://example.org/fhir/StructureDefinition/military-service"]
-              extension:
-                type: array
-                minItems: 1
-                items:
-                  anyOf:
-                    - type: object
-                      description: |
-                        One service record: whichever of `serviceType`, `rank`,
-                        `unit`, `service` and `vocation` it has, in that order.
-                      required: [url, extension]
-                      additionalProperties: false
-                      properties:
-                        url:
-                          type: string
-                          enum: [serviceRecord]
-                        extension:
-                          type: array
-                          minItems: 1
-                          items:
-                            type: object
-                            required: [url, valueString]
-                            additionalProperties: false
-                            properties:
-                              url:
-                                type: string
-                                enum: [serviceType, rank, unit, service, vocation]
-                              valueString:
-                                type: string
-                                minLength: 1
-                    - type: object
-                      description: One of the service's dates, to the day.
-                      required: [url, valueDate]
-                      additionalProperties: false
-                      properties:
-                        url:
-                          type: string
-                          enum: [enlistmentDate, ordDate, mrDate, rodDate]
-                        valueDate:
-                          type: string
-                          format: date
-                          pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+            anyOf:
+              - $ref: "#/components/schemas/FhirMilitaryServiceExtension"
+              - $ref: "#/components/schemas/FhirInvalidFieldExtension"
         telecom:
           type: array
           minItems: 1
@@ -4908,7 +4892,8 @@ components:
                         properties:
                           system:
                             type: string
-                            enum: ["http://terminology.hl7.org/CodeSystem/v2-0131"]
+                            enum:
+                              ["http://terminology.hl7.org/CodeSystem/v2-0131"]
                           code:
                             type: string
                             enum: [N]
@@ -4933,10 +4918,13 @@ components:
           type: array
           minItems: 1
           maxItems: 1
-          description: Exactly one, the NRIC. Dummy values only; their shape is not checked.
+          description: |
+            The NRIC, when the source holds one: its `system` alone when its
+            value was in the wrong format. Dummy values only; their shape is not
+            checked.
           items:
             type: object
-            required: [system, value]
+            required: [system]
             additionalProperties: false
             properties:
               system:
@@ -4949,10 +4937,13 @@ components:
           type: array
           minItems: 1
           maxItems: 1
-          description: Exactly one, the official name.
+          description: |
+            The official name, when the source holds one: its `text` left out
+            when the source sent none or one in the wrong format, and never
+            rebuilt from `family` and `given`.
           items:
             type: object
-            required: [use, text]
+            required: [use]
             additionalProperties: false
             properties:
               use:
@@ -4969,12 +4960,87 @@ components:
                 items:
                   type: string
         gender:
-          type: string
-          enum: [male, female, other, unknown]
+          description: |
+            The administrative gender's code: one of the four, or any other code
+            the source sent, as it came.
+          anyOf:
+            - type: string
+              enum: [male, female, other, unknown]
+            - type: string
+              minLength: 1
         birthDate:
           type: string
           format: date
           pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    FhirMilitaryServiceExtension:
+      description: |
+        A Patient's military service, under a placeholder URL until the
+        in-house source names its own. Its sub-extensions are each
+        `serviceRecord`, in order, then whichever of the dates the patient has.
+      type: object
+      required: [url, extension]
+      additionalProperties: false
+      properties:
+        url:
+          type: string
+          enum: ["http://example.org/fhir/StructureDefinition/military-service"]
+        extension:
+          type: array
+          minItems: 1
+          items:
+            anyOf:
+              - type: object
+                description: |
+                  One service record: whichever of `serviceType`, `rank`,
+                  `unit`, `service` and `vocation` it has, in that order.
+                required: [url, extension]
+                additionalProperties: false
+                properties:
+                  url:
+                    type: string
+                    enum: [serviceRecord]
+                  extension:
+                    type: array
+                    minItems: 1
+                    items:
+                      type: object
+                      required: [url, valueString]
+                      additionalProperties: false
+                      properties:
+                        url:
+                          type: string
+                          enum: [serviceType, rank, unit, service, vocation]
+                        valueString:
+                          type: string
+                          minLength: 1
+              - type: object
+                description: One of the service's dates, to the day.
+                required: [url, valueDate]
+                additionalProperties: false
+                properties:
+                  url:
+                    type: string
+                    enum: [enlistmentDate, ordDate, mrDate, rodDate]
+                  valueDate:
+                    type: string
+                    format: date
+                    pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    FhirInvalidFieldExtension:
+      type: object
+      description: |
+        One element of the Patient the patient source sent in the wrong format,
+        by its path in the served resource (ADR 0020): the service's own
+        extension, under a placeholder URL as the military service's is. Its
+        element is left out of the resource.
+      required: [url, valueString]
+      additionalProperties: false
+      properties:
+        url:
+          type: string
+          enum: ["http://example.org/fhir/StructureDefinition/invalid-field"]
+        valueString:
+          type: string
+          enum: ["identifier[0].value", "name[0].text", gender, birthDate]
     FhirContactPoint:
       type: object
       description: A FHIR R5 `ContactPoint`, a phone or an email.
@@ -5040,11 +5106,14 @@ components:
             $ref: "#/components/schemas/PatientMatch"
     PatientMatch:
       type: object
-      required: [id, name, nric, gender, birthDate, lastVisit]
+      required: [id, name, nric, gender, birthDate, lastVisit, invalid]
       additionalProperties: false
       description: |
         One Patient a search matched. Restricted, Sensitive Normal, as every
-        Patient is.
+        Patient is. Its five elements are read strictly, so each is there
+        (ADR 0018); its Last visit is shown as the patient source sent it
+        (ADR 0020), `null` when the source records none or sent it in the
+        wrong format, and `invalid` names it in the second case.
       properties:
         id:
           type: string
@@ -5071,7 +5140,17 @@ components:
           pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
           description: |
             The date of the Patient's Last visit, from the patient source's
-            `last-visit` extension; `null` when the source records none.
+            `last-visit` extension; `null` when the source records none, or
+            sent one that is no calendar date — the wrong JSON type, or a date
+            not to the day — which `invalid` then names.
+        invalid:
+          type: array
+          description: |
+            The fields whose format was wrong at the source, each `null`
+            above; none when each is present or missing.
+          items:
+            type: string
+            enum: [lastVisit]
     FfiHistoryPage:
       type: object
       required: [totalResults, startIndex, ffis]
@@ -5327,46 +5406,90 @@ components:
     ArmcBoard:
       type: object
       required:
-        [id, boardType, outcome, startDate, medicalOfficer1, medicalOfficer2]
+        [
+          id,
+          boardType,
+          outcome,
+          startDate,
+          endDate,
+          medicalOfficer1,
+          medicalOfficer2,
+          invalid,
+        ]
       additionalProperties: false
       description: |
         One ARMC Board in a patient's ARMC History: one aeromedical fitness
-        board the patient sat. Every element is required but `endDate`, which
-        is absent for a board still open. Restricted, Sensitive Normal, as the
-        patient's data is.
+        board the patient sat, shown as the patient source sent it (ADR 0020).
+        Every property is always there. A field the source left out, sent
+        `null`, empty or blank, or sent in the wrong format is `null`, and
+        `invalid` names each whose format was wrong — the wrong JSON type, or a
+        date that is no calendar date: a `null` field it does not name is
+        missing. Nothing of a value's meaning is checked — an End Date before
+        the Start Date included — and a code outside its closed set is passed
+        through as it came. Restricted, Sensitive Normal, as the patient's data
+        is.
       properties:
         id:
-          type: string
-          pattern: "^[A-Za-z0-9\\-.]{1,64}$"
-          description: The ARMC Board's own id at the patient source.
+          type: [string, "null"]
+          description: |
+            The ARMC Board's own id at the patient source, as it came: never
+            checked, FHIR's id grammar included.
         boardType:
-          $ref: "#/components/schemas/ArmcBoardType"
+          description: |
+            The ARMC Board Type's code: one of the closed set's, or any other
+            the source sent, as it came.
+          anyOf:
+            - $ref: "#/components/schemas/ArmcBoardType"
+            - type: string
+            - type: "null"
         outcome:
-          $ref: "#/components/schemas/ArmcOutcome"
+          description: |
+            The ARMC Outcome's code: one of the closed set's, or any other the
+            source sent — a NUMC Outcome's among them — as it came.
+          anyOf:
+            - $ref: "#/components/schemas/ArmcOutcome"
+            - type: string
+            - type: "null"
         startDate:
-          type: string
+          type: [string, "null"]
           format: date
           pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
           description: The ARMC Board's Start Date, a calendar date.
         endDate:
-          type: string
+          type: [string, "null"]
           format: date
           pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
           description: |
-            The ARMC Board's End Date, a calendar date on or after its Start
-            Date. Absent, never `null`, for a board still open.
+            The ARMC Board's End Date, a calendar date, before its Start Date
+            too; missing, `null`, for a board still open.
         medicalOfficer1:
-          type: string
-          minLength: 1
+          type: [string, "null"]
           description: |
             Medical Officer #1, a name as the patient source gives it, linked to
-            no User or account.
+            no User or account; a blank one is missing.
         medicalOfficer2:
-          type: string
-          minLength: 1
+          type: [string, "null"]
           description: |
             Medical Officer #2, a name as the patient source gives it, linked to
-            no User or account.
+            no User or account; a blank one is missing.
+        invalid:
+          type: array
+          description: |
+            The fields whose format was wrong at the source, each `null`
+            above, in the board's order; none when each is present or
+            missing.
+          items:
+            type: string
+            enum:
+              [
+                id,
+                boardType,
+                outcome,
+                startDate,
+                endDate,
+                medicalOfficer1,
+                medicalOfficer2,
+              ]
     ArmcBoardType:
       type: string
       description: |

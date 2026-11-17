@@ -40,9 +40,7 @@ const pager = (page: Page, card: "Users" | "Groups") =>
 /** Moves one card to its next page and back, checking where each page sits and what it shows. */
 async function pageThrough(page: Page, card: "Users" | "Groups") {
   const table = page.getByRole("table", { name: card });
-  await expect(pager(page, card)).toContainText(
-    `Showing 1 to ${PAGE_SIZE} of ${SEEDED} ${card.toLowerCase()}`,
-  );
+  await expect(pager(page, card)).toContainText(`Showing 1 to ${PAGE_SIZE} of ${SEEDED} records`);
   await expect(rowOf(page, table, nameOf(1))).toBeVisible();
   await expect(rowOf(page, table, nameOf(SEEDED))).toHaveCount(0);
   await expect(pager(page, card).getByRole("button", { name: "Previous" })).toBeDisabled();
@@ -50,7 +48,7 @@ async function pageThrough(page: Page, card: "Users" | "Groups") {
   await pager(page, card).getByRole("button", { name: "Next" }).click();
 
   await expect(pager(page, card)).toContainText(
-    `Showing ${SEEDED} to ${SEEDED} of ${SEEDED} ${card.toLowerCase()}`,
+    `Showing ${SEEDED} to ${SEEDED} of ${SEEDED} records`,
   );
   await expect(rowOf(page, table, nameOf(SEEDED))).toBeVisible();
   await expect(rowOf(page, table, nameOf(1))).toHaveCount(0);
@@ -58,9 +56,7 @@ async function pageThrough(page: Page, card: "Users" | "Groups") {
 
   await pager(page, card).getByRole("button", { name: "Previous" }).click();
 
-  await expect(pager(page, card)).toContainText(
-    `Showing 1 to ${PAGE_SIZE} of ${SEEDED} ${card.toLowerCase()}`,
-  );
+  await expect(pager(page, card)).toContainText(`Showing 1 to ${PAGE_SIZE} of ${SEEDED} records`);
 }
 
 test("an admin pages through and searches both cards", async ({ page }) => {
@@ -79,9 +75,9 @@ test("an admin pages through and searches both cards", async ({ page }) => {
     await searchCard(page, "Groups", TAG);
     await pageThrough(page, "Groups");
 
-    // A search that matches nothing says so, rather than that nothing is provisioned.
+    // A search that matches nothing says so, rather than that no records are found.
     await searchCard(page, "Groups", `${TAG}-none`);
-    await expect(page.getByText(`No groups match "${TAG}-none".`)).toBeVisible();
+    await expect(page.getByText("No records match your search.", { exact: true })).toBeVisible();
   } finally {
     for (const id of groupIds) await deprovisionGroup(connector.scim, id);
     for (const id of userIds) await deprovisionUser(connector.scim, id);
