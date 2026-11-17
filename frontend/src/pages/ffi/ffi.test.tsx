@@ -220,14 +220,6 @@ describe("FFI", () => {
     });
   });
 
-  it("says it is loading FFIs while the first read is in flight", async () => {
-    const answer = deferred();
-    await renderFfi(answer.answer);
-
-    expect(await screen.findByRole("status")).toHaveTextContent(/^Loading records…$/);
-    await answer.settle(page(FOUR_FFIS, 1, 4));
-  });
-
   // Status is the source's: an FFI past its Expiry Date shows the Status the
   // source sent, never one worked out from the date.
   it("shows the source's Status even for an FFI past its Expiry Date", async () => {
@@ -390,13 +382,6 @@ describe("FFI", () => {
     });
   });
 
-  it("says no records are found for a patient with none", async () => {
-    await renderFfi(page([], 1, 0));
-
-    expect(await screen.findByText("No records found.")).toBeInTheDocument();
-    expect(screen.queryByRole("table")).not.toBeInTheDocument();
-  });
-
   // What the patient in context decides — none, a 404, a failed read — is
   // `ForPatientInContext`'s (for-patient-in-context.test.tsx), and what every
   // history shares — a history's own 404, the range on a single page, a new
@@ -416,20 +401,6 @@ describe("FFI", () => {
 
     expect(await screen.findByText("Showing 1 to 4 of 4 records")).toBeInTheDocument();
     expect({ after: ffiReads(requests()), before }).toEqual({ after: [FIRST_PAGE], before: [] });
-  });
-
-  it("says it is loading FFIs while the patient in context is read", async () => {
-    const patient = deferred();
-    withPatientInContext(TAN_WEI_MING.id);
-    await renderSignedIn("/ffi", CLINICIAN, {
-      [FIRST_PAGE]: page(FOUR_FFIS, 1, 4),
-      [TAN_WEI_MING_READ]: patient.answer,
-    });
-
-    expect(screen.getByRole("main").querySelector("[role=status]")).toHaveTextContent(
-      /^Loading records…$/,
-    );
-    await patient.settle(json(TAN_WEI_MING));
   });
 
   it("says it couldn't load FFIs when the source fails, offering Try again", async () => {
