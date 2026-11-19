@@ -31,7 +31,7 @@ COMPOSE_DOWN_FLAGS := $(if $(filter 1,$(VOL)),-v)
 export NPM
 export MVN
 
-.PHONY: help bootstrap infra-up infra-down infra-logs \
+.PHONY: help bootstrap infra-up infra-down infra-logs mock-tar \
         dev dev-stop verify-frontend verify-backend verify-contract verify integration-test package \
         container clean
 
@@ -51,6 +51,10 @@ infra-down: ## Stop SQL Server, Redis and the patient source's mock (volumes are
 
 infra-logs: ## Tail the dependency logs
 	$(COMPOSE) logs -f
+
+mock-tar: ## Archive the patient source mock's mappings into backend/target/mappings.tar
+	mkdir -p backend/target
+	tar -cf backend/target/mappings.tar -C backend/patient-source-mock mappings
 
 dev: ## Run backend and frontend together (Ctrl-C stops both)
 	@scripts/dev.sh
