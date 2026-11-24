@@ -87,7 +87,8 @@ declares nothing is refused. Four kinds of operation:
   search (`GET /api/patient-search`, [patient](patient.md)) and reads a
   patient's FFI History (`GET /api/patient-ffi/{patientId}`, [ffi](ffi.md)), NUMC
   History (`GET /api/patient-numc/{patientId}`, [numc](numc.md)), ARMC History
-  (`GET /api/patient-armc/{patientId}`, [armc](armc.md)) and Medication History
+  (`GET /api/patient-armc/{patientId}`, [armc](armc.md)), HSP History
+  (`GET /api/patient-hsp/{patientId}`, [hsp](hsp.md)) and Medication History
   (`GET /api/patient-medication/{patientId}`, [medication](medication.md)); a
   session without it,
   a User in no Group that carries it included, gets the Authorization refusal.

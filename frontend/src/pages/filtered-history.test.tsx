@@ -1,5 +1,6 @@
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 
 import type { ReadDeclaration } from "@/auth/declarations";
@@ -22,7 +23,7 @@ import { FilteredHistory } from "./filtered-history";
 // page, narrowed by one filter and sorted by one column. What each history
 // page hands it — its read, its Filter panel, its failure copy, its table's columns —
 // is that page's suite's (ffi.test.tsx, numc.test.tsx, armc.test.tsx,
-// medication.test.tsx); the paged read beneath it is paged-read.test.tsx's.
+// hsp.test.tsx, medication.test.tsx); the paged read beneath it is paged-read.test.tsx's.
 
 interface WidgetFilters {
   kind: string;
@@ -58,8 +59,11 @@ const widgetPage = (names: string[], startIndex: number, totalResults: number) =
 
 const FIRST_OF_THREE = widgetPage(["anvil", "bolt"], 1, 3);
 
-/** The history of the patient `p-1`, its filter one button and its sort another. */
-const renderHistory = (answers: Answers) =>
+/**
+ * The history of the patient `p-1`, its filter one button and its sort
+ * another, headed `heading` when one is given.
+ */
+const renderHistory = (answers: Answers, heading?: ReactNode) =>
   renderAsSession(
     <InPageStatus>
       <FilteredHistory
@@ -71,6 +75,7 @@ const renderHistory = (answers: Answers) =>
             Bolts only, of {applied.kind === "" ? "all" : applied.kind}
           </button>
         )}
+        heading={heading}
         noFilters={NO_FILTERS}
         pageSize={2}
         patientId="p-1"
@@ -198,5 +203,28 @@ describe("FilteredHistory", () => {
       before,
       during,
     }).toEqual({ after: "false", before: "false", during: "true" });
+  });
+
+  it("sets the history's heading on its left, beside the Filter button on its right", async () => {
+    await renderHistory({ [widgetsAt(1)]: FIRST_OF_THREE }, <h2>Widget History</h2>);
+    await screen.findByText("Showing 1 to 2 of 3 records");
+
+    const row = screen.getByRole("heading", { name: "Widget History" }).parentElement!;
+    expect({
+      children: [...row.children].map((child) => child.textContent),
+      spread: row.classList.contains("justify-between"),
+    }).toEqual({ children: ["Widget History", "Bolts only, of all"], spread: true });
+  });
+
+  it("sets the Filter button alone on its right with no heading", async () => {
+    await renderHistory({ [widgetsAt(1)]: FIRST_OF_THREE });
+    await screen.findByText("Showing 1 to 2 of 3 records");
+
+    const row = screen.getByRole("button", { name: /^Bolts only/ }).parentElement!;
+    expect({
+      children: [...row.children].map((child) => child.textContent),
+      end: row.classList.contains("justify-end"),
+      heading: screen.queryByRole("heading"),
+    }).toEqual({ children: ["Bolts only, of all"], end: true, heading: null });
   });
 });

@@ -179,6 +179,18 @@ change, when the backend side moves. What the SPA has to honour:
   element is missing, "—" — the `endDate` of a board still open among them —
   one its row names in `invalid` is "Error", and a code outside its closed set
   is shown as it came, so no element fails the read.
+- **A patient's HSP History answers plain JSON too, on the same terms.**
+  `GET /api/patient-hsp/{patientId}` answers `application/json`, every
+  refusal or fault an `ApiError`. Its declaration (`HSP_HISTORY`,
+  `src/pages/hsp/hsp-api.ts`) opts in to `absentOnNotFound`, so the `404` is
+  "No patient in context" and the `502` "Couldn't load HSP records" with Try
+  again; the `{patientId}` is sent through `encodeURIComponent`. An HSP Record
+  is shown as received (ADR 0020): its shape is decoded strictly — every field
+  there, `invalid` an array of strings, and a field it does not know refused —
+  but each field's value through the lenient field decoder
+  (`readObject(…).sourceFields()`): a `null` field is missing, "—", one its
+  row names in `invalid` is "Error", and a code outside its closed set is
+  shown as it came, so no field fails the read.
 - **A patient's Medication History answers plain JSON too, on the same
   terms.** `GET /api/patient-medication/{patientId}` answers
   `application/json`, every refusal or fault an `ApiError`. Its declaration
@@ -297,10 +309,10 @@ change, when the backend side moves. What the SPA has to honour:
   is not bound to the EHR context: `patient:read` reads any id. It is a
   delegatable Permission the backend issues only to a member of a Group that
   carries it and to the Superuser; a session without it is refused the read,
-  the Patient search, the FFI History, the NUMC History, the ARMC History and
-  the Medication History `403`, so the SPA sends none of them — Home says
+  the Patient search, the FFI History, the NUMC History, the ARMC History, the
+  HSP History and the Medication History `403`, so the SPA sends none of them — Home says
   the account has no access to patients, and none of Patient Search,
-  Demographic, Medication, FFI, NUMC or ARMC is linked or opened.
+  Demographic, Medication, FFI, NUMC, ARMC or HSP is linked or opened.
 - **Logout answers `Clear-Site-Data: "cache","cookies","storage"`** — on a
   successful logout and on the `401` a logout with no live session gets. The
   browser drops anything in `localStorage` / `sessionStorage` along with the

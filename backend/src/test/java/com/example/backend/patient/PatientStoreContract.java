@@ -15,11 +15,16 @@ import com.example.backend.patient.domain.Ffi;
 import com.example.backend.patient.domain.FfiHigherAuthority;
 import com.example.backend.patient.domain.FfiFilter;
 import com.example.backend.patient.domain.FfiHistory;
-import com.example.backend.patient.domain.HistorySort;
-import com.example.backend.patient.domain.HistoryColumn;
 import com.example.backend.patient.domain.FfiOutcome;
 import com.example.backend.patient.domain.FfiStatus;
 import com.example.backend.patient.domain.FfiType;
+import com.example.backend.patient.domain.HistorySort;
+import com.example.backend.patient.domain.HistoryColumn;
+import com.example.backend.patient.domain.HspFilter;
+import com.example.backend.patient.domain.HspHistory;
+import com.example.backend.patient.domain.HspOutcome;
+import com.example.backend.patient.domain.HspRecord;
+import com.example.backend.patient.domain.HspStatus;
 import com.example.backend.patient.domain.MedicalCentre;
 import com.example.backend.patient.domain.MedicationFilter;
 import com.example.backend.patient.domain.MedicationHistory;
@@ -59,11 +64,12 @@ import org.junit.jupiter.params.provider.MethodSource;
  * development fixtures and its canned searches ({@code patient-source-mock/mappings},
  * /docs/domain/patient.md): each fixture by its id, exactly as the domain holds it, nothing under
  * an id no fixture holds, each documented search's page of matches with its Last visits and
- * its total, in the source's own order, and each FFI History, NUMC History, ARMC History and
- * Medication History the mock serves (/docs/domain/ffi.md, "The patient source's FFI
+ * its total, in the source's own order, and each FFI History, NUMC History, ARMC History, HSP
+ * History and Medication History the mock serves (/docs/domain/ffi.md, "The patient source's FFI
  * fixtures"; /docs/domain/numc.md, "The patient source's NUMC fixtures"; /docs/domain/armc.md,
- * "The patient source's ARMC fixtures"; /docs/domain/medication.md, "The patient source's
- * Medication fixtures"), page by page.
+ * "The patient source's ARMC fixtures"; /docs/domain/hsp.md, "The patient source's HSP
+ * fixtures"; /docs/domain/medication.md, "The patient source's Medication fixtures"), page by
+ * page.
  *
  * <p>The expected Patients are written out here, not derived from the stub files, so a stub that
  * drifted from the fixture table in /docs/domain/patient.md fails here.
@@ -864,6 +870,120 @@ public abstract class PatientStoreContract {
     @Test
     void a_well_formed_id_no_patient_is_held_under_has_no_armc_history() {
         assertThat(armcHistory(new PatientId("not-a-uuid"), FIRST_FIVE)).isEmpty();
+    }
+
+    // ---- the HSP Histories -----------------------------------------------------------------
+
+    private static HspRecord hsp(String id, HspOutcome outcome, String startDate, String endDate,
+            MedicalCentre submittingMc, HspStatus status) {
+        return new HspRecord(SourceField.present(id), SourceField.present(outcome.code()),
+                SourceField.present(LocalDate.parse(startDate)),
+                SourceField.present(LocalDate.parse(endDate)),
+                SourceField.present(submittingMc.code()), SourceField.present(status.code()));
+    }
+
+    /** The page {@code page} of {@code patient}'s HSP History, unfiltered, in the source's order. */
+    private Optional<HspHistory> hspHistory(PatientId patient, PageRequest page) {
+        return patients().findHspHistory(patient, HspFilter.NONE, HistorySort.SOURCE_ORDER,
+                page);
+    }
+
+    private static final HspRecord TAN_WEI_MINGS_LOW = hsp("hsp-tan-wei-ming-1", HspOutcome.LOW,
+            "2024-03-11", "2025-03-10", MedicalCentre.NEE_SOON_CAMP, HspStatus.ACTIVE);
+
+    private static final HspRecord TAN_WEI_MINGS_MODERATE = hsp("hsp-tan-wei-ming-2",
+            HspOutcome.MODERATE, "2023-10-14", "2024-10-13", MedicalCentre.MANDAI_HILL_CAMP,
+            HspStatus.INACTIVE);
+
+    private static final HspRecord TAN_WEI_MINGS_HIGH = hsp("hsp-tan-wei-ming-3",
+            HspOutcome.HIGH, "2022-11-22", "2023-10-10", MedicalCentre.HENDON_CAMP,
+            HspStatus.INACTIVE);
+
+    /** Tan Wei Ming's three HSP Records, in the source's own order. */
+    @Test
+    void tan_wei_mings_hsp_history_is_his_three_records_in_the_sources_order() {
+        assertThat(hspHistory(new PatientId("eq081-VQEgP8drUUqCWzHfw3"), FIRST_FIVE))
+                .contains(new HspHistory(3, List.of(TAN_WEI_MINGS_MODERATE, TAN_WEI_MINGS_LOW,
+                        TAN_WEI_MINGS_HIGH)));
+    }
+
+    /**
+     * Tan Boon Huat's three HSP Records, read as received (ADR 0020): an Outcome left out and a
+     * Submitting MC {@code null}; a Start Date of the wrong JSON type, an End Date not to the day
+     * and a Status of the wrong JSON type; and a record with no id whose codes, outside their
+     * closed sets, are kept as they came.
+     */
+    @Test
+    void tan_boon_huats_hsp_history_is_read_as_received() {
+        assertThat(hspHistory(new PatientId("dev-patient-10"), FIRST_FIVE))
+                .contains(new HspHistory(3, List.of(
+                        new HspRecord(SourceField.present("hsp-tan-boon-huat-1"),
+                                SourceField.missing(),
+                                SourceField.present(LocalDate.of(2022, 3, 16)),
+                                SourceField.present(LocalDate.of(2023, 3, 15)),
+                                SourceField.missing(), SourceField.present("active")),
+                        new HspRecord(SourceField.present("hsp-tan-boon-huat-2"),
+                                SourceField.present("low"), SourceField.invalid(),
+                                SourceField.invalid(), SourceField.present("kranji-camp"),
+                                SourceField.invalid()),
+                        new HspRecord(SourceField.missing(), SourceField.present("critical"),
+                                SourceField.present(LocalDate.of(2020, 3, 16)),
+                                SourceField.present(LocalDate.of(2021, 3, 15)),
+                                SourceField.present("tengah-air-base"),
+                                SourceField.present("expired")))));
+    }
+
+    /** Each canned sort of Tan Wei Ming's HSP History: the sort, then the records in its order. */
+    static Stream<Arguments> cannedHspSorts() {
+        List<HspRecord> earliestFirst =
+                List.of(TAN_WEI_MINGS_HIGH, TAN_WEI_MINGS_MODERATE, TAN_WEI_MINGS_LOW);
+        List<HspRecord> latestFirst = earliestFirst.reversed();
+        return Stream.of(
+                Arguments.of(HspHistory.START_DATE, SortOrder.ASCENDING, earliestFirst),
+                Arguments.of(HspHistory.START_DATE, SortOrder.DESCENDING, latestFirst),
+                Arguments.of(HspHistory.END_DATE, SortOrder.ASCENDING, earliestFirst),
+                Arguments.of(HspHistory.END_DATE, SortOrder.DESCENDING, latestFirst));
+    }
+
+    @ParameterizedTest(name = "{0} {1}")
+    @MethodSource("cannedHspSorts")
+    void tan_wei_mings_hsp_history_reads_in_each_canned_sort(HistoryColumn<?> field,
+            SortOrder order, List<HspRecord> records) {
+        assertThat(patients().findHspHistory(new PatientId("eq081-VQEgP8drUUqCWzHfw3"),
+                HspFilter.NONE, new HistorySort(field, order), FIRST_FIVE))
+                .contains(new HspHistory(3, records));
+    }
+
+    /** Each canned filter of Tan Wei Ming's HSP History: the case, the filter, then its records. */
+    static Stream<Arguments> cannedHspFilters() {
+        return Stream.of(
+                Arguments.of("active", new HspFilter(Set.of(), DateRange.any(), DateRange.any(),
+                        Set.of(), HspStatus.ACTIVE), List.of(TAN_WEI_MINGS_LOW)),
+                Arguments.of("low or high", new HspFilter(Set.of(HspOutcome.HIGH, HspOutcome.LOW),
+                        DateRange.any(), DateRange.any(), Set.of(), null),
+                        List.of(TAN_WEI_MINGS_LOW, TAN_WEI_MINGS_HIGH)));
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("cannedHspFilters")
+    void tan_wei_mings_hsp_history_reads_each_canned_filter(String filtered, HspFilter filter,
+            List<HspRecord> records) {
+        assertThat(patients().findHspHistory(new PatientId("eq081-VQEgP8drUUqCWzHfw3"), filter,
+                HistorySort.SOURCE_ORDER, FIRST_FIVE))
+                .contains(new HspHistory(records.size(), records));
+    }
+
+    /** Siti Nurhaliza binte Ahmad, as every fixture but those two, has no HSP Record. */
+    @Test
+    void a_patient_with_no_hsp_records_reads_an_empty_history_of_none() {
+        assertThat(hspHistory(new PatientId("erXuFYUfucBZaryVksYEcMg3"), FIRST_FIVE))
+                .contains(new HspHistory(0, List.of()));
+    }
+
+    /** {@code not-a-uuid} is a well-formed id the source holds no patient under. */
+    @Test
+    void a_well_formed_id_no_patient_is_held_under_has_no_hsp_history() {
+        assertThat(hspHistory(new PatientId("not-a-uuid"), FIRST_FIVE)).isEmpty();
     }
 
     // ---- the Medication Histories ----------------------------------------------------------

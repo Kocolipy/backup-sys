@@ -118,7 +118,7 @@ export default defineConfig({
     {
       name: "medical-officer",
       testMatch:
-        /(?:roles-medical-officer|patient-search|demographic|medication|ffi|numc|armc)\.spec\.ts/,
+        /(?:roles-medical-officer|patient-search|demographic|medication|ffi|numc|armc|hsp)\.spec\.ts/,
       dependencies: ["setup"],
       use: {
         ...devices["Desktop Chrome"],

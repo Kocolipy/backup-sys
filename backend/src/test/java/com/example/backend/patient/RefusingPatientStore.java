@@ -6,6 +6,8 @@ import com.example.backend.patient.domain.ArmcHistory;
 import com.example.backend.patient.domain.FfiFilter;
 import com.example.backend.patient.domain.FfiHistory;
 import com.example.backend.patient.domain.HistorySort;
+import com.example.backend.patient.domain.HspFilter;
+import com.example.backend.patient.domain.HspHistory;
 import com.example.backend.patient.domain.MedicationFilter;
 import com.example.backend.patient.domain.MedicationHistory;
 import com.example.backend.patient.domain.NumcFilter;
@@ -51,6 +53,12 @@ public abstract class RefusingPatientStore implements PatientStore {
     public Optional<ArmcHistory> findArmcHistory(PatientId id, ArmcFilter filter,
             HistorySort sort, PageRequest page) {
         throw refused("an ARMC History");
+    }
+
+    @Override
+    public Optional<HspHistory> findHspHistory(PatientId id, HspFilter filter, HistorySort sort,
+            PageRequest page) {
+        throw refused("an HSP History");
     }
 
     @Override

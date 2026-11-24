@@ -35,7 +35,7 @@ declaring the previous one in `dependencies`, and a project that signs in as a
 User of its own runs beside them:
 
 - `medical-officer` depends on `setup` alone: it replays the saved `mo1`
-  session and runs the Patient Search, Medication, FFI, NUMC and ARMC specs
+  session and runs the Patient Search, Medication, FFI, NUMC, ARMC and HSP specs
   and the Medical Officer role check.
 - `patient-sign-out` depends on no project: it signs in and out as `mo2`, the
   Medical Officer nothing else signs in as, for the "no patient in context

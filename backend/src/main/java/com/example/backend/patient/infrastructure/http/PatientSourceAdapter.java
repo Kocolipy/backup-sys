@@ -10,6 +10,8 @@ import com.example.backend.patient.domain.ArmcHistory;
 import com.example.backend.patient.domain.FfiFilter;
 import com.example.backend.patient.domain.FfiHistory;
 import com.example.backend.patient.domain.HistorySort;
+import com.example.backend.patient.domain.HspFilter;
+import com.example.backend.patient.domain.HspHistory;
 import com.example.backend.patient.domain.MedicationFilter;
 import com.example.backend.patient.domain.MedicationHistory;
 import com.example.backend.patient.domain.NumcFilter;
@@ -57,8 +59,10 @@ import org.springframework.web.client.RestClient;
  * patient's FFI History ({@link #findFfiHistory}, ADR 0019), and
  * {@code GET {base}/Patient/{id}/numc?…} for a patient's NUMC History ({@link #findNumcHistory},
  * ADR 0019, D5), {@code GET {base}/Patient/{id}/armc?…} for a patient's ARMC History
- * ({@link #findArmcHistory}, ADR 0019, D6), and {@code GET {base}/Patient/{id}/medication?…} for
- * a patient's Medication History ({@link #findMedicationHistory}, ADR 0019, D7). The source is assumed to answer FHIR R4 and to need
+ * ({@link #findArmcHistory}, ADR 0019, D6), {@code GET {base}/Patient/{id}/hsp?…} for a
+ * patient's HSP History ({@link #findHspHistory}, ADR 0019), and
+ * {@code GET {base}/Patient/{id}/medication?…} for a patient's Medication History
+ * ({@link #findMedicationHistory}, ADR 0019, D7). The source is assumed to answer FHIR R4 and to need
  * no authorisation, so the call carries no credential of any kind. The patient's id is its EHR's
  * FHIR id, sent unchanged.
  *
@@ -79,7 +83,7 @@ import org.springframework.web.client.RestClient;
  * is ({@code http.client.requests}, under the URI template, never the id), on the JDK client with
  * redirects off and the timeouts below: a fixed connect timeout, and a read timeout a deployment
  * may set ({@code APP_PATIENT_SOURCE_READ_TIMEOUT}). Nothing here logs: a Patient read by id, a
- * Patient search, and an FFI, a NUMC, an ARMC and a Medication History, shown as received
+ * Patient search, and an FFI, a NUMC, an ARMC, an HSP and a Medication History, shown as received
  * (ADR 0020), hand the paths of the fields their answer held in the wrong format — and a search,
  * of its dropped matches and its entries that are no Patient — to {@link InvalidSourceFields},
  * which reports them.
@@ -138,6 +142,17 @@ class PatientSourceAdapter implements PatientStore {
 
     /** A searchset of ARMC Boards, an ARMC History's answer. */
     private static final ParameterizedTypeReference<SourceSearchset<SourceArmc>> ARMC_BOARDS =
+            new ParameterizedTypeReference<>() {
+            };
+
+    /**
+     * A patient's HSP History, a page at a time (ADR 0019), before the filters and the sort a read
+     * adds to it.
+     */
+    static final String HSP_HISTORY = "/Patient/{id}/hsp?" + SourceSearchset.PAGE_QUERY;
+
+    /** A searchset of HSP Records, an HSP History's answer. */
+    private static final ParameterizedTypeReference<SourceSearchset<SourceHsp>> HSP_RECORDS =
             new ParameterizedTypeReference<>() {
             };
 
@@ -389,6 +404,38 @@ class PatientSourceAdapter implements PatientStore {
         query.sorted(sort, Ties.THE_SOURCES);
         return history(query, ARMC_BOARDS, SourceArmc::toBoard,
                 reportingInvalidFields(SourceRead.ARMC, ArmcHistory::new));
+    }
+
+    /**
+     * {@code GET {base}/Patient/{id}/hsp?…}: the patient's HSP History, filtered, sorted, paged and
+     * counted by the source (ADR 0019) — the Outcomes and the Submitting MCs each as its search
+     * parameter once, {@code outcome} and {@code submitting-mc}, its codes joined by commas, FHIR's
+     * OR; the Status as {@code status}; each end of a date range as its search parameter,
+     * {@code start-date} or {@code end-date}, {@code ge} the from-date and {@code le} the to-date;
+     * and a sort as {@code _sort} on the same date parameters, {@code -} first for descending, ties
+     * broken by id. With no column to sort by, no {@code _sort} is sent, and the order is the
+     * source's own. A {@code 404} is no patient under the id; the one other good answer is a
+     * {@code 200} searchset of HSP Records, and anything else is a fault, as is a searchset with no
+     * total or an entry that is no HSP Record. What a record's fields hold never is: each is read as
+     * received (ADR 0020), and the answer's invalid fields are reported. The id and the filters'
+     * values are URI variables, so the call is observed under the template alone: which filters
+     * were asked for and the sort, and none of their values.
+     */
+    @Override
+    public Optional<HspHistory> findHspHistory(PatientId id, HspFilter filter, HistorySort sort,
+            PageRequest page) {
+        SourceQuery query = new SourceQuery(HSP_HISTORY).variable("id", id.value());
+        query.paged(page);
+        query.anyOf("outcome", "outcome", filter.outcomes());
+        query.narrowing(HspHistory.START_DATE, filter.startDate());
+        query.narrowing(HspHistory.END_DATE, filter.endDate());
+        query.anyOf("submitting-mc", "submittingMc", filter.submittingMcs());
+        if (filter.status() != null) {
+            query.parameter("status", "status", filter.status().code());
+        }
+        query.sorted(sort, Ties.BY_ID);
+        return history(query, HSP_RECORDS, SourceHsp::toRecord,
+                reportingInvalidFields(SourceRead.HSP, HspHistory::new));
     }
 
     /**

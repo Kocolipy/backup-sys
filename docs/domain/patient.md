@@ -178,8 +178,8 @@ default (`backend/docs/configuration/patient-source.md`).
   body included — a connection lost before the answer was in, a `5xx` or any other
   status, or a `200` the service cannot hold — a body that is no Patient, or a
   Patient under another patient's `id`. **Another patient's id stays a failure**: the Patient is read by
-  the id the EHR context names, and so are its FFI, NUMC, ARMC and Medication
-  Histories, so a Patient under another id is not the patient asked for. What
+  the id the EHR context names, and so are its FFI, NUMC, ARMC, HSP and
+  Medication Histories, so a Patient under another id is not the patient asked for. What
   the NRIC, the name, the gender, the birth date or a Demographic detail hold
   is [never a failure](#shown-as-received).
 - **No caching.** No Patient is kept in Redis or in memory: every read, of the
@@ -530,14 +530,14 @@ title above a plain card saying "No patient in context", as the history pages
 do; a `404` for the id in context shows the same. With a patient in context the
 patient banner heads the page, its title kept for screen readers only. The top
 bar names the patient in context by name and NRIC.
-The Patient card, the top bar, and the FFI, NUMC, ARMC and Medication pages ([ffi](ffi.md), [numc](numc.md), [armc](armc.md), [medication](medication.md)), render from **one reader** of the patient in context, which the signed-in
+The Patient card — heading the Demographic and HSP pages — the top bar, and the FFI, NUMC, ARMC, HSP and Medication pages ([ffi](ffi.md), [numc](numc.md), [armc](armc.md), [hsp](hsp.md), [medication](medication.md)), render from **one reader** of the patient in context, which the signed-in
 layout renders (`frontend/src/pages/patient-in-context.ts`): each change
 of the patient in context is one `GET /api/patient/{id}` — one read of the
 uncached patient source — on every signed-in page alike, and a
 failed read is one "Couldn't load patient" on the page's error line — a body
 that is no Patient and a Patient under another id among them. The SPA
 holds no patient id beyond the EHR context, and the read is not bound to it:
-`patient:read` reads any id. The FFI, NUMC, ARMC and Medication pages read
+`patient:read` reads any id. The FFI, NUMC, ARMC, HSP and Medication pages read
 their histories by the EHR context's id, never by one the Patient carries. The
 top bar names the patient, and the Patient card shows them,
 [as received](#shown-as-received).
@@ -615,7 +615,9 @@ reaches a deployed environment. The backend holds no fixture of its own.
   [ffi](ffi.md)'s ("The patient source's FFI fixtures"); their NUMC Histories,
   and the NUMC fault stubs, [numc](numc.md)'s ("The patient source's NUMC
   fixtures"); their ARMC Histories, and the ARMC fault stubs, [armc](armc.md)'s
-  ("The patient source's ARMC fixtures"); their Medication Histories, and the
+  ("The patient source's ARMC fixtures"); their HSP Histories, and the HSP
+  fault stubs, [hsp](hsp.md)'s ("The patient source's HSP fixtures"); their
+  Medication Histories, and the
   Medication fault stubs, [medication](medication.md)'s ("The patient source's
   Medication fixtures").
 

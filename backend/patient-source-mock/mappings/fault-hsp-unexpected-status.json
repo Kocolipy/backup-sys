@@ -1,0 +1,26 @@
+{
+  "name": "Fault, HSP History: the source answers 400",
+  "metadata": {
+    "fault": "unexpected-status"
+  },
+  "request": {
+    "method": "GET",
+    "urlPath": "/Patient/fault-hsp-unexpected-status/hsp"
+  },
+  "response": {
+    "status": 400,
+    "headers": {
+      "Content-Type": "application/fhir+json"
+    },
+    "jsonBody": {
+      "resourceType": "OperationOutcome",
+      "issue": [
+        {
+          "severity": "error",
+          "code": "invalid",
+          "diagnostics": "Bad HSP page: hsp-fault-9 2015-05-25"
+        }
+      ]
+    }
+  }
+}

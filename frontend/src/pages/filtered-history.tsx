@@ -1,6 +1,6 @@
 /**
  * The filtered, sorted history listing every history page renders for the
- * patient in context: the FFI, NUMC, ARMC and Medication Histories. Shared by
+ * patient in context: the FFI, NUMC, ARMC, HSP and Medication Histories. Shared by
  * those pages, so it sits beside them in `src/pages/`; each page hands it its
  * read, its Filter panel, its failure copy and its table, and nothing here
  * names a history's column or its rows.
@@ -41,7 +41,7 @@ interface HistoryTableProps<R, C extends string> {
  *
  * It sorts by the columns `table` offers a sort heading for, in the source's
  * own order until a heading is pressed, and `filterPopover`, at its top
- * right, narrows it. A change of either reads the history from its first
+ * right — beside `heading` on its left, when the page hands one — narrows it. A change of either reads the history from its first
  * page, the filters combined with AND and with the sort. Both live here
  * alone: neither reaches the URL, and a new patient in context, a new
  * history, starts with neither — `noFilters` and no sort. With a filter
@@ -54,6 +54,7 @@ export function FilteredHistory<R, F, C extends string>({
   countFilters,
   declaration,
   filterPopover: FilterPopover,
+  heading,
   noFilters,
   pageSize,
   patientId,
@@ -68,6 +69,8 @@ export function FilteredHistory<R, F, C extends string>({
     true
   >;
   filterPopover: ComponentType<{ applied: F; onApply: (filters: F) => void }>;
+  /** The history's own heading, on the Filter button's row; none leaves the button alone. */
+  heading?: ReactNode;
   noFilters: F;
   pageSize: number;
   patientId: string;
@@ -87,7 +90,8 @@ export function FilteredHistory<R, F, C extends string>({
   const pending = view.kind === "loading";
   return (
     <>
-      <div className="flex justify-end">
+      <div className={heading ? "flex items-center justify-between gap-4" : "flex justify-end"}>
+        {heading}
         <FilterPopover applied={filters} onApply={setFilters} />
       </div>
       <PagedListing

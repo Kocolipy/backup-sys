@@ -41,6 +41,7 @@ const IDENTITIES: readonly {
       "/ffi",
       "/numc",
       "/armc",
+      "/hsp",
       "/accounts",
       "/audit",
       "/settings",

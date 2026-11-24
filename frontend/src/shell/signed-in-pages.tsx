@@ -1,6 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import {
   ClipboardCheck,
+  ClipboardList,
   House,
   Pill,
   Plane,
@@ -31,6 +32,8 @@ import { Demographic } from "@/pages/demographic/demographic";
 import { Ffis } from "@/pages/ffi/ffi";
 import { FFI_HISTORY } from "@/pages/ffi/ffi-api";
 import { Home } from "@/pages/home/home";
+import { HspRecords } from "@/pages/hsp/hsp";
+import { HSP_HISTORY } from "@/pages/hsp/hsp-api";
 import { Medications } from "@/pages/medication/medication";
 import { MEDICATION_HISTORY } from "@/pages/medication/medication-api";
 import { NumcRecords } from "@/pages/numc/numc";
@@ -67,9 +70,12 @@ export interface SignedInPage {
    * show, whose banner heads the page — the title showing whenever there is
    * none (`isWithoutPatient`). A page the sidebar or the top bar reaches hides
    * it, the link marking where the user is, unless the page is headed by the
-   * title alone, as Patient Search is.
+   * title alone, as Patient Search is. `"dropped-while-patient-in-context"`
+   * renders no title at all while there is a patient in context, for a page
+   * whose own heading is then its one `<h1>`, as the HSP page's is; with none
+   * the title shows as for `"while-patient-in-context"`.
    */
-  titleHidden?: boolean | "while-patient-in-context";
+  titleHidden?: boolean | "while-patient-in-context" | "dropped-while-patient-in-context";
 }
 
 /** Every signed-in page but Home, in the order the sidebar links them. */
@@ -221,6 +227,24 @@ const ARMC_PAGE: SignedInPage = {
 };
 
 /**
+ * HSP: the patient in context's Patient card above their HSP History, linked
+ * after ARMC for a session holding `patient:read`, the Permission its read
+ * requires, and guarded by it as ARMC is, so a session without it is routed to
+ * its landing page and offered no link. Its title is dropped while a patient is
+ * in context, the page's own "HSP History" card heading its `<h1>` beneath the
+ * patient banner, so the heading is never announced twice.
+ */
+const HSP_PAGE: SignedInPage = {
+  element: <HspRecords />,
+  homeLink: "HSP",
+  icon: ClipboardList,
+  path: "/hsp",
+  requires: { anyOf: [HSP_HISTORY.permission] },
+  title: "HSP History",
+  titleHidden: "dropped-while-patient-in-context",
+};
+
+/**
  * Every signed-in page, declared once: `App` turns each entry into a route
  * (behind the guard its `requires` states, if any), `SignedInShell` reads the matching
  * entry for the title, and links each entry
@@ -235,6 +259,7 @@ export const SIGNED_IN_PAGES: readonly SignedInPage[] = [
   FFI_PAGE,
   NUMC_PAGE,
   ARMC_PAGE,
+  HSP_PAGE,
   ...PAGES_BEYOND_HOME,
   SETTINGS_PAGE,
 ];

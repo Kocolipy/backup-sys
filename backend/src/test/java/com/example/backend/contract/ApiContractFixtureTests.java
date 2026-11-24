@@ -202,6 +202,7 @@ class ApiContractFixtureTests {
         patientFfi(all);
         patientNumc(all);
         patientArmc(all);
+        patientHsp(all);
         patientMedication(all);
         administration(all);
         connectors(all);
@@ -498,6 +499,45 @@ class ApiContractFixtureTests {
                     .cookie(user), 400);
             // The patient source failing: the mock's ARMC fault stub answering 503.
             t.expect(t.get("/api/patient-armc/fault-armc-server-error").cookie(user), 502);
+            t.expect(t.get(path).cookie(inNoGroup), 403);
+            t.expect(t.get(path).cookie(confined), 403);
+            t.expect(t.get(path), 401);
+        });
+    }
+
+    // ---- /api/patient-hsp/{patientId} ---------------------------------------------------
+
+    private static void patientHsp(List<Fixture> all) {
+        add(all, "patient HSP History: a page of HSP Records, sorted and filtered, one with fields"
+                + " missing, invalid and outside their closed sets, a patient with none, an unknown"
+                + " patient, a malformed id, a filter or sort it cannot take, a failing source, and"
+                + " the refusals", t -> {
+            // patient:read is a Group's to confer, as for an FFI History. The histories are the
+            // patient source's mock's (PatientSourceStubs): Tan Wei Ming has three HSP Records,
+            // Tan Boon Huat three shown as received (ADR 0020) — fields missing and invalid,
+            // codes outside their closed sets and a record with no id — and Siti Nurhaliza binte
+            // Ahmad none.
+            Cookie user = t.medicalOfficer(t.logIn(ADMIN, ADMIN_PASSWORD));
+            Cookie inNoGroup = t.settle(t.provision(true));
+            Cookie confined = t.logIn(t.provision(true), CONNECTOR_PASSWORD);
+            String path = "/api/patient-hsp/eq081-VQEgP8drUUqCWzHfw3";
+            t.expect(t.get(path + "?count=5").cookie(user), 200);
+            t.expect(t.get(path + "?count=5&sortBy=endDate&sortOrder=descending").cookie(user),
+                    200);
+            t.expect(t.get(path + "?count=5&outcome=low&outcome=high").cookie(user), 200);
+            t.expect(t.get("/api/patient-hsp/dev-patient-10?count=5").cookie(user), 200);
+            t.expect(t.get("/api/patient-hsp/erXuFYUfucBZaryVksYEcMg3?count=5").cookie(user),
+                    200);
+            t.expect(t.get("/api/patient-hsp/not-a-uuid").cookie(user), 404);
+            t.expect(t.get("/api/patient-hsp/" + "x".repeat(65)).cookie(user), 400);
+            t.expect(t.get(path + "?count=five").cookie(user), 400);
+            t.expect(t.get(path + "?outcome=critical").cookie(user), 400);
+            t.expect(t.get(path + "?sortBy=issueDate").cookie(user), 400);
+            t.expect(t.get(path + "?startDateTo=2024-02-30").cookie(user), 400);
+            t.expect(t.get(path + "?endDateFrom=2025-12-31&endDateTo=2025-01-01")
+                    .cookie(user), 400);
+            // The patient source failing: the mock's HSP fault stub answering 503.
+            t.expect(t.get("/api/patient-hsp/fault-hsp-server-error").cookie(user), 502);
             t.expect(t.get(path).cookie(inNoGroup), 403);
             t.expect(t.get(path).cookie(confined), 403);
             t.expect(t.get(path), 401);

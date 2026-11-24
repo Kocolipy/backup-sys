@@ -149,6 +149,7 @@ FAST_GATE=(
   com/example/backend/patient/controller/PatientControllerTests
   com/example/backend/patient/controller/PatientFfiControllerTests
   com/example/backend/patient/controller/PatientHistoriesControllerTests
+  com/example/backend/patient/controller/PatientHspControllerTests
   com/example/backend/patient/controller/PatientMedicationControllerTests
   com/example/backend/patient/controller/PatientNumcControllerTests
   com/example/backend/patient/controller/PatientSearchControllerTests
@@ -161,6 +162,8 @@ FAST_GATE=(
   com/example/backend/patient/domain/FfiTests
   com/example/backend/patient/domain/HistoryColumnTests
   com/example/backend/patient/domain/HistorySortTests
+  com/example/backend/patient/domain/HspFilterTests
+  com/example/backend/patient/domain/HspRecordTests
   com/example/backend/patient/domain/MedicationFilterTests
   com/example/backend/patient/domain/MedicationRecordTests
   com/example/backend/patient/domain/NumcFilterTests
@@ -177,6 +180,7 @@ FAST_GATE=(
   com/example/backend/patient/infrastructure/http/PatientSourceArmcAdapterTests
   com/example/backend/patient/infrastructure/http/PatientSourceFfiAdapterTests
   com/example/backend/patient/infrastructure/http/PatientSourceHistoriesAdapterTests
+  com/example/backend/patient/infrastructure/http/PatientSourceHspAdapterTests
   com/example/backend/patient/infrastructure/http/PatientSourceMedicationAdapterTests
   com/example/backend/patient/infrastructure/http/PatientSourceNumcAdapterTests
   com/example/backend/patient/infrastructure/http/PatientSourceSearchAdapterTests

@@ -1456,6 +1456,235 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+  /api/patient-hsp/{patientId}:
+    get:
+      tags: [Patient]
+      summary: Read a patient's HSP History, filtered and sorted, a page at a time
+      description: |
+        The HSP Records of the patient held under `patientId` that the filters
+        narrow, one page at a time, in the order `sortBy` and `sortOrder` name,
+        as the in-house patient source filters, orders, pages and counts them
+        (ADR 0019): the service reads them from the source on every call and
+        filters, orders, pages, holds and caches nothing of its own. With no
+        `sortBy`, whatever `sortOrder` says, no sort is asked of the source, so
+        the order is its own; with one, ties are broken by id. Read-only.
+
+        **Filters** narrow the history, combined with AND, each optional: any
+        of the Outcomes (`outcome`) and Submitting MCs (`submittingMc`), each
+        repeated for each code; one Status (`status`); and a range for the
+        Start Date (`startDateFrom`, `startDateTo`) and for the End Date
+        (`endDateFrom`, `endDateTo`), each end a calendar date, inclusive. They
+        reach the source as `outcome` and `submitting-mc`, each once with its
+        codes joined by commas (FHIR's OR), `status`, `start-date=ge…`,
+        `start-date=le…`, `end-date=ge…` and `end-date=le…`, and the sort as
+        `_sort=±start-date|±end-date,_id`.
+
+        Each record's Outcome, Submitting MC (a Medical Centre) and Status are
+        closed sets, carried as their codes; the SPA names each known code with
+        its label. **Status is the source's own** and is never derived from the
+        End Date: a record past its End Date may still be `active`.
+
+        **Shown as received** (ADR 0020): the patient source is the truth, so
+        no HSP Record fails the read for what a field holds. A field missing or
+        in the wrong format is `null`, the second named in the row's `invalid`,
+        and a code outside its closed set is passed through as it came; only
+        the closed sets of the filters are checked. A response holding fields
+        in the wrong format is one `WARN`, naming their paths and never their
+        values, and counts each in `patient_source.invalid_fields`.
+
+        Paging follows ADR 0017's parameter rules: `startIndex` one-based,
+        `count` defaulting to 100 and capped at 200, an out-of-range value
+        coerced rather than refused. The page they resolve to is the source's
+        to read — `count=0` and a page past the end included — and
+        `totalResults` is the source's count of every HSP Record the filters
+        select.
+
+        Requires `patient:read`, a delegatable Permission a User holds through a
+        Group that carries it, or as the Superuser. Outside `/api/patient`, so
+        the answer is plain JSON and every refusal and fault the application
+        API's `ApiError`, not a FHIR `OperationOutcome`.
+
+        **Not audited**, as a read of one Patient by id is not: a read appends
+        no audit row. The request's own log record names the route template,
+        never the patient id; a `502` adds the fault's one `ERROR` record,
+        naming the failure of the call or of its searchset, and never the
+        patient id or anything of the answer (`docs/domain/hsp.md`,
+        "Failures and logging").
+      operationId: getPatientHspHistory
+      security:
+        - sessionCookie: [patient:read]
+      parameters:
+        - name: patientId
+          in: path
+          required: true
+          description: |
+            The patient's id, its EHR's FHIR id, as `GET /api/patient/{id}`
+            reads the Patient by. Any value in FHIR's id grammar is well-formed.
+          schema:
+            type: string
+            pattern: "^[A-Za-z0-9\\-.]{1,64}$"
+        - name: outcome
+          in: query
+          required: false
+          description: |
+            Only HSP Records with any of these Outcomes, one code to each
+            repetition. Sent to the source once, as `outcome`, the codes joined
+            by commas.
+          style: form
+          explode: true
+          schema:
+            type: array
+            items:
+              $ref: "#/components/schemas/HspOutcome"
+        - name: startDateFrom
+          in: query
+          required: false
+          description: |
+            Only HSP Records starting on or after this day. Sent as
+            `start-date=ge…`.
+          schema:
+            type: string
+            format: date
+            example: "2024-01-01"
+        - name: startDateTo
+          in: query
+          required: false
+          description: |
+            Only HSP Records starting on or before this day; not before
+            `startDateFrom`. Sent as `start-date=le…`.
+          schema:
+            type: string
+            format: date
+            example: "2024-12-31"
+        - name: endDateFrom
+          in: query
+          required: false
+          description: |
+            Only HSP Records whose End Date is on or after this day. Sent as
+            `end-date=ge…`.
+          schema:
+            type: string
+            format: date
+            example: "2025-01-01"
+        - name: endDateTo
+          in: query
+          required: false
+          description: |
+            Only HSP Records whose End Date is on or before this day; not before
+            `endDateFrom`. Sent as `end-date=le…`.
+          schema:
+            type: string
+            format: date
+            example: "2025-12-31"
+        - name: submittingMc
+          in: query
+          required: false
+          description: |
+            Only HSP Records submitted by any of these Submitting MCs, one code
+            to each repetition. Sent to the source once, as `submitting-mc`, the
+            codes joined by commas.
+          style: form
+          explode: true
+          schema:
+            type: array
+            items:
+              $ref: "#/components/schemas/MedicalCentre"
+        - name: status
+          in: query
+          required: false
+          description: |
+            Only HSP Records with this Status, the source's own. Absent for
+            either. Sent to the source as `status`.
+          schema:
+            $ref: "#/components/schemas/HspStatus"
+        - name: sortBy
+          in: query
+          required: false
+          description: |
+            The one column to sort by: `startDate` (the source's `start-date`)
+            or `endDate` (its `end-date`). With none, the source's own order,
+            whatever `sortOrder` says: no `_sort` is sent.
+          schema:
+            type: string
+            enum: [startDate, endDate]
+        - name: sortOrder
+          in: query
+          required: false
+          description: |
+            The direction `sortBy` sorts in; `ascending` when `sortBy` is given
+            alone. Descending is sent with a leading `-`.
+          schema:
+            type: string
+            enum: [ascending, descending]
+        - name: startIndex
+          in: query
+          required: false
+          description: |
+            One-based index of the first HSP Record to return. Defaults to 1;
+            anything below 1 is coerced to 1 rather than refused, and an integer
+            of any size is coerced (one beyond 2147483647 is read as
+            2147483647). Sent to the source as the zero-based `_offset`.
+          schema:
+            type: integer
+        - name: count
+          in: query
+          required: false
+          description: |
+            HSP Records per page. Defaults to 100; a negative value is coerced to
+            0 and anything above 200 to 200, rather than refused, however large.
+            Sent to the source as `_count`. The SPA asks for 5.
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: One page of the patient's HSP History.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HspHistoryPage"
+        "400":
+          description: |
+            `patientId` is outside FHIR's id grammar; an `outcome`,
+            `submittingMc` or `status` is no code of its closed set, matched
+            exactly; `sortBy` is neither `startDate` nor `endDate`, or
+            `sortOrder` neither `ascending` nor `descending`; a date is no
+            calendar date `YYYY-MM-DD`; a from-date is after its to-date; or
+            `startIndex` or `count` is not an integer. Refused before the
+            patient source is called, with the generic `invalid-request`
+            `ApiError`, which quotes nothing of the request.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/PermissionRequired"
+        "404":
+          description: |
+            `patientId` is well-formed but the patient source holds no patient
+            under it (its `404`): the generic `request-refused` `ApiError`. An
+            ordinary answer, not a fault — the SPA shows it as "No patient in
+            context".
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "502":
+          description: |
+            The patient source failed: it could not be reached, gave no answer
+            within 2 seconds to connect and 5 to answer, answered any status but
+            a `200` or a `404`, or answered a `200` that is no searchset
+            `Bundle`, has no `total` or a negative one, or holds an entry with
+            no resource, one that is no object or one of another resource. What
+            an HSP Record's fields hold never fails the read (ADR 0020). The
+            generic `server-error` `ApiError`, saying nothing about the failure;
+            the fault's one record names its reason. The SPA shows it as
+            "Couldn't load HSP records", with Try again.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
   /api/patient-medication/{patientId}:
     get:
       tags: [Patient]
@@ -5372,8 +5601,8 @@ components:
       description: |
         A Medical Centre, a camp medical centre, by its code: Nee Soon Camp MC,
         Kranji Camp MC, Hendon Camp MC, Mandai Hill Camp MC, Khatib Camp MC.
-        An FFI's Submitting MC and a Medication Record's Dispensary each name
-        one.
+        An FFI's and an HSP Record's Submitting MC and a Medication Record's
+        Dispensary each name one.
       enum:
         [nee-soon-camp, kranji-camp, hendon-camp, mandai-hill-camp, khatib-camp]
     FfiStatus:
@@ -5582,6 +5811,96 @@ components:
         An ARMC Board's ARMC Outcome, by its code — FIT, UNFIT. A set of its own,
         apart from an FFI's Outcome and a NUMC Record's NUMC Outcome.
       enum: [fit, unfit]
+    HspHistoryPage:
+      type: object
+      required: [totalResults, startIndex, records]
+      additionalProperties: false
+      properties:
+        totalResults:
+          type: integer
+          description: The patient's HSP Records the filters select, across every page, as the patient source counted them.
+        startIndex:
+          type: integer
+          description: One-based index of this page's first HSP Record, as coerced.
+        records:
+          type: array
+          description: This page's HSP Records, in the order asked for, or the source's own with no sort.
+          items:
+            $ref: "#/components/schemas/HspRecord"
+    HspRecord:
+      type: object
+      required:
+        [id, outcome, startDate, endDate, submittingMc, status, invalid]
+      additionalProperties: false
+      description: |
+        One HSP Record in a patient's HSP History, shown as the patient source
+        sent it (ADR 0020). Every property is always there. A field the source
+        left out, sent `null`, empty or blank, or sent in the wrong format is
+        `null`, and `invalid` names each whose format was wrong — the wrong
+        JSON type, or a date that is no calendar date: a `null` field it does
+        not name is missing. Nothing of a value's meaning is checked, and a code
+        outside its closed set is passed through as it came. Restricted,
+        Sensitive Normal, as the patient's data is.
+      properties:
+        id:
+          type: [string, "null"]
+          description: |
+            The record's own id at the patient source, as it came: never
+            checked, FHIR's id grammar included.
+        outcome:
+          description: |
+            The Outcome's code: one of the closed set's, or any other the
+            source sent, as it came.
+          anyOf:
+            - $ref: "#/components/schemas/HspOutcome"
+            - type: string
+            - type: "null"
+        startDate:
+          type: [string, "null"]
+          format: date
+          pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+          description: The record's Start Date, a calendar date.
+        endDate:
+          type: [string, "null"]
+          format: date
+          pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+          description: |
+            The record's End Date, a calendar date, before its Start Date too.
+            Nothing is derived from it: `status` is the source's own.
+        submittingMc:
+          description: |
+            The Submitting MC's code, a Medical Centre's: one of the closed
+            set's, or any other the source sent, as it came.
+          anyOf:
+            - $ref: "#/components/schemas/MedicalCentre"
+            - type: string
+            - type: "null"
+        status:
+          description: |
+            The Status's code, the source's own: one of the closed set's, or any
+            other the source sent, as it came.
+          anyOf:
+            - $ref: "#/components/schemas/HspStatus"
+            - type: string
+            - type: "null"
+        invalid:
+          type: array
+          description: |
+            The fields whose format was wrong at the source, each `null` above,
+            in the record's order; none when each is present or missing.
+          items:
+            type: string
+            enum: [id, outcome, startDate, endDate, submittingMc, status]
+    HspOutcome:
+      type: string
+      description: An HSP Record's Outcome, by its code — LOW, MODERATE, HIGH.
+      enum: [low, moderate, high]
+    HspStatus:
+      type: string
+      description: |
+        An HSP Record's Status, the patient source's own — Active, Inactive —
+        never derived from its End Date.
+      enum: [active, inactive]
     MedicationHistoryPage:
       type: object
       required: [totalResults, startIndex, records]

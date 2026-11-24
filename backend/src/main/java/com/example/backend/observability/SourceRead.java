@@ -16,6 +16,9 @@ public enum SourceRead {
     /** A patient's ARMC History. */
     ARMC("armc"),
 
+    /** A patient's HSP History. */
+    HSP("hsp"),
+
     /** A patient's Medication History. */
     MEDICATION("medication"),
 

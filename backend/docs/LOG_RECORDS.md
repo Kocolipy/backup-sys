@@ -227,8 +227,8 @@ page, which quoted the path.
   broke (`not-a-searchset`, `no-total`, `another-resource`)
   (`/docs/domain/patient.md`, "Logging", and
   "Failures" in each history's file in `/docs/domain/`); a read shown as
-  received, the FFI, the NUMC, the ARMC or the Medication History, a Patient
-  by id or a Patient search, breaks no rule of what its fields hold, and a
+  received, the FFI, the NUMC, the ARMC, the HSP or the Medication History, a
+  Patient by id or a Patient search, breaks no rule of what its fields hold, and a
   search's match without a FHIR id is dropped, not failed (ADR 0020) — and its
   `error.category` is the
   fault's own, as ADR 0014's table has it for an outbound call: `network` and
@@ -246,15 +246,15 @@ page, which quoted the path.
 ### The patient source's invalid fields
 
 A read that shows the patient source's data as received — the FFI History, the
-NUMC History, the ARMC History, the Medication History, a Patient read by id
-and a Patient search — answers a field in the wrong format as
+NUMC History, the ARMC History, the HSP History, the Medication History, a
+Patient read by id and a Patient search — answers a field in the wrong format as
 `null`, or, in a Patient, leaves it out and names it by an extension, shown as
 "Error" (ADR 0020), and
 writes one `WARN` `patient_source.invalid_fields` (`successAtWarn`,
 `event.category` `network`, `event.type` `info`) for the whole response that
 held any — or, in a search, dropped a match without a FHIR id or held an entry
 that is no Patient — beside the request's own record. It carries
-`app.patient_source.read`, the read (`ffi`, `numc`, `armc`, `medication`,
+`app.patient_source.read`, the read (`ffi`, `numc`, `armc`, `hsp`, `medication`,
 `patient` or `search`), and
 `app.patient_source.invalid_fields`, the path of each such field in the
 source's answer, in its order and nested as deep as it was found

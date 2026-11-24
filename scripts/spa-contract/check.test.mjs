@@ -304,6 +304,8 @@ function document() {
         NumcOutcome: { type: "string", enum: ["fit", "waiver-granted"] },
         ArmcBoardType: { type: "string", enum: ["aces"] },
         ArmcOutcome: { type: "string", enum: ["fit"] },
+        HspOutcome: { type: "string", enum: ["low", "high"] },
+        HspStatus: { type: "string", enum: ["active", "inactive"] },
         DispenseStatus: { type: "string", enum: ["pending"] },
       },
     },
@@ -364,6 +366,10 @@ function spa() {
       "src/pages/armc/armc-api.ts": {
         ARMC_BOARD_TYPES: ["aces"],
         ARMC_OUTCOMES: ["fit"],
+      },
+      "src/pages/hsp/hsp-api.ts": {
+        HSP_OUTCOMES: ["low", "high"],
+        HSP_STATUSES: ["active", "inactive"],
       },
       "src/pages/medical-centre-api.ts": { MEDICAL_CENTRES: ["kranji-camp"] },
       "src/pages/medication/medication-api.ts": {
@@ -528,8 +534,23 @@ describe("the SPA's vocabularies", () => {
         ),
       `ARMC_OUTCOMES (src/pages/armc/armc-api.ts) has "waiver-granted", which #/components/schemas/ArmcOutcome lacks`,
     ],
-    // Medical Centre, the set an FFI's Submitting MC and a Medication Record's
-    // Dispensary share, is its own row, in a module of its own.
+    // One case per HSP set, for the same reason.
+    ...[
+      ["HSP_OUTCOMES", "HspOutcome", "moderate"],
+      ["HSP_STATUSES", "HspStatus", "lapsed"],
+    ].map(([set, schema, code]) => [
+      `the document gains a code of ${schema}`,
+      (_spa, doc) => schemas(doc)[schema].enum.push(code),
+      `${set} (src/pages/hsp/hsp-api.ts) lacks "${code}", which #/components/schemas/${schema} has`,
+    ]),
+    [
+      "the SPA gains an HSP Outcome",
+      (s) => s.modules["src/pages/hsp/hsp-api.ts"].HSP_OUTCOMES.push("unfit"),
+      `HSP_OUTCOMES (src/pages/hsp/hsp-api.ts) has "unfit", which #/components/schemas/HspOutcome lacks`,
+    ],
+    // Medical Centre, the set an FFI's and an HSP Record's Submitting MC and a
+    // Medication Record's Dispensary share, is its own row, in a module of its
+    // own.
     [
       "the document gains a Medical Centre",
       (_spa, doc) => schemas(doc).MedicalCentre.enum.push("khatib-camp"),
@@ -1195,6 +1216,7 @@ export const TOKENS: PagedDeclaration<
       "src/pages/medical-centre-api.ts",
       "src/pages/numc/numc-api.ts",
       "src/pages/armc/armc-api.ts",
+      "src/pages/hsp/hsp-api.ts",
       "src/pages/medication/medication-api.ts",
       "src/pages/tokens/tokens-api.ts",
     ]);

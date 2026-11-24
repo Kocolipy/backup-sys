@@ -187,6 +187,16 @@ public final class PatientSourceStubs {
     }
 
     /**
+     * Every HSP fault stub: a stub whose {@code metadata.fault} names the failure an HSP History
+     * read meets there — no answer, a status but a {@code 200} or a {@code 404}, or a page the
+     * service cannot hold — under a well-formed patient id no fixture uses
+     * (/docs/domain/hsp.md, "The patient source's HSP fixtures").
+     */
+    public static List<FaultStub> hspFaults() {
+        return historyFaults(HSP);
+    }
+
+    /**
      * Every Medication fault stub: a stub whose {@code metadata.fault} names the failure a
      * Medication History read meets there — no answer, a status but a {@code 200} or a
      * {@code 404}, or a page the service cannot hold — under a well-formed patient id no fixture
@@ -223,6 +233,11 @@ public final class PatientSourceStubs {
         return histories(ARMC);
     }
 
+    /** Every HSP History stub that is no fault stub ({@link #histories}). */
+    public static List<HistoryStub> hspHistories() {
+        return histories(HSP);
+    }
+
     /** Every Medication History stub that is no fault stub ({@link #histories}). */
     public static List<HistoryStub> medicationHistories() {
         return histories(MEDICATION);
@@ -244,10 +259,10 @@ public final class PatientSourceStubs {
     }
 
     /**
-     * One stub of an FFI, NUMC, ARMC or Medication History.
+     * One stub of an FFI, NUMC, ARMC, HSP or Medication History.
      *
-     * @param path   the path it answers, {@code /Patient/{id}/ffi}, {@code /numc}, {@code /armc}
-     *               or {@code /medication}, or the pattern of paths
+     * @param path   the path it answers, {@code /Patient/{id}/ffi}, {@code /numc}, {@code /armc},
+     *               {@code /hsp} or {@code /medication}, or the pattern of paths
      * @param query  its query parameters' matchers — missing for one answering any page
      * @param bundle the searchset it answers
      */
@@ -283,11 +298,14 @@ public final class PatientSourceStubs {
     /** The ARMC History's path segment, after the patient's id. */
     private static final String ARMC = "/armc";
 
+    /** The HSP History's path segment, after the patient's id. */
+    private static final String HSP = "/hsp";
+
     /** The Medication History's path segment, after the patient's id. */
     private static final String MEDICATION = "/medication";
 
     /** Every history's path segment. */
-    private static final List<String> HISTORIES = List.of(FFI, NUMC, ARMC, MEDICATION);
+    private static final List<String> HISTORIES = List.of(FFI, NUMC, ARMC, HSP, MEDICATION);
 
     /**
      * One fault stub.
@@ -339,6 +357,14 @@ public final class PatientSourceStubs {
         public List<String> armcValues() {
             return recordValues(List.of("id", "startDate", "endDate", "medicalOfficer1",
                     "medicalOfficer2"));
+        }
+
+        /**
+         * What a record of an HSP History's failure must not quote: each HSP Record's id and
+         * dates, and an error body's diagnostics.
+         */
+        public List<String> hspValues() {
+            return recordValues(List.of("id", "startDate", "endDate"));
         }
 
         /**

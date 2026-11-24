@@ -196,6 +196,7 @@ named by their columns' headings:
 | FFI        | FFI Type, Outcome, Status              | `/docs/domain/ffi.md`        |
 | NUMC       | Type, Outcome, Issue Date, Expiry Date | `/docs/domain/numc.md`       |
 | ARMC       | Board Type, Outcome, Start Date        | `/docs/domain/armc.md`       |
+| HSP        | Outcome, Status                        | `/docs/domain/hsp.md`        |
 | Medication | Medication, Dispense Status            | `/docs/domain/medication.md` |
 
 An ARMC Board's End Date is not one: a board still open has none.

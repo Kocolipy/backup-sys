@@ -17,8 +17,8 @@ import org.junit.jupiter.params.provider.ValueSource;
 /**
  * How a history read through the patient source is ordered: by one of the date columns the
  * history declares, one at a time, in either direction — an FFI History or a NUMC History by the
- * Issue Date or the Expiry Date, an ARMC History by the Start Date or the End Date, both calendar
- * dates, and a Medication History by the Start Date or the End Date, both date-times — or, with
+ * Issue Date or the Expiry Date, an ARMC History or an HSP History by the Start Date or the End
+ * Date, both calendar dates, and a Medication History by the Start Date or the End Date, both date-times — or, with
  * no column named, in the patient source's own order. The direction's spelling is
  * {@link SortOrderTests}'.
  */
@@ -36,6 +36,7 @@ class HistorySortTests {
             "FFI", FfiHistory.DATE_COLUMNS,
             "NUMC", NumcHistory.DATE_COLUMNS,
             "ARMC", ArmcHistory.DATE_COLUMNS,
+            "HSP", HspHistory.DATE_COLUMNS,
             "Medication", MedicationHistory.DATE_COLUMNS);
 
     @Test
@@ -96,6 +97,7 @@ class HistorySortTests {
         "NUMC, issueDate, issue-date, CALENDAR_DATE",
         "NUMC, expiryDate, expiry-date, CALENDAR_DATE",
         "ARMC, startDate, start-date, CALENDAR_DATE", "ARMC, endDate, end-date, CALENDAR_DATE",
+        "HSP, startDate, start-date, CALENDAR_DATE", "HSP, endDate, end-date, CALENDAR_DATE",
         "Medication, startDate, start-date, DATE_TIME",
         "Medication, endDate, end-date, DATE_TIME"})
     void aColumnIsSpelledAsTheRecordsFieldIs(String history, String spelled,
@@ -142,6 +144,20 @@ class HistorySortTests {
         "START_DATE", "enddate", "medicalOfficer1"})
     void anyOtherArmcColumnIsRefused(String spelled) {
         assertThatThrownBy(() -> HistorySort.column(ArmcHistory.DATE_COLUMNS, spelled))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("A history sorts by startDate or endDate");
+    }
+
+    /**
+     * Only an HSP Record's two dates sort an HSP History: no other column does, its Outcome, its
+     * Submitting MC and its Status among them, nor another history's dates, nor any other
+     * spelling of its own.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"issueDate", "expiryDate", "outcome", "submittingMc", "status",
+        "start-date", "START_DATE", "enddate"})
+    void anyOtherHspColumnIsRefused(String spelled) {
+        assertThatThrownBy(() -> HistorySort.column(HspHistory.DATE_COLUMNS, spelled))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("A history sorts by startDate or endDate");
     }

@@ -96,6 +96,12 @@ class PatientHistoriesIntegrationTests {
                     "outcome=unfit", 3, List.of("unfit"),
                     "sortBy=endDate&endDateTo=2099-01-01", List.of("2099-01-01"),
                     PatientSourceStubs::armcFaults, FaultStub::armcValues),
+            new History("HSP", "hsp", "records", 3,
+                    List.of("hsp-tan-wei-ming", "2024-03-11", "2025-03-10", "2022-11-22"),
+                    "outcome=moderate&submittingMc=hendon-camp", 0,
+                    List.of("moderate", "hendon-camp"),
+                    "sortBy=endDate&startDateTo=2099-01-01", List.of("2099-01-01"),
+                    PatientSourceStubs::hspFaults, FaultStub::hspValues),
             new History("Medication", "medication", "records", 5,
                     List.of("medication-tan-wei-ming", "medication-tan-hui-min", "Paracetamol",
                             "Oral rehydration salts", "2026-10-18T17:30", "2024-08-05T11:05",
@@ -135,6 +141,12 @@ class PatientHistoriesIntegrationTests {
             fault-armc-unexpected-status,                unexpected-status,                     data
             fault-armc-not-a-searchset,                  not-a-searchset,                       data
             fault-armc-no-total,                         no-total,                              data
+            fault-hsp-unreachable,                       unreachable,                           network
+            fault-hsp-slow,                              timed-out,                             network
+            fault-hsp-server-error,                      server-error,                          server
+            fault-hsp-unexpected-status,                 unexpected-status,                     data
+            fault-hsp-not-a-searchset,                   not-a-searchset,                       data
+            fault-hsp-no-total,                          no-total,                              data
             fault-medication-unreachable,                unreachable,                           network
             fault-medication-slow,                       timed-out,                             network
             fault-medication-server-error,               server-error,                          server
@@ -376,6 +388,39 @@ class PatientHistoriesIntegrationTests {
         assertThat(logs.lines()).doesNotContain("dev-patient-10", "armc-tan-boon-huat",
                 "armc tan boon huat", "20210316", "2021-04", "aircrew", "waiver-granted",
                 "Dr Rajesh Kumar");
+    }
+
+    /**
+     * An HSP History holding fields in the wrong format is answered, as received (ADR 0020), and
+     * writes exactly one {@code WARN} beside the request's record, naming each such field by its
+     * path in the source's answer, and no {@code ERROR}; nothing in the stream names the patient
+     * or anything the records hold.
+     */
+    @Test
+    void anHspHistoryWithInvalidFieldsIsAnsweredAndWarnsOnceNamingTheirPaths() throws Exception {
+        HttpClient session = signedIn();
+        logs.reset();
+
+        HttpResponse<String> response = send(session, HttpRequest.newBuilder(URI.create(
+                "http://localhost:" + port + "/api/patient-hsp/dev-patient-10?count=5")));
+        logs.awaitRequestRecords(1);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(logs.records())
+                .filteredOn(record -> List.of("WARN", "ERROR")
+                        .contains(record.at("/log/level").asText()))
+                .filteredOn(record -> !"http.request".equals(record.at("/app/event/action")
+                        .asText()))
+                .singleElement()
+                .satisfies(warning -> assertThat(List.of(warning.at("/log/level").asText(),
+                        warning.at("/app/event/action").asText(),
+                        warning.at("/app/patient_source/read").asText(),
+                        warning.at("/app/patient_source/invalid_fields").toString()))
+                        .containsExactly("WARN", "patient_source.invalid_fields", "hsp",
+                                "[\"entry[1].startDate\",\"entry[1].endDate\","
+                                        + "\"entry[1].status\"]"));
+        assertThat(logs.lines()).doesNotContain("dev-patient-10", "hsp-tan-boon-huat",
+                "20210316", "2022-03", "2023-03-15", "tengah-air-base");
     }
 
     /**

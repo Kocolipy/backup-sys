@@ -39,6 +39,8 @@ set-equal to the one before it. The document's enums are named under
 | NUMC Outcomes          | `NumcOutcome`, by `code()`                   | `NumcOutcome`                                                                           | `NUMC_OUTCOMES` (`numc-api.ts`)             |
 | ARMC Board Types       | `ArmcBoardType`, by `code()`                 | `ArmcBoardType`                                                                         | `ARMC_BOARD_TYPES` (`armc-api.ts`)          |
 | ARMC Outcomes          | `ArmcOutcome`, by `code()`                   | `ArmcOutcome`                                                                           | `ARMC_OUTCOMES` (`armc-api.ts`)             |
+| HSP Outcomes           | `HspOutcome`, by `code()`                    | `HspOutcome`                                                                            | `HSP_OUTCOMES` (`hsp-api.ts`)               |
+| HSP Statuses           | `HspStatus`, by `code()`                     | `HspStatus`                                                                             | `HSP_STATUSES` (`hsp-api.ts`)               |
 | Dispense Statuses      | `DispenseStatus`, by `code()`                | `DispenseStatus`                                                                        | `DISPENSE_STATUSES` (`medication-api.ts`)   |
 | Medical Centres        | `MedicalCentre`, by `code()`                 | `MedicalCentre`                                                                         | `MEDICAL_CENTRES` (`medical-centre-api.ts`) |
 
@@ -53,7 +55,7 @@ set-equal to the one before it. The document's enums are named under
   also decodes another response with: `PERMISSIONS` against the delegatable
   enum). A new closed set joins both lists.
 - **A set shown as received** (ADR 0020) stays `equal`. An FFI's, a NUMC
-  Record's, an ARMC Board's or a Medication Record's code may be any string — the document's row field is `anyOf` the set's enum, any
+  Record's, an ARMC Board's, an HSP Record's or a Medication Record's code may be any string — the document's row field is `anyOf` the set's enum, any
   string and `null` — but the set is what a filter's codes are checked
   against and what the Filter panel offers, so the SPA's copy and the enum hold
   the same known codes, and the check compares the enum, not the row field.

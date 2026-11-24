@@ -71,8 +71,8 @@ export const VOCABULARIES = [
     module: "src/pages/ffi/ffi-api.ts",
     mirrors: [{ pointer: `#/components/schemas/${schema}`, relation: "equal" }],
   })),
-  // Medical Centre, carried as its code: the set an FFI's Submitting MC and a
-  // Medication Record's Dispensary share.
+  // Medical Centre, carried as its code: the set an FFI's and an HSP Record's
+  // Submitting MC and a Medication Record's Dispensary share.
   {
     set: "MEDICAL_CENTRES",
     module: "src/pages/medical-centre-api.ts",
@@ -96,6 +96,15 @@ export const VOCABULARIES = [
   ].map(([set, schema]) => ({
     set,
     module: "src/pages/armc/armc-api.ts",
+    mirrors: [{ pointer: `#/components/schemas/${schema}`, relation: "equal" }],
+  })),
+  // An HSP Record's two closed sets of its own, each carried as its code.
+  ...[
+    ["HSP_OUTCOMES", "HspOutcome"],
+    ["HSP_STATUSES", "HspStatus"],
+  ].map(([set, schema]) => ({
+    set,
+    module: "src/pages/hsp/hsp-api.ts",
     mirrors: [{ pointer: `#/components/schemas/${schema}`, relation: "equal" }],
   })),
   // A Medication Record's Dispense Status, carried as its code.

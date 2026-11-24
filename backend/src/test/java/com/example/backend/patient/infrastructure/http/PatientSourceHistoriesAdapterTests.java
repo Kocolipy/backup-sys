@@ -15,6 +15,7 @@ import com.example.backend.patient.PatientSourceStubs.FaultStub;
 import com.example.backend.patient.domain.ArmcFilter;
 import com.example.backend.patient.domain.FfiFilter;
 import com.example.backend.patient.domain.HistorySort;
+import com.example.backend.patient.domain.HspFilter;
 import com.example.backend.patient.domain.MedicationFilter;
 import com.example.backend.patient.domain.NumcFilter;
 import com.example.backend.patient.domain.PatientId;
@@ -100,6 +101,10 @@ class PatientSourceHistoriesAdapterTests {
                     (adapter, patient) -> adapter.findArmcHistory(new PatientId(patient),
                             ArmcFilter.NONE, HistorySort.SOURCE_ORDER, SECOND_PAGE_OF_FIVE),
                     PatientSourceStubs::armcFaults, FaultStub::armcValues),
+            new History("HSP", "hsp", "HSP",
+                    (adapter, patient) -> adapter.findHspHistory(new PatientId(patient),
+                            HspFilter.NONE, HistorySort.SOURCE_ORDER, SECOND_PAGE_OF_FIVE),
+                    PatientSourceStubs::hspFaults, FaultStub::hspValues),
             new History("Medication", "medication", "Medication",
                     (adapter, patient) -> adapter.findMedicationHistory(new PatientId(patient),
                             MedicationFilter.NONE, HistorySort.SOURCE_ORDER, SECOND_PAGE_OF_FIVE),

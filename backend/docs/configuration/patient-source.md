@@ -1,7 +1,7 @@
 ---
 type: Configuration Reference
 title: Patient source
-description: APP_PATIENT_SOURCE_BASE_URL and APP_PATIENT_SOURCE_READ_TIMEOUT — the in-house patient source the backend reads every Patient, FFI History, NUMC History, ARMC History and Medication History from and passes every Patient search to, its required base URL, its timeouts, and the local WireMock mock compose runs on 127.0.0.1:8104, with its fixtures, its search set, its FFI Histories, its NUMC Histories, its ARMC Histories and its Medication Histories.
+description: APP_PATIENT_SOURCE_BASE_URL and APP_PATIENT_SOURCE_READ_TIMEOUT — the in-house patient source the backend reads every Patient, FFI History, NUMC History, ARMC History, HSP History and Medication History from and passes every Patient search to, its required base URL, its timeouts, and the local WireMock mock compose runs on 127.0.0.1:8104, with its fixtures, its search set, its FFI Histories, its NUMC Histories, its ARMC Histories, its HSP Histories and its Medication Histories.
 tags: [patient, configuration]
 ---
 
@@ -17,11 +17,13 @@ The backend reads every Patient from the in-house patient source at
 `GET {base}/Patient?…`, as FHIR R4, and reads every patient's FFI History at
 `GET {base}/Patient/{id}/ffi?…`, NUMC History at
 `GET {base}/Patient/{id}/numc?…`, ARMC History at
-`GET {base}/Patient/{id}/armc?…` and Medication History at
+`GET {base}/Patient/{id}/armc?…`, HSP History at
+`GET {base}/Patient/{id}/hsp?…` and Medication History at
 `GET {base}/Patient/{id}/medication?…`, on every read, with no cache and **no
 credential** (ADR 0014, ADR 0018, ADR 0019; `/docs/domain/patient.md`, "The
 in-house patient source" and "Patient search"; `/docs/domain/ffi.md`;
-`/docs/domain/numc.md`; `/docs/domain/armc.md`; `/docs/domain/medication.md`).
+`/docs/domain/numc.md`; `/docs/domain/armc.md`; `/docs/domain/hsp.md`;
+`/docs/domain/medication.md`).
 The SPA never reaches it.
 
 - **Required, with no default.** `application.yaml` names
@@ -242,6 +244,41 @@ Tan Boon Huat's page carries it.
 ```bash
 curl -s 'http://127.0.0.1:8104/Patient/eq081-VQEgP8drUUqCWzHfw3/armc?_offset=0&_count=5&_total=accurate'
 curl -s 'http://127.0.0.1:8104/Patient/dev-patient-05/armc?end-date=ge2023-01-01&_offset=0&_count=5&_total=accurate'
+```
+
+### The HSP Histories
+
+The backend reads a patient's HSP History at
+`GET {base}/Patient/{id}/hsp?_offset=…&_count=…&_total=accurate`, on the same
+base URL, client and timeouts, with each filter and the sort the HSP page asks
+for, ties broken by id, and no `_sort` when it asks for none (ADR 0019;
+`/docs/domain/hsp.md`, "The source contract"). The mock answers a FHIR-shaped
+searchset of `HSP` objects, matched on `_count=5`, `_offset`,
+`_total=accurate`, the `_sort` and each filter — `outcome`, `start-date`,
+`end-date`, `submitting-mc`, `status` — pinned or absent:
+
+| Stub file                                   | Read                                                      | Answers                                                                                                                                       |
+| ------------------------------------------- | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `hsp-tan-wei-ming`                          | `eq081-VQEgP8drUUqCWzHfw3`                                | Tan Wei Ming's 3 HSP Records, `total: 3`                                                                                                      |
+| `hsp-tan-wei-ming-by-start-date`            | Tan Wei Ming, `_sort=start-date,_id`                      | his 3, earliest Start Date first                                                                                                              |
+| `hsp-tan-wei-ming-by-start-date-descending` | Tan Wei Ming, `_sort=-start-date,_id`                     | his 3, latest Start Date first                                                                                                                |
+| `hsp-tan-wei-ming-by-end-date`              | Tan Wei Ming, `_sort=end-date,_id`                        | his 3, earliest End Date first                                                                                                                |
+| `hsp-tan-wei-ming-by-end-date-descending`   | Tan Wei Ming, `_sort=-end-date,_id`                       | his 3, latest End Date first                                                                                                                  |
+| `hsp-tan-wei-ming-active`                   | Tan Wei Ming, `status=active`                             | `total: 1`                                                                                                                                    |
+| `hsp-tan-wei-ming-low-or-high`              | Tan Wei Ming, `outcome=low,high`                          | `total: 2`                                                                                                                                    |
+| `hsp-tan-boon-huat`                         | `dev-patient-10`                                          | Tan Boon Huat's 3, `total: 3`, shown as received: fields missing, malformed and outside their closed sets, and a record with no id (ADR 0020) |
+| `hsp-fallback`                              | any other read of a development fixture's, lower priority | no entry, `total: 0`                                                                                                                          |
+| `hsp-not-found`                             | any other well-formed id, lowest priority                 | `404`, as a read by id of an unknown id                                                                                                       |
+
+Beside them, `fault-hsp-<failure>` answers each failure of an HSP read under a
+patient id of its own — `unreachable` (the connection reset), `slow` (after 7
+seconds), `server-error` (`503`), `unexpected-status` (`400`),
+`not-a-searchset` and `no-total`. What an HSP Record holds is never a failure:
+Tan Boon Huat's page carries it.
+
+```bash
+curl -s 'http://127.0.0.1:8104/Patient/eq081-VQEgP8drUUqCWzHfw3/hsp?_offset=0&_count=5&_total=accurate'
+curl -s 'http://127.0.0.1:8104/Patient/eq081-VQEgP8drUUqCWzHfw3/hsp?status=active&_offset=0&_count=5&_total=accurate'
 ```
 
 ### The Medication Histories

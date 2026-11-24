@@ -1,7 +1,8 @@
 /**
- * Medical Centre: the closed set of camp medical centres an FFI's Submitting
- * MC and a Medication Record's Dispensary each draw on — vocabulary the FFI
- * and Medication pages' API modules share, so it sits beside them in
+ * Medical Centre: the closed set of camp medical centres an FFI's and an HSP
+ * Record's Submitting MC and a Medication Record's Dispensary each draw on —
+ * vocabulary the FFI, HSP and Medication pages' API modules share, so it sits
+ * beside them in
  * `src/pages/` as an API module of its own, data only.
  *
  * Exported for the SPA–API contract check (`/scripts/spa-contract/`), which

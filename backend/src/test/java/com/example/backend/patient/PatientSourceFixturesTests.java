@@ -401,7 +401,7 @@ class PatientSourceFixturesTests {
         return FIXTURES.stream().map(fixture -> fixture.get("id").asString()).toList();
     }
 
-    /** The FFIs, NUMC Records or ARMC Boards a history stub's searchset holds, in its order. */
+    /** The records a history stub's searchset holds, in its order. */
     private static List<JsonNode> resourcesOf(PatientSourceStubs.HistoryStub stub) {
         return StreamSupport.stream(stub.bundle().at("/entry").spliterator(), false)
                 .map(entry -> entry.get("resource"))
@@ -1320,6 +1320,300 @@ class PatientSourceFixturesTests {
         assertThat(PatientSourceStubs.armcFaults())
                 .allSatisfy(fault -> assertThat(fault.id())
                         .isEqualTo("fault-armc-" + fault.fault())
+                        .matches("[A-Za-z0-9\\-.]{1,64}")
+                        .isNotIn(fixtureIds()))
+                .extracting(PatientSourceStubs.FaultStub::fault)
+                .containsExactlyInAnyOrder("unreachable", "slow", "server-error",
+                        "unexpected-status", "not-a-searchset", "no-total");
+    }
+
+    // ---- the HSP Histories ------------------------------------------------------------------
+
+    /** The filters an HSP History read sends the source, each as its own search parameter. */
+    private static final List<String> HSP_FILTER_PARAMETERS =
+            List.of("outcome", "start-date", "end-date", "submitting-mc", "status");
+
+    /** The HSP Records of every page of {@code patient}'s HSP History, page after page. */
+    private static List<JsonNode> hspsOf(String patient) {
+        return PatientSourceStubs.hspHistories().stream()
+                .filter(stub -> inTheSourcesOrder(stub, HSP_FILTER_PARAMETERS))
+                .filter(stub -> stub.path().equals("/Patient/" + patient + "/hsp"))
+                .sorted(Comparator.comparing(stub -> stub.query().at("/_offset/equalTo")
+                        .asInt()))
+                .flatMap(stub -> resourcesOf(stub).stream())
+                .toList();
+    }
+
+    /** The patient whose HSP History is shown as received: the one whose records are malformed. */
+    private static final String HSP_AS_RECEIVED = "/Patient/dev-patient-10/hsp";
+
+    /** Every HSP History stub but Tan Boon Huat's, whose every record is well-formed. */
+    private static Stream<PatientSourceStubs.HistoryStub> wellFormedHspHistories() {
+        return PatientSourceStubs.hspHistories().stream()
+                .filter(stub -> !stub.path().equals(HSP_AS_RECEIVED));
+    }
+
+    /**
+     * Two fixtures have HSP Records, each on one page of its own stub — Tan Wei Ming's three and
+     * Tan Boon Huat's three, shown as received — and a fallback answers every fixture's other
+     * read with none.
+     */
+    @Test
+    void twoFixturesHaveAnHspHistoryAndTheFallbackServesEveryFixture() {
+        List<String> exact = PatientSourceStubs.hspHistories().stream()
+                .filter(stub -> inTheSourcesOrder(stub, HSP_FILTER_PARAMETERS))
+                .map(stub -> stub.path() + " " + stub.query().at("/_offset/equalTo").asString()
+                        + " of " + stub.bundle().at("/total").asInt())
+                .toList();
+        String fallback = PatientSourceStubs.hspHistories().stream()
+                .map(PatientSourceStubs.HistoryStub::path)
+                .filter(path -> path.contains("("))
+                .findFirst().orElseThrow();
+
+        assertThat(exact).containsExactlyInAnyOrder(
+                "/Patient/eq081-VQEgP8drUUqCWzHfw3/hsp 0 of 3",
+                "/Patient/dev-patient-10/hsp 0 of 3");
+        assertThat(fixtureIds()).allSatisfy(id ->
+                assertThat("/Patient/" + id + "/hsp").matches(fallback));
+        assertThat("/Patient/fault-hsp-no-total/hsp").doesNotMatch(fallback);
+    }
+
+    /**
+     * Every canned read is matched on the whole page the backend asks for — five to a page, its
+     * offset and an accurate total — and pins the sort and each filter it does not use as absent,
+     * and each it uses to its exact values, so a read of any other page, or with a filter or sort
+     * no stub names, falls to the fallback rather than to an unfiltered page.
+     */
+    @Test
+    void everyCannedHspReadPinsItsPageItsSortAndEveryFilterItUsesOrNot() {
+        assertThat(PatientSourceStubs.hspHistories()).filteredOn(PatientSourceFixturesTests::canned)
+                .hasSize(8)
+                .allSatisfy(stub -> assertThat(List.of(
+                        stub.query().at("/_count/equalTo").asString(),
+                        stub.query().at("/_offset/equalTo").isString(),
+                        stub.query().at("/_total/equalTo").asString()))
+                        .containsExactly("5", true, "accurate"))
+                .allSatisfy(stub -> assertThat(Stream.concat(Stream.of("_sort"),
+                        HSP_FILTER_PARAMETERS.stream()))
+                        .as("each matcher, absent or pinned")
+                        .allMatch(parameter -> pinsOrAbsent(stub.query().path(parameter))));
+    }
+
+    /** Each page holds no more than five HSP Records, and a history's pages hold its total. */
+    @Test
+    void everyHspHistoryPageHoldsAtMostFiveAndItsPagesHoldTheirTotal() {
+        assertThat(PatientSourceStubs.hspHistories())
+                .allSatisfy(stub -> assertThat(resourcesOf(stub)).hasSizeLessThanOrEqualTo(5));
+        assertThat(List.of(hspsOf("eq081-VQEgP8drUUqCWzHfw3").size(),
+                hspsOf("dev-patient-10").size()))
+                .containsExactly(3, 3);
+    }
+
+    /**
+     * Every HSP Record any stub answers, sorted or filtered too, is an {@code HSP} of its five
+     * elements and its id alone, and every one but Tan Boon Huat's has every one of them.
+     */
+    @Test
+    void everyHspRecordHoldsItsFiveElementsAndItsIdAlone() {
+        Set<String> fields = Set.of("resourceType", "id", "outcome", "startDate", "endDate",
+                "submittingMc", "status");
+        assertThat(PatientSourceStubs.hspHistories().stream()
+                .flatMap(stub -> resourcesOf(stub).stream()))
+                .isNotEmpty()
+                .allSatisfy(hsp -> assertThat(hsp.get("resourceType").asString())
+                        .isEqualTo("HSP"))
+                .allSatisfy(hsp -> assertThat(fields).containsAll(hsp.propertyNames()));
+        assertThat(wellFormedHspHistories().flatMap(stub -> resourcesOf(stub).stream()))
+                .allSatisfy(hsp -> assertThat(hsp.propertyNames())
+                        .containsExactlyInAnyOrderElementsOf(fields));
+    }
+
+    /**
+     * Tan Boon Huat's three HSP Records are the patient source's data as received (ADR 0020): an
+     * Outcome left out and a {@code null} Submitting MC; a Start Date of the wrong JSON type, an
+     * End Date not to the day and a Status of the wrong JSON type; and a code outside each closed
+     * set on a record with no id, written out record by record.
+     */
+    @Test
+    void tanBoonHuatsHspHistoryHoldsMissingMalformedAndUnknownFields() {
+        assertThat(hspsOf("dev-patient-10")).extracting(JsonNode::toString).containsExactly(
+                "{\"resourceType\":\"HSP\",\"id\":\"hsp-tan-boon-huat-1\","
+                        + "\"startDate\":\"2022-03-16\",\"endDate\":\"2023-03-15\","
+                        + "\"submittingMc\":null,\"status\":\"active\"}",
+                "{\"resourceType\":\"HSP\",\"id\":\"hsp-tan-boon-huat-2\",\"outcome\":\"low\","
+                        + "\"startDate\":20210316,\"endDate\":\"2022-03\","
+                        + "\"submittingMc\":\"kranji-camp\",\"status\":true}",
+                "{\"resourceType\":\"HSP\",\"outcome\":\"critical\","
+                        + "\"startDate\":\"2020-03-16\",\"endDate\":\"2021-03-15\","
+                        + "\"submittingMc\":\"tengah-air-base\",\"status\":\"expired\"}");
+    }
+
+    /**
+     * Tan Wei Ming's three HSP Records are exactly the documented history, in the source's own
+     * order, which is by neither date, in either direction.
+     */
+    @Test
+    void tanWeiMingsHspHistoryIsTheDocumentedThree() {
+        assertThat(hspsOf("eq081-VQEgP8drUUqCWzHfw3"))
+                .extracting(hsp -> String.join(" ", hsp.get("outcome").asString(),
+                        hsp.get("startDate").asString(), hsp.get("endDate").asString(),
+                        hsp.get("submittingMc").asString(), hsp.get("status").asString()))
+                .containsExactly(
+                        "moderate 2023-10-14 2024-10-13 mandai-hill-camp inactive",
+                        "low 2024-03-11 2025-03-10 nee-soon-camp active",
+                        "high 2022-11-22 2023-10-10 hendon-camp inactive");
+    }
+
+    /**
+     * Tan Wei Ming's own order is none of his four sorted orders, so a read whose sort never
+     * reached the source cannot pass for a sorted one.
+     */
+    @Test
+    void tanWeiMingsOwnHspOrderIsNoneOfHisSortedOrders() {
+        List<PatientSourceStubs.HistoryStub> his = PatientSourceStubs.hspHistories().stream()
+                .filter(PatientSourceFixturesTests::canned)
+                .filter(stub -> stub.path().equals("/Patient/eq081-VQEgP8drUUqCWzHfw3/hsp"))
+                .filter(stub -> !pinnedIn(stub.query(), "_sort").isEmpty())
+                .toList();
+        List<String> own = hspsOf("eq081-VQEgP8drUUqCWzHfw3").stream()
+                .map(hsp -> hsp.get("id").asString()).toList();
+
+        assertThat(his).hasSize(4).allSatisfy(stub -> assertThat(resourcesOf(stub).stream()
+                .map(hsp -> hsp.get("id").asString()).toList()).isNotEqualTo(own));
+    }
+
+    /** Every code of both closed sets of the HSP Record's own, as they are spelled on the wire. */
+    private static final Map<String, Set<String>> HSP_CLOSED_SETS = Map.of(
+            "outcome", Set.of("low", "moderate", "high"),
+            "status", Set.of("active", "inactive"));
+
+    /**
+     * Tan Wei Ming's history holds every code of the Outcome and the Status, so a page reading it
+     * shows each label and each badge.
+     */
+    @Test
+    void tanWeiMingsHspHistoryCoversEveryCodeOfBothClosedSets() {
+        List<JsonNode> hsps = hspsOf("eq081-VQEgP8drUUqCWzHfw3");
+
+        HSP_CLOSED_SETS.forEach((field, codes) -> assertThat(hsps)
+                .extracting(hsp -> hsp.get(field).asString())
+                .as(field)
+                .containsOnlyElementsOf(codes)
+                .containsAll(codes));
+    }
+
+    /**
+     * An HSP Record past its End Date is still Active: Status is the source's own, never derived
+     * from the date, and the fixtures show it.
+     */
+    @Test
+    void anHspRecordPastItsEndDateMayStillBeActive() {
+        assertThat(hspsOf("eq081-VQEgP8drUUqCWzHfw3"))
+                .filteredOn(hsp -> hsp.get("status").asString().equals("active"))
+                .extracting(hsp -> hsp.get("endDate").asString())
+                .anyMatch(end -> end.compareTo("2026-01-01") < 0);
+    }
+
+    /**
+     * Every HSP Record's id but Tan Boon Huat's is in FHIR's id grammar and no other record's, of
+     * any other history.
+     */
+    @Test
+    void everyHspRecordIdIsAFhirIdOfItsOwn() {
+        List<String> ids = wellFormedHspHistories()
+                .filter(stub -> inTheSourcesOrder(stub, HSP_FILTER_PARAMETERS))
+                .flatMap(stub -> resourcesOf(stub).stream())
+                .map(hsp -> hsp.get("id").asString())
+                .toList();
+        Stream<String> others = Stream.of(PatientSourceStubs.ffiHistories(),
+                        PatientSourceStubs.numcHistories(), PatientSourceStubs.armcHistories(),
+                        PatientSourceStubs.medicationHistories())
+                .flatMap(List::stream)
+                .flatMap(stub -> resourcesOf(stub).stream())
+                .filter(record -> record.has("id"))
+                .map(record -> record.get("id").asString());
+
+        assertThat(ids).hasSize(3).doesNotHaveDuplicates()
+                .doesNotContainAnyElementsOf(others.toList())
+                .allSatisfy(id -> assertThat(id).matches("[A-Za-z0-9\\-.]{1,64}"));
+    }
+
+    // ---- the HSP sort and filter stubs ----------------------------------------------------
+
+    /**
+     * Every sorted or filtered HSP read answers exactly the HSP Records its filters select from
+     * the patient's history in the source's own order — a set of codes is any of them — sorted as
+     * its {@code _sort} names, ties by id, or left in that order with none, paged by its offset,
+     * five to a page, with the total it selects: the source's behaviour, as /docs/domain/hsp.md
+     * documents it. Each record is exactly as the unfiltered history holds it.
+     */
+    @Test
+    void everySortedOrFilteredHspReadAnswersTheRecordsItsFiltersAndSortSelect() {
+        List<PatientSourceStubs.HistoryStub> narrowed = PatientSourceStubs.hspHistories().stream()
+                .filter(PatientSourceFixturesTests::canned)
+                .filter(stub -> !inTheSourcesOrder(stub, HSP_FILTER_PARAMETERS))
+                .toList();
+
+        assertThat(narrowed).hasSize(6).allSatisfy(stub -> {
+            String patient = stub.path().replaceFirst("^/Patient/", "")
+                    .replaceFirst("/hsp$", "");
+            JsonNode query = stub.query();
+            List<JsonNode> selected = hspsOf(patient).stream()
+                    .filter(hsp -> anyOf(hsp, "outcome", pinnedIn(query, "outcome")))
+                    .filter(hsp -> inRange(hsp.get("startDate").asString(),
+                            pinnedIn(query, "start-date")))
+                    .filter(hsp -> inRange(hsp.get("endDate").asString(),
+                            pinnedIn(query, "end-date")))
+                    .filter(hsp -> anyOf(hsp, "submittingMc", pinnedIn(query, "submitting-mc")))
+                    .filter(hsp -> anyOf(hsp, "status", pinnedIn(query, "status")))
+                    .toList();
+            List<JsonNode> expected = sortedAs(selected, pinnedIn(query, "_sort"));
+            int offset = query.at("/_offset/equalTo").asInt();
+
+            assertThat(List.of(stub.bundle().at("/total").asInt(), resourcesOf(stub)))
+                    .containsExactly(expected.size(),
+                            expected.subList(offset, Math.min(offset + 5, expected.size())));
+        });
+    }
+
+    /**
+     * The sort and filter stubs, all on Tan Wei Ming, cover each direction of each sortable
+     * column, ties by id, the Status and two Outcomes at once.
+     */
+    @Test
+    void theHspSortAndFilterStubsCoverEverySortAndTheirFilters() {
+        List<PatientSourceStubs.HistoryStub> narrowed = PatientSourceStubs.hspHistories().stream()
+                .filter(PatientSourceFixturesTests::canned)
+                .filter(stub -> !inTheSourcesOrder(stub, HSP_FILTER_PARAMETERS))
+                .toList();
+
+        assertThat(List.of(
+                narrowed.stream().map(PatientSourceStubs.HistoryStub::path)
+                        .collect(Collectors.toSet()),
+                narrowed.stream().flatMap(stub -> pinnedIn(stub.query(), "_sort").stream())
+                        .collect(Collectors.toSet()),
+                narrowed.stream().flatMap(stub -> HSP_FILTER_PARAMETERS.stream()
+                                .flatMap(parameter -> pinnedIn(stub.query(), parameter).stream()
+                                        .map(value -> parameter + "=" + value)))
+                        .collect(Collectors.toSet())))
+                .containsExactly(
+                        Set.of("/Patient/eq081-VQEgP8drUUqCWzHfw3/hsp"),
+                        Set.of("start-date,_id", "-start-date,_id", "end-date,_id",
+                                "-end-date,_id"),
+                        Set.of("status=active", "outcome=low,high"));
+    }
+
+    /**
+     * The HSP fault stubs, each by the failure it serves under a well-formed patient id no
+     * fixture uses, so it never shadows a fixture's history and the read reaches the source: a
+     * failure of the call or of the searchset alone, since no HSP Record fails a read
+     * (ADR 0020).
+     */
+    @Test
+    void theHspFaultStubsServeEachFailureUnderAPatientIdOfItsOwn() {
+        assertThat(PatientSourceStubs.hspFaults())
+                .allSatisfy(fault -> assertThat(fault.id())
+                        .isEqualTo("fault-hsp-" + fault.fault())
                         .matches("[A-Za-z0-9\\-.]{1,64}")
                         .isNotIn(fixtureIds()))
                 .extracting(PatientSourceStubs.FaultStub::fault)

@@ -1,0 +1,96 @@
+{
+  "name": "HSP History: Tan Boon Huat's three HSP Records, shown as received: fields missing, malformed and outside their closed sets",
+  "request": {
+    "method": "GET",
+    "urlPath": "/Patient/dev-patient-10/hsp",
+    "queryParameters": {
+      "_count": {
+        "equalTo": "5"
+      },
+      "_offset": {
+        "equalTo": "0"
+      },
+      "_total": {
+        "equalTo": "accurate"
+      },
+      "_sort": {
+        "absent": true
+      },
+      "outcome": {
+        "absent": true
+      },
+      "start-date": {
+        "absent": true
+      },
+      "end-date": {
+        "absent": true
+      },
+      "submitting-mc": {
+        "absent": true
+      },
+      "status": {
+        "absent": true
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/fhir+json"
+    },
+    "jsonBody": {
+      "resourceType": "Bundle",
+      "id": "hsp-history",
+      "type": "searchset",
+      "total": 3,
+      "link": [
+        {
+          "relation": "self",
+          "url": "http://127.0.0.1:8104/Patient/dev-patient-10/hsp?_offset=0&_count=5"
+        }
+      ],
+      "entry": [
+        {
+          "resource": {
+            "resourceType": "HSP",
+            "id": "hsp-tan-boon-huat-1",
+            "startDate": "2022-03-16",
+            "endDate": "2023-03-15",
+            "submittingMc": null,
+            "status": "active"
+          },
+          "search": {
+            "mode": "match"
+          }
+        },
+        {
+          "resource": {
+            "resourceType": "HSP",
+            "id": "hsp-tan-boon-huat-2",
+            "outcome": "low",
+            "startDate": 20210316,
+            "endDate": "2022-03",
+            "submittingMc": "kranji-camp",
+            "status": true
+          },
+          "search": {
+            "mode": "match"
+          }
+        },
+        {
+          "resource": {
+            "resourceType": "HSP",
+            "outcome": "critical",
+            "startDate": "2020-03-16",
+            "endDate": "2021-03-15",
+            "submittingMc": "tengah-air-base",
+            "status": "expired"
+          },
+          "search": {
+            "mode": "match"
+          }
+        }
+      ]
+    }
+  }
+}

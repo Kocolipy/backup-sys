@@ -152,6 +152,7 @@ describe("SignedInShell's navigation sidebar", () => {
     ["FFI", "/ffi", ["patient:read"]],
     ["NUMC", "/numc", ["patient:read"]],
     ["ARMC", "/armc", ["patient:read"]],
+    ["HSP", "/hsp", ["patient:read"]],
     ["Accounts", "/accounts", ["user:read", "group:read", "connector:read"]],
     ["Audit logs", "/audit", ["audit:read"]],
   ] as const)(
@@ -182,14 +183,14 @@ describe("SignedInShell's navigation sidebar", () => {
     ).toEqual([]);
   });
 
-  it("links Search first, then Demographic, Medication, FFI, NUMC and ARMC, for a session holding patient:read alone", async () => {
+  it("links Search first, then Demographic, Medication, FFI, NUMC, ARMC and HSP, for a session holding patient:read alone", async () => {
     await renderSignedIn("/search", holding(["patient:read"]));
 
     expect(
       within(screen.getAllByRole("list")[0])
         .getAllByRole("link")
         .map((link) => link.textContent),
-    ).toEqual(["Search", "Demographic", "Medication", "FFI", "NUMC", "ARMC"]);
+    ).toEqual(["Search", "Demographic", "Medication", "FFI", "NUMC", "ARMC", "HSP"]);
   });
 
   it("links Search first, ahead of every page a Superuser may open", async () => {
@@ -206,6 +207,7 @@ describe("SignedInShell's navigation sidebar", () => {
       "FFI",
       "NUMC",
       "ARMC",
+      "HSP",
       "Accounts",
       "Audit logs",
     ]);
@@ -218,6 +220,7 @@ describe("SignedInShell's navigation sidebar", () => {
     ["/ffi", "FFI"],
     ["/numc", "NUMC"],
     ["/armc", "ARMC"],
+    ["/hsp", "HSP"],
     ["/audit", "Audit logs"],
   ])("on %s highlights %s's link, and no other", async (path, current) => {
     await renderShell(path, {}, holding(EVERY_PERMISSION));
@@ -229,6 +232,7 @@ describe("SignedInShell's navigation sidebar", () => {
       "FFI",
       "NUMC",
       "ARMC",
+      "HSP",
       "Accounts",
       "Audit logs",
     ];

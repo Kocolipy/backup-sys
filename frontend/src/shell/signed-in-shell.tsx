@@ -56,12 +56,14 @@ export function SignedInShell() {
 /**
  * The page's one title, in the headline type, kept for screen readers only as
  * its `titleHidden` says — for a page the patient banner heads, only while
- * there is a patient in context to show.
+ * there is a patient in context to show — or, for a page whose own heading
+ * then stands in for it, not rendered at all while there is one.
  */
 function PageTitle({ page }: { page: SignedInPage }) {
   const view = usePatientInContext();
-  const hidden =
-    page.titleHidden === "while-patient-in-context" ? !isWithoutPatient(view) : page.titleHidden;
+  const withPatient = !isWithoutPatient(view);
+  if (page.titleHidden === "dropped-while-patient-in-context" && withPatient) return null;
+  const hidden = typeof page.titleHidden === "string" ? withPatient : page.titleHidden;
   return (
     <h1 className={cn("font-headline text-headline-lg", hidden && "sr-only")}>{page.title}</h1>
   );

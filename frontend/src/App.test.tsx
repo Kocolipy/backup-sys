@@ -158,6 +158,7 @@ describe("App", () => {
     ["a User holding no patient:read", "/ffi", "Home", SIGNED_IN, "/"],
     ["a User holding no patient:read", "/numc", "Home", SIGNED_IN, "/"],
     ["a User holding no patient:read", "/armc", "Home", SIGNED_IN, "/"],
+    ["a User holding no patient:read", "/hsp", "Home", SIGNED_IN, "/"],
     ["a session holding patient:read", "/", "Patient Search", PATIENT_READER, "/search"],
     ["a Superuser", "/", "Patient Search", SUPERUSER, "/search"],
     ["a session holding patient:read", "/search", "Patient Search", PATIENT_READER, "/search"],
@@ -172,6 +173,7 @@ describe("App", () => {
     ["a session holding patient:read", "/ffi", "FFI History", PATIENT_READER, "/ffi"],
     ["a session holding patient:read", "/numc", "NUMC", PATIENT_READER, "/numc"],
     ["a session holding patient:read", "/armc", "ARMC", PATIENT_READER, "/armc"],
+    ["a session holding patient:read", "/hsp", "HSP History", PATIENT_READER, "/hsp"],
   ] as [string, string, string, Answers, string][])(
     "routes %s visiting %s to %s",
     async (_session, path, heading, answers, landed) => {

@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import com.example.backend.patient.PatientSourceStubs;
 import com.example.backend.patient.application.ArmcHistoryService;
 import com.example.backend.patient.application.FfiHistoryService;
+import com.example.backend.patient.application.HspHistoryService;
 import com.example.backend.patient.application.MedicationHistoryService;
 import com.example.backend.patient.application.NumcHistoryService;
 import com.example.backend.patient.domain.PatientStore;
@@ -133,6 +134,19 @@ class PatientHistoriesControllerTests {
                     List.of("outcome"),
                     List.of(new Range("startDateFrom", "startDateTo", "2023-01-02", "2023-01-01"),
                             new Range("endDateFrom", "endDateTo", "2024-12-31", "2024-01-01"))),
+            // Every HSP History is one page: the second is the fallback's empty page.
+            new History("HSP", "hsp", "records",
+                    store -> new PatientHspController(new HspHistoryService(store)),
+                    new Read(TAN_WEI_MING, "startIndex=6", 0, 6, List.of()),
+                    new Read(TAN_WEI_MING, "sortBy=startDate", 3, 1,
+                            List.of("hsp-tan-wei-ming-3", "hsp-tan-wei-ming-2",
+                                    "hsp-tan-wei-ming-1")),
+                    new Read(TAN_WEI_MING, "outcome=high&outcome=low", 2, 1,
+                            List.of("hsp-tan-wei-ming-1", "hsp-tan-wei-ming-3")),
+                    "startDateTo=2019-12-31",
+                    List.of("outcome", "submittingMc", "status"),
+                    List.of(new Range("startDateFrom", "startDateTo", "2024-03-12", "2024-03-11"),
+                            new Range("endDateFrom", "endDateTo", "2025-12-31", "2025-01-01"))),
             new History("Medication", "medication", "records",
                     store -> new PatientMedicationController(new MedicationHistoryService(store)),
                     new Read(TAN_WEI_MING, "startIndex=6", 6, 6,

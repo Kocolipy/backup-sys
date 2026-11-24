@@ -11,11 +11,14 @@ Date: 2026-11-12
 
 ## Status
 
-Accepted. A patient's FFI History, NUMC History, ARMC History and Medication
-History are each read at `GET /api/patient-<history>/{patientId}`, and the
-SPA's page for each reads it for the patient in context. `/docs/domain/ffi.md`,
-`/docs/domain/numc.md`, `/docs/domain/armc.md` and `/docs/domain/medication.md`
-are the behaviour in full; this file holds the decisions and their reasons.
+Accepted. A patient's FFI History, NUMC History, ARMC History, HSP History and
+Medication History are each read at `GET /api/patient-<history>/{patientId}`,
+and the SPA's page for each reads it for the patient in context.
+`/docs/domain/ffi.md`, `/docs/domain/numc.md`, `/docs/domain/armc.md`,
+`/docs/domain/hsp.md` and `/docs/domain/medication.md` are the behaviour in
+full; this file holds the decisions and their reasons. The HSP History is read
+on D1 to D4 as written, an FFI History over fewer elements, with nothing of its
+own to decide.
 
 D1 to D4 are written for the FFI History, the first decided, and bind every
 history; D5 to D7 say what each other history changes.

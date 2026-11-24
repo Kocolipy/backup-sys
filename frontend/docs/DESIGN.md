@@ -97,24 +97,32 @@ A status takes one of five variants, each drawn from a theme token pair — the
 four soft pairs under "Colours", or `muted` — and never from a raw colour:
 
 - `success` — a positive state: an audit event's Success, an active User, a
-  FIT Outcome (an FFI's, NUMC's, ARMC's), a DISPENSED Dispense Status.
+  FIT Outcome (an FFI's, NUMC's, ARMC's), an HSP Record's LOW Outcome, a
+  DISPENSED Dispense Status.
 - `warning` — a state to notice that is no fault: a Deactivated User, which
-  reads "Deactivated", never "inactive".
+  reads "Deactivated", never "inactive"; an HSP Record's MODERATE Outcome.
 - `danger` — a refusal or failure: an audit event's Failure, an UNFIT Outcome
-  (an FFI's, NUMC's, ARMC's), an UNCOLLECTED Dispense Status.
+  (an FFI's, NUMC's, ARMC's), an HSP Record's HIGH Outcome, an UNCOLLECTED
+  Dispense Status.
 - `info` — a granted waiver: NUMC's WAIVER GRANTED.
 - `muted` — a state set aside, neither good nor bad: an FFI's Inactive, NUMC's
   WAIVER REJECTED, a PENDING Dispense Status.
 
 A code outside its closed set, shown as received (ADR 0020), is on the neutral
 `outline` badge, its raw code as its text (`byCode`, `src/lib/source-field.ts`):
-a code the page cannot name has no meaning to colour.
+a code the page cannot name has no meaning to colour. An HSP Record's Outcome
+fills that pill with `card`, a white pill, so a hovered row's tint never shows
+through it (`hsp/hsp.tsx`).
 
 `src/pages/status-badge.tsx` maps an audit event's outcome and a User's status
 to its label and variant. Each history page maps the closed sets it shows as
 badges to their variants beside the table that shows them (`ffi/ffi.tsx`,
-`numc/numc.tsx`, `armc/armc.tsx`, `medication/medication.tsx`), by the rules
-above.
+`numc/numc.tsx`, `armc/armc.tsx`, `hsp/hsp.tsx`, `medication/medication.tsx`),
+by the rules above.
+
+An HSP Record's Status is no badge but coloured text, mapped beside its table
+(`hsp/hsp.tsx`): Active in `success-soft-foreground`, Inactive in
+`muted-foreground`, and a code outside its set in the table's own colour.
 
 ### Signed-in chip
 
@@ -131,7 +139,8 @@ heading stands over its column's values, a sortable heading's button included.
 Identifiers — UUIDs, correlation ids, routes — are set in monospace, and
 timestamps in tabular figures, so a column of them aligns. A history's first
 data column — the Medication, the FFI Type, the NUMC Type, the ARMC Board
-Type — is set in bold, so each row reads by what it records.
+Type — is set in bold, so each row reads by what it records. The HSP
+History's first data column is its Outcome badge.
 
 A history that declares Mandatory elements (ADR 0020, D7) leads its table with
 a narrow warning column, before its first column and shown only on a page
@@ -142,8 +151,8 @@ carries one `TriangleAlert` icon there in `warning-soft-foreground` — a state
 to notice, as the `warning` badge is — and every other row an empty cell. The
 icon is a tab stop with no action, its tooltip, on hover and on focus, also
 its accessible name: "Critical information missing: " and the affected
-columns' headings, in column order. Four tables declare them: the Medication,
-FFI, NUMC and ARMC Histories.
+columns' headings, in column order. Five tables declare them: the Medication,
+FFI, NUMC, ARMC and HSP Histories.
 
 ### Sidebar
 

@@ -436,7 +436,7 @@ present, shown as its value; missing — no key, `null`, or a blank string —
 shown as "—"; or invalid — the wrong JSON type, or a string that is no date or
 date-time of its kind — shown as "Error". A code outside its closed set is
 shown as the raw code. Only a failure of the call or of the page's structure
-fails the read. The FFI, NUMC, ARMC and Medication Histories, a Patient read by
+fails the read. The FFI, NUMC, ARMC, HSP and Medication Histories, a Patient read by
 id and a Patient search are read so; a Patient search's match is shown only
 under a FHIR id, one without being dropped and counted.
 _Avoid_: validated, sanitised, lenient (the reading is lenient; what the
@@ -448,8 +448,9 @@ Mandatory element is missing or invalid carries a warning naming it, and is
 still shown in full: an element whose absence is flagged on its row, never one
 whose absence rejects the record. An FFI's are its FFI Type, Outcome and
 Status; a NUMC Record's its NUMC Type, NUMC Outcome, Issue Date and Expiry
-Date; an ARMC Board's its ARMC Board Type, ARMC Outcome and Start Date; a
-Medication Record's its Medication and its Dispense Status.
+Date; an ARMC Board's its ARMC Board Type, ARMC Outcome and Start Date; an
+HSP Record's its HSP Outcome and HSP Status; a Medication Record's
+its Medication and its Dispense Status.
 _Avoid_: required element, required field (a required element's absence
 rejects its record, the rule ADR 0020 supersedes), critical field
 
@@ -464,7 +465,7 @@ is linked from no sidebar.
 _Avoid_: Profile, patient profile
 
 **Patient card**:
-The card heading the Demographic page, showing the EHR context's patient — name, NRIC, gender, date of
+The card heading the Demographic and HSP pages, showing the EHR context's patient — name, NRIC, gender, date of
 birth and age, each shown as received, the age following the date of birth —
 or "No patient in context" when the tab holds no EHR context,
 its EHR context names no patient, or the Patient source holds none under its
@@ -536,7 +537,7 @@ _Avoid_: FFI list, FFI log
 **Date Column**:
 A date a history declares it sorts by and narrows by a from–to range: its
 name, its label, the Patient source's search parameter, and its Precision. The
-FFI and NUMC Histories' are the Issue Date and Expiry Date, the ARMC and
+FFI and NUMC Histories' are the Issue Date and Expiry Date, the ARMC, HSP and
 Medication Histories' the Start Date and End Date.
 _Avoid_: date field, sortable date
 
@@ -568,13 +569,13 @@ and DIS.
 
 **Medical Centre**:
 A camp medical centre, one of a closed set: Nee Soon Camp MC, Kranji Camp MC,
-Hendon Camp MC, Mandai Hill Camp MC and Khatib Camp MC. An FFI's Submitting MC
-and a Medication Record's Dispensary each name one.
+Hendon Camp MC, Mandai Hill Camp MC and Khatib Camp MC. An FFI's and an HSP
+Record's Submitting MC and a Medication Record's Dispensary each name one.
 _Avoid_: MC set, camp MC list, a bare "Submitting MC" for the set (that is an
 FFI's field)
 
 **Submitting MC**:
-The Medical Centre that submitted an FFI.
+The Medical Centre that submitted an FFI or an HSP Record.
 
 **Status**:
 Whether an FFI is Active or Inactive, as the Patient source says. It is the
@@ -647,19 +648,48 @@ FFI's Outcome and a NUMC Record's NUMC Outcome.
 _Avoid_: ARMC result, a bare "Outcome" (that is an FFI's)
 
 **Start Date**:
-The start of a record's period: a calendar date on an ARMC Board, and a
-date-time, to the minute, on a Medication Record.
+The start of a record's period: a calendar date on an ARMC Board and an HSP
+Record, and a date-time, to the minute, on a Medication Record.
 
 **End Date**:
 The end of a record's period: a calendar date on an ARMC Board, which may have
 none while it is still open and is shown as received, before its Start Date
-too; and a date-time, to the minute, on a Medication Record, which always has
-one, never before its Start Date.
+too; a calendar date on an HSP Record, from which nothing is derived; and a
+date-time, to the minute, on a Medication Record, which always has one, never
+before its Start Date.
 
 **Medical Officer #1** / **Medical Officer #2**:
 The two Medical Officers who sat on an ARMC Board, each a name as the Patient
 source gives it. Neither is linked to a User or an account.
 _Avoid_: MO 1 / MO 2, board member
+
+### HSP
+
+Rules: [hsp](docs/domain/hsp.md). Decided in ADR 0019 and ADR 0020.
+
+**HSP Record**:
+One HSP assessment of a patient, as the Patient source holds it: its HSP
+Outcome, Start Date, End Date, Submitting MC and HSP Status, each shown as
+received — missing or invalid included, and a code outside its closed set
+shown raw. Its HSP Outcome and HSP Status are its Mandatory elements. Read from the Patient source on every read, never held, and not
+audited.
+_Avoid_: HSP Assessment, HSP entry
+
+**HSP History**:
+Every HSP Record of one patient, shown on the HSP page (`/hsp`) beneath the
+Patient card for the patient in context, sorted and filtered by the Patient
+source as an FFI History is.
+_Avoid_: HSP list, HSP log
+
+**HSP Outcome**:
+The risk an HSP Record found, one of LOW, MODERATE and HIGH. A set of its own,
+apart from an FFI's Outcome.
+_Avoid_: HSP result, risk level, a bare "Outcome" (that is an FFI's)
+
+**HSP Status**:
+Whether an HSP Record is Active or Inactive, as the Patient source says. The
+source's own, never derived from the End Date.
+_Avoid_: a bare "Status" (that is an FFI's), expired
 
 ### Medication
 

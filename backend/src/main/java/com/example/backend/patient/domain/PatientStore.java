@@ -5,9 +5,10 @@ import java.util.Optional;
 
 /**
  * Outbound port for reading Patients: one by its id, a page of a Patient search, or a page of one
- * patient's FFI History, NUMC History, ARMC History or Medication History. Owned by the domain
- * and implemented by an infrastructure adapter, so the dependency points inward: the HTTP adapter over the in-house patient source (ADR 0014), which
- * the controller, the wire and the SPA do not know of.
+ * patient's FFI History, NUMC History, ARMC History, HSP History or Medication History. Owned by
+ * the domain and implemented by an infrastructure adapter, so the dependency points inward: the
+ * HTTP adapter over the in-house patient source (ADR 0014), which the controller, the wire and
+ * the SPA do not know of.
  *
  * <p>Read-only: nothing in the service writes a Patient.
  */
@@ -48,6 +49,15 @@ public interface PatientStore {
      * it.
      */
     Optional<ArmcHistory> findArmcHistory(PatientId id, ArmcFilter filter, HistorySort sort,
+            PageRequest page);
+
+    /**
+     * The page {@code page} of the HSP History of the patient held under {@code id} that
+     * {@code filter} narrows, in the order {@code sort} names — the source's own order for
+     * {@link HistorySort#SOURCE_ORDER} — as the source filters, orders, pages and counts it, ties
+     * broken by id (ADR 0019), or none when the source holds no patient under it.
+     */
+    Optional<HspHistory> findHspHistory(PatientId id, HspFilter filter, HistorySort sort,
             PageRequest page);
 
     /**

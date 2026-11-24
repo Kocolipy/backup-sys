@@ -101,7 +101,7 @@ and decoders — and imports no hook (`lb-api-modules-are-data`).
 - `home/home.tsx` — Home: its title, shown, above a card saying the account
   has no access to patients. The landing page of a session without
   `patient:read`, refused to one holding it, and linked from no sidebar.
-- `patient-card.tsx` — the Patient card, heading the Demographic page,
+- `patient-card.tsx` — the Patient card, heading the Demographic and HSP pages,
   rendered from `usePatientInContext()`: the plain card the history pages
   show, "No patient in context", for none or a `404` (`isWithoutPatient`, by
   which the shell shows the page's title then), "Loading the patient…", an empty card for a failure (its
@@ -161,8 +161,8 @@ and decoders — and imports no hook (`lb-api-modules-are-data`).
 
 ### The history pages
 
-Medication, FFI, NUMC and ARMC are one page shape over four histories
-(`medication/`, `ffi/`, `numc/`, `armc/`): each folder holds the page, its
+Medication, FFI, NUMC, ARMC and HSP are one page shape over five histories
+(`medication/`, `ffi/`, `numc/`, `armc/`, `hsp/`): each folder holds the page, its
 `*-api.ts` and its `*-filter-popover.tsx`. Each page is linked for, and
 guarded by, `patient:read`, is read-only with no row action, and:
 
@@ -173,7 +173,7 @@ guarded by, `patient:read`, is read-only with no row action, and:
   (`src/lib/decode.ts`), an optional element through `optionalString` — absent
   when the source lacks it, shown as `—` — and each closed set as a `Record`
   of labels keyed by its codes, so a code added fails typecheck until it has a
-  label. FFI, NUMC and ARMC, shown as received (ADR 0020), decode their rows'
+  label. FFI, NUMC, ARMC and HSP, shown as received (ADR 0020), decode their rows'
   shape strictly and each field's value through `readObject(…).sourceFields()`,
   each cell through `shown` and each code's label or badge through `byCode`
   (`src/lib/source-field.ts`): "—" for a missing field, "Error" for one in the
@@ -193,14 +193,24 @@ What differs is each history's own:
 | FFI        | Issue Date, Expiry Date             | each closed set but the Status (any of), and the Status (one) | Outcome, Status  | FFI Type, Outcome, Status              |
 | NUMC       | Issue Date, Expiry Date             | Type and Outcome (any of)                                     | NUMC Outcome     | Type, Outcome, Issue Date, Expiry Date |
 | ARMC       | Start Date, End Date                | Outcome (one)                                                 | ARMC Outcome     | Board Type, Outcome, Start Date        |
+| HSP        | Start Date, End Date                | Outcome and Submitting MC (any of), and the Status (one)      | HSP Outcome      | Outcome, Status                        |
 
 `DESIGN.md` ("Badge") has which variant each status takes. The Medication
 table is wider than its card: the table primitive keeps each cell to one line
-and scrolls sideways in its own container. Each of the four tables declares
+and scrolls sideways in its own container. Each of the five tables declares
 its Mandatory elements beside it, in column order, each label its column's
 heading, so the two cannot drift; a page where some row misses one opens its
 table with a narrow leading column of warnings (`mandatory-elements.tsx`), and
 a page where none does has no such column.
+
+HSP alone is headed by the Patient card, as the Demographic page is: the
+patient in context's banner, then a card headed "HSP History" holding the
+listing, that heading beside its Filter button (`FilteredHistory`'s
+`heading`). Its title is kept for screen readers only while the banner heads
+the page (`titleHidden`). With no patient in context — none, or a `404` for
+the id there — it is its title, shown, above the Patient card's plain "No
+patient in context" card, with no HSP History card, and its history is not
+read. Its Status is coloured text, not a badge.
 
 - `filtered-history.tsx` — `FilteredHistory`, the filtered, sorted listing
   every history page renders once the patient in context is read. Each page
@@ -209,7 +219,8 @@ a page where none does has no such column.
   table. It holds the filters and the sort as component state alone, never the URL, so a new
   patient in context starts with neither; reads through `usePagedRead`, a
   change of either from the first page; and renders the Filter panel above the
-  shared `PagedListing`, its range named on a single page too. A `404` is
+  shared `PagedListing`, beside the history's own heading when the page hands
+  one, its range named on a single page too. A `404` is
   `NoPatientInContext`; with a filter applied, the listing is narrowed by
   filters, so an empty history says "No records match the filters."; and the
   table is told while a read is pending, so its sort headings hold still.
@@ -233,11 +244,11 @@ a page where none does has no such column.
     declared column — that keeps its own draft, applies only on Apply or Enter
     in a date, refuses a bad range beneath its field with nothing sent, and
     resets to the page's own no-filter value.
-- `medical-centre-api.ts` — Medical Centre, the closed set the FFI's
-  Submitting MC and the Medication Record's Dispensary share:
+- `medical-centre-api.ts` — Medical Centre, the closed set the FFI's and the
+  HSP Record's Submitting MC and the Medication Record's Dispensary share:
   `MEDICAL_CENTRES`, which the SPA–API contract check holds to `openapi.yaml`'s
   `MedicalCentre`, and `MEDICAL_CENTRE_LABELS`. It sits in `src/pages/` because
-  two pages' API modules read it.
+  three pages' API modules read it.
 
 ## Shared parts
 
