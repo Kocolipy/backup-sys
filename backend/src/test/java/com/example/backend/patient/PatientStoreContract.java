@@ -88,9 +88,11 @@ public abstract class PatientStoreContract {
                     SourceField.present("+65 8234 5678")),
             new MilitaryHistory(
                     List.of(
-                            serviceRecord("NSman", "CPT", "3 SIR", "Army", "Infantry Officer"),
+                            serviceRecord("NSman", "CPT", "3 SIR", "Army", "Infantry Officer",
+                                    "Combat", "Selarang Medical Centre",
+                                    "Selarang Dental Centre"),
                             serviceRecord("DXO", "ME2", "RSS Supreme", "Navy",
-                                    "Naval Safety Officer")),
+                                    "Naval Safety Officer", null, null, null)),
                     SourceField.present(LocalDate.of(2018, 1, 15)),
                     SourceField.present(LocalDate.of(2020, 1, 14)),
                     SourceField.missing(),
@@ -109,18 +111,29 @@ public abstract class PatientStoreContract {
             new MilitaryHistory(
                     List.of(new MilitaryHistory.ServiceRecord(SourceField.present("NSF"),
                             SourceField.invalid(), SourceField.missing(),
-                            SourceField.present("Army"), SourceField.present("Signaller"))),
+                            SourceField.present("Army"), SourceField.present("Signaller"),
+                            SourceField.missing(), SourceField.missing(),
+                            SourceField.missing())),
                     SourceField.invalid(),
                     SourceField.present(LocalDate.of(2001, 3, 1)),
                     SourceField.missing(),
                     SourceField.invalid()));
 
-    /** A service record whose every field the source sent as it should. */
+    /**
+     * A service record whose every field the source sent as it should, or left out: each
+     * {@code null} is a field it lacks.
+     */
     private static MilitaryHistory.ServiceRecord serviceRecord(String serviceType, String rank,
-            String unit, String service, String vocation) {
-        return new MilitaryHistory.ServiceRecord(SourceField.present(serviceType),
-                SourceField.present(rank), SourceField.present(unit),
-                SourceField.present(service), SourceField.present(vocation));
+            String unit, String service, String vocation, String vocationType, String primaryMc,
+            String dentalCentre) {
+        return new MilitaryHistory.ServiceRecord(sent(serviceType), sent(rank), sent(unit),
+                sent(service), sent(vocation), sent(vocationType), sent(primaryMc),
+                sent(dentalCentre));
+    }
+
+    /** A text field the source sent, or one it left out when {@code value} is {@code null}. */
+    private static SourceField<String> sent(String value) {
+        return value == null ? SourceField.missing() : SourceField.present(value);
     }
 
     /** The patient port under test, reading the development fixtures. */

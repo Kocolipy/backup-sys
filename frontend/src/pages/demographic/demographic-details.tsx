@@ -22,21 +22,9 @@ import type {
 } from "@/pages/patient-api";
 import { usePatientInContext } from "@/pages/patient-in-context";
 
-/** The service record slots the overview always lays out, filled or not. */
-const SERVICE_RECORD_SLOTS = 3;
-
 const MISSING: SourceField<never> = { state: "missing" };
 
-/** A service record with every field missing: an empty slot. */
-const NO_SERVICE_RECORD: ServiceRecord = {
-  rank: MISSING,
-  service: MISSING,
-  serviceType: MISSING,
-  unit: MISSING,
-  vocation: MISSING,
-};
-
-/** A patient with no Military history: every slot and date missing. */
+/** A patient with no Military history: no service record, and every date missing. */
 const NO_MILITARY_HISTORY: MilitaryHistory = {
   enlistmentDate: MISSING,
   mrDate: MISSING,
@@ -50,16 +38,6 @@ const text = (field: SourceField<string>) => shown(field, (value) => value);
 
 /** A `YYYY-MM-DD` date as `dd MMM yyyy` (`08 Sep 2037`), "—" or "Error" as it is. */
 const date = (field: SourceField<string>) => shown(field, formatCalendarDateTwoDigitDay);
-
-/**
- * The unit and the service, each as shown, joined by " / " — one missing left
- * out — or "—" when both are missing.
- */
-const unitAndService = (record: ServiceRecord): ReactNode => {
-  const parts = [record.unit, record.service].filter((part) => part.state !== "missing");
-  if (parts.length === 0) return text(MISSING);
-  return parts.flatMap((part, at) => (at === 0 ? [text(part)] : [" / ", text(part)]));
-};
 
 /** Whether a service record holds nothing at all: every field missing. */
 const isEmpty = (record: ServiceRecord) =>
@@ -77,7 +55,7 @@ function Rows({
     <dl className={className}>
       {rows.map(([label, value]) => (
         <div className="flex items-baseline justify-between gap-4 border-b py-2.5" key={label}>
-          <dt className="text-muted-foreground">{label}</dt>
+          <dt className="shrink-0 whitespace-nowrap text-muted-foreground">{label}</dt>
           <dd className="text-right font-medium">{value}</dd>
         </div>
       ))}
@@ -86,11 +64,12 @@ function Rows({
 }
 
 /**
- * One service record slot: open at first when it holds a record, folded when
- * it is empty, and showing every field it lacks as unknown.
+ * One service record, open at first and folding on its trigger, each of its
+ * fields in its own row — one it lacks as "—", one in the wrong format as
+ * "Error".
  */
 function ServiceRecordSlot({ number, record }: { number: number; record: ServiceRecord }) {
-  const [open, setOpen] = useState(!isEmpty(record));
+  const [open, setOpen] = useState(true);
   // Stryker disable all: styling alone — the first record's label is tinted and the chevron turns with the slot; jsdom renders no CSS, and the slot's state is the trigger's aria-expanded, which the suite asserts.
   const labelClass =
     number === 1
@@ -112,8 +91,12 @@ function ServiceRecordSlot({ number, record }: { number: number; record: Service
           rows={[
             ["Service Type", text(record.serviceType)],
             ["Rank", text(record.rank)],
-            ["Unit / Service", unitAndService(record)],
+            ["Service", text(record.service)],
+            ["Unit", text(record.unit)],
             ["Vocation", text(record.vocation)],
+            ["Type of Vocation", text(record.vocationType)],
+            ["Primary MC", text(record.primaryMc)],
+            ["Dental Centre", text(record.dentalCentre)],
           ]}
         />
       </CollapsibleContent>
@@ -121,26 +104,21 @@ function ServiceRecordSlot({ number, record }: { number: number; record: Service
   );
 }
 
-/** The patient's Military history: at least three service record slots, then its dates. */
+/**
+ * The patient's Military history: each service record that holds anything,
+ * numbered in the source's order among those shown — none at all for a
+ * patient with no record, or with only empty ones — then its dates.
+ */
 function MilitaryOverview({ history }: { history: MilitaryHistory }) {
-  const records = history.serviceRecords;
-  const slots = Array.from(
-    { length: Math.max(SERVICE_RECORD_SLOTS, records.length) },
-    (_, index): ServiceRecord => records[index] ?? NO_SERVICE_RECORD,
-  );
+  const records = history.serviceRecords.filter((record) => !isEmpty(record));
   return (
     <Card aria-labelledby="military-overview" className="w-full" role="region">
       <CardHeader>
-        <CardTitle className="uppercase" id="military-overview">
-          Military Overview
-        </CardTitle>
+        <CardTitle id="military-overview">Military Overview</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col">
-        {slots.map((record, index) => (
-          <ServiceRecordSlot key={index} number={index + 1} record={record} />
-        ))}
         <Rows
-          className="flex flex-col pt-6"
+          className="flex flex-col pb-6"
           rows={[
             ["Enlistment Date", date(history.enlistmentDate)],
             ["ORD Date", date(history.ordDate)],
@@ -148,6 +126,9 @@ function MilitaryOverview({ history }: { history: MilitaryHistory }) {
             ["ROD Date", date(history.rodDate)],
           ]}
         />
+        {records.map((record, index) => (
+          <ServiceRecordSlot key={index} number={index + 1} record={record} />
+        ))}
       </CardContent>
     </Card>
   );

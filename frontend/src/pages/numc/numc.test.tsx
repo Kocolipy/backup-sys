@@ -137,22 +137,14 @@ describe("NUMC", () => {
     expect(within(table()).getAllByText("Diving Duties")[0]).toHaveClass("font-semibold");
   });
 
-  it("shows each Outcome as a badge: FIT green, UNFIT red, WAIVER GRANTED blue, WAIVER REJECTED muted", async () => {
+  it("shows only FIT green and UNFIT red; other Outcomes are white", async () => {
     await renderNumc(page(FOUR_RECORDS, 1, 4));
     await screen.findByRole("table", { name: "NUMC History" });
 
     expect({
       badges: outcomeBadges(),
-      blue: within(table())
-        .getByText("WAIVER GRANTED")
-        .classList.contains("text-info-soft-foreground"),
-      muted: within(table())
-        .getByText("WAIVER REJECTED")
-        .classList.contains("text-muted-foreground"),
     }).toEqual({
-      badges: ["FIT success", "WAIVER REJECTED muted", "WAIVER GRANTED info", "UNFIT danger"],
-      blue: true,
-      muted: true,
+      badges: ["FIT success", "WAIVER REJECTED outline", "WAIVER GRANTED outline", "UNFIT danger"],
     });
   });
 

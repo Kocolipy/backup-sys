@@ -101,7 +101,8 @@ and decoders — and imports no hook (`lb-api-modules-are-data`).
 - `home/home.tsx` — Home: its title, shown, above a card saying the account
   has no access to patients. The landing page of a session without
   `patient:read`, refused to one holding it, and linked from no sidebar.
-- `patient-card.tsx` — the Patient card, heading the Demographic and HSP pages,
+- `patient-card.tsx` — the Patient card, heading the Demographic, FFI, NUMC,
+  ARMC and HSP pages,
   rendered from `usePatientInContext()`: the plain card the history pages
   show, "No patient in context", for none or a `404` (`isWithoutPatient`, by
   which the shell shows the page's title then), "Loading the patient…", an empty card for a failure (its
@@ -119,14 +120,14 @@ and decoders — and imports no hook (`lb-api-modules-are-data`).
 - `demographic/demographic-details.tsx` — the Demographic details of the
   patient in context, rendered from `usePatientInContext()` (importing
   `patient-api.ts` for its types alone), and nothing while no patient is
-  loaded: the Military Overview (at least three service record slots, a
-  slot holding any field open and an empty one folded at first, then the
-  service dates as `dd MMM yyyy`), Contact Details and Next of Kin / Emergency,
-  "No next of kin recorded" for a patient with none. Each detail is shown as
-  received through `shown`, independently of the others — its value, "—" when
-  missing, "Error" when invalid — and Unit / Service joins the unit and the
-  service each so shown, one missing left out; every value renders as a plain
-  text node.
+  loaded: the Military Overview (each service record holding any field, open
+  at first and numbered among those shown, an empty one left out — so none at
+  all for a patient without one — each field in its own row, then the service
+  dates as `dd MMM yyyy`; no badge), Contact Details and Next of Kin /
+  Emergency, "No next of kin recorded" for a patient with none. Each detail is
+  shown as received through `shown`, independently of the others — its value,
+  "—" when missing, "Error" when invalid; every value renders as a plain text
+  node.
 - `patient-in-context.ts`, `patient-api.ts` — the **one reader of the patient
   in context**. `PatientInContextScope`, which the signed-in layout renders
   once inside its page status, reads `GET /api/patient/{id}` through `PATIENT`
@@ -203,14 +204,20 @@ heading, so the two cannot drift; a page where some row misses one opens its
 table with a narrow leading column of warnings (`mandatory-elements.tsx`), and
 a page where none does has no such column.
 
-HSP alone is headed by the Patient card, as the Demographic page is: the
-patient in context's banner, then a card headed "HSP History" holding the
-listing, that heading beside its Filter button (`FilteredHistory`'s
-`heading`). Its title is kept for screen readers only while the banner heads
-the page (`titleHidden`). With no patient in context — none, or a `404` for
-the id there — it is its title, shown, above the Patient card's plain "No
-patient in context" card, with no HSP History card, and its history is not
-read. Its Status is coloured text, not a badge.
+FFI, NUMC, ARMC and HSP are headed by the Patient card, as the Demographic
+page is (`patient-history-page.tsx`): the patient in context's banner, then a
+card holding the listing, headed by the page's title beside its Filter button
+(`FilteredHistory`'s `heading`). That heading is the page's one `<h1>`: the
+shell drops its own title while a patient is in context (`titleHidden:
+"dropped-while-patient-in-context"`). With no patient in context — none, or a
+`404` for the id there — the page is its title, shown, above the Patient
+card's plain "No patient in context" card, with no history card, and its
+history is not read. Medication keeps its title above a card of its own. HSP's
+Status is coloured text, not a badge.
+
+- `patient-history-page.tsx` — `PatientHistoryPage`, that layout, handed the
+  page's history; and `HistoryHeading`, the page's title as the history
+  card's heading.
 
 - `filtered-history.tsx` — `FilteredHistory`, the filtered, sorted listing
   every history page renders once the patient in context is read. Each page

@@ -185,7 +185,9 @@ const MEDICATION_PAGE: SignedInPage = {
  * FFI: the FFI History of the patient in context, linked after Medication for
  * a session holding `patient:read`, the Permission its read requires, and
  * guarded by it as Patient Search is, so a session without it is routed to
- * its landing page and offered no link. Its title heads the page.
+ * its landing page and offered no link. The Patient card heads it, and its
+ * title heads the history's card in place of the page's while a patient is in
+ * context (`PatientHistoryPage`).
  */
 const FFI_PAGE: SignedInPage = {
   element: <Ffis />,
@@ -194,13 +196,14 @@ const FFI_PAGE: SignedInPage = {
   path: "/ffi",
   requires: { anyOf: [FFI_HISTORY.permission] },
   title: "FFI History",
+  titleHidden: "dropped-while-patient-in-context",
 };
 
 /**
  * NUMC: the NUMC History of the patient in context, linked after FFI for a
  * session holding `patient:read`, the Permission its read requires, and
  * guarded by it as FFI is, so a session without it is routed to its landing
- * page and offered no link. Its title heads the page.
+ * page and offered no link. Laid out as FFI is.
  */
 const NUMC_PAGE: SignedInPage = {
   element: <NumcRecords />,
@@ -209,13 +212,14 @@ const NUMC_PAGE: SignedInPage = {
   path: "/numc",
   requires: { anyOf: [NUMC_HISTORY.permission] },
   title: "NUMC",
+  titleHidden: "dropped-while-patient-in-context",
 };
 
 /**
  * ARMC: the ARMC History of the patient in context, linked after NUMC for a
  * session holding `patient:read`, the Permission its read requires, and
  * guarded by it as NUMC is, so a session without it is routed to its landing
- * page and offered no link. Its title heads the page.
+ * page and offered no link. Laid out as FFI is.
  */
 const ARMC_PAGE: SignedInPage = {
   element: <ArmcBoards />,
@@ -224,6 +228,7 @@ const ARMC_PAGE: SignedInPage = {
   path: "/armc",
   requires: { anyOf: [ARMC_HISTORY.permission] },
   title: "ARMC",
+  titleHidden: "dropped-while-patient-in-context",
 };
 
 /**

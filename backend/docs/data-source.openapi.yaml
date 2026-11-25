@@ -1454,7 +1454,8 @@ components:
               - type: object
                 description: |
                   One service record: whichever of `serviceType`, `rank`,
-                  `unit`, `service` and `vocation` it has, each a
+                  `unit`, `service`, `vocation`, `vocationType`, `primaryMc`
+                  and `dentalCentre` it has, each a
                   `valueString` shown as received — a string, and "Error" as
                   any other JSON type. The first under each url is read; any
                   other field is ignored.
@@ -1513,6 +1514,12 @@ components:
                 valueString: Army
               - url: vocation
                 valueString: Infantry Officer
+              - url: vocationType
+                valueString: Combat
+              - url: primaryMc
+                valueString: Selarang Medical Centre
+              - url: dentalCentre
+                valueString: Selarang Dental Centre
           - url: enlistmentDate
             valueDate: "2018-01-15"
           - url: ordDate

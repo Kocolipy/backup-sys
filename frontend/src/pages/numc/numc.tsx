@@ -1,4 +1,3 @@
-import { Card, CardContent } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -10,13 +9,13 @@ import {
 import { orElse, shown } from "@/lib/source-field";
 import { formatCalendarDateTwoDigitDay } from "@/lib/time";
 import { FilteredHistory } from "@/pages/filtered-history";
-import { ForPatientInContext } from "@/pages/for-patient-in-context";
 import {
   anyWarns,
   type MandatoryElement,
   MissingInformationCell,
   MissingInformationHeading,
 } from "@/pages/mandatory-elements";
+import { HistoryHeading, PatientHistoryPage } from "@/pages/patient-history-page";
 import { type ColumnSorting, PlainHeading, SortHeading } from "@/pages/sort-heading";
 import { badged, type BadgeVariant, labelled } from "@/pages/source-code";
 
@@ -34,14 +33,13 @@ import {
 } from "./numc-api";
 
 /**
- * Each NUMC Outcome's badge: FIT green, UNFIT red, WAIVER GRANTED blue and
- * WAIVER REJECTED muted. A code outside the set is on a neutral one.
+ * Each NUMC Outcome's badge: FIT green, UNFIT red; every other code is white.
  */
 const OUTCOME_BADGES: Readonly<Record<NumcOutcome, BadgeVariant>> = {
   fit: "success",
   unfit: "danger",
-  "waiver-granted": "info",
-  "waiver-rejected": "muted",
+  "waiver-granted": "outline",
+  "waiver-rejected": "outline",
 };
 
 /** The Type column: a Mandatory element, its label the column's heading. */
@@ -158,6 +156,7 @@ function NumcHistory({ patientId }: { patientId: string }) {
       countFilters={countNumcFilters}
       declaration={NUMC_HISTORY}
       filterPopover={NumcFilterPopover}
+      heading={<HistoryHeading>NUMC</HistoryHeading>}
       noFilters={NO_NUMC_FILTERS}
       pageSize={NUMC_HISTORY_PAGE_SIZE}
       patientId={patientId}
@@ -169,17 +168,9 @@ function NumcHistory({ patientId }: { patientId: string }) {
 }
 
 /**
- * NUMC: the NUMC History of the patient in context, read from the patient
- * source, and "Loading records…" while the patient is read
- * ({@link ForPatientInContext}). A new patient in context is a new history,
- * read from its first page.
+ * NUMC: the patient in context's Patient card, then their NUMC History, read
+ * from the patient source ({@link PatientHistoryPage}).
  */
 export function NumcRecords() {
-  return (
-    <Card>
-      <CardContent className="flex flex-col gap-4">
-        <ForPatientInContext history={NumcHistory} />
-      </CardContent>
-    </Card>
-  );
+  return <PatientHistoryPage history={NumcHistory} />;
 }

@@ -160,10 +160,11 @@ refused read is audited as `ACCESS_DENIED`, as every authorization refusal is.
 `patient:read`, and guarded by it as every history page is. Titled "HSP
 History".
 
-- **The Patient card heads it**, as on the Demographic page: the patient in
-  context's banner, and beneath it a card headed "HSP History" holding the
-  table, its Filter button at the card's top right. The page's title is
-  hidden while the banner heads the page.
+- **The Patient card heads it**, as on the Demographic, FFI, NUMC and ARMC
+  pages: the patient in context's banner, and beneath it a card headed "HSP
+  History" holding the table, its Filter button at the card's top right. That
+  heading is the page's one title: the page's own is dropped while the banner
+  heads the page.
 - **No patient in context** — the tab holds none, or the source holds no
   patient under its id — shows the page's title above the Patient card's plain
   "No patient in context" card, and no HSP History card; nothing is read.

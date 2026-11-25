@@ -916,9 +916,10 @@ class PatientSourceAdapterContractTests extends PatientStoreContract {
         SourceField<String> missing = SourceField.missing();
         assertThat(read.militaryHistory()).isEqualTo(new MilitaryHistory(
                 List.of(new MilitaryHistory.ServiceRecord(missing, SourceField.present("CPT"),
-                                missing, missing, missing),
+                                missing, missing, missing, missing, missing, missing),
                         new MilitaryHistory.ServiceRecord(missing, missing,
-                                SourceField.present("3 SIR"), missing, SourceField.invalid())),
+                                SourceField.present("3 SIR"), missing, SourceField.invalid(),
+                                missing, missing, missing)),
                 SourceField.invalid(), SourceField.invalid(),
                 SourceField.present(LocalDate.of(2030, 4, 1)), SourceField.missing()));
     }

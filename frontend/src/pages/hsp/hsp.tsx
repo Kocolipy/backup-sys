@@ -1,5 +1,4 @@
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -11,7 +10,6 @@ import {
 import { byCode, orElse, shown } from "@/lib/source-field";
 import { formatCalendarDateTwoDigitDay } from "@/lib/time";
 import { FilteredHistory } from "@/pages/filtered-history";
-import { ForPatientInContext } from "@/pages/for-patient-in-context";
 import {
   anyWarns,
   type MandatoryElement,
@@ -19,8 +17,7 @@ import {
   MissingInformationHeading,
 } from "@/pages/mandatory-elements";
 import { MEDICAL_CENTRE_LABELS } from "@/pages/medical-centre-api";
-import { PatientCard } from "@/pages/patient-card";
-import { isWithoutPatient, usePatientInContext } from "@/pages/patient-in-context";
+import { HistoryHeading, PatientHistoryPage } from "@/pages/patient-history-page";
 import { type ColumnSorting, PlainHeading, SortHeading } from "@/pages/sort-heading";
 import { type BadgeVariant, labelled } from "@/pages/source-code";
 
@@ -167,7 +164,7 @@ function HspHistory({ patientId }: { patientId: string }) {
       countFilters={countHspFilters}
       declaration={HSP_HISTORY}
       filterPopover={HspFilterPopover}
-      heading={<h1 className="text-lg font-semibold">HSP History</h1>}
+      heading={<HistoryHeading>HSP History</HistoryHeading>}
       noFilters={NO_HSP_FILTERS}
       pageSize={HSP_HISTORY_PAGE_SIZE}
       patientId={patientId}
@@ -180,23 +177,8 @@ function HspHistory({ patientId }: { patientId: string }) {
 
 /**
  * HSP: the patient in context's Patient card, then their HSP History, read
- * from the patient source, and "Loading records…" while the patient is read
- * ({@link ForPatientInContext}). With no patient in context — a `404`
- * included — the Patient card alone says so, as on the Demographic page. A new
- * patient in context is a new history, read from its first page.
+ * from the patient source ({@link PatientHistoryPage}).
  */
 export function HspRecords() {
-  const withoutPatient = isWithoutPatient(usePatientInContext());
-  return (
-    <div className="flex w-full flex-col gap-4">
-      <PatientCard />
-      {withoutPatient ? null : (
-        <Card>
-          <CardContent className="flex flex-col gap-4">
-            <ForPatientInContext history={HspHistory} />
-          </CardContent>
-        </Card>
-      )}
-    </div>
-  );
+  return <PatientHistoryPage history={HspHistory} />;
 }

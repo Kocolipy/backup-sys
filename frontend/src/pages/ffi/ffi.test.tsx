@@ -210,13 +210,13 @@ describe("FFI", () => {
     ]);
   });
 
-  it("shows each Outcome as a badge: FIT green, REQUEST WAIVER amber, UNFIT red", async () => {
+  it("shows only FIT green and UNFIT red; other Outcomes are white", async () => {
     await renderFfi(page(FOUR_FFIS, 1, 4));
     await screen.findByRole("table", { name: "FFI History" });
 
     expect(badges(1)).toEqual([
       "FIT success",
-      "REQUEST WAIVER warning",
+      "REQUEST WAIVER outline",
       "FIT success",
       "UNFIT danger",
     ]);

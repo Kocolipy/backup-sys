@@ -1,4 +1,3 @@
-import { Card, CardContent } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -10,7 +9,6 @@ import {
 import { orElse, shown } from "@/lib/source-field";
 import { formatCalendarDateTwoDigitDay } from "@/lib/time";
 import { FilteredHistory } from "@/pages/filtered-history";
-import { ForPatientInContext } from "@/pages/for-patient-in-context";
 import {
   anyWarns,
   type MandatoryElement,
@@ -18,6 +16,7 @@ import {
   MissingInformationHeading,
 } from "@/pages/mandatory-elements";
 import { MEDICAL_CENTRE_LABELS } from "@/pages/medical-centre-api";
+import { HistoryHeading, PatientHistoryPage } from "@/pages/patient-history-page";
 import { type ColumnSorting, PlainHeading, SortHeading } from "@/pages/sort-heading";
 import { badged, type BadgeVariant, labelled } from "@/pages/source-code";
 
@@ -38,12 +37,11 @@ import {
 } from "./ffi-api";
 
 /**
- * Each Outcome's badge: FIT green, REQUEST WAIVER amber, UNFIT red. A code
- * outside the set is on a neutral one.
+ * Each Outcome's badge: FIT green, UNFIT red; every other code is white.
  */
 const OUTCOME_BADGES: Readonly<Record<FfiOutcome, BadgeVariant>> = {
   fit: "success",
-  "request-waiver": "warning",
+  "request-waiver": "outline",
   unfit: "danger",
 };
 
@@ -151,6 +149,7 @@ function FfiHistory({ patientId }: { patientId: string }) {
       countFilters={countFfiFilters}
       declaration={FFI_HISTORY}
       filterPopover={FfiFilterPopover}
+      heading={<HistoryHeading>FFI History</HistoryHeading>}
       noFilters={NO_FFI_FILTERS}
       pageSize={FFI_HISTORY_PAGE_SIZE}
       patientId={patientId}
@@ -162,17 +161,9 @@ function FfiHistory({ patientId }: { patientId: string }) {
 }
 
 /**
- * FFI: the FFI History of the patient in context, read from the patient
- * source, and "Loading records…" while the patient is read
- * ({@link ForPatientInContext}). A new patient in context is a new history,
- * read from its first page.
+ * FFI: the patient in context's Patient card, then their FFI History, read
+ * from the patient source ({@link PatientHistoryPage}).
  */
 export function Ffis() {
-  return (
-    <Card>
-      <CardContent className="flex flex-col gap-4">
-        <ForPatientInContext history={FfiHistory} />
-      </CardContent>
-    </Card>
-  );
+  return <PatientHistoryPage history={FfiHistory} />;
 }

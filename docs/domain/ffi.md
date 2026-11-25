@@ -31,7 +31,7 @@ An FFI has seven elements, each read as the patient source sent it
 | Element          | On the wire (both sides)   | Shown as                                                                                                                                                                                                         |
 | ---------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | FFI Type         | `type`, a code             | `overseas-exercises` Overseas Exercises · `cat-a-ocs-scs` CAT A - OCS/SCS · `ippt` IPPT FFI · `dental` Dental FFI · `ord-release-from-service` ORD / Release from Service · `vocational` Vocational FFI, in bold |
-| Outcome          | `outcome`, a code          | `fit` FIT (green badge) · `request-waiver` REQUEST WAIVER (amber badge) · `unfit` UNFIT (red badge)                                                                                                              |
+| Outcome          | `outcome`, a code          | `fit` FIT (green badge) · `request-waiver` REQUEST WAIVER (white badge) · `unfit` UNFIT (red badge)                                                                                                              |
 | Issue Date       | `issueDate`, `YYYY-MM-DD`  | `05 Feb 2001`                                                                                                                                                                                                    |
 | Expiry Date      | `expiryDate`, `YYYY-MM-DD` | `05 Feb 2001`                                                                                                                                                                                                    |
 | Higher Authority | `higherAuthority`, a code  | `camo` CAMO · `carmo` CARMO · `cnmo` CNMO · `comd-mmi` Comd MMI · `dis` DIS                                                                                                                                      |
@@ -289,7 +289,14 @@ refused read is audited as `ACCESS_DENIED`, as every authorization refusal is.
 
 `/ffi`, linked **FFI** in the sidebar after Medication for a session holding
 `patient:read`, and guarded by it as Patient Search is: a session without it is
-offered no link and is routed to its landing page. Headed "FFI History".
+offered no link and is routed to its landing page. Titled "FFI History".
+
+- **The Patient card heads it**, as on the Demographic page: the patient in
+  context's banner, and beneath it a card headed "FFI History" — the page's one
+  title, in place of the page's own while the banner heads the page — holding
+  the table, its Filter button beside that heading. With no patient in context
+  the page shows its title above the Patient card's plain "No patient in
+  context" card, and no FFI History card.
 
 - **It reads the patient in context**, the tab's EHR context's patient, from
   the signed-in layout's one reader of it ([patient](patient.md), "The patient

@@ -205,11 +205,13 @@ class PatientTests {
     }
 
     @ParameterizedTest
-    @CsvSource({"0, serviceType", "1, rank", "2, unit", "3, service", "4, vocation"})
+    @CsvSource({"0, serviceType", "1, rank", "2, unit", "3, service", "4, vocation",
+            "5, vocationType", "6, primaryMc", "7, dentalCentre"})
     void aServiceRecordHoldsEachFieldAsReceived(int at, String name) {
-        SourceField<?>[] fields = missingBut(5, at);
+        SourceField<?>[] fields = missingBut(8, at);
         assertThatThrownBy(() -> new MilitaryHistory.ServiceRecord(field(fields, 0),
-                field(fields, 1), field(fields, 2), field(fields, 3), field(fields, 4)))
+                field(fields, 1), field(fields, 2), field(fields, 3), field(fields, 4),
+                field(fields, 5), field(fields, 6), field(fields, 7)))
                 .isInstanceOf(NullPointerException.class).hasMessage(name);
     }
 
@@ -237,7 +239,9 @@ class PatientTests {
         MilitaryHistory.ServiceRecord record = new MilitaryHistory.ServiceRecord(
                 SourceField.present("NSman"), SourceField.present("CPT"),
                 SourceField.present("3 SIR"), SourceField.present("Army"),
-                SourceField.present("Infantry Officer"));
+                SourceField.present("Infantry Officer"), SourceField.present("Combat"),
+                SourceField.present("Selarang Medical Centre"),
+                SourceField.present("Selarang Dental Centre"));
         MilitaryHistory service = new MilitaryHistory(List.of(record), BIRTH_DATE, BIRTH_DATE,
                 BIRTH_DATE, BIRTH_DATE);
         NextOfKin kin = new NextOfKin(SourceField.present("Mdm Lee Siew Kuen"),
@@ -262,7 +266,8 @@ class PatientTests {
     /** A service record with only {@code rank} and {@code vocation} received, each as given. */
     private static MilitaryHistory.ServiceRecord recordOf(SourceField<String> rank,
             SourceField<String> vocation) {
-        return new MilitaryHistory.ServiceRecord(MISSING, rank, MISSING, MISSING, vocation);
+        return new MilitaryHistory.ServiceRecord(MISSING, rank, MISSING, MISSING, vocation,
+                MISSING, MISSING, MISSING);
     }
 
     private static Patient tanWith(Demographics details) {
@@ -339,7 +344,7 @@ class PatientTests {
                 new NextOfKin(INVALID, INVALID, INVALID),
                 new MilitaryHistory(List.of(
                         new MilitaryHistory.ServiceRecord(INVALID, INVALID, INVALID, INVALID,
-                                INVALID),
+                                INVALID, INVALID, INVALID, INVALID),
                         recordOf(INVALID, MISSING)),
                         INVALID_DAY, INVALID_DAY, INVALID_DAY, INVALID_DAY));
 
@@ -347,7 +352,8 @@ class PatientTests {
                 "phone", "email", "residentialAddress", "nextOfKin.name",
                 "nextOfKin.relationship", "nextOfKin.phone", "serviceRecord.serviceType",
                 "serviceRecord.rank", "serviceRecord.unit", "serviceRecord.service",
-                "serviceRecord.vocation", "serviceRecord.rank", "enlistmentDate", "ordDate",
+                "serviceRecord.vocation", "serviceRecord.vocationType", "serviceRecord.primaryMc",
+                "serviceRecord.dentalCentre", "serviceRecord.rank", "enlistmentDate", "ordDate",
                 "mrDate", "rodDate");
     }
 

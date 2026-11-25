@@ -127,7 +127,10 @@ class PatientControllerTests {
                         {"url": "rank", "valueString": "CPT"},
                         {"url": "unit", "valueString": "3 SIR"},
                         {"url": "service", "valueString": "Army"},
-                        {"url": "vocation", "valueString": "Infantry Officer"}]},
+                        {"url": "vocation", "valueString": "Infantry Officer"},
+                        {"url": "vocationType", "valueString": "Combat"},
+                        {"url": "primaryMc", "valueString": "Selarang Medical Centre"},
+                        {"url": "dentalCentre", "valueString": "Selarang Dental Centre"}]},
                       {"url": "serviceRecord", "extension": [
                         {"url": "serviceType", "valueString": "DXO"},
                         {"url": "rank", "valueString": "ME2"},

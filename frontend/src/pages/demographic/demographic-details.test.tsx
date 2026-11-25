@@ -48,7 +48,7 @@ const withMilitaryHistory = (extension: object[]) => ({
 afterEach(() => clearEhrContext());
 
 describe("DemographicDetails", () => {
-  it("lays out Tan Wei Ming's two service records open, the empty third folded, then his dates", async () => {
+  it("lays out Tan Wei Ming's dates before his two open service records, each field in its own row", async () => {
     await renderDetails(json(TAN_WEI_MING));
 
     const overview = await page().findByRole("region", { name: "Military Overview" });
@@ -58,37 +58,70 @@ describe("DemographicDetails", () => {
         .map((button) => `${button.textContent} ${button.getAttribute("aria-expanded")}`),
       pairsIn(overview),
     ]).toEqual([
-      ["Service record 1 true", "Service record 2 true", "Service record 3 false"],
+      ["Service record 1 true", "Service record 2 true"],
       [
-        "Service Type: NSman",
-        "Rank: CPT",
-        "Unit / Service: 3 SIR / Army",
-        "Vocation: Infantry Officer",
-        "Service Type: DXO",
-        "Rank: ME2",
-        "Unit / Service: RSS Supreme / Navy",
-        "Vocation: Naval Safety Officer",
         "Enlistment Date: 15 Jan 2018",
         "ORD Date: 14 Jan 2020",
         "MR Date: —",
         "ROD Date: 08 Sep 2037",
+        "Service Type: NSman",
+        "Rank: CPT",
+        "Service: Army",
+        "Unit: 3 SIR",
+        "Vocation: Infantry Officer",
+        "Type of Vocation: Combat",
+        "Primary MC: Selarang Medical Centre",
+        "Dental Centre: Selarang Dental Centre",
+        "Service Type: DXO",
+        "Rank: ME2",
+        "Service: Navy",
+        "Unit: RSS Supreme",
+        "Vocation: Naval Safety Officer",
+        "Type of Vocation: —",
+        "Primary MC: —",
+        "Dental Centre: —",
       ],
     ]);
   });
 
-  it("shows an empty service record's every field as unknown once opened", async () => {
-    const user = userEvent.setup();
-    await renderDetails(json(TAN_WEI_MING));
+  it("shows no empty service record, numbering those it shows in the source's order", async () => {
+    await renderDetails(
+      json(
+        withMilitaryHistory([
+          { extension: [{ url: "rank", valueString: "LTA" }], url: "serviceRecord" },
+          { url: "serviceRecord" },
+          { extension: [{ url: "service", valueString: "Navy" }], url: "serviceRecord" },
+        ]),
+      ),
+    );
+
     const overview = await page().findByRole("region", { name: "Military Overview" });
-
-    await user.click(within(overview).getByRole("button", { name: "Service record 3" }));
-
-    expect(pairsIn(overview).slice(8, 12)).toEqual([
-      "Service Type: —",
-      "Rank: —",
-      "Unit / Service: —",
-      "Vocation: —",
+    expect([
+      within(overview)
+        .getAllByRole("button")
+        .map((button) => button.textContent),
+      pairsIn(overview).filter((pair) => /^(Rank|Service):/.test(pair)),
+    ]).toEqual([
+      ["Service record 1", "Service record 2"],
+      ["Rank: LTA", "Service: —", "Rank: —", "Service: Navy"],
     ]);
+  });
+
+  it("shows no service record at all for a patient whose every record is empty, only the dates", async () => {
+    await renderDetails(json(withMilitaryHistory([{ url: "serviceRecord" }])));
+
+    const overview = await page().findByRole("region", { name: "Military Overview" });
+    expect([within(overview).queryAllByRole("button"), pairsIn(overview)]).toEqual([
+      [],
+      ["Enlistment Date: —", "ORD Date: —", "MR Date: —", "ROD Date: —"],
+    ]);
+  });
+
+  it("shows no badge beside its title", async () => {
+    await renderDetails(json(TAN_WEI_MING));
+
+    const overview = await page().findByRole("region", { name: "Military Overview" });
+    expect(overview.querySelector("[data-slot=badge]")).toBeNull();
   });
 
   it("folds a service record away, and opens it again", async () => {
@@ -128,7 +161,7 @@ describe("DemographicDetails", () => {
     ]);
   });
 
-  it("shows each detail a patient has none of as unknown, with every slot folded and no Next of kin", async () => {
+  it("shows each detail a patient has none of as unknown, with no service record and no Next of kin", async () => {
     await renderDetails(json(TAN_WEI_MING_BARE));
 
     await page().findByRole("region", { name: "Contact Details" });
@@ -136,35 +169,16 @@ describe("DemographicDetails", () => {
       pairsIn(region("Contact Details")),
       within(region("Next of Kin / Emergency")).queryByText("No next of kin recorded") !== null,
       pairsIn(region("Military Overview")),
-      within(region("Military Overview"))
-        .getAllByRole("button")
-        .map((button) => button.getAttribute("aria-expanded")),
+      within(region("Military Overview")).queryAllByRole("button"),
     ]).toEqual([
       ["Phone: —", "Email address: —", "Residential address: —"],
       true,
       ["Enlistment Date: —", "ORD Date: —", "MR Date: —", "ROD Date: —"],
-      ["false", "false", "false"],
+      [],
     ]);
   });
 
-  it("names a unit with no service, or a service with no unit, alone", async () => {
-    await renderDetails(
-      json(
-        withMilitaryHistory([
-          { extension: [{ url: "unit", valueString: "3 SIR" }], url: "serviceRecord" },
-          { extension: [{ url: "service", valueString: "Navy" }], url: "serviceRecord" },
-        ]),
-      ),
-    );
-
-    const overview = await page().findByRole("region", { name: "Military Overview" });
-    expect(pairsIn(overview).filter((pair) => pair.startsWith("Unit / Service"))).toEqual([
-      "Unit / Service: 3 SIR",
-      "Unit / Service: Navy",
-    ]);
-  });
-
-  it("lays out a slot for every service record past the third", async () => {
+  it("lays out every service record, past the third too", async () => {
     const record = { extension: [{ url: "rank", valueString: "LTA" }], url: "serviceRecord" };
     await renderDetails(json(withMilitaryHistory([record, record, record, record])));
 
@@ -216,18 +230,22 @@ describe("DemographicDetails", () => {
     const overview = await page().findByRole("region", { name: "Military Overview" });
 
     expect(pairsIn(overview)).toEqual([
-      "Service Type: NSF",
-      "Rank: Error",
-      "Unit / Service: Army",
-      "Vocation: Signaller",
       "Enlistment Date: Error",
       "ORD Date: 01 Mar 2001",
       "MR Date: —",
       "ROD Date: Error",
+      "Service Type: NSF",
+      "Rank: Error",
+      "Service: Army",
+      "Unit: —",
+      "Vocation: Signaller",
+      "Type of Vocation: —",
+      "Primary MC: —",
+      "Dental Centre: —",
     ]);
   });
 
-  it("shows a malformed unit as Error beside its service, and a record holding only a malformed field open", async () => {
+  it("shows a malformed field as Error, and a record holding only a malformed field open", async () => {
     const extension = [
       { extension: [{ url: "service", valueString: "Army" }], url: "serviceRecord" },
       { url: "serviceRecord" },
@@ -243,7 +261,7 @@ describe("DemographicDetails", () => {
           },
           {
             url: "http://example.org/fhir/StructureDefinition/invalid-field",
-            valueString: "extension[0].extension[1].extension('vocation').valueString",
+            valueString: "extension[0].extension[1].extension('primaryMc').valueString",
           },
         ],
       }),
@@ -251,13 +269,20 @@ describe("DemographicDetails", () => {
     const overview = await page().findByRole("region", { name: "Military Overview" });
 
     expect([
-      pairsIn(overview).filter((pair) => /^(Unit|Vocation)/.test(pair)),
+      pairsIn(overview).filter((pair) => /^(Service|Unit|Primary MC):/.test(pair)),
       within(overview)
         .getAllByRole("button")
         .map((button) => button.getAttribute("aria-expanded")),
     ]).toEqual([
-      ["Unit / Service: Error / Army", "Vocation: —", "Unit / Service: —", "Vocation: Error"],
-      ["true", "true", "false"],
+      [
+        "Service: Army",
+        "Unit: Error",
+        "Primary MC: —",
+        "Service: —",
+        "Unit: —",
+        "Primary MC: Error",
+      ],
+      ["true", "true"],
     ]);
   });
 });

@@ -465,7 +465,7 @@ is linked from no sidebar.
 _Avoid_: Profile, patient profile
 
 **Patient card**:
-The card heading the Demographic and HSP pages, showing the EHR context's patient — name, NRIC, gender, date of
+The card heading the Demographic, FFI, NUMC, ARMC and HSP pages, showing the EHR context's patient — name, NRIC, gender, date of
 birth and age, each shown as received, the age following the date of birth —
 or "No patient in context" when the tab holds no EHR context,
 its EHR context names no patient, or the Patient source holds none under its
@@ -508,7 +508,9 @@ _Avoid_: NOK (outside a label), emergency contact, guardian
 
 **Military history**:
 A Patient's national service, as the Patient source records it: their service
-records in order — each a service type, rank, unit, service and vocation — and
+records in order — each a service type, rank, unit, service, vocation, type of
+vocation, primary MC and dental centre, the last two as the source names them —
+and
 their enlistment, ORD (Operationally Ready Date), MR and ROD (Run Out Date)
 dates.
 _Avoid_: military service (the name of its wire extension, not of the term),

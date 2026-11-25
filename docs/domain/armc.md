@@ -263,6 +263,10 @@ as `ACCESS_DENIED`, as every authorization refusal is.
 `/armc`, titled **ARMC**, linked **ARMC** in the sidebar after NUMC, with the
 `Plane` icon, for a session holding `patient:read`, and guarded by it as NUMC
 is: a session without it is offered no link and is routed to its landing page.
+Laid out as the FFI page is ([ffi](ffi.md), "The FFI page"): the Patient card,
+then a card headed **ARMC** holding the table beside its Filter button, the
+page's title then dropped; with no patient in context, the title above the
+Patient card's plain "No patient in context" card alone.
 
 - **It reads the patient in context** as the FFI page does, from the signed-in
   layout's one reader of it ([patient](patient.md), "The patient in context"),

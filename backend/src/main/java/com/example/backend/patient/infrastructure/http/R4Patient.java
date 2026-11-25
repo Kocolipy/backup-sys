@@ -271,7 +271,10 @@ record R4Patient(
                 serviceRecordField(fields, MilitaryHistory.ServiceRecord.Field.RANK),
                 serviceRecordField(fields, MilitaryHistory.ServiceRecord.Field.UNIT),
                 serviceRecordField(fields, MilitaryHistory.ServiceRecord.Field.SERVICE),
-                serviceRecordField(fields, MilitaryHistory.ServiceRecord.Field.VOCATION));
+                serviceRecordField(fields, MilitaryHistory.ServiceRecord.Field.VOCATION),
+                serviceRecordField(fields, MilitaryHistory.ServiceRecord.Field.VOCATION_TYPE),
+                serviceRecordField(fields, MilitaryHistory.ServiceRecord.Field.PRIMARY_MC),
+                serviceRecordField(fields, MilitaryHistory.ServiceRecord.Field.DENTAL_CENTRE));
     }
 
     private static SourceField<String> serviceRecordField(List<Extension> fields,

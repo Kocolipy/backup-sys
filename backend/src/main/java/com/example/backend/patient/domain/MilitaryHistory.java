@@ -70,11 +70,16 @@ public record MilitaryHistory(List<ServiceRecord> serviceRecords,
      * @param rank        the rank held
      * @param unit        the unit served in
      * @param service     the service the unit belongs to ({@code Army})
-     * @param vocation    the vocation served as
+     * @param vocation     the vocation served as
+     * @param vocationType the type of that vocation ({@code Combat}), as the source names it
+     * @param primaryMc    the medical centre the patient is seen at first, as the source names
+     *                     it — free text, not one of the Medical Centre closed set
+     * @param dentalCentre the dental centre the patient is seen at, as the source names it
      */
     public record ServiceRecord(SourceField<String> serviceType, SourceField<String> rank,
             SourceField<String> unit, SourceField<String> service,
-            SourceField<String> vocation) {
+            SourceField<String> vocation, SourceField<String> vocationType,
+            SourceField<String> primaryMc, SourceField<String> dentalCentre) {
 
         public ServiceRecord {
             Objects.requireNonNull(serviceType, "serviceType");
@@ -82,6 +87,9 @@ public record MilitaryHistory(List<ServiceRecord> serviceRecords,
             Objects.requireNonNull(unit, "unit");
             Objects.requireNonNull(service, "service");
             Objects.requireNonNull(vocation, "vocation");
+            Objects.requireNonNull(vocationType, "vocationType");
+            Objects.requireNonNull(primaryMc, "primaryMc");
+            Objects.requireNonNull(dentalCentre, "dentalCentre");
         }
 
         /** The field {@code field} names. */
@@ -104,7 +112,10 @@ public record MilitaryHistory(List<ServiceRecord> serviceRecords,
             RANK("rank", ServiceRecord::rank),
             UNIT("unit", ServiceRecord::unit),
             SERVICE("service", ServiceRecord::service),
-            VOCATION("vocation", ServiceRecord::vocation);
+            VOCATION("vocation", ServiceRecord::vocation),
+            VOCATION_TYPE("vocationType", ServiceRecord::vocationType),
+            PRIMARY_MC("primaryMc", ServiceRecord::primaryMc),
+            DENTAL_CENTRE("dentalCentre", ServiceRecord::dentalCentre);
 
             private final String url;
             private final Function<ServiceRecord, SourceField<String>> of;

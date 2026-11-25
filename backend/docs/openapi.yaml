@@ -5255,7 +5255,9 @@ components:
               - type: object
                 description: |
                   One service record: whichever of `serviceType`, `rank`,
-                  `unit`, `service` and `vocation` it has present, in that
+                  `unit`, `service`, `vocation`, `vocationType` (its Type of
+                  Vocation), `primaryMc` (its Primary MC, free text, not a
+                  `MedicalCentre`) and `dentalCentre` it has present, in that
                   order, and no `extension` when it has none.
                 required: [url]
                 additionalProperties: false
@@ -5273,7 +5275,17 @@ components:
                       properties:
                         url:
                           type: string
-                          enum: [serviceType, rank, unit, service, vocation]
+                          enum:
+                            [
+                              serviceType,
+                              rank,
+                              unit,
+                              service,
+                              vocation,
+                              vocationType,
+                              primaryMc,
+                              dentalCentre,
+                            ]
                         valueString:
                           type: string
                           minLength: 1
@@ -5323,7 +5335,7 @@ components:
                 - "extension[0].extension('mrDate').valueDate"
                 - "extension[0].extension('rodDate').valueDate"
             - type: string
-              pattern: "^extension\\[0\\]\\.extension\\[(0|[1-9][0-9]*)\\]\\.extension\\('(serviceType|rank|unit|service|vocation)'\\)\\.valueString$"
+              pattern: "^extension\\[0\\]\\.extension\\[(0|[1-9][0-9]*)\\]\\.extension\\('(serviceType|rank|unit|service|vocation|vocationType|primaryMc|dentalCentre)'\\)\\.valueString$"
     FhirContactPoint:
       type: object
       description: |

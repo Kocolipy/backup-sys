@@ -115,8 +115,11 @@ service date that is no calendar date — and none fails the read.
   `http://example.org/fhir/StructureDefinition/military-service`, a placeholder
   URL until the in-house source names its own, first among the extensions: a
   `serviceRecord` sub-extension per service record, in the source's order, each
-  holding whichever of `serviceType`, `rank`, `unit`, `service` and `vocation`
-  (`valueString`) it has present, then whichever of `enlistmentDate`,
+  holding whichever of `serviceType`, `rank`, `unit`, `service`, `vocation`,
+  `vocationType` (its Type of Vocation), `primaryMc` (its Primary MC) and
+  `dentalCentre` (`valueString`) it has present — the Primary MC and Dental
+  Centre free text as the source names them, not the Medical Centre closed set
+  — then whichever of `enlistmentDate`,
   `ordDate`, `mrDate` and `rodDate` (`valueDate`, to the day) the patient has
   present. A field or a date missing or in the wrong format is left out: base
   R5 admits no extension with neither a value nor extensions of its own. One in
@@ -142,8 +145,13 @@ service date that is no calendar date — and none fails the read.
 
 The Demographic page shows each detail as its value, **"—"** when missing, or
 **"Error"** when in the wrong format; a patient with no contact coded as next of
-kin shows "No next of kin recorded", and one with no military service every
-service record slot and date as "—".
+kin shows "No next of kin recorded". Its Military Overview shows each service
+record holding any field — present or in the wrong format — open, numbered
+among those shown in the source's order, each field in its own row: Service
+Type, Rank, Service, Unit, Vocation, Type of Vocation, Primary MC, Dental
+Centre. A service record holding none is not shown, so a patient with no
+military service, or only empty records, shows no service record at all, and
+every date as "—". The overview carries no badge.
 
 ## The in-house patient source
 
@@ -530,7 +538,7 @@ title above a plain card saying "No patient in context", as the history pages
 do; a `404` for the id in context shows the same. With a patient in context the
 patient banner heads the page, its title kept for screen readers only. The top
 bar names the patient in context by name and NRIC.
-The Patient card — heading the Demographic and HSP pages — the top bar, and the FFI, NUMC, ARMC, HSP and Medication pages ([ffi](ffi.md), [numc](numc.md), [armc](armc.md), [hsp](hsp.md), [medication](medication.md)), render from **one reader** of the patient in context, which the signed-in
+The Patient card — heading the Demographic, FFI, NUMC, ARMC and HSP pages — the top bar, and the FFI, NUMC, ARMC, HSP and Medication pages ([ffi](ffi.md), [numc](numc.md), [armc](armc.md), [hsp](hsp.md), [medication](medication.md)), render from **one reader** of the patient in context, which the signed-in
 layout renders (`frontend/src/pages/patient-in-context.ts`): each change
 of the patient in context is one `GET /api/patient/{id}` — one read of the
 uncached patient source — on every signed-in page alike, and a

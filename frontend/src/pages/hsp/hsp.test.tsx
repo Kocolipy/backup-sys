@@ -5,12 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { clearEhrContext } from "@/auth/ehr-context";
 import { bare, deferred, holding, json, type Answers } from "@/auth/session-adapter.testHelpers";
 import { leadingCells, leadingColumn, warnings } from "@/pages/mandatory-elements.testHelpers";
-import {
-  page as main,
-  TAN_WEI_MING,
-  TAN_WEI_MING_READ,
-  withPatientInContext,
-} from "@/pages/patient.testHelpers";
+import { TAN_WEI_MING, TAN_WEI_MING_READ, withPatientInContext } from "@/pages/patient.testHelpers";
 import { renderSignedIn } from "@/shell/signed-in-shell.testHelpers";
 
 /** A Medical Officer: a session holding `patient:read`, which the HSP page requires. */
@@ -109,16 +104,6 @@ const statusTones = () =>
     return `${status.textContent} [${status.firstElementChild?.className ?? "no span"}]`;
   });
 
-/** The page's headings, each beside whether it is kept for screen readers only. */
-const headingsShown = () =>
-  main()
-    .getAllByRole("heading")
-    .map((heading) => [heading.textContent, heading.classList.contains("sr-only")]);
-
-/** The text of the card holding "No patient in context", or null with none. */
-const noPatientCard = () =>
-  main().queryByText("No patient in context")?.closest("[data-slot=card]")?.textContent ?? null;
-
 afterEach(() => {
   clearEhrContext();
 });
@@ -139,34 +124,6 @@ describe("HSP", () => {
         ["MODERATE", "14 Oct 2023", "13 Oct 2024", "Mandai Hill Camp MC", "Inactive"],
         ["HIGH", "22 Nov 2022", "10 Oct 2023", "Hendon Camp MC", "Inactive"],
       ],
-    });
-  });
-
-  // The shell drops its title while a patient is in context, so the card's
-  // heading is the page's one h1 and "HSP History" is announced once.
-  it("heads the page with the Patient card, then a card headed HSP History beside its Filter button", async () => {
-    await renderHsp(page(THREE_RECORDS, 1, 3));
-    await screen.findByRole("table", { name: "HSP History" });
-
-    const patientCard = main().getByRole("region", { name: "Patient" });
-    const heading = main().getByRole("heading", { level: 1, name: "HSP History" });
-    const historyCard = heading.closest("[data-slot=card]")!;
-    expect({
-      filterBesideHeading: within(heading.parentElement!).getByRole("button", { name: /^Filter/ })
-        .tagName,
-      headings: headingsShown(),
-      patientCardFirst: Boolean(
-        patientCard.compareDocumentPosition(historyCard) & Node.DOCUMENT_POSITION_FOLLOWING,
-      ),
-      tableInHistoryCard: historyCard.contains(table()),
-    }).toEqual({
-      filterBesideHeading: "BUTTON",
-      headings: [
-        ["Tan Wei Ming", false],
-        ["HSP History", false],
-      ],
-      patientCardFirst: true,
-      tableInHistoryCard: true,
     });
   });
 
@@ -357,42 +314,6 @@ describe("HSP", () => {
 
     expect(await screen.findByText("Showing 1 to 3 of 3 records")).toBeInTheDocument();
     expect({ after: hspReads(requests()), before }).toEqual({ after: [FIRST_PAGE], before: [] });
-  });
-
-  it("is headed by its title, shown, above the Patient card's no patient in context, with no HSP History card and no read, with none", async () => {
-    const { requests } = await renderSignedIn("/hsp", CLINICIAN, {});
-
-    expect({
-      filter: screen.queryByRole("button", { name: /^Filter/ }),
-      headings: headingsShown(),
-      noPatient: noPatientCard(),
-      reads: hspReads(requests()),
-    }).toEqual({
-      filter: null,
-      headings: [["HSP History", false]],
-      noPatient: "No patient in context",
-      reads: [],
-    });
-  });
-
-  it("is headed by its title, shown, above the Patient card's no patient in context, with no HSP History card and no read, for a 404", async () => {
-    withPatientInContext(TAN_WEI_MING.id);
-    const { requests } = await renderSignedIn("/hsp", CLINICIAN, {
-      [TAN_WEI_MING_READ]: bare(404),
-    });
-    await main().findByText("No patient in context");
-
-    expect({
-      filter: screen.queryByRole("button", { name: /^Filter/ }),
-      headings: headingsShown(),
-      noPatient: noPatientCard(),
-      reads: hspReads(requests()),
-    }).toEqual({
-      filter: null,
-      headings: [["HSP History", false]],
-      noPatient: "No patient in context",
-      reads: [],
-    });
   });
 
   it("says it couldn't load HSP records when the source fails, offering Try again", async () => {

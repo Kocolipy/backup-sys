@@ -337,7 +337,9 @@ layout's one read of them (`PatientInContextScope`), which the Patient card
 and the Demographic details render from too, then Notifications, the one link to Settings,
 Help and who is signed in: the username, and beneath it the Groups the session
 was signed in with), the page title (kept for screen readers only as its entry's
-`titleHidden` says — the Demographic and HSP pages' only while a patient is in context to show) and the page's one error line (the page-status
+`titleHidden` says — the Demographic page's only while a patient is in context to show — or, for the
+FFI, NUMC, ARMC and HSP pages, not rendered while a patient is in context, the history card's heading
+then the page's `<h1>`) and the page's one error line (the page-status
 scope); a page renders only its body. Settings (`SETTINGS_PATH`, `/settings`)
 holds the password change, both the voluntary one and the one the
 change-required flag requires: a flagged session is confined to Settings, in

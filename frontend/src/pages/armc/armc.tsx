@@ -1,4 +1,3 @@
-import { Card, CardContent } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -10,13 +9,13 @@ import {
 import { orElse, shown } from "@/lib/source-field";
 import { formatCalendarDateTwoDigitDay } from "@/lib/time";
 import { FilteredHistory } from "@/pages/filtered-history";
-import { ForPatientInContext } from "@/pages/for-patient-in-context";
 import {
   anyWarns,
   type MandatoryElement,
   MissingInformationCell,
   MissingInformationHeading,
 } from "@/pages/mandatory-elements";
+import { HistoryHeading, PatientHistoryPage } from "@/pages/patient-history-page";
 import { type ColumnSorting, PlainHeading, SortHeading } from "@/pages/sort-heading";
 import { badged, type BadgeVariant, labelled } from "@/pages/source-code";
 
@@ -33,7 +32,7 @@ import {
   NO_ARMC_FILTERS,
 } from "./armc-api";
 
-/** Each ARMC Outcome's badge: FIT green, UNFIT red. A code outside the set is on a neutral one. */
+/** Each ARMC Outcome's badge: FIT green, UNFIT red; every other code is white. */
 const OUTCOME_BADGES: Readonly<Record<ArmcOutcome, BadgeVariant>> = {
   fit: "success",
   unfit: "danger",
@@ -144,6 +143,7 @@ function ArmcHistory({ patientId }: { patientId: string }) {
       countFilters={countArmcFilters}
       declaration={ARMC_HISTORY}
       filterPopover={ArmcFilterPopover}
+      heading={<HistoryHeading>ARMC</HistoryHeading>}
       noFilters={NO_ARMC_FILTERS}
       pageSize={ARMC_HISTORY_PAGE_SIZE}
       patientId={patientId}
@@ -155,17 +155,9 @@ function ArmcHistory({ patientId }: { patientId: string }) {
 }
 
 /**
- * ARMC: the ARMC History of the patient in context, read from the patient
- * source, and "Loading records…" while the patient is read
- * ({@link ForPatientInContext}). A new patient in context is a new history,
- * read from its first page.
+ * ARMC: the patient in context's Patient card, then their ARMC History, read
+ * from the patient source ({@link PatientHistoryPage}).
  */
 export function ArmcBoards() {
-  return (
-    <Card>
-      <CardContent className="flex flex-col gap-4">
-        <ForPatientInContext history={ArmcHistory} />
-      </CardContent>
-    </Card>
-  );
+  return <PatientHistoryPage history={ArmcHistory} />;
 }

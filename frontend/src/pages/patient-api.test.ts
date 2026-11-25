@@ -37,11 +37,14 @@ const NO_DETAILS = { email: MISSING, phone: MISSING, residentialAddress: MISSING
 
 /** A service record with every field missing, but those given. */
 const record = (fields: object) => ({
+  dentalCentre: MISSING,
+  primaryMc: MISSING,
   rank: MISSING,
   service: MISSING,
   serviceType: MISSING,
   unit: MISSING,
   vocation: MISSING,
+  vocationType: MISSING,
   ...fields,
 });
 
@@ -97,20 +100,23 @@ describe("PATIENT's answer", () => {
         ordDate: present("2020-01-14"),
         rodDate: present("2037-09-08"),
         serviceRecords: [
-          {
+          record({
+            dentalCentre: present("Selarang Dental Centre"),
+            primaryMc: present("Selarang Medical Centre"),
             rank: present("CPT"),
             service: present("Army"),
             serviceType: present("NSman"),
             unit: present("3 SIR"),
             vocation: present("Infantry Officer"),
-          },
-          {
+            vocationType: present("Combat"),
+          }),
+          record({
             rank: present("ME2"),
             service: present("Navy"),
             serviceType: present("DXO"),
             unit: present("RSS Supreme"),
             vocation: present("Naval Safety Officer"),
-          },
+          }),
         ],
       },
       nextOfKin: {

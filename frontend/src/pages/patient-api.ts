@@ -59,13 +59,19 @@ export interface PatientSummary {
   residentialAddress: SourceField<string>;
 }
 
-/** One service record of a patient's Military history, each field as received. */
+/**
+ * One service record of a patient's Military history, each field as received:
+ * its Primary MC and Dental Centre free text, as the source names them.
+ */
 export interface ServiceRecord {
+  dentalCentre: SourceField<string>;
+  primaryMc: SourceField<string>;
   rank: SourceField<string>;
   service: SourceField<string>;
   serviceType: SourceField<string>;
   unit: SourceField<string>;
   vocation: SourceField<string>;
+  vocationType: SourceField<string>;
 }
 
 /** A field of a service record, by its key, which is also the url it is served under. */
@@ -247,11 +253,14 @@ const decodeServiceRecord = (extension: unknown, invalid: InvalidPaths): Service
       invalid.named(`.extension('${url}').valueString`),
     );
   return {
+    dentalCentre: field("dentalCentre"),
+    primaryMc: field("primaryMc"),
     rank: field("rank"),
     service: field("service"),
     serviceType: field("serviceType"),
     unit: field("unit"),
     vocation: field("vocation"),
+    vocationType: field("vocationType"),
   };
 };
 

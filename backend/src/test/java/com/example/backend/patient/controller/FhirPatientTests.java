@@ -52,7 +52,8 @@ class FhirPatientTests {
     void aServiceRecordIsRenderedWithOnlyTheFieldsItHoldsAndEveryDateInOrder() {
         MilitaryHistory history = new MilitaryHistory(
                 List.of(new MilitaryHistory.ServiceRecord(MISSING, present("CPT"), INVALID,
-                        present("Army"), MISSING)),
+                        present("Army"), MISSING, present("Combat"), MISSING,
+                        present("Selarang Dental Centre"))),
                 SourceField.present(DAY), SourceField.present(DAY.plusDays(1)),
                 SourceField.present(DAY.plusDays(2)), SourceField.present(DAY.plusDays(3)));
 
@@ -62,7 +63,9 @@ class FhirPatientTests {
                           "extension": [
                             {"url": "serviceRecord", "extension": [
                               {"url": "rank", "valueString": "CPT"},
-                              {"url": "service", "valueString": "Army"}]},
+                              {"url": "service", "valueString": "Army"},
+                              {"url": "vocationType", "valueString": "Combat"},
+                              {"url": "dentalCentre", "valueString": "Selarang Dental Centre"}]},
                             {"url": "enlistmentDate", "valueDate": "2020-01-14"},
                             {"url": "ordDate", "valueDate": "2020-01-15"},
                             {"url": "mrDate", "valueDate": "2020-01-16"},
@@ -160,7 +163,8 @@ class FhirPatientTests {
         Demographics details = new Demographics(INVALID, INVALID, INVALID,
                 new NextOfKin(INVALID, INVALID, INVALID),
                 new MilitaryHistory(List.of(new MilitaryHistory.ServiceRecord(
-                        present("NSF"), INVALID, MISSING, MISSING, MISSING)),
+                        present("NSF"), INVALID, MISSING, MISSING, MISSING, MISSING, MISSING,
+                        MISSING)),
                         SourceField.invalid(), SourceField.missing(), SourceField.missing(),
                         SourceField.present(DAY)));
 

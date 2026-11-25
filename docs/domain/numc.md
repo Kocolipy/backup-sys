@@ -35,7 +35,7 @@ A NUMC Record has four elements, each read as the patient source sent it
 | Element      | On the wire (both sides)   | Shown as                                                                                                                                             |
 | ------------ | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | NUMC Type    | `type`, a code             | `hyperbaric-chamber` Hyperbaric Chamber Duties · `submariner` Submariner Duties · `diving` Diving Duties, in bold                                    |
-| NUMC Outcome | `outcome`, a code          | `fit` FIT (green badge) · `unfit` UNFIT (red badge) · `waiver-granted` WAIVER GRANTED (blue badge) · `waiver-rejected` WAIVER REJECTED (muted badge) |
+| NUMC Outcome | `outcome`, a code          | `fit` FIT (green badge) · `unfit` UNFIT (red badge) · `waiver-granted` WAIVER GRANTED (white badge) · `waiver-rejected` WAIVER REJECTED (white badge) |
 | Issue Date   | `issueDate`, `YYYY-MM-DD`  | `14 Oct 2023`                                                                                                                                        |
 | Expiry Date  | `expiryDate`, `YYYY-MM-DD` | `14 Oct 2023`                                                                                                                                        |
 
@@ -246,6 +246,10 @@ as `ACCESS_DENIED`, as every authorization refusal is.
 `/numc`, titled **NUMC**, linked **NUMC** in the sidebar after FFI, with the
 `Waves` icon, for a session holding `patient:read`, and guarded by it as FFI is:
 a session without it is offered no link and is routed to its landing page.
+Laid out as the FFI page is ([ffi](ffi.md), "The FFI page"): the Patient card,
+then a card headed **NUMC** holding the table beside its Filter button, the
+page's title then dropped; with no patient in context, the title above the
+Patient card's plain "No patient in context" card alone.
 
 - **It reads the patient in context** as the FFI page does, from the signed-in
   layout's one reader of it ([patient](patient.md), "The patient in context"),
